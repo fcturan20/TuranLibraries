@@ -16,7 +16,7 @@ namespace TuranEditor {
 		unsigned int INDICES_NUMBER = 0;
 		unsigned short Material_Index = 0;
 
-		GFX_API::VertexAttributeLayout DataLayout;
+		unsigned int VERTEXATTRIBLAYOUT_ID;
 
 		bool Verify_Mesh_Data();
 	};

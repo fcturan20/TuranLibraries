@@ -57,13 +57,7 @@
     <ClInclude Include="Source\GFX\IMGUI\IMGUI_WINDOW.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\GFX\Renderer\GFX_RenderCommands.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\GFX\Renderer\GFX_Renderer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\GFX\Renderer\GFX_Resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\GFX\Renderer\GPU_ContentManager.h">
@@ -73,9 +67,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\GFX\GFX_Display.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\GFX\GFX_ENUMs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\GFX\GFX_Includes.h">
@@ -144,13 +135,13 @@
     <ClInclude Include="Source\Editor\FileSystem\EditorFileSystem_Core.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Editor\RenderContext\Editor_DataManager.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Editor\Editor_Includes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\GFX\Renderer\GFX_RenderNodes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\VK_RenderGraphCommands.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -185,13 +176,7 @@
     <ClCompile Include="Source\GFX\IMGUI\IMGUI_WINDOW.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\GFX\Renderer\GFX_RenderCommands.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Source\GFX\Renderer\GFX_Renderer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\GFX\Renderer\GFX_Resource.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\GFX\Renderer\GPU_ContentManager.cpp">
@@ -201,9 +186,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\GFX\GFX_Display.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\GFX\GFX_ENUMs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\GFX\GFX_Includes.cpp">
@@ -242,15 +224,6 @@
     <ClCompile Include="Source\Editor\Editors\Status_Window.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\MaterialInstance_Import.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\ShaderSource_Creater.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\Texture_Loader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Editor\FileSystem\ResourceTypes\Model_Resource.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -263,9 +236,6 @@
     <ClCompile Include="Source\Editor\FileSystem\EditorFileSystem_Core.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Editor\RenderContext\Editor_DataManager.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Editor\Editor_Includes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -276,6 +246,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\GFX\Renderer\GFX_RenderNodes.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\VulkanObjectManagement.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\FGAlgorithm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

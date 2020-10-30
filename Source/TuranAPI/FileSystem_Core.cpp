@@ -29,24 +29,17 @@ namespace TuranAPI {
 	void FileSystem::Write_TextFile(const char* text, const char* path, bool write_to_end) {
 		std::ofstream Output_File;
 		if (write_to_end) {
-			std::cout << "Before ofstream!\n";
-
 			Output_File.open(path, std::ios::out | std::ios::app);
 
 			Output_File << text << std::endl;
 			Output_File.close();
 
-			std::cout << "After ofstream!\n";
 		}
 		else {
-			std::cout << "Before open!\n";
 
 			Output_File.open(path, std::ios::out | std::ios::trunc);
-			std::cout << "After open!\n";
 			Output_File << text << std::endl;
-			std::cout << "After appending!\n";
 			Output_File.close();
-			std::cout << "After closing!\n";
 		}
 	}
 

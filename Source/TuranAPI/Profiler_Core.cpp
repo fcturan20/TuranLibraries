@@ -6,16 +6,16 @@ namespace TuranAPI {
 	//CODE ALL OF THESE!
 	Profiled_Scope::Profiled_Scope() {}
 	Profiled_Scope::Profiled_Scope(const char* name) : NAME(name) {
-		START_POINT = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+		START_POINT = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
 		THREAD_ID = std::hash<std::thread::id>{}(std::this_thread::get_id());
 		Is_Recording = true;
 	}
 	Profiled_Scope::~Profiled_Scope() {
 		//If the scope was being recorded!
 		if (Is_Recording) {
-			END_POINT = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+			END_POINT = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
 			DURATION = END_POINT - START_POINT;
-			std::cout << "Scope Duration: " << DURATION << std::endl;
+			std::cout << NAME << " Scope Duration: " << DURATION << " microseconds (1/1000 milliseconds)" << std::endl;
 			/*
 			std::cout << "A Profiled scope is saved!" << std::endl;
 			std::cout << "Scope Name:" << NAME << std::endl;

@@ -2,25 +2,19 @@
 #include <string>
 
 namespace GFX_API {
-	Renderer::Renderer() : DrawPassID_BITSET(8), SubDrawPassID_BITSET(8) {}
+	Renderer::Renderer() {}
 	Renderer::~Renderer() {}
+	unsigned char Renderer::Get_LastFrameIndex() {
+		if (FrameIndex) {
+			return FrameIndex - 1;
+		}
+		else {
+			return FrameCount - 1;
+		}
+	}
+	void Renderer::Set_NextFrameIndex() {
+		FrameIndex = (FrameIndex + 1) % FrameCount;
+	}
 
 
-	unsigned int Renderer::Create_DrawPassID() {
-		unsigned int ID = DrawPassID_BITSET.GetIndex_FirstFalse() + 1;
-		DrawPassID_BITSET.SetBit_True(ID - 1);
-		return ID;
-	}
-	void Renderer::Delete_DrawPassID(unsigned int ID) {
-		DrawPassID_BITSET.SetBit_False(ID - 1);
-	}
-
-	unsigned int Renderer::Create_SubDrawPassID() {
-		unsigned int ID = SubDrawPassID_BITSET.GetIndex_FirstFalse() + 1;
-		SubDrawPassID_BITSET.SetBit_True(ID - 1);
-		return ID;
-	}
-	void Renderer::Delete_SubDrawPassID(unsigned int ID) {
-		SubDrawPassID_BITSET.SetBit_False(ID - 1);
-	}
 }

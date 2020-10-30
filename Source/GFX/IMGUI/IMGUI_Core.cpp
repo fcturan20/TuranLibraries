@@ -232,7 +232,7 @@ namespace GFX_API {
 	}
 
 	void IMGUI_Core::Display_Texture(unsigned int TEXTURE_AssetID, const unsigned int& Display_WIDTH, const unsigned int& Display_HEIGHT, bool should_Flip_Vertically) {
-		TuranAPI::LOG_NOTCODED("Display_Texture isn't coded because Vulkan isn't finished yet!", true);
+		LOG_NOTCODED_TAPI("Display_Texture isn't coded because Vulkan isn't finished yet!", true);
 	}
 	bool IMGUI_Core::Begin_TabBar() {
 		return ImGui::BeginTabBar("");

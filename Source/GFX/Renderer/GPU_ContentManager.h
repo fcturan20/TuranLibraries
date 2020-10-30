@@ -1,60 +1,20 @@
 #pragma once
 #include "GFX/GFX_Includes.h"
-#include "GFX/GFX_ENUMs.h"
 #include "GFX/GFX_FileSystem/Resource_Type/Texture_Resource.h"
 #include "GFX/GFX_FileSystem/Resource_Type/Material_Type_Resource.h"
-#include "GFX_Resource.h"
+#include "GFX_RenderNodes.h"
 
 
 namespace GFX_API {
 
-	/*RenderingComponents aren't supported here because every RenderGraph will define how it handles RenderComponents
-	Nonetheless, the RenderingComponent's data should be in GPU so we should provide functions to send a buffer to GPU here
-
-	All resources (except Meshes) are coupled with their GPU representations in responsible GFX_API's classes.
-	That means, you can use your Asset_ID in GFX operations! If you didn't understand, you can go to OpenGL4.
-	But because there is no concept of Mesh in GFX, you have to use Upload_MeshBuffer's returned ID in GFX operations.
-	
-	When Material Types are compiled, they're written to disk! So you should use Delete_MaterialType when you don't need a MaterialType anymore!
-	I'd like to keep this process transparent and give the control to the user but the scope of the project is high enough to not allow this.
-	I didn't want to support recompile, because this causes an unnecessary complex coupling between MaterialType-StoredBinaryData-FileSystem-GPUContentManager
-	If user wants to recompile all the Material Types, he can delete all of them and compile again.
+	/* Specification:
+	1) This system has a VRAM allocation system
+	2) You can't store resources in Staging memory, only GPU Local memory is allowed!
+	3) You can't know recent left GPU Local Memory, you can only query last frame's left GPU Local Memory
+	4) If you upload a resource and it fits Staging Memory but not the GPU Local Memory, GFX API will fail in GFXRenderer->Run()
 	*/
 	class GFXAPI GPU_ContentManager {
 	protected:
-		vector<GFX_Texture> TEXTUREs;
-		vector<GFX_GlobalBuffer> GLOBALBUFFERs;
-		vector<GFX_ShaderSource> SHADERSOURCEs;
-		vector<GFX_ShaderProgram> SHADERPROGRAMs;
-		vector<GFX_ComputeShader> COMPUTESHADERs;
-		vector<VertexAttribute> VERTEXATTRIBUTEs;
-		vector<VertexAttributeLayout> VERTEXATTRIBLAYOUTs;
-		vector<RT_SLOTSET> RT_SLOTSETs;
-		vector<TransferPacket> TRANSFER_PACKETs;
-
-
-		Bitset GLOBALBUFFERID_BITSET;
-		unsigned int Create_GlobalBufferID();
-		void Delete_GlobalBufferID(unsigned int ID);
-
-		Bitset VertexAttributeID_BITSET;
-		unsigned int Create_VertexAttributeID();
-		void Delete_VertexAttributeID(unsigned int ID);
-
-		Bitset VertexAttribLayoutID_BITSET;
-		unsigned int Create_VertexAttribLayoutID();
-		void Delete_VertexAttribLayoutID(unsigned int ID);
-
-		Bitset RTSLOTSETID_BITSET;
-		unsigned int Create_RTSLOTSETID();
-		void Delete_RTSLOTSETID(unsigned int ID);
-
-		Bitset TRANSFERPACKETID_BITSET;
-		unsigned int Create_TransferPacketID();
-		void Delete_TransferPacketID(unsigned int ID);
-		GFX_API::TransferPacket* Find_TransferPacket_byID(unsigned int PacketID, unsigned int* vector_index = nullptr);
-
-		void Add_to_TransferPacket(unsigned int TransferPacketID, void* TransferHandle);
 	public:
 		GPU_ContentManager();
 		virtual ~GPU_ContentManager();
@@ -62,47 +22,65 @@ namespace GFX_API {
 		virtual void Unload_AllResources() = 0;
 
 		//Registers Vertex Attribute to the system and gives it an ID
-		unsigned int Create_VertexAttribute(DATA_TYPE TYPE, bool is_perVertex);
+		virtual GFXHandle Create_VertexAttribute(GFX_API::DATA_TYPE TYPE, bool is_perVertex) = 0;
 		//Returns true if operation is successful
-		virtual bool Delete_VertexAttribute(unsigned int Attribute_ID) = 0;
-		virtual unsigned int Create_VertexAttributeLayout(vector<unsigned int> Attributes) = 0;
-		virtual void Delete_VertexAttributeLayout(unsigned int Layout_ID) = 0;
+		virtual bool Delete_VertexAttribute(GFXHandle Attribute_ID) = 0;
+		/*Attributes are ordered as the same order of input vector
+		* For example: Same attribute ID may have different location/order in another attribute layout
+		* So you should gather your mesh buffer data according to that
+		*/
+		virtual GFXHandle Create_VertexAttributeLayout(const vector<GFXHandle>& Attributes) = 0;
+		virtual void Delete_VertexAttributeLayout(GFXHandle Layout_ID) = 0;
 
-		//Return MeshBufferID to use in Draw Calls
-		virtual unsigned int Upload_MeshBuffer(unsigned int attributelayout, const void* vertex_data, unsigned int data_size, unsigned int vertex_count, 
-			const void* index_data, unsigned int index_count) = 0;
+		/*
+		* Return MeshBufferID to use in Draw Calls
+		* You should order your vertex data according to attribute layout, don't forget that
+		* For now, Mesh Buffers only support index data as unsigned integer
+		* If index_data doesn't point to a buffer that's (4 * index_count) size, then it's a Undefined Behaviour
+		* Vertex_count shouldn't be 0
+		* If you want to use indexed mesh buffer, index_count shouldn't be 0
+		* Buffer Create Rule
+		1) vertex_data and index_data: valid, index_count != 0 -> Both Vertex and Index Data sent to Staging Buffer if there is enough space, Indexed Rendering: Supported
+		2) vertex_data and index_data: valid, index_count == 0 -> Only Vertex Data sent to Staging Buffer if there is enough space, Indexed Rendering: Not Supported
+		3) vertex_data or index_data: invalid, index_count != 0 -> No data sent, just buffer object is created. Indexed Rendering: Supported
+		4) vertex_data: valid, index_data: invalid, index_count == 0 -> Only Vertex Data sent to Staging Buffer if there is enough space, Indexed Rendering: Not Supported
+		*/
+		virtual GFXHandle Create_MeshBuffer(GFXHandle attributelayout, const void* vertex_data, unsigned int vertex_count,
+			const unsigned int* index_data, unsigned int index_count, GFXHandle TransferPassHandle) = 0;
+		virtual void Upload_MeshBuffer(GFXHandle MeshBufferHandle, const void* vertex_data, const void* index_data) = 0;
 		//When you call this function, Draw Calls that uses this ID may draw another Mesh or crash
-		virtual void Unload_MeshBuffer(unsigned int MeshBuffer_ID) = 0;
+		virtual void Unload_MeshBuffer(GFXHandle MeshBuffer_ID) = 0;
 
-		virtual unsigned int Upload_PointBuffer(const void* point_data, unsigned int data_size, unsigned int point_count) = 0;
-		virtual unsigned int CreatePointBuffer_fromMeshBuffer(unsigned int MeshBuffer_ID, unsigned int AttributeIndex_toUseAsPointBuffer) = 0;
-		virtual void Unload_PointBuffer(unsigned int PointBuffer_ID) = 0;
-
-		//Create a Texture Buffer and upload if texture's GPUREADONLY_CPUEXISTENCE
-		virtual void Create_Texture(Texture_Resource* TEXTURE_ASSET, unsigned int Asset_ID, unsigned int TransferPacketID) = 0;
-		virtual void Upload_Texture(unsigned int Asset_ID, void* DATA, unsigned int DATA_SIZE, unsigned int TransferPacketID) = 0;
-		virtual void Unload_Texture(unsigned int ASSET_ID) = 0;
+		//This function only creates a texture object, you should upload its data with Upload_Texture() or 
+		//change its layout with Renderer->Barrier_Texture() if its data is GPU side only and unknown by the application
+		virtual GFXHandle Create_Texture(const Texture_Description& TEXTURE_ASSET, GFXHandle TransferPassID) = 0;
+		virtual void Upload_Texture(GFXHandle TEXTUREHANDLE, void* DATA, unsigned int DATA_SIZE) = 0;
+		virtual void Unload_Texture(GFXHandle TEXTUREHANDLE) = 0;
 
 
-		virtual unsigned int Create_GlobalBuffer(const char* BUFFER_NAME, void* DATA, unsigned int DATA_SIZE, BUFFER_VISIBILITY USAGE) = 0;
+		//Return handle to reference in GFX!
+		virtual GFXHandle Create_GlobalBuffer(const char* BUFFER_NAME, void* DATA, unsigned int DATA_SIZE, BUFFER_VISIBILITY USAGE) = 0;
 		//If you want to upload the data, but data's pointer didn't change since the last time (Creation or Re-Upload) you can use nullptr!
 		//Also if the data's size isn't changed since the last time, you can pass as 0.
 		//If DATA isn't nullptr, old data that buffer holds will be deleted!
-		virtual void Upload_GlobalBuffer(unsigned int BUFFER_ID, void* DATA = nullptr, unsigned int DATA_SIZE = 0) = 0;
-		virtual void Unload_GlobalBuffer(unsigned int BUFFER_ID) = 0;
+		virtual void Upload_GlobalBuffer(GFXHandle BUFFER_ID, void* DATA = nullptr, unsigned int DATA_SIZE = 0) = 0;
+		virtual void Unload_GlobalBuffer(GFXHandle BUFFER_ID) = 0;
+
+		//Return handle to reference in GFX!
+		virtual GFXHandle Compile_ShaderSource(ShaderSource_Resource* SHADER) = 0;
+		virtual void Delete_ShaderSource(GFXHandle ID) = 0;
+		//Return handle to reference in GFX!
+		virtual GFXHandle Compile_ComputeShader(GFX_API::ComputeShader_Resource* SHADER) = 0;
+		virtual void Delete_ComputeShader(GFXHandle ID) = 0;
+		//Return handle to reference in GFX!
+		virtual GFXHandle Link_MaterialType(Material_Type* MATTYPE_ASSET) = 0;
+		virtual void Delete_MaterialType(GFXHandle ID) = 0;
+		//Return handle to reference in GFX!
+		virtual GFXHandle Create_MaterialInst(Material_Instance* MATINST_ASSET) = 0;
+		virtual void Delete_MaterialInst(GFXHandle ID) = 0;
 
 
-		virtual void Compile_ShaderSource(ShaderSource_Resource* SHADER, unsigned int Asset_ID, string* compilation_status) = 0;
-		virtual void Delete_ShaderSource(unsigned int Shader_ID) = 0;
-		virtual void Compile_ComputeShader(GFX_API::ComputeShader_Resource* SHADER, unsigned int Asset_ID, string* compilation_status) = 0;
-		virtual void Delete_ComputeShader(unsigned int ASSET_ID) = 0;
-		virtual void Link_MaterialType(Material_Type* MATTYPE_ASSET, unsigned int Asset_ID) = 0;
-		virtual void Delete_MaterialType(unsigned int Asset_ID) = 0;
-		virtual void Create_MaterialInst(Material_Instance* MATINST_ASSET, unsigned int Asset_ID) = 0;
-		virtual void Delete_MaterialInst(unsigned int Asset_ID) = 0;
-
-
-		virtual unsigned int Create_RTSlotSet(unsigned int* RTIDs, unsigned int* SlotIndexes, ATTACHMENT_READSTATE* ReadTypes, 
-			RT_ATTACHMENTs* AttachmentTypes, OPERATION_TYPE* OperationsTypes, unsigned int SlotCount) = 0;
+		virtual GFXHandle Create_RTSlotSet(const vector<GFX_API::RTSLOT_Description>& Descriptions) = 0;
+		virtual GFXHandle Inherite_RTSlotSet(const GFX_API::GFXHandle SLOTSETHandle, const vector<GFX_API::IRTSLOT_Description>& Descriptions) = 0;
 	};
 }

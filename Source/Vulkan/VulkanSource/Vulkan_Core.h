@@ -19,10 +19,9 @@ namespace Vulkan {
 		vector<VkFence> SwapchainFences;
 		VkShaderModule* FirstShaderProgram;
 
-		virtual void Initialization() override;
-		virtual void Check_Computer_Specs() override;
-		virtual void Save_Monitors() override;
-		virtual void Create_Renderer() override;
+		void Initialization();
+		void Check_Computer_Specs();
+		void Save_Monitors();
 
 		virtual void Check_Errors() override;
 		//Window Operations
@@ -45,15 +44,7 @@ namespace Vulkan {
 		//A Graphics Queue is created for learning purpose
 		void Setup_LogicalDevice();
 		void Create_MainWindow_SwapChain();
-		void Create_CommandBuffers();
-		void Begin_RenderPass(unsigned int CB_Index);
-		void Begin_DrawingFirstTriangle(unsigned int CB_Index);
-		void Finish_DrawingProgresses(unsigned int CB_Index);
-		void Create_Semaphores();
 
-		//Recreation Operations
-		void Recreate_SwapchainDependentData();
-		void RecordCommandBuffer_Again();
 
 		//Destroy Operations
 		void Destroy_SwapchainDependentData();

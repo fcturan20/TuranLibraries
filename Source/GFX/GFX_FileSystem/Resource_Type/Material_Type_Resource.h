@@ -1,6 +1,5 @@
 #pragma once
 #include "GFX/GFX_Includes.h"
-#include "GFX/GFX_ENUMs.h"
 
 enum class RESOURCETYPEs : char;
 
@@ -11,7 +10,8 @@ namespace GFX_API {
 	public:
 		ShaderSource_Resource();
 		SHADERSTAGEs_FLAG STAGE;
-		string SOURCE_CODE;
+		void* SOURCE_DATA;
+		unsigned int DATA_SIZE;
 		SHADER_LANGUAGEs LANGUAGE;
 	};
 	
@@ -43,11 +43,12 @@ namespace GFX_API {
 		MATERIALDATA_TYPE TYPE;
 	};
 
-	/* Used to specify the material instance specific data! If there is no, you don't have to pass any to Material_Instance.
+	/* Used to specify the material instance specific data! The data responsibility's in your hands!
 	* This data is invalid if BINDINGPOINT isn't same with BINDINGPOINT of any MaterialDataDescriptor in the Material_Type
 	*/
 	struct GFXAPI MaterialInstanceData {
-		void* DATA, *BINDINGPOINT;
+		void* BINDINGPOINT;
+		void* DATA_GFXID;
 	};
 
 
@@ -55,9 +56,7 @@ namespace GFX_API {
 	public:
 		Material_Type();
 
-		unsigned int VERTEXSOURCE_ID, FRAGMENTSOURCE_ID, ATTRIBUTELAYOUT_ID, RT_SLOTSETID, TRANSFERPACKET_ID;
-
-		vector<unsigned int> SUBPASSes;
+		GFXHandle VERTEXSOURCE_ID, FRAGMENTSOURCE_ID, ATTRIBUTELAYOUT_ID, RTSLOTSET_ID, SubDrawPass_ID;
 		vector<MaterialDataDescriptor> MATERIALTYPEDATA;
 	};
 	
@@ -68,7 +67,7 @@ namespace GFX_API {
 		
 		//Uniforms won't change at run-time because we are defining uniforms at compile-time, but it is an easier syntax for now!
 		//This list will be defined per material type (for example: Surface_PBR, Surface_Phong, Texture View etc.)
-		unsigned int Material_Type;
+		void* Material_Type;
 		vector<MaterialInstanceData> MATERIALDATAs;
 	};
 

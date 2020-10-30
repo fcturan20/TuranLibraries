@@ -1,6 +1,5 @@
 #pragma once
 #include "GFX_Includes.h"
-#include "GFX_ENUMs.h"
 
 namespace GFX_API {
 	//I have no function to do something on monitor, so this is a storage struct

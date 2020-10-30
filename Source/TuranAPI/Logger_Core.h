@@ -40,10 +40,10 @@ namespace TuranAPI {
 		};
 
 	}
-#define LOG_CRASHING(LOG_string)							Logging::Logger::SELF->Log_CrashingError(LOG_string)
-#define LOG_ERROR(LOG_string)								Logging::Logger::SELF->Log_HandledError(LOG_string)
-#define LOG_WARNING(LOG_string)								Logging::Logger::SELF->Log_Warning(LOG_string)
-#define LOG_STATUS(LOG_string)								Logging::Logger::SELF->Log_Status(LOG_string)
-#define LOG_NOTCODED(LOG_string, Stop_Application_BOOL)		Logging::Logger::SELF->Log_NotCodedPath(LOG_string, Stop_Application_BOOL)
-#define WRITE_LOGs_toFILEs()								Logging::Logger::SELF->Write_LOGs_toTextFiles()
 }
+#define LOG_CRASHING_TAPI(LOG_string)							TuranAPI::Logging::Logger::SELF->Log_CrashingError(LOG_string)
+#define LOG_ERROR_TAPI(LOG_string)								TuranAPI::Logging::Logger::SELF->Log_HandledError(LOG_string)
+#define LOG_WARNING_TAPI(LOG_string)							TuranAPI::Logging::Logger::SELF->Log_Warning(LOG_string)
+#define LOG_STATUS_TAPI(LOG_string)								TuranAPI::Logging::Logger::SELF->Log_Status(LOG_string)
+#define LOG_NOTCODED_TAPI(LOG_string, Stop_Application_BOOL)	TuranAPI::Logging::Logger::SELF->Log_NotCodedPath(LOG_string, Stop_Application_BOOL)
+#define WRITE_LOGs_toFILEs_TAPI()								TuranAPI::Logging::Logger::SELF->Write_LOGs_toTextFiles()

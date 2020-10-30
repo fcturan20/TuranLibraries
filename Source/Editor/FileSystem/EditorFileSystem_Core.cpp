@@ -11,14 +11,14 @@ namespace TuranEditor {
 	Editor_FileSystem* Editor_FileSystem::SELF = nullptr;
 
 	Editor_FileSystem::Editor_FileSystem() : Asset_IDSet(100) {
-		TuranAPI::LOG_STATUS("Starting the Editor FileSystem! But this doesn't make anything!");
+		LOG_STATUS_TAPI("Starting the Editor FileSystem! But this doesn't make anything!");
 		SELF = this;
 	}
 
 	void Editor_FileSystem::Add_anAsset_toAssetList(Resource_Identifier* RESOURCE) {
 		unsigned int ID = Create_Resource_ID();
 		if (RESOURCE == nullptr) {
-			TuranAPI::LOG_ERROR("Editor FileSystem couldn't add the asset to File List, because Resource is nullptr!");
+			LOG_ERROR_TAPI("Editor FileSystem couldn't add the asset to File List, because Resource is nullptr!");
 			return;
 		}
 		
@@ -34,7 +34,7 @@ namespace TuranEditor {
 				return;
 			}
 		}
-		TuranAPI::LOG_ERROR("Editor_FileSystem tried to delete an Asset, but it is not in FileList! There is a lack in somewhere!");
+		LOG_ERROR_TAPI("Editor_FileSystem tried to delete an Asset, but it is not in FileList! There is a lack in somewhere!");
 	}
 
 	bool Editor_FileSystem::Does_ResourceExist(unsigned int Resource_ID, RESOURCETYPEs TYPE) const {
@@ -43,7 +43,7 @@ namespace TuranEditor {
 				return true;
 			}
 		}
-		TuranAPI::LOG_WARNING("Does_ResourceExist() failed to find a resource!\n");
+		LOG_WARNING_TAPI("Does_ResourceExist() failed to find a resource!\n");
 		return false;
 	}
 
@@ -54,7 +54,7 @@ namespace TuranEditor {
 				return RESOURCE;
 			}
 		}
-		TuranAPI::LOG_ERROR("Find_ResourceIdentifier_byID has failed to find the resource!");
+		LOG_ERROR_TAPI("Find_ResourceIdentifier_byID has failed to find the resource!");
 		return nullptr;
 	}
 

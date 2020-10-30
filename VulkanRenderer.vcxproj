@@ -68,10 +68,8 @@
     <ClInclude Include="Source\Editor\FileSystem\ResourceTypes\ResourceTYPEs.h" />
     <ClInclude Include="Source\Editor\FileSystem\ResourceTypes\Resource_Identifier.h" />
     <ClInclude Include="Source\Editor\FileSystem\ResourceTypes\Scene_Resource.h" />
-    <ClInclude Include="Source\Editor\RenderContext\Editor_DataManager.h" />
     <ClInclude Include="Source\GFX\GFX_Core.h" />
     <ClInclude Include="Source\GFX\GFX_Display.h" />
-    <ClInclude Include="Source\GFX\GFX_ENUMs.h" />
     <ClInclude Include="Source\GFX\GFX_FileSystem\Resource_Type\Material_Type_Resource.h" />
     <ClInclude Include="Source\GFX\GFX_FileSystem\Resource_Type\Texture_Resource.h" />
     <ClInclude Include="Source\GFX\GFX_Includes.h" />
@@ -85,10 +83,8 @@
     <ClInclude Include="Source\GFX\IMGUI\Includes\imstb_rectpack.h" />
     <ClInclude Include="Source\GFX\IMGUI\Includes\imstb_textedit.h" />
     <ClInclude Include="Source\GFX\IMGUI\Includes\imstb_truetype.h" />
-    <ClInclude Include="Source\GFX\Renderer\GFX_RenderCommands.h" />
     <ClInclude Include="Source\GFX\Renderer\GFX_Renderer.h" />
     <ClInclude Include="Source\GFX\Renderer\GFX_RenderNodes.h" />
-    <ClInclude Include="Source\GFX\Renderer\GFX_Resource.h" />
     <ClInclude Include="Source\GFX\Renderer\GPU_ContentManager.h" />
     <ClInclude Include="Source\Includes.h" />
     <ClInclude Include="Source\Main.h" />
@@ -98,6 +94,7 @@
     <ClInclude Include="Source\TuranAPI\Logger_Core.h" />
     <ClInclude Include="Source\TuranAPI\Profiler_Core.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\VK_GPUContentManager.h" />
+    <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\VK_RenderGraphCommands.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Renderer_Core.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Resource.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Core.h" />
@@ -109,16 +106,11 @@
     <ClCompile Include="Source\Editor\Editor_Includes.cpp" />
     <ClCompile Include="Source\Editor\Editor_System.cpp" />
     <ClCompile Include="Source\Editor\FileSystem\EditorFileSystem_Core.cpp" />
-    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\MaterialInstance_Import.cpp" />
-    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\ShaderSource_Creater.cpp" />
-    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\Texture_Loader.cpp" />
     <ClCompile Include="Source\Editor\FileSystem\ResourceTypes\Model_Resource.cpp" />
     <ClCompile Include="Source\Editor\FileSystem\ResourceTypes\Resource_Identifier.cpp" />
     <ClCompile Include="Source\Editor\FileSystem\ResourceTypes\Scene_Resource.cpp" />
-    <ClCompile Include="Source\Editor\RenderContext\Editor_DataManager.cpp" />
     <ClCompile Include="Source\GFX\GFX_Core.cpp" />
     <ClCompile Include="Source\GFX\GFX_Display.cpp" />
-    <ClCompile Include="Source\GFX\GFX_ENUMs.cpp" />
     <ClCompile Include="Source\GFX\GFX_FileSystem\Resource_Type\Material_Type_Resource.cpp" />
     <ClCompile Include="Source\GFX\GFX_FileSystem\Resource_Type\Texture_Resource.cpp" />
     <ClCompile Include="Source\GFX\GFX_Includes.cpp" />
@@ -129,10 +121,8 @@
     <ClCompile Include="Source\GFX\IMGUI\Includes\imgui_draw.cpp" />
     <ClCompile Include="Source\GFX\IMGUI\Includes\imgui_stdlib.cpp" />
     <ClCompile Include="Source\GFX\IMGUI\Includes\imgui_widgets.cpp" />
-    <ClCompile Include="Source\GFX\Renderer\GFX_RenderCommands.cpp" />
     <ClCompile Include="Source\GFX\Renderer\GFX_Renderer.cpp" />
     <ClCompile Include="Source\GFX\Renderer\GFX_RenderNodes.cpp" />
-    <ClCompile Include="Source\GFX\Renderer\GFX_Resource.cpp" />
     <ClCompile Include="Source\GFX\Renderer\GPU_ContentManager.cpp" />
     <ClCompile Include="Source\Main.cpp" />
     <ClCompile Include="Source\TuranAPI\API_includes.cpp" />
@@ -140,7 +130,9 @@
     <ClCompile Include="Source\TuranAPI\FileSystem_Core.cpp" />
     <ClCompile Include="Source\TuranAPI\Logger_Core.cpp" />
     <ClCompile Include="Source\TuranAPI\Profiler_Core.cpp" />
+    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\FGAlgorithm.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\VK_GPUContentManager.cpp" />
+    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\VulkanObjectManagement.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Renderer_Core.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Resource.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Vulkan_Core.cpp" />

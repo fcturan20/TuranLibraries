@@ -1,2 +1,7 @@
 # GFXVulkanBackend
 Test Renderer serves as an GFX API testing project but I want to support Vulkan in GFX too so I should learn Vulkan first, then add support to GFX.
+
+# RenderGraph
+RenderGraph algorithms are not done yet but general design is decided and commented in the related files. I know there are lacking features but I'm trying to workaround them right now (VK_CONCURRENT_MODE for resources for example). In the final product, I willl benchmark then decide which feature to delete.
+If you want a quick summary: You define render nodes (Draw Pass, Transfer Pass, Compute Pass). Draw Pass render node also has SubDrawPass render nodes which is gonna help you to schedule your draw calls in the same Draw Pass. Because all draw calls to a DrawPass will execute async. SubDrawPasses are sync point which you define which shader stages to sync.
+You define dependencies between passes (Draw Pass, Transfer Pass, Compute Pass) (you also define if the dependency is to the last frame's pass). Each frame you will call some draw operations, barrier operations, copy-upload-download operations, compute operations. RenderGraph doesn't check resource usage, you have to define barriers. RenderGraph only checks if there is anyworkload for a pass and while using Queues (Command Buffers and semaphores too), workless passes are ignored. Abstraction is gonna support multiple queues but I didn't code it yet.

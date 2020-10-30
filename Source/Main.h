@@ -6,9 +6,9 @@
 #include "Editor/FileSystem/EditorFileSystem_Core.h"
 
 #include "Editor/FileSystem/ResourceImporters/Model_Loader.h"
-#include "Editor/RenderContext/Editor_DataManager.h"
 #include "TuranAPI/Profiler_Core.h"
 
+//These functions are defined in Editor_System.cpp in Editor folder
 namespace TuranEditor {
 
 	class Editor_System {
@@ -23,5 +23,6 @@ namespace TuranEditor {
 		static bool Should_EditorClose();
 	};
 
-
+	void RenderGraphConstruction_BasicUT();
+	void RenderGraphConstruction_LastFrameUT();
 }

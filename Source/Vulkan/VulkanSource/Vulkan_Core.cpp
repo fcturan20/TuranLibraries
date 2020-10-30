@@ -1,19 +1,22 @@
 #include "Vulkan_Core.h"
 #include "TuranAPI/Logger_Core.h"
+#define WINDOW_WIDTH 1280
+#define WINDOW_HEIGHT 720
+
 
 namespace Vulkan {
 	Vulkan_Core::Vulkan_Core() {
 		//Set static GFX_API variable as created Vulkan_Core, because there will only one GFX_API in run-time
 		//And we will use this SELF to give commands to GFX_API in window callbacks
 		SELF = this;
-		TuranAPI::LOG_STATUS("Vulkan systems are starting!");
+		LOG_STATUS_TAPI("VulkanCore: Vulkan systems are starting!");
 
 		//Set error callback to handle all glfw errors (including initialization error)!
-		//glfwSetErrorCallback(Vulkan_Core::GFX_Error_Callback);
+		glfwSetErrorCallback(Vulkan_Core::GFX_Error_Callback);
 
 		glfwInit();
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 		Save_Monitors();
 
 		//Note that: Vulkan initialization need a Window to be created before, so we should create one with GLFW
@@ -22,29 +25,28 @@ namespace Vulkan {
 
 		GFXRENDERER = new Vulkan::Renderer;
 		ContentManager = new Vulkan::GPU_ContentManager;
-		TuranAPI::LOG_NOTCODED("Vulkan's IMGUI support isn't coded!\n", false);
+		LOG_NOTCODED_TAPI("VulkanCore: Vulkan's IMGUI support isn't coded!\n", false);
 
-		TuranAPI::LOG_STATUS("Vulkan systems are started!");
+		LOG_STATUS_TAPI("VulkanCore: Vulkan systems are started!");
 	}
 	Vulkan_Core::~Vulkan_Core() {
 		Destroy_GFX_Resources();
 	}
 
 	void Vulkan_Core::Create_MainWindow() {
-		TuranAPI::LOG_STATUS("Creating a window named");
+		LOG_STATUS_TAPI("VulkanCore: Creating a window named");
 
 		//Create window as it will share resources with Renderer Context to get display texture!
-		GLFWwindow* glfw_window = glfwCreateWindow(1280, 720, "Vulkan Window", NULL, nullptr);
-		WINDOW* Vulkan_Window = new WINDOW(1280, 720, GFX_API::WINDOW_MODE::WINDOWED, &CONNECTED_Monitors[0], CONNECTED_Monitors[0].REFRESH_RATE, "Vulkan Window", GFX_API::V_SYNC::VSYNC_OFF);
+		GLFWwindow* glfw_window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Vulkan Window", NULL, nullptr);
+		WINDOW* Vulkan_Window = new WINDOW(WINDOW_WIDTH, WINDOW_HEIGHT, GFX_API::WINDOW_MODE::WINDOWED, &CONNECTED_Monitors[0], CONNECTED_Monitors[0].REFRESH_RATE, "Vulkan Window", GFX_API::V_SYNC::VSYNC_OFF);
 		//glfwSetWindowMonitor(glfw_window, NULL, 0, 0, Vulkan_Window->Get_Window_Mode().x, Vulkan_Window->Get_Window_Mode().y, Vulkan_Window->Get_Window_Mode().z);
 		Vulkan_Window->GLFW_WINDOW = glfw_window;
 
 		//Check and Report if GLFW fails
 		if (glfw_window == NULL) {
-			TuranAPI::LOG_CRASHING("Error: We failed to create the window because of GLFW!");
+			LOG_CRASHING_TAPI("VulkanCore: We failed to create the window because of GLFW!");
 			glfwTerminate();
 		}
-		glfwSetFramebufferSizeCallback(glfw_window, Window_ResizeCallback);
 
 		Main_Window = Vulkan_Window;
 	}
@@ -61,16 +63,9 @@ namespace Vulkan {
 		
 		Setup_LogicalDevice();
 		Create_MainWindow_SwapChain();
-		unsigned int VS_CODESIZE = 0, FS_CODESIZE = 0;
-		char* VS_CODE = (char*)TAPIFILESYSTEM::Read_BinaryFile("C:/dev/VulkanRenderer/Source/Vulkan/Content/FirstShaderVert.spv", VS_CODESIZE);
-		char* FS_CODE = (char*)TAPIFILESYSTEM::Read_BinaryFile("C:/dev/VulkanRenderer/Source/Vulkan/Content/FirstShaderFrag.spv", FS_CODESIZE);
-		FirstShaderProgram = Compile_Shaders(VS_CODE, VS_CODESIZE, FS_CODE, FS_CODESIZE);
-		delete VS_CODE;	delete FS_CODE;
-		Create_CommandBuffers();
-		Create_Semaphores();
 	}
 	void Vulkan_Core::GFX_Error_Callback(int error_code, const char* description) {
-		TuranAPI::LOG_CRASHING(description, true);
+		LOG_CRASHING_TAPI(description, true);
 	}
 	void Vulkan_Core::Create_Instance() {
 		//APPLICATION INFO
@@ -131,12 +126,10 @@ namespace Vulkan {
 		InstCreation_Info.ppEnabledLayerNames = nullptr;
 #endif
 
-		VK_States.Instance_CreationInfo = InstCreation_Info;
-
 		if (vkCreateInstance(&InstCreation_Info, nullptr, &VK_States.Vulkan_Instance) != VK_SUCCESS) {
-			TuranAPI::LOG_CRASHING("Failed to create a Vulkan Instance!");
+			LOG_CRASHING_TAPI("Failed to create a Vulkan Instance!");
 		}
-		TuranAPI::LOG_STATUS("Vulkan Instance is created successfully!");
+		LOG_STATUS_TAPI("Vulkan Instance is created successfully!");
 
 	}
 	void Vulkan_Core::Setup_Debugging() {
@@ -150,23 +143,23 @@ namespace Vulkan {
 		DebugMessenger_CreationInfo.pUserData = nullptr;
 
 		if (VK_States.vkCreateDebugUtilsMessengerEXT()(VK_States.Vulkan_Instance, &DebugMessenger_CreationInfo, nullptr, &VK_States.Debug_Messenger) != VK_SUCCESS) {
-			TuranAPI::LOG_CRASHING("Vulkan's Debug Callback system failed to start!");
+			LOG_CRASHING_TAPI("Vulkan's Debug Callback system failed to start!");
 		}
-		TuranAPI::LOG_STATUS("Vulkan Debug Callback system is started!");
+		LOG_STATUS_TAPI("Vulkan Debug Callback system is started!");
 	}
 	void Vulkan_Core::Create_Surface_forWindow() {
 		WINDOW* Vulkan_Window = (WINDOW*)Main_Window;
 		VkSurfaceKHR Window_Surface = {};
 		if (glfwCreateWindowSurface(VK_States.Vulkan_Instance, Vulkan_Window->GLFW_WINDOW, nullptr, &Window_Surface) != VK_SUCCESS) {
-			TuranAPI::LOG_ERROR("GLFW failed to create a window surface");
+			LOG_ERROR_TAPI("GLFW failed to create a window surface");
 		}
 		else {
-			TuranAPI::LOG_STATUS("GLFW created a window surface!");
+			LOG_STATUS_TAPI("GLFW created a window surface!");
 		}
 		Vulkan_Window->Window_Surface = Window_Surface;
 	}
 	void Vulkan_Core::Check_Computer_Specs() {
-		TuranAPI::LOG_STATUS("Started to check Computer Specifications!");
+		LOG_STATUS_TAPI("Started to check Computer Specifications!");
 
 		//CHECK GPUs
 		uint32_t GPU_NUMBER = 0;
@@ -178,7 +171,7 @@ namespace Vulkan {
 		vkEnumeratePhysicalDevices(VK_States.Vulkan_Instance, &GPU_NUMBER, Physical_GPU_LIST.data());
 
 		if (GPU_NUMBER == 0) {
-			TuranAPI::LOG_CRASHING("There is no GPU that has Vulkan support! Updating your drivers or Upgrading the OS may help");
+			LOG_CRASHING_TAPI("There is no GPU that has Vulkan support! Updating your drivers or Upgrading the OS may help");
 		}
 
 		//GET GPU INFORMATIONs, QUEUE FAMILIES etc
@@ -206,7 +199,7 @@ namespace Vulkan {
 			default:
 				//const char* CrashingError = Text_Add("Vulkan_Core::Check_Computer_Specs failed to find GPU's Type (Only Discrete and Integrated GPUs supported!), Type is:",
 					//std::to_string(Vulkan_GPU->Device_Properties.deviceType).c_str());
-				TuranAPI::LOG_CRASHING("There is an error about GPU!");
+				LOG_CRASHING_TAPI("There is an error about GPU!");
 				break;
 			}
 
@@ -216,30 +209,42 @@ namespace Vulkan {
 			Vulkan_GPU->QueueFamilies.resize(queueFamilyCount);
 			vkGetPhysicalDeviceQueueFamilyProperties(Vulkan_GPU->Physical_Device, &queueFamilyCount, Vulkan_GPU->QueueFamilies.data());
 
+			bool is_presentationfound = false;
 			for (unsigned int queuefamily_index = 0; queuefamily_index < Vulkan_GPU->QueueFamilies.size(); queuefamily_index++) {
 				VkQueueFamilyProperties* QueueFamily = &Vulkan_GPU->QueueFamilies[queuefamily_index];
+				VK_QUEUE VKQUEUE;
+				VKQUEUE.QueueFamilyIndex = queuefamily_index;
 				if (QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 					Vulkan_GPU->is_GraphicOperations_Supported = true;
-					Vulkan_GPU->Graphics_QueueFamily = queuefamily_index;
-					std::cout << "Graphics Queue Family Index: " << queuefamily_index << std::endl;
+					VKQUEUE.SupportFlag.is_GRAPHICSsupported = true;
 				}
 				if (QueueFamily->queueFlags & VK_QUEUE_COMPUTE_BIT) {
 					Vulkan_GPU->is_ComputeOperations_Supported = true;
-					Vulkan_GPU->Compute_QueueFamily = queuefamily_index;
+					VKQUEUE.SupportFlag.is_COMPUTEsupported = true;
+					Vulkan_GPU->COMPUTE_supportedqueuecount++;
 				}
-				if ((QueueFamily->queueFlags & VK_QUEUE_TRANSFER_BIT) && !(QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+				if (QueueFamily->queueFlags & VK_QUEUE_TRANSFER_BIT) {
 					Vulkan_GPU->is_TransferOperations_Supported = true;
-					Vulkan_GPU->Transfer_QueueFamily = queuefamily_index;
-					std::cout << "Graphics Queue Family Index: " << queuefamily_index << std::endl;
+					VKQUEUE.SupportFlag.is_TRANSFERsupported = true;
+					Vulkan_GPU->TRANSFERs_supportedqueuecount++;
 				}
-				Vulkan_GPU->ResourceSharedQueueFamilies = new uint32_t[2]{ Vulkan_GPU->Graphics_QueueFamily, Vulkan_GPU->Transfer_QueueFamily };
 
 				//Check Presentation Support
-				VkBool32 is_Presentation_Supported;
-				vkGetPhysicalDeviceSurfaceSupportKHR(Vulkan_GPU->Physical_Device, queuefamily_index, ((WINDOW*)Main_Window)->Window_Surface, &is_Presentation_Supported);
-				if (is_Presentation_Supported) {
-					Vulkan_GPU->is_DisplayOperations_Supported = true;
-					Vulkan_GPU->Presentation_QueueFamilyIndex = queuefamily_index;
+				if (!is_presentationfound) {
+					VkBool32 is_Presentation_Supported;
+					vkGetPhysicalDeviceSurfaceSupportKHR(Vulkan_GPU->Physical_Device, queuefamily_index, ((WINDOW*)Main_Window)->Window_Surface, &is_Presentation_Supported);
+					if (is_Presentation_Supported) {
+						Vulkan_GPU->is_DisplayOperations_Supported = true;
+						VKQUEUE.SupportFlag.is_PRESENTATIONsupported = true;
+					}
+				}
+
+				Vulkan_GPU->QUEUEs.push_back(VKQUEUE);
+				if (VKQUEUE.SupportFlag.is_GRAPHICSsupported) {
+					Vulkan_GPU->GRAPHICS_QUEUEIndex = Vulkan_GPU->QUEUEs.size() - 1;
+				}
+				if (VKQUEUE.SupportFlag.is_PRESENTATIONsupported) {
+					Vulkan_GPU->DISPLAY_QUEUEIndex = Vulkan_GPU->QUEUEs.size() - 1;
 				}
 			}
 
@@ -264,13 +269,13 @@ namespace Vulkan {
 
 			DEVICE_GPUs.push_back(Vulkan_GPU);
 		}
-		TuranAPI::LOG_STATUS("Probably one GPU is detected!");
+		LOG_STATUS_TAPI("Probably one GPU is detected!");
 		if (DEVICE_GPUs.size() == 1) {
 			GPU_TO_RENDER = DEVICE_GPUs[0];
-			TuranAPI::LOG_STATUS("The renderer GPU selected as first GPU, because there is only one GPU");
+			LOG_STATUS_TAPI("The renderer GPU selected as first GPU, because there is only one GPU");
 		}
 		else {
-			TuranAPI::LOG_WARNING("There are more than one GPUs, please select one to use in rendering operations!");
+			LOG_WARNING_TAPI("There are more than one GPUs, please select one to use in rendering operations!");
 			std::cout << "GPU index: ";
 			int i = 0;
 			std::cin >> i;
@@ -280,102 +285,65 @@ namespace Vulkan {
 				std::cin >> i;
 			}
 			GPU_TO_RENDER = DEVICE_GPUs[i];
-			TuranAPI::LOG_STATUS("GPU: " + GPU_TO_RENDER->MODEL + "is selected for rendering operations!");
+			LOG_STATUS_TAPI("GPU: " + GPU_TO_RENDER->MODEL + "is selected for rendering operations!");
 		}
 
 
-		TuranAPI::LOG_STATUS("Finished checking Computer Specifications!");
+		LOG_STATUS_TAPI("Finished checking Computer Specifications!");
 	}
 	void Vulkan_Core::Setup_LogicalDevice() {
-		TuranAPI::LOG_STATUS("Starting to setup logical device");
+		LOG_STATUS_TAPI("Starting to setup logical device");
 		GPU* Vulkan_GPU = (GPU*)this->GPU_TO_RENDER;
 		//We don't need for now, so leave it empty. But GPU has its own feature list already
 		VkPhysicalDeviceFeatures Features = {};
 
+		vector<VkDeviceQueueCreateInfo> QueueCreationInfos;
 		//Queue Creation Processes
-		if (Vulkan_GPU->is_GraphicOperations_Supported) {
-			VkDeviceQueueCreateInfo GraphicsQueue;
-			GraphicsQueue.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-			GraphicsQueue.queueCount = 1;
-			GraphicsQueue.queueFamilyIndex = Vulkan_GPU->Graphics_QueueFamily;
-			GraphicsQueue.pQueuePriorities = new float(1.0f);
-			GraphicsQueue.pNext = nullptr;
-			GraphicsQueue.flags = 0;
-			Vulkan_GPU->QueueCreationInfos.push_back(GraphicsQueue);
-		}
-		if (Vulkan_GPU->is_TransferOperations_Supported) {
-			VkDeviceQueueCreateInfo ci = {};
-			ci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-			ci.queueCount = 1;
-			ci.queueFamilyIndex = Vulkan_GPU->Transfer_QueueFamily;
-			ci.pQueuePriorities = new float(1.0f);
-			ci.pNext = nullptr;
-			ci.flags = 0;
-			Vulkan_GPU->QueueCreationInfos.push_back(ci);
-		}
-		if (Vulkan_GPU->is_DisplayOperations_Supported) {
-			if (Vulkan_GPU->Graphics_QueueFamily == Vulkan_GPU->Presentation_QueueFamilyIndex) {
-				TuranAPI::LOG_STATUS("Vulkan: Presentation Queue and Graphics Queue are the same, so don't need to create a Presentation Queue");
-			}
-			else {
-				VkDeviceQueueCreateInfo DisplayQueue;
-				DisplayQueue.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				DisplayQueue.queueCount = 1;
-				DisplayQueue.queueFamilyIndex = Vulkan_GPU->Presentation_QueueFamilyIndex;
-				DisplayQueue.pQueuePriorities = new float(1.0f);
-				DisplayQueue.pNext = nullptr;
-				DisplayQueue.flags = 0;
-				Vulkan_GPU->QueueCreationInfos.push_back(DisplayQueue);
-			}
+		float QueuePriority = 1.0f;
+		for (unsigned int QueueIndex = 0; QueueIndex < Vulkan_GPU->QUEUEs.size(); QueueIndex++) {
+			VK_QUEUE& QUEUE = Vulkan_GPU->QUEUEs[QueueIndex];
+			VkDeviceQueueCreateInfo QueueInfo = {};
+			QueueInfo.flags = 0;
+			QueueInfo.pNext = nullptr;
+			QueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			QueueInfo.queueFamilyIndex = QUEUE.QueueFamilyIndex;
+			QueueInfo.pQueuePriorities = &QueuePriority;
+			QueueInfo.queueCount = 1;
+			QueueCreationInfos.push_back(QueueInfo);
 		}
 		if (!Vulkan_GPU->is_GraphicOperations_Supported && !Vulkan_GPU->is_DisplayOperations_Supported) {
-			TuranAPI::LOG_CRASHING("GPU doesn't support Graphics or Display Queue, so logical device creation failed!");
+			LOG_CRASHING_TAPI("GPU doesn't support Graphics or Display Queue, so logical device creation failed!");
 			return;
 		}
 
-		Vulkan_GPU->Logical_Device_CreationInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		Vulkan_GPU->Logical_Device_CreationInfo.flags = 0;
-		Vulkan_GPU->Logical_Device_CreationInfo.pQueueCreateInfos = Vulkan_GPU->QueueCreationInfos.data();
-		Vulkan_GPU->Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(Vulkan_GPU->QueueCreationInfos.size());
-		Vulkan_GPU->Logical_Device_CreationInfo.pEnabledFeatures = &Features;
+		VkDeviceCreateInfo Logical_Device_CreationInfo{};
+		Logical_Device_CreationInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		Logical_Device_CreationInfo.flags = 0;
+		Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
+		Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
+		Logical_Device_CreationInfo.pEnabledFeatures = &Features;
 		VK_States.Is_RequiredDeviceExtensions_Supported(Vulkan_GPU);
 
 
-		Vulkan_GPU->Logical_Device_CreationInfo.enabledExtensionCount = Vulkan_GPU->Required_DeviceExtensionNames->size();
-		Vulkan_GPU->Logical_Device_CreationInfo.ppEnabledExtensionNames = Vulkan_GPU->Required_DeviceExtensionNames->data();
+		Logical_Device_CreationInfo.enabledExtensionCount = Vulkan_GPU->Required_DeviceExtensionNames->size();
+		Logical_Device_CreationInfo.ppEnabledExtensionNames = Vulkan_GPU->Required_DeviceExtensionNames->data();
 
-		Vulkan_GPU->Logical_Device_CreationInfo.enabledLayerCount = 0;
+		Logical_Device_CreationInfo.enabledLayerCount = 0;
 
-		if (vkCreateDevice(Vulkan_GPU->Physical_Device, &Vulkan_GPU->Logical_Device_CreationInfo, nullptr, &Vulkan_GPU->Logical_Device) != VK_SUCCESS) {
-			TuranAPI::LOG_CRASHING("Vulkan failed to create a Logical Device!");
+		if (vkCreateDevice(Vulkan_GPU->Physical_Device, &Logical_Device_CreationInfo, nullptr, &Vulkan_GPU->Logical_Device) != VK_SUCCESS) {
+			LOG_CRASHING_TAPI("Vulkan failed to create a Logical Device!");
 			return;
 		}
-		TuranAPI::LOG_STATUS("Vulkan created a Logical Device!");
+		LOG_STATUS_TAPI("Vulkan created a Logical Device!");
 
-		if (Vulkan_GPU->is_GraphicOperations_Supported) {
-			VkQueue Graphics_Queue = {};
-			vkGetDeviceQueue(Vulkan_GPU->Logical_Device, Vulkan_GPU->Graphics_QueueFamily, 0, &Graphics_Queue);
-			Vulkan_GPU->GraphicsQueue = Graphics_Queue;
+		for (unsigned int QueueIndex = 0; QueueIndex < Vulkan_GPU->QUEUEs.size(); QueueIndex++) {
+			vkGetDeviceQueue(Vulkan_GPU->Logical_Device, Vulkan_GPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &Vulkan_GPU->QUEUEs[QueueIndex].Queue);
+
 		}
-		if (Vulkan_GPU->is_DisplayOperations_Supported) {
-			if (Vulkan_GPU->Presentation_QueueFamilyIndex == Vulkan_GPU->Graphics_QueueFamily) {
-				TuranAPI::LOG_STATUS("Vulkan: Didn't create a VkQueue for Display, because it is same with Graphics");
-			}
-			else {
-				VkQueue Display_Queue = {};
-				vkGetDeviceQueue(Vulkan_GPU->Logical_Device, Vulkan_GPU->Presentation_QueueFamilyIndex, 0, &Display_Queue);
-				Vulkan_GPU->DisplayQueue = Display_Queue;
-			}
-		}
-		if (Vulkan_GPU->is_TransferOperations_Supported) {
-			VkQueue Transfer_Queue = {};
-			vkGetDeviceQueue(Vulkan_GPU->Logical_Device, Vulkan_GPU->Transfer_QueueFamily, 0, &Transfer_Queue);
-			Vulkan_GPU->TransferQueue = Transfer_Queue;
-		}
-		TuranAPI::LOG_STATUS("Created logical device succesfully!");
+		LOG_STATUS_TAPI("VulkanCore: Created logical device succesfully!");
 	}
 	void Vulkan_Core::Create_MainWindow_SwapChain() {
-		TuranAPI::LOG_STATUS("Started to create SwapChain for GPU according to a Window");
+		LOG_STATUS_TAPI("VulkanCore: Started to create SwapChain for GPU according to a Window");
 		WINDOW* Vulkan_Window = (WINDOW*)Main_Window;
 		GPU* Vulkan_GPU = (GPU*)GPU_TO_RENDER;
 
@@ -401,50 +369,62 @@ namespace Vulkan {
 		VkExtent2D Window_ImageExtent = { Vulkan_Window->Get_Window_Mode().x, Vulkan_Window->Get_Window_Mode().y };
 		uint32_t image_count = 0;
 		if (Vulkan_GPU->SurfaceCapabilities.maxImageCount > Vulkan_GPU->SurfaceCapabilities.minImageCount) {
-			image_count = Vulkan_GPU->SurfaceCapabilities.minImageCount + 1;
+			image_count = 2;
 		}
 		else {
-			TuranAPI::LOG_NOTCODED("I didn't understand what happens now, Vulkan_GPU->SurfaceCapabilities.maxImageCount < Vulkan_GPU->SurfaceCapabilities.minImageCount in Vulkan_Core::Create_SwapChain_forWindow", true);
+			LOG_NOTCODED_TAPI("VulkanCore: Window Surface Capabilities have issues, maxImageCount <= minImageCount!", true);
 		}
-		Vulkan_Window->Window_SwapChainCreationInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		Vulkan_Window->Window_SwapChainCreationInfo.flags = 0;
-		Vulkan_Window->Window_SwapChainCreationInfo.pNext = nullptr;
-		Vulkan_Window->Window_SwapChainCreationInfo.presentMode = Window_PresentationMode;
-		Vulkan_Window->Window_SwapChainCreationInfo.surface = Vulkan_Window->Window_Surface;
-		Vulkan_Window->Window_SwapChainCreationInfo.minImageCount = image_count;
-		Vulkan_Window->Window_SwapChainCreationInfo.imageFormat = Window_SurfaceFormat.format;
-		Vulkan_Window->Window_SwapChainCreationInfo.imageColorSpace = Window_SurfaceFormat.colorSpace;
-		Vulkan_Window->Window_SwapChainCreationInfo.imageExtent = Window_ImageExtent;
-		Vulkan_Window->Window_SwapChainCreationInfo.imageArrayLayers = 1;
-		Vulkan_Window->Window_SwapChainCreationInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-		Vulkan_Window->Window_SwapChainCreationInfo.clipped = VK_TRUE;
-		Vulkan_Window->Window_SwapChainCreationInfo.preTransform = Vulkan_GPU->SurfaceCapabilities.currentTransform;
-		Vulkan_Window->Window_SwapChainCreationInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		Vulkan_Window->Window_SwapChainCreationInfo.oldSwapchain = nullptr;
+		VkSwapchainCreateInfoKHR swpchn_ci = {};
+		swpchn_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+		swpchn_ci.flags = 0;
+		swpchn_ci.pNext = nullptr;
+		swpchn_ci.presentMode = Window_PresentationMode;
+		swpchn_ci.surface = Vulkan_Window->Window_Surface;
+		swpchn_ci.minImageCount = image_count;
+		swpchn_ci.imageFormat = Window_SurfaceFormat.format;
+		swpchn_ci.imageColorSpace = Window_SurfaceFormat.colorSpace;
+		swpchn_ci.imageExtent = Window_ImageExtent;
+		swpchn_ci.imageArrayLayers = 1;
+		swpchn_ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		swpchn_ci.clipped = VK_TRUE;
+		swpchn_ci.preTransform = Vulkan_GPU->SurfaceCapabilities.currentTransform;
+		swpchn_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+		swpchn_ci.oldSwapchain = nullptr;
 
-		Vulkan_Window->Window_SwapChainCreationInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-		Vulkan_Window->Window_SwapChainCreationInfo.queueFamilyIndexCount = 2;
-		Vulkan_Window->Window_SwapChainCreationInfo.pQueueFamilyIndices = ((GPU*)GPU_TO_RENDER)->ResourceSharedQueueFamilies;
+		swpchn_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		swpchn_ci.queueFamilyIndexCount = 1;
+		swpchn_ci.pQueueFamilyIndices = &Vulkan_GPU->QUEUEs[Vulkan_GPU->DISPLAY_QUEUEIndex].QueueFamilyIndex;
 
-		if (vkCreateSwapchainKHR(Vulkan_GPU->Logical_Device, &Vulkan_Window->Window_SwapChainCreationInfo, nullptr, &Vulkan_Window->Window_SwapChain) != VK_SUCCESS) {
-			TuranAPI::LOG_CRASHING("Failed to create a SwapChain for a Window");
+
+		if (vkCreateSwapchainKHR(Vulkan_GPU->Logical_Device, &swpchn_ci, nullptr, &Vulkan_Window->Window_SwapChain) != VK_SUCCESS) {
+			LOG_CRASHING_TAPI("VulkanCore: Failed to create a SwapChain for a Window");
 		}
-		TuranAPI::LOG_STATUS("Finished creating SwapChain for GPU according to a Window");
+		LOG_STATUS_TAPI("VulkanCore: Finished creating SwapChain for GPU according to a Window");
 
 		//Get Swapchain images
 		uint32_t created_imagecount = 0;
 		vkGetSwapchainImagesKHR(Vulkan_GPU->Logical_Device, Vulkan_Window->Window_SwapChain, &created_imagecount, nullptr);
-		Vulkan_Window->SwapChain_Images.resize(created_imagecount);
-		vkGetSwapchainImagesKHR(Vulkan_GPU->Logical_Device, Vulkan_Window->Window_SwapChain, &created_imagecount, Vulkan_Window->SwapChain_Images.data());
+		VkImage* SWPCHN_IMGs = new VkImage[created_imagecount];
+		vkGetSwapchainImagesKHR(Vulkan_GPU->Logical_Device, Vulkan_Window->Window_SwapChain, &created_imagecount, SWPCHN_IMGs);
+		for (unsigned int vkim_index = 0; vkim_index < created_imagecount; vkim_index++) {
+			VK_Texture* SWAPCHAINTEXTURE = new VK_Texture;
+			SWAPCHAINTEXTURE->CHANNELs = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA8UB;
+			SWAPCHAINTEXTURE->HEIGHT = Main_Window->Get_Window_Mode().y;
+			SWAPCHAINTEXTURE->WIDTH = Main_Window->Get_Window_Mode().x;
+			SWAPCHAINTEXTURE->DATA_SIZE = SWAPCHAINTEXTURE->WIDTH * SWAPCHAINTEXTURE->HEIGHT * 4;
+			SWAPCHAINTEXTURE->Image = SWPCHN_IMGs[vkim_index];
 
-		TuranAPI::LOG_STATUS("Finished getting VkImages of Swapchain");
+			Vulkan_Window->Swapchain_Textures.push_back(SWAPCHAINTEXTURE);
+		}
 
-		TuranAPI::LOG_STATUS("Started getting VkImageViews of Swapchain");
-		Vulkan_Window->SwapChain_ImageViews.resize(Vulkan_Window->SwapChain_Images.size());
-		for (unsigned int i = 0; i < Vulkan_Window->SwapChain_Images.size(); i++) {
+		LOG_STATUS_TAPI("VulkanCore: Finished getting VkImages of Swapchain");
+
+		LOG_STATUS_TAPI("VulkanCore: Started getting VkImageViews of Swapchain");
+		for (unsigned int i = 0; i < Vulkan_Window->Swapchain_Textures.size(); i++) {
 			VkImageViewCreateInfo ImageView_ci = {};
 			ImageView_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			ImageView_ci.image = Vulkan_Window->SwapChain_Images[i];
+			VK_Texture* SwapchainTexture = GFXHandleConverter(VK_Texture*, Vulkan_Window->Swapchain_Textures[i]);
+			ImageView_ci.image = SwapchainTexture->Image;
 			ImageView_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
 			//I'm tired, so set the value manually!
 			ImageView_ci.format = Window_SurfaceFormat.format;
@@ -460,138 +440,17 @@ namespace Vulkan {
 			ImageView_ci.subresourceRange.layerCount = 1;
 			ImageView_ci.subresourceRange.levelCount = 1;
 
-			if (vkCreateImageView(Vulkan_GPU->Logical_Device, &ImageView_ci, nullptr, &Vulkan_Window->SwapChain_ImageViews[i]) != VK_SUCCESS) {
-				TuranAPI::LOG_CRASHING("Image View creation has failed!");
+			if (vkCreateImageView(Vulkan_GPU->Logical_Device, &ImageView_ci, nullptr, &SwapchainTexture->ImageView) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("VulkanCore: Image View creation has failed!");
 			}
-			TuranAPI::LOG_STATUS("Created an Image View successfully!");
+			LOG_STATUS_TAPI("VulkanCore: Created an Image View successfully!");
 		}
 	}
-	void Vulkan_Core::Create_CommandBuffers() {
-		TuranAPI::LOG_STATUS("Started to create Command Buffers!");
-		GPU* Vulkan_GPU = (GPU*)GPU_TO_RENDER;
-
-		FirstTriangle_CommandBuffers.push_back(VkCommandBuffer());
-		FirstTriangle_CommandBuffers.push_back(VkCommandBuffer());
-		FirstTriangle_CommandBuffers.push_back(VkCommandBuffer());
-
-		VkCommandBufferAllocateInfo CommandBuffer_ai = {};
-		CommandBuffer_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		CommandBuffer_ai.commandPool = FirstTriangle_CommandPool;
-		CommandBuffer_ai.commandBufferCount = FirstTriangle_CommandBuffers.size();
-		std::cout << "\n\nCommand buffers size: " << FirstTriangle_CommandBuffers.size() << std::endl;
-		CommandBuffer_ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		CommandBuffer_ai.pNext = nullptr;
-		if (vkAllocateCommandBuffers(Vulkan_GPU->Logical_Device, &CommandBuffer_ai, FirstTriangle_CommandBuffers.data()) != VK_SUCCESS) {
-			TuranAPI::LOG_CRASHING("Vulkan Command Buffer allocation failed!");
-		}
-		TuranAPI::LOG_STATUS("Allocated Command Buffers");
-
-		for (unsigned int CB_index = 0; CB_index < FirstTriangle_CommandBuffers.size(); CB_index++) {
-			VkCommandBufferBeginInfo CommandBuffer_bi = {};
-			CommandBuffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			CommandBuffer_bi.pInheritanceInfo = nullptr;
-			CommandBuffer_bi.flags = 0;
-			CommandBuffer_bi.pNext = nullptr;
-
-			if (vkBeginCommandBuffer(FirstTriangle_CommandBuffers[CB_index], &CommandBuffer_bi) != VK_SUCCESS) {
-				TuranAPI::LOG_CRASHING("Command buffer begin has failed!");
-			}
-			
-			//Record command buffer for once for now
-
-			Begin_RenderPass(CB_index);
-			Begin_DrawingFirstTriangle(CB_index);
-			Finish_DrawingProgresses(CB_index);
-		}
-		TuranAPI::LOG_STATUS("Finished creating Command Buffers!");
-	}
-	void Vulkan_Core::Begin_RenderPass(unsigned int CB_Index) {
-		
-		TuranAPI::LOG_STATUS("Started to begin Render Pass!");
-		VkClearValue ClearColor_Value = { 0.4f, 0.7f, 0.5f, 1.0f };
-		VkRect2D RenderScissor = {};
-		RenderScissor.offset = { 0,0 };
-		RenderScissor.extent = { (uint32_t)Main_Window->Get_Window_Mode().x , (uint32_t)Main_Window->Get_Window_Mode().y };
-
-		VkRenderPassBeginInfo RenderPass_bi = {};
-		RenderPass_bi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		RenderPass_bi.renderPass = FirstTriangle_RenderPass;
-		RenderPass_bi.renderArea = RenderScissor;
-		RenderPass_bi.framebuffer = ((WINDOW*)Main_Window)->Swapchain_Framebuffers[CB_Index];
-		RenderPass_bi.pNext = nullptr;
-		RenderPass_bi.clearValueCount = 1;
-		RenderPass_bi.pClearValues = &ClearColor_Value;
-
-		vkCmdBeginRenderPass(FirstTriangle_CommandBuffers[CB_Index], &RenderPass_bi, VK_SUBPASS_CONTENTS_INLINE);
-
-		TuranAPI::LOG_STATUS("Finished beginning Render Pass!");
-	}
-	void Vulkan_Core::Begin_DrawingFirstTriangle(unsigned int CB_Index) {
-		/*
-
-		TuranAPI::LOG_STATUS("Started to send First Triangle's drawing commands!");
-
-		vkCmdBindPipeline(FirstTriangle_CommandBuffers[CB_Index], VK_PIPELINE_BIND_POINT_GRAPHICS, FirstTriangle_GraphicsPipeline);
-
-		//Dynamic State Settings
-		{
-			VkViewport RenderViewport = {};
-			{
-				RenderViewport.width = (float)Main_Window->Get_Window_Mode().x;
-				RenderViewport.height = (float)Main_Window->Get_Window_Mode().y;
-				RenderViewport.minDepth = 0.0f;
-				RenderViewport.maxDepth = 1.0f;
-				RenderViewport.x = 0;
-				RenderViewport.y = 0;
-			}
-			vkCmdSetViewport(FirstTriangle_CommandBuffers[CB_Index], 0, 1, &RenderViewport);
-		}
-
-
-
-		vkCmdDraw(FirstTriangle_CommandBuffers[CB_Index], 3, 1, 0, 0);
-
-		TuranAPI::LOG_STATUS("Finished sending First Triangle's drawing commmands!");*/
-	}
-	void Vulkan_Core::Finish_DrawingProgresses(unsigned int CB_Index) {
-		TuranAPI::LOG_STATUS("Started to close Rendering Operations!");
-
-		vkCmdEndRenderPass(FirstTriangle_CommandBuffers[CB_Index]);
-		vkEndCommandBuffer(FirstTriangle_CommandBuffers[CB_Index]);
-
-		TuranAPI::LOG_STATUS("Finished closing Rendering Operations!");
-	}
-	void Vulkan_Core::Create_Semaphores() {
-		GPU* Vulkan_GPU = (GPU*)GPU_TO_RENDER;
-		WINDOW* VK_WINDOW = (WINDOW*)Main_Window;
-
-		VkSemaphoreCreateInfo Semaphore_ci = {};
-		Semaphore_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-		Semaphore_ci.flags = 0;
-		Semaphore_ci.pNext = nullptr;
-		if (vkCreateSemaphore(Vulkan_GPU->Logical_Device, &Semaphore_ci, nullptr, &Wait_GettingFramebuffer) != VK_SUCCESS ||
-			vkCreateSemaphore(Vulkan_GPU->Logical_Device, &Semaphore_ci, nullptr, &Wait_RenderingFirstTriangle) != VK_SUCCESS) {
-			TuranAPI::LOG_CRASHING("Semaphore creation has failed!");
-		}
-
-		SwapchainFences.resize(VK_WINDOW->SwapChain_Images.size());
-		//Set fences as signaled for the first frame!
-		for (unsigned int i = 0; i < 3; i++) {
-			VkFenceCreateInfo Fence_ci = {};
-			Fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-			Fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-			Fence_ci.pNext = nullptr;
-			if (vkCreateFence(Vulkan_GPU->Logical_Device, &Fence_ci, nullptr, &SwapchainFences[i]) != VK_SUCCESS) {
-				TuranAPI::LOG_CRASHING("Fence creation has failed!");
-			}
-		}
-	}
-
 
 	void Vulkan_Core::Save_Monitors() {
 		int monitor_count;
 		GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
-		TuranAPI::LOG_STATUS("Probably one monitor is detected!");
+		LOG_STATUS_TAPI("VulkanCore: " + to_string(monitor_count) + " number of monitor(s) detected!");
 		for (unsigned int i = 0; i < monitor_count; i++) {
 			GLFWmonitor* monitor = monitors[i];
 
@@ -608,10 +467,6 @@ namespace Vulkan {
 
 			CONNECTED_Monitors.push_back(gfx_monitor);
 		}
-	}
-
-	void Vulkan_Core::Create_Renderer() {
-		TuranAPI::LOG_NOTCODED("Vulkan_Core::Create_Renderer isn't coded!\n", false);
 	}
 
 	//Destroy Operations
@@ -641,7 +496,7 @@ namespace Vulkan {
 
 		glfwTerminate();
 
-		TuranAPI::LOG_STATUS("Vulkan Resources are destroyed!");
+		LOG_STATUS_TAPI("Vulkan Resources are destroyed!");
 	}
 	void Vulkan_Core::Destroy_SwapchainDependentData() {
 		GPU* Vulkan_GPU = (GPU*)GPU_TO_RENDER;
@@ -657,81 +512,35 @@ namespace Vulkan {
 		}
 
 		vkDestroySwapchainKHR(Vulkan_GPU->Logical_Device, VK_WINDOW->Window_SwapChain, nullptr);
-
-		for (unsigned int i = 0; i < VK_WINDOW->Swapchain_Framebuffers.size(); i++) {
-			vkDestroyFramebuffer(Vulkan_GPU->Logical_Device, VK_WINDOW->Swapchain_Framebuffers[i], nullptr);
-		}
-		VK_WINDOW->Swapchain_Framebuffers.clear();
-
-		for (unsigned int i = 0; i < VK_WINDOW->SwapChain_ImageViews.size(); i++) {
-			vkDestroyImageView(Vulkan_GPU->Logical_Device, VK_WINDOW->SwapChain_ImageViews[i], nullptr);
-		}
-	}
-
-	//Recreate Operations
-
-	void Vulkan_Core::Recreate_SwapchainDependentData() {
-		GPU* Vulkan_GPU = (GPU*)GPU_TO_RENDER;
-		WINDOW* VK_WINDOW = (WINDOW*)Main_Window;
-
-		vkDeviceWaitIdle(Vulkan_GPU->Logical_Device);
-		Destroy_SwapchainDependentData();
-
-		Create_MainWindow_SwapChain();
-		//Swapchain image number has changed!
-		if (VK_WINDOW->SwapChain_Images.size() != VK_WINDOW->Swapchain_Framebuffers.size()) {
-			Create_Framebuffers();
-			Create_CommandPool();
-			Create_CommandBuffers();
-			Create_Semaphores();
-		}
-	}
-	void Vulkan_Core::RecordCommandBuffer_Again() {
-		GPU* Vulkan_GPU = (GPU*)GPU_TO_RENDER;
-		WINDOW* VK_WINDOW = (WINDOW*)Main_Window;
-		vkDeviceWaitIdle(Vulkan_GPU->Logical_Device);
-
-		for (unsigned int i = 0; i < VK_WINDOW->Swapchain_Framebuffers.size(); i++) {
-			vkDestroyFramebuffer(Vulkan_GPU->Logical_Device, VK_WINDOW->Swapchain_Framebuffers[i], nullptr);
-		}
-		VK_WINDOW->Swapchain_Framebuffers.clear();
-
-		vkFreeCommandBuffers(Vulkan_GPU->Logical_Device, FirstTriangle_CommandPool, static_cast<uint32_t>(FirstTriangle_CommandBuffers.size()), FirstTriangle_CommandBuffers.data());
-		FirstTriangle_CommandBuffers.clear();
-
-		Create_Framebuffers();
-		Create_CommandPool();
-		Create_CommandBuffers();
 	}
 
 	//Input (Keyboard-Controller) Operations
 	void Vulkan_Core::Take_Inputs() {
-		TuranAPI::LOG_STATUS("Take inputs!");
+		LOG_STATUS_TAPI("Take inputs!");
 		glfwPollEvents();
 	}
 
 	//CODE ALL OF THE BELOW FUNCTIONS!!!!
 	void Vulkan_Core::Change_Window_Resolution(unsigned int width, unsigned int height) {
-		TuranAPI::LOG_NOTCODED("GFX->Change_Window_Resolution isn't coded!", true);
+		LOG_NOTCODED_TAPI("VulkanCore: Change_Window_Resolution isn't coded!", true);
 	}
 	void Vulkan_Core::Window_ResizeCallback(GLFWwindow* window, int WIDTH, int HEIGHT) {
 		Vulkan_Core* THIS = (Vulkan_Core*)GFX;
 		WINDOW* VK_WINDOW = (WINDOW*)THIS->Main_Window;
-		if (((Renderer*)GFXRENDERER)->Record_RenderGraphCreation) {
-			TuranAPI::LOG_ERROR("You can not change window's size while recording rendergraph!");
+		if (((Renderer*)GFXRENDERER)->Is_ConstructingRenderGraph()) {
+			LOG_ERROR_TAPI("You can not change window's size while recording rendergraph!");
 			return;
 		}
 		VK_WINDOW->Change_Width_Height(WIDTH, HEIGHT);
-		THIS->Recreate_SwapchainDependentData();
 	}
 
 	void Vulkan_Core::Swapbuffers_ofMainWindow() {
 		glfwSwapBuffers(((WINDOW*)Main_Window)->GLFW_WINDOW);
 	}
 	void Vulkan_Core::Show_RenderTarget_onWindow(unsigned int RenderTarget_GFXID) {
-		TuranAPI::LOG_NOTCODED("GFX->Show_RenderTarget_onWindow isn't coded!", true);
+		LOG_NOTCODED_TAPI("VulkanCore: Show_RenderTarget_onWindow isn't coded!", true);
 	}
 	void Vulkan_Core::Check_Errors() {
-		TuranAPI::LOG_NOTCODED("GFX->Check_Errors isn't coded!", true);
+		LOG_NOTCODED_TAPI("VulkanCore: Check_Errors isn't coded!", true);
 	}
 }

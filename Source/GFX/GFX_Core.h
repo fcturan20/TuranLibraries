@@ -7,16 +7,14 @@
 
 
 namespace GFX_API {
+	//If you want to close GFX API systems, you should call Destroy GFX
+	//Because "delete GFX;" may cause issues!
 	class GFXAPI GFX_Core {
 	protected:
 		unsigned int FOCUSED_WINDOW_index;
 		vector<GPU*> DEVICE_GPUs;
 		GFX_Core();
 
-		virtual void Initialization() = 0;
-		virtual void Check_Computer_Specs() = 0;
-		virtual void Save_Monitors() = 0;
-		virtual void Create_Renderer() = 0;
 
 		MONITOR* Create_MonitorOBJ(void* monitor, const char* name);
 	public:
@@ -40,6 +38,8 @@ namespace GFX_API {
 
 
 		virtual void Take_Inputs() = 0;
+		//Destroy GFX API systems to create again (with a different Graphics API maybe?) or close application
+		//This will close all of the systems with "GFX" prefix and you shouldn't call them either
 		virtual void Destroy_GFX_Resources() = 0;
 		virtual void Check_Errors() = 0;
 	};

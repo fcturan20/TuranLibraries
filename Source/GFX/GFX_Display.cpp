@@ -25,7 +25,7 @@ namespace GFX_API {
 		HEIGHT = height;
 		COLOR_BITES = color_bites;
 		REFRESH_RATE = refrest_rate;
-		TuranAPI::LOG_STATUS("Monitor's Video Mode is set!");
+		LOG_STATUS_TAPI("Monitor's Video Mode is set!");
 	}
 	MONITOR& MONITOR::operator= (const MONITOR& from) {
 		ID = from.ID;
@@ -60,12 +60,12 @@ namespace GFX_API {
 
 	//Settings of window
 	void WINDOW::Window_Settings(V_SYNC vsync_type, bool window_resizable) {
-		TuranAPI::LOG_NOTCODED("WINDOW::Window_Settings isn't coded!", false);
+		LOG_NOTCODED_TAPI("WINDOW::Window_Settings isn't coded!", false);
 	}
 
 	void WINDOW::Change_Width_Height(unsigned int width, unsigned int height) {
 		WIDTH = width;
 		HEIGHT = height;
-		TuranAPI::LOG_STATUS("Window's width and height is changed!");
+		LOG_STATUS_TAPI("Window's width and height is changed!");
 	}
 }

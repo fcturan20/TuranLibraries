@@ -12,7 +12,7 @@ namespace TuranEditor {
 	}
 	bool Static_Mesh_Data::Verify_Mesh_Data() {
 		if (VERTEX_NUMBER == 0){
-			TuranAPI::LOG_ERROR("Vertex number is zero or below!");
+			LOG_ERROR_TAPI("Vertex number is zero or below!");
 			return false;
 		}
 		return true;

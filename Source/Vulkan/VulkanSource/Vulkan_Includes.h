@@ -10,6 +10,20 @@
 #define VULKAN_DEBUGGING
 
 namespace Vulkan {
+	struct VK_QUEUEFLAG {
+		bool is_GRAPHICSsupported : 1;
+		bool is_PRESENTATIONsupported : 1;
+		bool is_COMPUTEsupported : 1;
+		bool is_TRANSFERsupported : 1;
+		//bool is_VTMEMsupported : 1;	Not supported for now!
+	};
+
+	struct VK_API VK_QUEUE {
+		VK_QUEUEFLAG SupportFlag;
+		VkQueue Queue;
+		uint32_t QueueFamilyIndex;
+		VkCommandPool CommandPool;
+	};
 
 	class VK_API GPU : public GFX_API::GPU {
 	public:
@@ -19,11 +33,10 @@ namespace Vulkan {
 		VkPhysicalDeviceFeatures Device_Features = {};
 		VkPhysicalDeviceMemoryProperties MemoryProperties = {};
 		vector<VkQueueFamilyProperties> QueueFamilies;
-		uint32_t* ResourceSharedQueueFamilies = nullptr, Graphics_QueueFamily = {}, Compute_QueueFamily = {}, Transfer_QueueFamily = {}, Presentation_QueueFamilyIndex = {};
-		vector<VkDeviceQueueCreateInfo> QueueCreationInfos;
-		VkDeviceCreateInfo Logical_Device_CreationInfo = {};
+		vector<VK_QUEUE> QUEUEs;
+		unsigned int TRANSFERs_supportedqueuecount = 0, COMPUTE_supportedqueuecount = 0;
+		unsigned int GRAPHICS_QUEUEIndex = 0, DISPLAY_QUEUEIndex = 0;
 		VkDevice Logical_Device = {};
-		VkQueue GraphicsQueue, DisplayQueue, TransferQueue;
 		vector<VkExtensionProperties> Supported_DeviceExtensions;
 		vector<const char*>* Required_DeviceExtensionNames;
 
@@ -38,12 +51,9 @@ namespace Vulkan {
 	public:
 		WINDOW(unsigned int width, unsigned int height, GFX_API::WINDOW_MODE display_mode, GFX_API::MONITOR* display_monitor, unsigned int refresh_rate, const char* window_name, GFX_API::V_SYNC v_sync);
 		VkSurfaceKHR Window_Surface = {};
-		VkSwapchainCreateInfoKHR Window_SwapChainCreationInfo = {};
 		VkSwapchainKHR Window_SwapChain = {};
-		vector<VkImage> SwapChain_Images;
-		vector<VkImageView> SwapChain_ImageViews;
 		GLFWwindow* GLFW_WINDOW = {};
-		vector<VkFramebuffer> Swapchain_Framebuffers;
+		vector<GFX_API::GFXHandle> Swapchain_Textures;
 	};
 
 	//Use this class to store Vulkan Global Variables (Such as VkInstance, VkApplicationInfo etc)
@@ -53,7 +63,6 @@ namespace Vulkan {
 		Vulkan_States();
 		VkInstance Vulkan_Instance;
 		VkApplicationInfo Application_Info;
-		VkInstanceCreateInfo Instance_CreationInfo;
 		vector<VkExtensionProperties> Supported_InstanceExtensionList;
 		vector<const char*> Required_InstanceExtensionNames;
 
@@ -82,11 +91,19 @@ namespace Vulkan {
 		PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT();
 	};
 
+#define GFXHandleConverter(ConvertType, Handle) static_cast<ConvertType>((void*)Handle)
+
 	VK_API VkFormat Find_VkFormat_byDataType(GFX_API::DATA_TYPE datatype);
 	VK_API VkFormat Find_VkFormat_byTEXTURECHANNELs(GFX_API::TEXTURE_CHANNELs channels);
-	VK_API VkAttachmentLoadOp Find_VkLoadOp_byAttachmentReadState(GFX_API::ATTACHMENT_READSTATE readstate);
-	VK_API VkImageLayout Find_VkImageFinalLayout_byTextureType(GFX_API::TEXTURE_TYPEs type);
+	VK_API VkAttachmentLoadOp Find_VkLoadOp_byAttachmentReadState(GFX_API::DRAWPASS_LOAD readstate);
 	VK_API VkShaderStageFlags Find_VkStages(GFX_API::SHADERSTAGEs_FLAG flag);
 	VK_API VkDescriptorType Find_VkDescType_byVisibility(GFX_API::BUFFER_VISIBILITY BUFVIS);
 	VK_API VkDescriptorType Find_VkDescType_byMATDATATYPE(GFX_API::MATERIALDATA_TYPE TYPE);
+
+	enum VK_API class SUBALLOCATEBUFFERTYPEs : unsigned char {
+		NOWHERE,
+		STAGING,
+		GPULOCALBUF,
+		GPULOCALTEX
+	};
 }

@@ -4,6 +4,7 @@
 #include "GFX/IMGUI/IMGUI_Core.h"
 #include "GFX/GFX_Core.h"
 #include "Editor/FileSystem/EditorFileSystem_Core.h"
+#include "TuranAPI/ThreadedJobCore.h"
 
 #include "Editor/FileSystem/ResourceImporters/Model_Loader.h"
 #include "TuranAPI/Profiler_Core.h"
@@ -17,7 +18,10 @@ namespace TuranEditor {
 		TuranAPI::Profiler_System Profiler;
 		static bool Should_Close;
 	public:
-		Editor_System();
+		vector<GFX_API::GPUDescription> GPUs;
+		vector<GFX_API::MonitorDescription> Monitors;
+
+		Editor_System(TuranAPI::Threading::JobSystem& JobSystem);
 		~Editor_System();
 		static void Take_Inputs();
 		static bool Should_EditorClose();
@@ -25,4 +29,5 @@ namespace TuranEditor {
 
 	void RenderGraphConstruction_BasicUT();
 	void RenderGraphConstruction_LastFrameUT();
+	void RenderGraphConstruction_DrawPassed();
 }

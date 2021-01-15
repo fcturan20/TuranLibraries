@@ -9,8 +9,7 @@
 
 namespace Vulkan {
 	class VK_API Vulkan_Core : public GFX_API::GFX_Core {
-		void Create_MainWindow();
-
+	public:
 		Vulkan_States VK_States;
 		VkCommandPool FirstTriangle_CommandPool;
 		vector<VkCommandBuffer> FirstTriangle_CommandBuffers;
@@ -19,15 +18,16 @@ namespace Vulkan {
 		vector<VkFence> SwapchainFences;
 		VkShaderModule* FirstShaderProgram;
 
-		void Initialization();
-		void Check_Computer_Specs();
-		void Save_Monitors();
+		//Initialization Processes
+
+		void Check_Computer_Specs(vector<GFX_API::GPUDescription>& GPUdescs);
+		void Save_Monitors(vector<GFX_API::MonitorDescription>& Monitors);
 
 		virtual void Check_Errors() override;
 		//Window Operations
-		virtual void Change_Window_Resolution(unsigned int width, unsigned int height) override;
-		virtual void Swapbuffers_ofMainWindow() override;
-		virtual void Show_RenderTarget_onWindow(unsigned int RenderTarget_GFXID) override;
+
+		virtual GFX_API::GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) override;
+		virtual void Change_Window_Resolution(GFX_API::GFXHandle Window, unsigned int width, unsigned int height) override;
 
 		//Input (Keyboard-Controller) Operations
 		virtual void Take_Inputs() override;
@@ -40,17 +40,14 @@ namespace Vulkan {
 		void Create_Instance();
 		//Initialization calls this function if TURAN_DEBUGGING is defined
 		void Setup_Debugging();
-		void Create_Surface_forWindow();
 		//A Graphics Queue is created for learning purpose
 		void Setup_LogicalDevice();
-		void Create_MainWindow_SwapChain();
 
 
 		//Destroy Operations
-		void Destroy_SwapchainDependentData();
 		virtual void Destroy_GFX_Resources() override;
-	public:
-		Vulkan_Core();
+
+		Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem& JobSystem);
 		virtual ~Vulkan_Core();
 	};
 

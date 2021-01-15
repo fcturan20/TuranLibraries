@@ -30,6 +30,7 @@ namespace Vulkan {
 		unsigned int WIDTH, HEIGHT, DATA_SIZE;
 		GFX_API::TEXTURE_CHANNELs CHANNELs;
 		GFX_API::TEXTUREUSAGEFLAG USAGE;
+		SUBALLOCATEBUFFERTYPEs MEMORYREGION;
 
 		VkImage Image = {};
 		VkImageView ImageView = {};
@@ -50,11 +51,14 @@ namespace Vulkan {
 		GFX_API::OPERATION_TYPE STENCIL_OPTYPE;
 		vec2 CLEAR_COLOR;
 	};
-	struct VK_API VK_RTSLOTSET {
+	struct VK_RTSLOTs {
 		VK_COLORRTSLOT* COLOR_SLOTs = nullptr;
 		unsigned char COLORSLOTs_COUNT = 0;
 		VK_DEPTHSTENCILSLOT* DEPTHSTENCIL_SLOT = nullptr;	//There is one, but there may not be a Depth Slot. So if there is no, then this is nullptr.
 		//Unused Depth and NoDepth are different. Unused Depth means RenderPass does have one but current Subpass doesn't use, but NoDepth means RenderPass doesn't have one!
+	};
+	struct VK_API VK_RTSLOTSET {
+		VK_RTSLOTs PERFRAME_SLOTSETs[2];
 	};
 	struct VK_API VK_IRTSLOTSET {
 		VK_RTSLOTSET* BASESLOTSET;
@@ -85,8 +89,8 @@ namespace Vulkan {
 		VkVertexInputAttributeDescription* AttribDescs;
 		unsigned char AttribDesc_Count;
 	};
-	struct VK_API VK_Mesh {
-		unsigned int VERTEX_COUNT, INDEX_COUNT;
+	struct VK_API VK_VertexBuffer {
+		unsigned int VERTEX_COUNT;
 		VK_VertexAttribLayout* Layout;
 		VkBuffer Buffer;
 	};
@@ -141,6 +145,14 @@ namespace Vulkan {
 
 	//RenderNodes
 
+	enum class TPType : unsigned char {
+		ERROR = 0,
+		DP = 1,
+		TP = 2,
+		CP = 3,
+		WP = 4,
+	};
+
 	enum class VK_BUFFERTYPEs : unsigned char {
 		MESH = 0,
 		STORAGE = 1,
@@ -166,9 +178,9 @@ namespace Vulkan {
 		VkDeviceSize StagingBufferOffset;
 	};
 	struct VK_TPUploadDatas {
-		vector<VK_Texture*> CreateTextures;
-		vector<VK_ImUploadInfo> TextureUploads;
-		vector<VK_BufUploadInfo> BufferUploads;
+		TuranAPI::Threading::TLVector<VK_ImUploadInfo> TextureUploads;
+		TuranAPI::Threading::TLVector<VK_BufUploadInfo> BufferUploads;
+		VK_TPUploadDatas();
 	};
 
 	struct VK_ImBarrierInfo {
@@ -182,9 +194,9 @@ namespace Vulkan {
 		GFX_API::SHADERSTAGEs_FLAG WAITSTAGE, SIGNALSTAGE;
 	};
 	struct VK_TPBarrierDatas {
-		vector<VK_Texture*> CreateTextures;
-		vector<VK_ImBarrierInfo> TextureBarriers;
-		vector<VK_BufBarrierInfo> BufferBarriers;
+		TuranAPI::Threading::TLVector<VK_ImBarrierInfo> TextureBarriers;
+		TuranAPI::Threading::TLVector<VK_BufBarrierInfo> BufferBarriers;
+		VK_TPBarrierDatas();
 	};
 
 	struct VK_TransferPass {
@@ -199,7 +211,7 @@ namespace Vulkan {
 		unsigned char Binding_Index;
 		VK_IRTSLOTSET* SLOTSET;
 		GFX_API::GFXHandle DrawPass;
-		vector<GFX_API::DrawCall_Description> DrawCalls;
+		//vector<GFX_API::DrawCall_Description> DrawCalls;
 	};
 	struct VK_API VK_DrawPass {
 		//Name is to debug the rendergraph algorithms, production ready code won't use it!
@@ -212,7 +224,16 @@ namespace Vulkan {
 		vector<GFX_API::PassWait_Description> WAITs;
 	};
 
-
+	struct VK_API VK_WindowCall {
+		VK_ImBarrierInfo BarrierInfo;
+		std::function<void()> JobToDo;
+		VkSwapchainKHR Swapchain;
+	};
+	struct VK_API VK_WindowPass {
+		string NAME;
+		vector<VK_WindowCall> WindowCalls;
+		vector<GFX_API::PassWait_Description> WAITs;
+	};
 
 
 
@@ -229,12 +250,11 @@ namespace Vulkan {
 
 	struct VK_BranchPass {
 		GFX_API::GFXHandle Handle;	//Use VK_DrawPassInstance if is_TransferPass is true, otherwise use VK_TransferPass
-		bool is_TransferPass;
-		VK_BranchPass* NextItem = nullptr;	//This is a linked list, so point to the next item
+		TPType TYPE;
 	};
 	/*
 	1) VK_RGBranch consists of one or more passes that should be executed serially without executing any other passes
-	Note: You can think a VK_RGBranch as a VkSubmitInfo with one command buffer
+	Note: You can think a VK_RGBranch as a VkSubmitInfo with one command buffer if its all passes are active
 	2) VK_RGBranch will be called RB for this spec
 	3) a RB start after one or more RBs and end before one or more RBs
 	4) Render Graph starts with Root Passes that doesn't wait for any of the current passes
@@ -244,26 +264,45 @@ namespace Vulkan {
 	Note: Of course if all of the wait passes are in same RB, algorithm finds the order of execution.
 	7) For maximum workload, each RGBranch stores a signal semaphore and list of wait semaphores that point to the signal semaphores of other RGBranches
 	But GFX API doesn't have to use the listed semaphores, because there may not be any workload of this branch or any of the dependent branches
+	8) ID is only used for now and same branch in different frames have the same ID (Because this ID is generated in current frame construction proccess)
+	9) CorePasses is a linked list of all passes that created at RenderGraph_Construction process
+	10) CFPasses is a linked list of all passes of the CorePasses that has some workload and CFNeed_QueueSpecs is the queue support flag of these passes
+	11) GFX API will analyze the workload of the all passes in the Branch each frame and create CFPasses and CFNeed_QueueSpecs
 	*/
+	struct VK_RGBranch;
+	struct VK_Submit {
+		VK_CommandBuffer* CB = nullptr;
+		//Index + 1
+		vector<unsigned char> BranchIndexes;
+		vector<unsigned char> WaitSemaphoreIndexes;
+		unsigned char SignalSemaphoreIndex = 0;
+		VK_QUEUE* Run_Queue = nullptr;
+		bool is_EndSubmit = false, is_Ended = false;
+	};
 	struct VK_RGBranch {
-		VK_BranchPass* Passes = nullptr;
-		VK_RGBranch** DependentBranches, **LaterExecutedBranches;
-		unsigned char DependentBranchCount = 0, LaterExecutedBranchCount = 0;
-		VkSemaphore SignalSemaphore, **WaitSemaphores;
-		unsigned char WaitSemaphoresCount = 0;
+		//Static Datas
+
+		unsigned char ID;	
+		VK_BranchPass* CorePasses = nullptr;
+		unsigned char PassCount = 0;
+		VK_RGBranch **PenultimateSwapchainBranches = nullptr, **LFDependentBranches = nullptr, **CFDependentBranches = nullptr, **LaterExecutedBranches = nullptr;
+		unsigned char PenultimateSwapchainBranchCount = 0, LFDependentBranchCount = 0, CFDependentBranchCount = 0, LaterExecutedBranchCount = 0;
+
+		//Dynamic Datas
+
+		VK_QUEUEFLAG CFNeeded_QueueSpecs;
+		VK_Submit* AttachedSubmit = nullptr;
+		//All of these are real indexes, so there is no sentinel value
+		vector<unsigned char> LFDynamicDependents, CFDynamicDependents, DynamicLaterExecutes;
+		//All these indexes are indexes of the CorePasses' active passes but +1 because 0 means null
+		//That means, if you use these indexes to access a pass from CorePasses, you should access with "index - 1"
+		unsigned char* CurrentFramePassesIndexes = nullptr;
 	};
 
 	struct VK_FrameGraph {
 		VK_RGBranch* FrameGraphTree;
 		unsigned char BranchCount = 0;
+		vector<VK_Submit*> CurrentFrameSubmits;
 	};
-
-
-
-
-
-
-
-
 
 }

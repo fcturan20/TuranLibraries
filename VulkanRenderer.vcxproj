@@ -46,6 +46,10 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)Source</AdditionalIncludeDirectories>
+      <Optimization>MaxSpeed</Optimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -93,11 +97,12 @@
     <ClInclude Include="Source\TuranAPI\FileSystem_Core.h" />
     <ClInclude Include="Source\TuranAPI\Logger_Core.h" />
     <ClInclude Include="Source\TuranAPI\Profiler_Core.h" />
+    <ClInclude Include="Source\TuranAPI\ThreadedJobCore.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\VK_GPUContentManager.h" />
-    <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\VK_RenderGraphCommands.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Renderer_Core.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Resource.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Core.h" />
+    <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Display.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Includes.h" />
   </ItemGroup>
   <ItemGroup>
@@ -110,7 +115,6 @@
     <ClCompile Include="Source\Editor\FileSystem\ResourceTypes\Resource_Identifier.cpp" />
     <ClCompile Include="Source\Editor\FileSystem\ResourceTypes\Scene_Resource.cpp" />
     <ClCompile Include="Source\GFX\GFX_Core.cpp" />
-    <ClCompile Include="Source\GFX\GFX_Display.cpp" />
     <ClCompile Include="Source\GFX\GFX_FileSystem\Resource_Type\Material_Type_Resource.cpp" />
     <ClCompile Include="Source\GFX\GFX_FileSystem\Resource_Type\Texture_Resource.cpp" />
     <ClCompile Include="Source\GFX\GFX_Includes.cpp" />
@@ -130,9 +134,9 @@
     <ClCompile Include="Source\TuranAPI\FileSystem_Core.cpp" />
     <ClCompile Include="Source\TuranAPI\Logger_Core.cpp" />
     <ClCompile Include="Source\TuranAPI\Profiler_Core.cpp" />
+    <ClCompile Include="Source\TuranAPI\ThreadedJobCore.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\FGAlgorithm.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\VK_GPUContentManager.cpp" />
-    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\VulkanObjectManagement.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Renderer_Core.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Resource.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Vulkan_Core.cpp" />

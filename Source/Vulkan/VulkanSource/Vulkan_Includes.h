@@ -10,11 +10,13 @@
 #define VULKAN_DEBUGGING
 
 namespace Vulkan {
+	//Initializes as everything is false
 	struct VK_QUEUEFLAG {
 		bool is_GRAPHICSsupported : 1;
 		bool is_PRESENTATIONsupported : 1;
 		bool is_COMPUTEsupported : 1;
 		bool is_TRANSFERsupported : 1;
+		VK_QUEUEFLAG();
 		//bool is_VTMEMsupported : 1;	Not supported for now!
 	};
 
@@ -23,37 +25,53 @@ namespace Vulkan {
 		VkQueue Queue;
 		uint32_t QueueFamilyIndex;
 		VkCommandPool CommandPool;
+		vector<GFX_API::GFXHandle> ActiveSubmits;
+		unsigned char QueueFeatureScore = 0;
 	};
 
-	class VK_API GPU : public GFX_API::GPU {
-	public:
-		GPU();
+	struct VK_API GPU {
 		VkPhysicalDevice Physical_Device = {};
 		VkPhysicalDeviceProperties Device_Properties = {};
 		VkPhysicalDeviceFeatures Device_Features = {};
 		VkPhysicalDeviceMemoryProperties MemoryProperties = {};
-		vector<VkQueueFamilyProperties> QueueFamilies;
 		vector<VK_QUEUE> QUEUEs;
 		unsigned int TRANSFERs_supportedqueuecount = 0, COMPUTE_supportedqueuecount = 0;
-		unsigned int GRAPHICS_QUEUEIndex = 0, DISPLAY_QUEUEIndex = 0;
+		unsigned int GRAPHICS_QUEUEIndex = 0;
 		VkDevice Logical_Device = {};
 		vector<VkExtensionProperties> Supported_DeviceExtensions;
 		vector<const char*>* Required_DeviceExtensionNames;
 
-		VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
-		vector<VkSurfaceFormatKHR> SurfaceFormats;
-		vector<VkPresentModeKHR> PresentationModes;
 		unsigned int Find_vkMemoryTypeIndex(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+		uint32_t* AllQueueFamilies;
+		//This function searches the best queue that has least specs but needed specs
+		//For example: Queue 1->Graphics,Transfer,Compute - Queue 2->Transfer, Compute - Queue 3->Transfer
+		//If flag only supports Transfer, then it is Queue 3
+		//If flag only supports Compute, then it is Queue 2
+		//This is because user probably will use Direct Queues (Graphics,Transfer,Compute supported queue and every GPU has at least one)
+		//Users probably gonna leave the Direct Queue when they need async operations (Async compute or Async Transfer)
+		//Also if flag doesn't need anything (probably Barrier TP only), returns nullptr
+		VK_QUEUE* Find_BestQueue(const VK_QUEUEFLAG& Branch);
+		bool DoesQueue_Support(const VK_QUEUE* QUEUE, const VK_QUEUEFLAG& FLAG);
+	};
+
+	struct VK_API MONITOR {
+
 	};
 
 	//Window will be accessed from only Vulkan.dll, so the programmer may be aware what he can cause
-	class VK_API WINDOW : public GFX_API::WINDOW {
-	public:
-		WINDOW(unsigned int width, unsigned int height, GFX_API::WINDOW_MODE display_mode, GFX_API::MONITOR* display_monitor, unsigned int refresh_rate, const char* window_name, GFX_API::V_SYNC v_sync);
+	struct VK_API WINDOW {
+		unsigned int WIDTH, HEIGHT, DISPLAY_QUEUEIndex = 0;
+		GFX_API::WINDOW_MODE DISPLAYMODE;
+		GFX_API::GFXHandle MONITOR;
+		string NAME;
+
 		VkSurfaceKHR Window_Surface = {};
 		VkSwapchainKHR Window_SwapChain = {};
 		GLFWwindow* GLFW_WINDOW = {};
 		vector<GFX_API::GFXHandle> Swapchain_Textures;
+		VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
+		vector<VkSurfaceFormatKHR> SurfaceFormats;
+		vector<VkPresentModeKHR> PresentationModes;
 	};
 
 	//Use this class to store Vulkan Global Variables (Such as VkInstance, VkApplicationInfo etc)
@@ -65,6 +83,7 @@ namespace Vulkan {
 		VkApplicationInfo Application_Info;
 		vector<VkExtensionProperties> Supported_InstanceExtensionList;
 		vector<const char*> Required_InstanceExtensionNames;
+		GPU* GPU_TO_RENDER;
 
 		VkLayerProperties* Supported_LayerList;
 		uint32_t Supported_LayerNumber;

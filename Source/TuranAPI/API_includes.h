@@ -61,7 +61,15 @@ namespace TuranAPI {
 	//extern string* Find_TuranAPIEnumsName_byValue(unsigned short Enums_Value);
 	//extern TuranAPI_ENUMs Find_TuranAPIEnum_byName(const string& Enum_Name);
 	void TURANAPI Empty();
+
 }
+enum TAPIResult : unsigned char {
+	TAPI_SUCCESS = 0,
+	TAPI_FAIL = 1,
+	TAPI_NOTCODED = 2,
+	TAPI_INVALIDARGUMENT = 3,
+	TAPI_WRONGTIMING = 4	//This means the operation is called at the wrong time!
+};
 
 //Some basic functionality to do debugging!
 #define GET_VARIABLE_NAME(Variable) (#Variable)

@@ -141,7 +141,10 @@
     <ClInclude Include="Source\GFX\Renderer\GFX_RenderNodes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\VK_RenderGraphCommands.h">
+    <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Display.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\TuranAPI\ThreadedJobCore.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -183,9 +186,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\GFX\GFX_Core.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\GFX\GFX_Display.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\GFX\GFX_Includes.cpp">
@@ -248,10 +248,10 @@
     <ClCompile Include="Source\GFX\Renderer\GFX_RenderNodes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\VulkanObjectManagement.cpp">
+    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\FGAlgorithm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\FGAlgorithm.cpp">
+    <ClCompile Include="Source\TuranAPI\ThreadedJobCore.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -32,12 +32,6 @@ namespace GFX_API {
 	};
 	GFXAPI unsigned int Get_UNIFORMTYPEs_SIZEinbytes(DATA_TYPE uniform);
 	GFXAPI const char* Find_UNIFORM_VARTYPE_Name(DATA_TYPE uniform_var_type);
-	/*
-	enum class RT_ATTACHMENTs : unsigned char {
-		TEXTURE_ATTACHMENT_COLOR,
-		TEXTURE_ATTACHMENT_DEPTH,
-		TEXTURE_ATTACHMENT_DEPTHSTENCIL
-	};*/
 
 	enum class OPERATION_TYPE : unsigned char {
 		READ_ONLY,
@@ -47,8 +41,11 @@ namespace GFX_API {
 	};
 
 	enum class DRAWPASS_LOAD : unsigned char {
+		//All values will be cleared to a certain value
 		CLEAR,
+		//You don't need previous data, just gonna ignore and overwrite on them
 		FULL_OVERWRITE,
+		//You need previous data, so previous data will affect current draw calls
 		LOAD
 	};
 
@@ -176,11 +173,13 @@ namespace GFX_API {
 		bool FRAGMENTSHADER : 1;
 		bool COLORRTOUTPUT : 1;
 		bool TRANSFERCMD : 1;
+		bool SWAPCHAINDISPLAY : 1;
 		SHADERSTAGEs_FLAG();
 	};
 
 
 	//If you change this enum, don't forget that Textures and Global Buffers uses this enum. So, consider them.
+	//Note 2: Change this enum to use in Vertex and Index buffers too!
 
 	enum class BUFFER_VISIBILITY : unsigned char {
 		CPUREADWRITE_GPUREADONLY = 0,			//Use this when all the data responsibility on the CPU and GPU just reads it (Global Camera Matrixes, CPU Software Rasterization Depth reads from the GPU etc.)
@@ -230,11 +229,5 @@ namespace GFX_API {
 		CONSTUBUFFER_G,
 		CONSTSBUFFER_PI,
 		CONSTSBUFFER_G
-	};
-
-	enum class SWAPCHAIN_IDENTIFIER : unsigned char {
-		NO_SWPCHN = 0,
-		CURRENTFRAME_SWPCHN = 1,
-		LASTFRAME_SWPCHN = 2
 	};
 }

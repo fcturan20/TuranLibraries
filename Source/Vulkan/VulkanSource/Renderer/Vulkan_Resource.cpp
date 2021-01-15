@@ -1,4 +1,5 @@
 #include "Vulkan_Resource.h"
+#define VKGPU ((Vulkan::GPU*)GFX->GPU_TO_RENDER)
 
 namespace Vulkan {
 	VkImageUsageFlags Find_VKImageUsage_forVKTexture(VK_Texture& TEXTURE) {
@@ -24,5 +25,13 @@ namespace Vulkan {
 			FLAG = FLAG | VK_IMAGE_USAGE_SAMPLED_BIT;
 		}
 		return FLAG;
+	}
+
+	VK_TPUploadDatas::VK_TPUploadDatas() : TextureUploads(GFX->JobSys), BufferUploads(GFX->JobSys) {
+
+	}
+
+	VK_TPBarrierDatas::VK_TPBarrierDatas() : BufferBarriers(GFX->JobSys), TextureBarriers(GFX->JobSys) {
+
 	}
 }

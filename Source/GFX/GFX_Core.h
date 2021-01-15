@@ -4,6 +4,7 @@
 #include "Renderer/GFX_Renderer.h"
 #include "Renderer/GPU_ContentManager.h"
 #include "IMGUI/IMGUI_Core.h"
+#include "TuranAPI/ThreadedJobCore.h"
 
 
 namespace GFX_API {
@@ -12,11 +13,13 @@ namespace GFX_API {
 	class GFXAPI GFX_Core {
 	protected:
 		unsigned int FOCUSED_WINDOW_index;
-		vector<GPU*> DEVICE_GPUs;
-		GFX_Core();
-
-
-		MONITOR* Create_MonitorOBJ(void* monitor, const char* name);
+		vector<GFXHandle> DEVICE_GPUs;
+		GFXHandle GPU_TO_RENDER;
+		vector<GFXHandle> WINDOWs;
+		vector<GFXHandle> CONNECTED_Monitors;
+		
+		//This is to remind that each GFX API should return a monitor list at initialization
+		GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs, TuranAPI::Threading::JobSystem& JobSys);
 	public:
 		virtual ~GFX_Core();
 
@@ -24,17 +27,13 @@ namespace GFX_API {
 		Renderer* RENDERER;
 		GPU_ContentManager* ContentManager;
 		IMGUI_Core* IMGUI_o;
-		GPU* GPU_TO_RENDER;
-
-		WINDOW* Main_Window;
-		vector<MONITOR> CONNECTED_Monitors;
+		TuranAPI::Threading::JobSystem& JobSys;
 
 		//Window Operations
 
-		virtual void Change_Window_Resolution(unsigned int width, unsigned int height) = 0;
-		virtual void Swapbuffers_ofMainWindow() = 0;
-		virtual void Show_RenderTarget_onWindow(unsigned int RenderTarget_GFXID) = 0;
-
+		//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
+		virtual GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) = 0;
+		virtual void Change_Window_Resolution(GFXHandle WindowHandle, unsigned int width, unsigned int height) = 0;
 
 
 		virtual void Take_Inputs() = 0;
@@ -43,7 +42,6 @@ namespace GFX_API {
 		virtual void Destroy_GFX_Resources() = 0;
 		virtual void Check_Errors() = 0;
 	};
-
 }
 
 #define GFX GFX_API::GFX_Core::SELF

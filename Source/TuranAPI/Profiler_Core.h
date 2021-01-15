@@ -12,12 +12,15 @@ namespace TuranAPI {
 	class TURANAPI Profiled_Scope {
 	public:
 		bool Is_Recording;
-		long long START_POINT, END_POINT, THREAD_ID, DURATION;
+		long long START_POINT, END_POINT, THREAD_ID;
 		string NAME;
 		//Use this constructor to fill the data later!
 		Profiled_Scope();
 		//Use this constructor to start profiling a scope!
-		Profiled_Scope(const char* name);
+		//Timing Indexes: 0->Nanoseconds, 1->Microseconds, 2->Milliseconds, 3->Seconds
+		Profiled_Scope(const char* name, bool StartImmediately, unsigned char timingindex);
+		bool StartRecording(unsigned char timingindex);
+		bool StopRecording(long long& duration);
 		~Profiled_Scope();
 	};
 
@@ -32,11 +35,16 @@ namespace TuranAPI {
 		~Profiler_System();
 
 		void Save_a_ProfiledScope_toSession(const Profiled_Scope& PROFILED_SCOPE);
-		unsigned int Get_LastScopeDuration();
 	};
 }
 
 #define TURAN_STOP_PROFILING() TuranAPI::Stop_Recording_Session()
-#define TURAN_PROFILE_SCOPE(name) TuranAPI::Profiled_Scope ProfilingScope##__LINE__(name)
-#define TURAN_PROFILE_FUNCTION() TURAN_PROFILE_SCOPE(__FUNCSIG__)
-#define TURAN_GETDURATION_OFLASTPROFILING TuranAPI::Profiler_System::SELF->Get_LastScopeDuration()
+//Profile in microseconds
+#define TURAN_PROFILE_SCOPE_NAS(name) TuranAPI::Profiled_Scope ProfilingScope##__LINE__(name, true, 0)
+#define TURAN_PROFILE_SCOPE_MCS(name) TuranAPI::Profiled_Scope ProfilingScope##__LINE__(name, true, 1)
+#define TURAN_PROFILE_SCOPE_MLS(name) TuranAPI::Profiled_Scope ProfilingScope##__LINE__(name, true, 2)
+#define TURAN_PROFILE_SCOPE_S(name) TuranAPI::Profiled_Scope ProfilingScope##__LINE__(name, true, 3)
+#define TURAN_PROFILE_FUNCTION_NAS() TURAN_PROFILE_SCOPE_MCS(__FUNCSIG__, true, 0)
+#define TURAN_PROFILE_FUNCTION_MCS() TURAN_PROFILE_SCOPE_MCS(__FUNCSIG__, true, 1)
+#define TURAN_PROFILE_FUNCTION_MLS() TURAN_PROFILE_SCOPE_MCS(__FUNCSIG__, true, 2)
+#define TURAN_PROFILE_FUNCTION_S() TURAN_PROFILE_SCOPE_MCS(__FUNCSIG__, true, 3)

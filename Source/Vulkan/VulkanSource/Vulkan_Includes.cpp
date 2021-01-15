@@ -1,6 +1,46 @@
 #include "Vulkan_Includes.h"
+#define VKGPU ((Vulkan::GPU*)GFX->GPU_TO_RENDER)
 
 namespace Vulkan {
+	VK_QUEUEFLAG::VK_QUEUEFLAG() {
+		is_GRAPHICSsupported = false;
+		is_COMPUTEsupported = false;
+		is_PRESENTATIONsupported = false;
+		is_TRANSFERsupported = false;
+	}
+	VK_QUEUE* GPU::Find_BestQueue(const VK_QUEUEFLAG& Flag) {
+		if (!Flag.is_COMPUTEsupported && !Flag.is_GRAPHICSsupported && !Flag.is_TRANSFERsupported && !Flag.is_PRESENTATIONsupported) {
+			return nullptr;
+		}
+		unsigned char BestScore = 0;
+		VK_QUEUE* BestQueue = nullptr;
+		for (unsigned char QueueIndex = 0; QueueIndex < QUEUEs.size(); QueueIndex++) {
+			VK_QUEUE* Queue = &QUEUEs[QueueIndex];
+			if (DoesQueue_Support(Queue, Flag)) {
+				if (!BestScore || BestScore > Queue->QueueFeatureScore) {
+					BestScore = Queue->QueueFeatureScore;
+					BestQueue = Queue;
+				}
+			}
+		}
+		return BestQueue;
+	}
+	bool GPU::DoesQueue_Support(const VK_QUEUE* QUEUE, const VK_QUEUEFLAG& Flag) {
+		const VK_QUEUEFLAG& supportflag = QUEUE->SupportFlag;
+		if (Flag.is_COMPUTEsupported && !supportflag.is_COMPUTEsupported) {
+			return false;
+		}
+		if (Flag.is_GRAPHICSsupported && !supportflag.is_GRAPHICSsupported) {
+			return false;
+		}
+		if (Flag.is_TRANSFERsupported && !supportflag.is_TRANSFERsupported) {
+			return false;
+		}
+		if (Flag.is_PRESENTATIONsupported && !supportflag.is_PRESENTATIONsupported) {
+			return false;
+		}
+		return true;
+	}
 	unsigned int GPU::Find_vkMemoryTypeIndex(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
 		for (uint32_t i = 0; i < MemoryProperties.memoryTypeCount; i++) {
 			if ((typeFilter & (1 << i)) && (MemoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
@@ -12,7 +52,7 @@ namespace Vulkan {
 	}
 
 	Vulkan_States::Vulkan_States()  {
-
+		
 	}
 	const char* const* Vulkan_States::Get_Supported_LayerNames(const VkLayerProperties* list, uint32_t length) {
 		const char** NameList = new const char* [length];
@@ -159,21 +199,6 @@ namespace Vulkan {
 			return "NULL";
 		}
 	}
-	WINDOW::WINDOW(unsigned int width, unsigned int height, GFX_API::WINDOW_MODE display_mode, GFX_API::MONITOR* display_monitor,
-		unsigned int refresh_rate, const char* window_name, GFX_API::V_SYNC v_sync) {
-		WIDTH = width;
-		HEIGHT = height;
-		DISPLAY_MODE = display_mode;
-		DISPLAY_MONITOR = display_monitor;
-		REFRESH_RATE = REFRESH_RATE;
-		WINDOW_NAME = window_name;
-		VSYNC_MODE = v_sync;
-	}
-
-	GPU::GPU(){
-
-	}
-
 
 
 	VkFormat Find_VkFormat_byDataType(GFX_API::DATA_TYPE datatype) {

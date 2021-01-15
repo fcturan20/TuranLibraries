@@ -1,7 +1,8 @@
 #include "VK_GPUContentManager.h"
 #include "Vulkan_Renderer_Core.h"
+#include "Vulkan/VulkanSource/Vulkan_Core.h"
 #define VKRENDERER ((Vulkan::Renderer*)GFXRENDERER)
-#define VKGPU ((Vulkan::GPU*)GFX->GPU_TO_RENDER)
+#define VKGPU (((Vulkan::Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
 #define VKWINDOW ((Vulkan::WINDOW*)GFX->Main_Window)
 #define STAGINGBUFFER_SIZE 20480
 #define GPULOCAL_BUFSIZE (1024 * 1024 * 10)
@@ -19,9 +20,14 @@ namespace Vulkan {
 
 		VkBufferCreateInfo ci{};
 		ci.usage = usage;
-		ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		ci.queueFamilyIndexCount = 1;
-		//ci.pQueueFamilyIndices = &VKGPU->TRANSFERQueue.QueueFamilyIndex;
+		if (VKGPU->QUEUEs.size() > 1) {
+			ci.sharingMode = VK_SHARING_MODE_CONCURRENT;
+		}
+		else {
+			ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		}
+		ci.queueFamilyIndexCount = VKGPU->QUEUEs.size();
+		ci.pQueueFamilyIndices = VKGPU->AllQueueFamilies;
 		ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		ci.size = size;
 
@@ -30,7 +36,8 @@ namespace Vulkan {
 		}
 		return buffer;
 	}
-	GPU_ContentManager::GPU_ContentManager() {
+	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(GFX->JobSys), TEXTUREs(GFX->JobSys), GLOBALBUFFERs(GFX->JobSys), SHADERSOURCEs(GFX->JobSys),
+		SHADERPROGRAMs(GFX->JobSys), SHADERPINSTANCEs(GFX->JobSys), VERTEXATTRIBUTEs(GFX->JobSys), VERTEXATTRIBLAYOUTs(GFX->JobSys), RT_SLOTSETs(GFX->JobSys) {
 		//Staging Buffer Memory Allocation
 		{
 			VkMemoryRequirements memrequirements;
@@ -93,10 +100,15 @@ namespace Vulkan {
 				im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 				im_ci.mipLevels = 1;
 				im_ci.pNext = nullptr;
-				//im_ci.pQueueFamilyIndices = &VKGPU->GRAPHICSQueue.QueueFamilyIndex;
-				im_ci.queueFamilyIndexCount = 1;
 				im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
-				im_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+				if (VKGPU->QUEUEs.size() > 1) {
+					im_ci.sharingMode = VK_SHARING_MODE_CONCURRENT;
+				}
+				else {
+					im_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+				}
+				im_ci.pQueueFamilyIndices = VKGPU->AllQueueFamilies;
+				im_ci.queueFamilyIndexCount = VKGPU->QUEUEs.size();
 				im_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
 				im_ci.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 			}
@@ -161,26 +173,32 @@ namespace Vulkan {
 			unsigned int UNIFORMBUFFER_COUNT = 0, STORAGEBUFFER_COUNT = 0;
 			{
 				vector<VkDescriptorSetLayoutBinding> bindings;
-				for (unsigned int i = 0; i < GLOBALBUFFERs.size(); i++) {
-					VK_GlobalBuffer* globbuf = GLOBALBUFFERs[i];
-					bindings.push_back(VkDescriptorSetLayoutBinding());
-					bindings[i].binding = globbuf->BINDINGPOINT;
-					bindings[i].descriptorCount = 1;
-					bindings[i].descriptorType = Find_VkDescType_byVisibility(globbuf->VISIBILITY);
-					bindings[i].pImmutableSamplers = VK_NULL_HANDLE;
-					bindings[i].stageFlags = Find_VkStages(globbuf->ACCESSED_STAGEs);
-					//Buffer Type Counting
-					switch (bindings[i].descriptorType) {
-					case VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-					case VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-						STORAGEBUFFER_COUNT++;
-						break;
-					case VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-					case VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-						UNIFORMBUFFER_COUNT++;
-						break;
+				std::unique_lock<std::mutex> GlobalBufferLocker;
+				GLOBALBUFFERs.PauseAllOperations(GlobalBufferLocker);
+				for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys.GetThisThreadIndex(); ThreadID++) {
+					for (unsigned int i = 0; i < GLOBALBUFFERs.size(ThreadID); i++) {
+						VK_GlobalBuffer* globbuf = GLOBALBUFFERs.get(ThreadID, i);
+						bindings.push_back(VkDescriptorSetLayoutBinding());
+						bindings[i].binding = globbuf->BINDINGPOINT;
+						bindings[i].descriptorCount = 1;
+						bindings[i].descriptorType = Find_VkDescType_byVisibility(globbuf->VISIBILITY);
+						bindings[i].pImmutableSamplers = VK_NULL_HANDLE;
+						bindings[i].stageFlags = Find_VkStages(globbuf->ACCESSED_STAGEs);
+						//Buffer Type Counting
+						switch (bindings[i].descriptorType) {
+						case VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+						case VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+							STORAGEBUFFER_COUNT++;
+							break;
+						case VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+						case VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+							UNIFORMBUFFER_COUNT++;
+							break;
+						}
 					}
 				}
+				GlobalBufferLocker.unlock();
+				
 				VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
 				DescSetLayout_ci.flags = 0;
 				DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -192,9 +210,9 @@ namespace Vulkan {
 					return;
 				}
 			}
-			//Descriptor Pool creation
+			//Descriptor Pool and Descriptor Set creation
+			vector<VkDescriptorPoolSize> poolsizes;
 			{
-				vector<VkDescriptorPoolSize> poolsizes;
 				if (UNIFORMBUFFER_COUNT > 0) {
 					VkDescriptorPoolSize UDescCount;
 					UDescCount.descriptorCount = UNIFORMBUFFER_COUNT;
@@ -214,26 +232,28 @@ namespace Vulkan {
 				descpool_ci.poolSizeCount = poolsizes.size();
 				descpool_ci.flags = 0;
 				descpool_ci.pNext = nullptr;
-				if (vkCreateDescriptorPool(VKGPU->Logical_Device, &descpool_ci, nullptr, &GlobalBuffers_DescPool) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorPool()!");
-				}
-			}
-			//Descriptor Set allocation
-			{
-				VkDescriptorSetAllocateInfo descset_ai = {};
-				descset_ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-				descset_ai.pNext = nullptr;
-				descset_ai.descriptorPool = GlobalBuffers_DescPool;
-				descset_ai.descriptorSetCount = 1;
-				descset_ai.pSetLayouts = &GlobalBuffers_DescSetLayout;
-				if (vkAllocateDescriptorSets(VKGPU->Logical_Device, &descset_ai, &GlobalBuffers_DescSet) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkAllocateDescriptorSets()!");
+				if (poolsizes.size()) {
+					if (vkCreateDescriptorPool(VKGPU->Logical_Device, &descpool_ci, nullptr, &GlobalBuffers_DescPool) != VK_SUCCESS) {
+						LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorPool()!");
+					}
+					//Descriptor Set allocation
+					{
+						VkDescriptorSetAllocateInfo descset_ai = {};
+						descset_ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+						descset_ai.pNext = nullptr;
+						descset_ai.descriptorPool = GlobalBuffers_DescPool;
+						descset_ai.descriptorSetCount = 1;
+						descset_ai.pSetLayouts = &GlobalBuffers_DescSetLayout;
+						if (vkAllocateDescriptorSets(VKGPU->Logical_Device, &descset_ai, &GlobalBuffers_DescSet) != VK_SUCCESS) {
+							LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkAllocateDescriptorSets()!");
+						}
+					}
 				}
 			}
 		}
 	}
 
-	void GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset) {
+	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset) {
 		VkMemoryRequirements bufferreq;
 		vkGetBufferMemoryRequirements(VKGPU->Logical_Device, BUFFER, &bufferreq);
 		VkDeviceSize size = bufferreq.size;
@@ -250,10 +270,10 @@ namespace Vulkan {
 			break;
 		case SUBALLOCATEBUFFERTYPEs::STAGING:
 			LOG_CRASHING_TAPI("Suballocate_Buffer() has failed because SUBALLOCATEBUFFERTYPE is STAGING!");
-			return;
+			return TAPI_INVALIDARGUMENT;
 		default:
 			LOG_CRASHING_TAPI("Suballocate_Buffer() has failed because SUBALLOCATEBUFFERTYPE isn't supported!");
-			return;
+			return TAPI_NOTCODED;
 		}
 		if (MEMALLOC->Allocated_Blocks.size() == 0) {
 			VK_MemoryBlock FirstBlock;
@@ -289,24 +309,25 @@ namespace Vulkan {
 
 		if (!Found_Offset) {
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed because there is no way you can create a buffer at this size!");
-			return;
+			return TAPI_INVALIDARGUMENT;
 		}
 		
 		if (vkBindBufferMemory(VKGPU->Logical_Device, BUFFER, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed at vkBindBufferMemory()!");
-			return;
+			return TAPI_FAIL;
 		}
 		MemoryOffset = Offset;
+		return TAPI_SUCCESS;
 	}
-	void GPU_ContentManager::Suballocate_Image(VkImage IMAGE, SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset) {
+	TAPIResult GPU_ContentManager::Suballocate_Image(VK_Texture& Texture) {
 		VkMemoryRequirements req;
-		vkGetImageMemoryRequirements(VKGPU->Logical_Device, IMAGE, &req);
+		vkGetImageMemoryRequirements(VKGPU->Logical_Device, Texture.Image, &req);
 		VkDeviceSize size = req.size;
 
 		VkDeviceSize Offset = 0;
 		bool Found_Offset = false;
 		VK_MemoryAllocation* MEMALLOC = nullptr;
-		switch (GPUregion) {
+		switch (Texture.MEMORYREGION) {
 		case SUBALLOCATEBUFFERTYPEs::STAGING:
 			MEMALLOC = &STAGINGBUFFERALLOC;
 			break;
@@ -318,7 +339,7 @@ namespace Vulkan {
 			break;
 		default:
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed because SUBALLOCATEBUFFERTYPE isn't supported!");
-			return;
+			return TAPI_NOTCODED;
 		}
 		if (MEMALLOC->Allocated_Blocks.size() == 0) {
 			VK_MemoryBlock FirstBlock;
@@ -355,14 +376,15 @@ namespace Vulkan {
 
 		if (!Found_Offset) {
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed becuse there is no way you can create a suballocate at this size!");
-			return;
+			return TAPI_INVALIDARGUMENT;
 		}
 
-		if (vkBindImageMemory(VKGPU->Logical_Device, IMAGE, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
+		if (vkBindImageMemory(VKGPU->Logical_Device, Texture.Image, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed at VkBindImageMemory()!");
-			return;
+			return TAPI_FAIL;
 		}
-		MemoryOffset = Offset;
+		Texture.GPUMemoryOffset = Offset;
+		return TAPI_SUCCESS;
 	}
 	VkDeviceSize GPU_ContentManager::Get_StagingBufferOffset(unsigned int size) {
 		if (STAGINGBUFFERALLOC.Allocated_Blocks.size() == 0) {
@@ -406,52 +428,24 @@ namespace Vulkan {
 		STAGINGBUFFERALLOC.Allocated_Blocks.clear();
 	}
 
-	unsigned int GPU_ContentManager::Calculate_sizeofVertexLayout(const vector<VK_VertexAttribute*>& ATTRIBUTEs) {
+	unsigned int GPU_ContentManager::Calculate_sizeofVertexLayout(const VK_VertexAttribute* const* ATTRIBUTEs, unsigned int count) {
 		unsigned int size = 0;
-		for (unsigned int i = 0; i < ATTRIBUTEs.size(); i++) {
+		for (unsigned int i = 0; i < count; i++) {
 			size += GFX_API::Get_UNIFORMTYPEs_SIZEinbytes(ATTRIBUTEs[i]->DATATYPE);
 		}
 		return size;
 	}
-	GFX_API::GFXHandle GPU_ContentManager::Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes) {
-		vector<VK_VertexAttribute*> ATTRIBs;
-		for (unsigned int i = 0; i < Attributes.size(); i++) {
-			VK_VertexAttribute* Attribute = GFXHandleConverter(VK_VertexAttribute*, Attributes[i]);
-			if (!Attribute) {
-				LOG_ERROR_TAPI("You referenced an uncreated attribute to Create_VertexAttributeLayout!");
-				return 0;
-			}
-			ATTRIBs.push_back(Attribute);
+	TAPIResult GPU_ContentManager::Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, const bool& is_perVertex, GFX_API::GFXHandle& Handle) {
+		unsigned char ThisThreadIndex = GFX->JobSys.GetThisThreadIndex();
+		if (!is_perVertex) {
+			LOG_ERROR_TAPI("A Vertex Attribute description is not per vertex, so creation fail at it! Descriptions that are after it aren't created!");
+			return TAPI_INVALIDARGUMENT;
 		}
-		unsigned int size_pervertex = Calculate_sizeofVertexLayout(ATTRIBs);
-
-
-		VK_VertexAttribLayout* Layout = new VK_VertexAttribLayout;
-		Layout->Attributes = new VK_VertexAttribute* [ATTRIBs.size()];
-		for (unsigned int i = 0; i < ATTRIBs.size(); i++) {
-			Layout->Attributes[i] = ATTRIBs[i];
-		}
-		Layout->Attribute_Number = ATTRIBs.size();
-		Layout->size_perVertex = size_pervertex;
-		Layout->BindingDesc.binding = 0;
-		Layout->BindingDesc.stride = size_pervertex;
-		Layout->BindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-		Layout->AttribDescs = new VkVertexInputAttributeDescription[Attributes.size()];
-		Layout->AttribDesc_Count = Attributes.size();
-		unsigned int stride_ofcurrentattribute = 0;
-		for (unsigned int i = 0; i < ATTRIBs.size(); i++) {
-			Layout->AttribDescs[i].binding = 0;
-			Layout->AttribDescs[i].location = i;
-			Layout->AttribDescs[i].offset = stride_ofcurrentattribute;
-			Layout->AttribDescs[i].format = Find_VkFormat_byDataType(ATTRIBs[i]->DATATYPE);
-			stride_ofcurrentattribute += GFX_API::Get_UNIFORMTYPEs_SIZEinbytes(ATTRIBs[i]->DATATYPE);
-		}
-		VERTEXATTRIBLAYOUTs.push_back(Layout);
-		return Layout;
-	}
-	void GPU_ContentManager::Delete_VertexAttributeLayout(GFX_API::GFXHandle Layout_ID) {
-		LOG_NOTCODED_TAPI("Delete_VertexAttributeLayout() isn't coded yet!", true);
+		VK_VertexAttribute* VA = new VK_VertexAttribute;
+		VA->DATATYPE = TYPE;
+		VERTEXATTRIBUTEs.push_back(ThisThreadIndex, VA);
+		Handle = VA;
+		return TAPI_SUCCESS;
 	}
 
 
@@ -539,119 +533,212 @@ namespace Vulkan {
 		return false;
 	}
 
+	TAPIResult GPU_ContentManager::Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) {
+		VK_VertexAttribLayout* Layout = new VK_VertexAttribLayout;
+		Layout->Attribute_Number = Attributes.size();
+		Layout->Attributes = new VK_VertexAttribute * [Attributes.size()];
+		for (unsigned int i = 0; i < Attributes.size(); i++) {
+			VK_VertexAttribute* Attribute = GFXHandleConverter(VK_VertexAttribute*, Attributes[i]);
+			if (!Attribute) {
+				LOG_ERROR_TAPI("You referenced an uncreated attribute to Create_VertexAttributeLayout!");
+				delete Layout;
+				return TAPI_INVALIDARGUMENT;
+			}
+			Layout->Attributes[i] = Attribute;
+		}
+		unsigned int size_pervertex = Calculate_sizeofVertexLayout(Layout->Attributes, Attributes.size());
+		Layout->size_perVertex = size_pervertex;
+		Layout->BindingDesc.binding = 0;
+		Layout->BindingDesc.stride = size_pervertex;
+		Layout->BindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-	GFX_API::GFXHandle GPU_ContentManager::Create_MeshBuffer(GFX_API::GFXHandle attributelayout, const void* vertex_data, unsigned int vertex_count,
-		const unsigned int* index_data, unsigned int index_count, GFX_API::GFXHandle TransferPassHandle) {
-		if (!vertex_count) {
+		Layout->AttribDescs = new VkVertexInputAttributeDescription[Attributes.size()];
+		Layout->AttribDesc_Count = Attributes.size();
+		unsigned int stride_ofcurrentattribute = 0;
+		for (unsigned int i = 0; i < Attributes.size(); i++) {
+			Layout->AttribDescs[i].binding = 0;
+			Layout->AttribDescs[i].location = i;
+			Layout->AttribDescs[i].offset = stride_ofcurrentattribute;
+			Layout->AttribDescs[i].format = Find_VkFormat_byDataType(Layout->Attributes[i]->DATATYPE);
+			stride_ofcurrentattribute += GFX_API::Get_UNIFORMTYPEs_SIZEinbytes(Layout->Attributes[i]->DATATYPE);
+		}
+		VERTEXATTRIBLAYOUTs.push_back(GFX->JobSys.GetThisThreadIndex(), Layout);
+		Handle = Layout;
+		return TAPI_SUCCESS;
+	}
+	void GPU_ContentManager::Delete_VertexAttributeLayout(GFX_API::GFXHandle Layout_ID) {
+		LOG_NOTCODED_TAPI("Delete_VertexAttributeLayout() isn't coded yet!", true);
+	}
+	TAPIResult GPU_ContentManager::Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, const void* Data, unsigned int VertexCount, 
+		const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& VertexBufferHandle) {
+		LOG_NOTCODED_TAPI("GFXContentManager->Create_VertexBuffer() is not coded for TP and data upload yet!", true);
+		if (!VertexCount) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because vertex_count is zero!");
-			return nullptr;
+			return TAPI_INVALIDARGUMENT;
 		}
 		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, TransferPassHandle);
 		if (!TP) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because TransferPass is invalid!");
-			return nullptr;
+			return TAPI_INVALIDARGUMENT;
 		}
+
 		if (TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_COPY || TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_DOWNLOAD) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because specified TP doesn't support buffer creation, use a BARRIER or UPLOAD TP!");
-			return nullptr;
+			return TAPI_INVALIDARGUMENT;
 		}
-
-		LOG_NOTCODED_TAPI("GFXContentManager->Create_MeshBuffer()->BUFFERTPDATA isn't coded!", true);
-
-		VK_VertexAttribLayout* Layout = GFXHandleConverter(VK_VertexAttribLayout*, attributelayout);
+		VK_VertexAttribLayout* Layout = GFXHandleConverter(VK_VertexAttribLayout*, AttributeLayout);
 		if (!Layout) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because Attribute Layout ID is invalid!");
-			return nullptr;
+			return TAPI_INVALIDARGUMENT;
 		}
 
-		unsigned int TOTALDATA_SIZE = Layout->size_perVertex * vertex_count;
-		TOTALDATA_SIZE += ((index_data) ? (index_count * 4) : (0));
-		if (GPULOCAL_BUFFERALLOC.UnusedSize < TOTALDATA_SIZE) {
-			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because this mesh buffer is larger than left space in GPU Local memory!");
-			return nullptr;
-		}
+		unsigned int TOTALDATA_SIZE = Layout->size_perVertex * VertexCount;
 
-
-		VK_Mesh* VKMesh = new VK_Mesh;
+		VK_VertexBuffer* VKMesh = new VK_VertexBuffer;
 		VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-		if (index_count) {
-			BufferUsageFlag |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-		}
+
 		VKMesh->Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
 		VkDeviceSize offset = 0;
-		Suballocate_Buffer(VKMesh->Buffer, SUBALLOCATEBUFFERTYPEs::GPULOCALBUF, offset);
+		switch (Suballocate_Buffer(VKMesh->Buffer, SUBALLOCATEBUFFERTYPEs::GPULOCALBUF, offset)) {
+		case TAPI_FAIL:
+			LOG_ERROR_TAPI("There is no memory left in specified memory region, please try again later!");
+			return TAPI_FAIL;
+		}
 
 		VKMesh->Layout = Layout;
-		VKMesh->INDEX_COUNT = index_count;
-		VKMesh->VERTEX_COUNT = vertex_count;
-		MESHBUFFERs.push_back(VKMesh);
-		return VKMesh;
+		VKMesh->VERTEX_COUNT = VertexCount;
+		MESHBUFFERs.push_back(GFX->JobSys.GetThisThreadIndex(), VKMesh);
+		VertexBufferHandle = VKMesh;
+		return TAPI_SUCCESS;
 	}
-	void GPU_ContentManager::Upload_MeshBuffer(GFX_API::GFXHandle MeshBufferHandle, const void* vertex_data, const void* index_data) {
-		LOG_NOTCODED_TAPI("Upload_MeshBuffer() isn't coded yet!", true);
+	TAPIResult GPU_ContentManager::Upload_VertexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset) {
+		LOG_NOTCODED_TAPI("Upload_VertexBuffer() isn't coded yet!", true);
+		return TAPI_NOTCODED;
 	}
 	//When you call this function, Draw Calls that uses this ID may draw another Mesh or crash
 	//Also if you have any Point Buffer that uses first vertex attribute of that Mesh Buffer, it may crash or draw any other buffer
-	void GPU_ContentManager::Unload_MeshBuffer(GFX_API::GFXHandle MeshBuffer_ID) {
+	void GPU_ContentManager::Unload_VertexBuffer(GFX_API::GFXHandle MeshBuffer_ID) {
 		LOG_NOTCODED_TAPI("VK::Unload_MeshBuffer isn't coded!", true);
 	}
+	TAPIResult GPU_ContentManager::Create_IndexBuffer(const void* Data, unsigned int DataSize, const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& IndexBufferHandle) {
+		LOG_NOTCODED_TAPI("Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!", true);
+		return TAPI_NOTCODED;
+	}
+	TAPIResult GPU_ContentManager::Upload_IndexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset) {
+		LOG_NOTCODED_TAPI("Upload_IndexBuffer() isn't coded yet!", true);
+		return TAPI_NOTCODED;
+	}
+	void GPU_ContentManager::Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) {
+		LOG_NOTCODED_TAPI("Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!", true);
+	}
 
-	GFX_API::GFXHandle GPU_ContentManager::Create_Texture(const GFX_API::Texture_Description& TEXTURE_ASSET, GFX_API::GFXHandle TransferPassID) {
-		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, TransferPassID);
+	TAPIResult GPU_ContentManager::Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, const void* DATA, const GFX_API::IMAGEUSAGE& FIRSTUSAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& TextureHandle) {
+		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, TransferPassHandle);
 		if (!TP) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_Texture() has failed because TransferPass is invalid!");
-			return nullptr;
+			return TAPI_INVALIDARGUMENT;
 		}
 		if (TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_COPY || TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_DOWNLOAD) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_Texture() has failed because specified TP doesn't support texture creation, you should use either UPLOAD or BARRIER type of TP!");
-			return nullptr;
+			return TAPI_INVALIDARGUMENT;
 		}
-		
+
 		LOG_NOTCODED_TAPI("GFXContentManager->Create_Texture() should support mipmaps and check the left space in GPU Local memory!", false);
 
-		VK_Texture* gfx_texture = new VK_Texture;
-		gfx_texture->CHANNELs = TEXTURE_ASSET.Properties.CHANNEL_TYPE;
-		gfx_texture->HEIGHT = TEXTURE_ASSET.HEIGHT;
-		gfx_texture->WIDTH = TEXTURE_ASSET.WIDTH;
-		gfx_texture->DATA_SIZE = TEXTURE_ASSET.WIDTH * TEXTURE_ASSET.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(TEXTURE_ASSET.Properties.CHANNEL_TYPE);
-		gfx_texture->USAGE = TEXTURE_ASSET.USAGE;
-		if (TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_UPLOAD) {
-			VK_TPUploadDatas* TPdatas = GFXHandleConverter(VK_TPUploadDatas*, TP->TransferDatas);
-			TPdatas->CreateTextures.push_back(gfx_texture);
-		}
-		else {
-			VK_TPBarrierDatas* TPdatas = GFXHandleConverter(VK_TPBarrierDatas*, TP->TransferDatas);
-			TPdatas->CreateTextures.push_back(gfx_texture);
+		VK_Texture* TEXTURE = new VK_Texture;
+		TEXTURE->CHANNELs = TEXTURE_ASSET.Properties.CHANNEL_TYPE;
+		TEXTURE->HEIGHT = TEXTURE_ASSET.HEIGHT;
+		TEXTURE->WIDTH = TEXTURE_ASSET.WIDTH;
+		TEXTURE->DATA_SIZE = TEXTURE_ASSET.WIDTH * TEXTURE_ASSET.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(TEXTURE_ASSET.Properties.CHANNEL_TYPE);
+		TEXTURE->USAGE = TEXTURE_ASSET.USAGE;
+		TEXTURE->MEMORYREGION = SUBALLOCATEBUFFERTYPEs::GPULOCALTEX;
+
+		//Upload data to the Staging Buffer and create a upload call (which means Staging->GPU Local copy call)
+		VKRENDERER->TransferCall_ImUpload(TP, TEXTURE, Get_StagingBufferOffset(TEXTURE->DATA_SIZE));	//-> This is wrong, there shouldn't happen any upload calls in Create_xxx functions
+		
+		{
+			VkImageCreateInfo im_ci = {};
+			im_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+			im_ci.arrayLayers = 1;
+			im_ci.extent.width = TEXTURE->WIDTH;
+			im_ci.extent.height = TEXTURE->HEIGHT;
+			im_ci.extent.depth = 1;
+			im_ci.flags = 0;
+			im_ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE->CHANNELs);
+			im_ci.imageType = VK_IMAGE_TYPE_2D;
+			im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			im_ci.mipLevels = 1;
+			im_ci.pNext = nullptr;
+			if (VKGPU->QUEUEs.size() > 1) {
+				im_ci.sharingMode = VK_SHARING_MODE_CONCURRENT;
+			}
+			else {
+				im_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			}
+			im_ci.pQueueFamilyIndices = VKGPU->AllQueueFamilies;
+			im_ci.queueFamilyIndexCount = VKGPU->QUEUEs.size();
+			im_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
+			im_ci.usage = Find_VKImageUsage_forVKTexture(*TEXTURE);
+			im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+
+			if (vkCreateImage(VKGPU->Logical_Device, &im_ci, nullptr, &TEXTURE->Image) != VK_SUCCESS) {
+				LOG_ERROR_TAPI("GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
+				delete TEXTURE;
+				return TAPI_FAIL;
+			}
+
+			Suballocate_Image(*TEXTURE);
 		}
 
-		TEXTUREs.push_back(gfx_texture);
-		return gfx_texture;
-	}
-	void GPU_ContentManager::Upload_Texture(GFX_API::GFXHandle Asset_ID, void* DATA, unsigned int DATA_SIZE){
-		LOG_NOTCODED_TAPI("VK::Upload_Texture isn't coded!", true);
+		//Create Image View
+		{
+			VkImageViewCreateInfo ci = {};
+			ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			ci.flags = 0;
+			ci.pNext = nullptr;
+
+			ci.image = TEXTURE->Image;
+			ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+			ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE->CHANNELs);
+			ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			ci.subresourceRange.baseArrayLayer = 0;
+			ci.subresourceRange.layerCount = 1;
+			ci.subresourceRange.baseMipLevel = 0;
+			ci.subresourceRange.levelCount = 1;
+
+			if (vkCreateImageView(VKGPU->Logical_Device, &ci, nullptr, &TEXTURE->ImageView) != VK_SUCCESS) {
+				LOG_ERROR_TAPI("GFXContentManager->Upload_Texture() has failed in vkCreateImageView()!");
+				return TAPI_FAIL;
+			}
+		}
+		
+		TEXTUREs.push_back(GFX->JobSys.GetThisThreadIndex(), TEXTURE);
+		TextureHandle = TEXTURE;
+		LOG_NOTCODED_TAPI("GFXContentManager->Upload_Texture(): Uploading the data isn't coded yet!", true);
 	}
 	void GPU_ContentManager::Unload_Texture(GFX_API::GFXHandle ASSET_ID) {
-		LOG_NOTCODED_TAPI("VK::Unload_Texture isn't coded!", true);
+		LOG_NOTCODED_TAPI("GFXContentManager->Unload_Texture() isn't coded!", true);
 	}
 
 
-	GFX_API::GFXHandle GPU_ContentManager::Create_GlobalBuffer(const char* BUFFER_NAME, void* DATA, unsigned int DATA_SIZE, GFX_API::BUFFER_VISIBILITY USAGE) {
-		LOG_NOTCODED_TAPI("VK::Create_GlobalBuffer isn't coded!", true);
+	TAPIResult GPU_ContentManager::Create_GlobalBuffer(const char* BUFFER_NAME, const void* DATA, unsigned int DATA_SIZE, const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle& GlobalBufferHandle) {
+		LOG_NOTCODED_TAPI("GFXContentManager->Create_GlobalBuffer() isn't coded!", true);
 		if (!VKRENDERER->Is_ConstructingRenderGraph()) {
-			LOG_ERROR_TAPI("I don't support run-time Global Buffer addition for now because I need to recreate PipelineLayouts (so all PSOs)!");
-			return 0;
+			LOG_ERROR_TAPI("GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)!");
+			return TAPI_WRONGTIMING;
 		}
-		return 0;
+		return TAPI_SUCCESS;
 	}
-	void GPU_ContentManager::Upload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID, void* DATA, unsigned int DATA_SIZE) {
-		LOG_NOTCODED_TAPI("VK::Upload_GlobalBuffer isn't coded!", true);
+	TAPIResult GPU_ContentManager::Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* DATA, unsigned int DATA_SIZE, GFX_API::GFXHandle TransferPassHandle) {
+		LOG_NOTCODED_TAPI("Upload_GlobalBuffer() isn't coded yet!", true);
+		return TAPI_NOTCODED;
 	}
 	void GPU_ContentManager::Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) {
-		LOG_NOTCODED_TAPI("VK::Unload_GlobalBuffer isn't coded!", true);
+		LOG_NOTCODED_TAPI("GFXContentManager->Unload_GlobalBuffer() isn't coded!", true);
 	}
 
 
-	GFX_API::GFXHandle GPU_ContentManager::Compile_ShaderSource(GFX_API::ShaderSource_Resource* SHADER) {
+	TAPIResult GPU_ContentManager::Compile_ShaderSource(const GFX_API::ShaderSource_Resource* SHADER, GFX_API::GFXHandle& ShaderSourceHandle) {
 		//Create Vertex Shader Module
 		VkShaderModuleCreateInfo ci = {};
 		ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -662,41 +749,43 @@ namespace Vulkan {
 
 		VkShaderModule Module;
 		if (vkCreateShaderModule(((GPU*)VKGPU)->Logical_Device, &ci, 0, &Module) != VK_SUCCESS) {
-			LOG_CRASHING_TAPI("Vertex Shader Module is failed at creation!");
+			LOG_CRASHING_TAPI("Shader Source is failed at creation!");
+			return TAPI_FAIL;
 		}
 		
 		VK_ShaderSource* SHADERSOURCE = new VK_ShaderSource;
 		SHADERSOURCE->Module = Module;
-		SHADERSOURCEs.push_back(SHADERSOURCE);
+		SHADERSOURCEs.push_back(GFX->JobSys.GetThisThreadIndex(), SHADERSOURCE);
 		LOG_STATUS_TAPI("Vertex Shader Module is successfully created!");
-		return SHADERSOURCE;
+		ShaderSourceHandle = SHADERSOURCE;
+		return TAPI_SUCCESS;
 	}
 	void GPU_ContentManager::Delete_ShaderSource(GFX_API::GFXHandle ASSET_ID) {
 		LOG_NOTCODED_TAPI("VK::Unload_GlobalBuffer isn't coded!", true);
 	}
-	GFX_API::GFXHandle GPU_ContentManager::Compile_ComputeShader(GFX_API::ComputeShader_Resource* SHADER){
+	TAPIResult GPU_ContentManager::Compile_ComputeShader(GFX_API::ComputeShader_Resource* SHADER, GFX_API::GFXHandle* Handles, unsigned int Count) {
 		LOG_NOTCODED_TAPI("VK::Compile_ComputeShader isn't coded!", true);
-		return nullptr;
+		return TAPI_NOTCODED;
 	}
 	void GPU_ContentManager::Delete_ComputeShader(GFX_API::GFXHandle ASSET_ID){
 		LOG_NOTCODED_TAPI("VK::Delete_ComputeShader isn't coded!", true);
 	}
-	GFX_API::GFXHandle GPU_ContentManager::Link_MaterialType(GFX_API::Material_Type* MATTYPE_ASSET){
+	TAPIResult GPU_ContentManager::Link_MaterialType(const GFX_API::Material_Type& MATTYPE_ASSET, GFX_API::GFXHandle& MaterialHandle) {
 		LOG_NOTCODED_TAPI("You forgot to use Inherited RT SlotSets instead of the Base SlotSets!", true);
 		if (VKRENDERER->Is_ConstructingRenderGraph()) {
 			LOG_ERROR_TAPI("You can't link a Material Type while recording RenderGraph!");
-			return nullptr;
+			return TAPI_WRONGTIMING;
 		}
 		VK_VertexAttribLayout* LAYOUT = nullptr;
-		LAYOUT = GFXHandleConverter(VK_VertexAttribLayout*, MATTYPE_ASSET->ATTRIBUTELAYOUT_ID);
+		LAYOUT = GFXHandleConverter(VK_VertexAttribLayout*, MATTYPE_ASSET.ATTRIBUTELAYOUT_ID);
 		if (!LAYOUT) {
 			LOG_ERROR_TAPI("Link_MaterialType() has failed because Material Type has invalid Vertex Attribute Layout!");
-			return nullptr;
+			return TAPI_INVALIDARGUMENT;
 		}
-		VK_SubDrawPass* Subpass = GFXHandleConverter(VK_SubDrawPass*, MATTYPE_ASSET->SubDrawPass_ID);
-		if (Subpass->SLOTSET != MATTYPE_ASSET->RTSLOTSET_ID) {
+		VK_SubDrawPass* Subpass = GFXHandleConverter(VK_SubDrawPass*, MATTYPE_ASSET.SubDrawPass_ID);
+		if (Subpass->SLOTSET != MATTYPE_ASSET.RTSLOTSET_ID) {
 			LOG_ERROR_TAPI("Link_MaterialType() has failed because Material Type's RenderTarget SlotSet doesn't match with the SubDrawPass'!");
-			return nullptr;
+			return TAPI_FAIL;
 		}
 		VK_DrawPass* MainPass = nullptr;
 		MainPass = GFXHandleConverter(VK_DrawPass*, Subpass->DrawPass);
@@ -709,13 +798,13 @@ namespace Vulkan {
 		{
 			Vertex_ShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			Vertex_ShaderStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-			VkShaderModule* VS_Module = &GFXHandleConverter(VK_ShaderSource*, MATTYPE_ASSET->VERTEXSOURCE_ID)->Module;
+			VkShaderModule* VS_Module = &GFXHandleConverter(VK_ShaderSource*, MATTYPE_ASSET.VERTEXSOURCE_ID)->Module;
 			Vertex_ShaderStage.module = *VS_Module;
 			Vertex_ShaderStage.pName = "main";
 
 			Fragment_ShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			Fragment_ShaderStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-			VkShaderModule* FS_Module = &GFXHandleConverter(VK_ShaderSource*, MATTYPE_ASSET->FRAGMENTSOURCE_ID)->Module;
+			VkShaderModule* FS_Module = &GFXHandleConverter(VK_ShaderSource*, MATTYPE_ASSET.FRAGMENTSOURCE_ID)->Module;
 			Fragment_ShaderStage.module = *FS_Module;
 			Fragment_ShaderStage.pName = "main";
 		}
@@ -817,8 +906,8 @@ namespace Vulkan {
 			//General DescriptorSet Layout Creation
 			{
 				vector<VkDescriptorSetLayoutBinding> bindings;
-				for (unsigned int i = 0; i < MATTYPE_ASSET->MATERIALTYPEDATA.size(); i++) {
-					GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET->MATERIALTYPEDATA[i];
+				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
+					const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
 					if (gfxdesc.BINDINGPOINT) {
 						if (gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_G ||
 							gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G ||
@@ -831,7 +920,7 @@ namespace Vulkan {
 						for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
 							if (BP == bindings[bpsearchindex].binding) {
 								LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
-								return nullptr;
+								return TAPI_FAIL;
 							}
 						}
 
@@ -865,15 +954,15 @@ namespace Vulkan {
 
 				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &VKPipeline->General_DescSetLayout.Layout) != VK_SUCCESS) {
 					LOG_ERROR_TAPI("Link_MaterialType() has failed at General DescriptorSetLayout Creation vkCreateDescriptorSetLayout()");
-					return nullptr;
+					return TAPI_FAIL;
 				}
 			}
 
 			//Instance DescriptorSet Layout Creation
 			{
 				vector<VkDescriptorSetLayoutBinding> bindings;
-				for (unsigned int i = 0; i < MATTYPE_ASSET->MATERIALTYPEDATA.size(); i++) {
-					GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET->MATERIALTYPEDATA[i];
+				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
+					const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
 					if (gfxdesc.BINDINGPOINT) {
 						if (gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI ||
 							gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI ||
@@ -885,7 +974,7 @@ namespace Vulkan {
 						for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
 							if (BP == bindings[bpsearchindex].binding) {
 								LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
-								return nullptr;
+								return TAPI_FAIL;
 							}
 						}
 						VkDescriptorSetLayoutBinding bn = {};
@@ -917,7 +1006,7 @@ namespace Vulkan {
 
 				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &VKPipeline->Instance_DescSetLayout.Layout) != VK_SUCCESS) {
 					LOG_ERROR_TAPI("Link_MaterialType() has failed at Instance DesciptorSetLayout Creation vkCreateDescriptorSetLayout()");
-					return nullptr;
+					return TAPI_FAIL;
 				}
 			}
 
@@ -939,7 +1028,7 @@ namespace Vulkan {
 
 				if (vkCreatePipelineLayout(Vulkan_GPU->Logical_Device, &pl_ci, nullptr, &VKPipeline->PipelineLayout) != VK_SUCCESS) {
 					LOG_ERROR_TAPI("Link_MaterialType() failed at vkCreatePipelineLayout()!");
-					return nullptr;
+					return TAPI_FAIL;
 				}
 			}
 		}
@@ -970,35 +1059,31 @@ namespace Vulkan {
 				delete VKPipeline;
 				delete STAGEs;
 				LOG_ERROR_TAPI("vkCreateGraphicsPipelines has failed!");
-				return nullptr;
+				return TAPI_FAIL;
 			}
 		}
 
 		VKPipeline->GFX_Subpass = Subpass;
-		VKPipeline->DESCCOUNT = MATTYPE_ASSET->MATERIALTYPEDATA.size();
-		VKPipeline->DATADESCs = new GFX_API::MaterialDataDescriptor[MATTYPE_ASSET->MATERIALTYPEDATA.size()];
+		VKPipeline->DESCCOUNT = MATTYPE_ASSET.MATERIALTYPEDATA.size();
+		VKPipeline->DATADESCs = new GFX_API::MaterialDataDescriptor[MATTYPE_ASSET.MATERIALTYPEDATA.size()];
 		for (unsigned int i = 0; i < VKPipeline->DESCCOUNT; i++) {
-			VKPipeline->DATADESCs[i] = MATTYPE_ASSET->MATERIALTYPEDATA[i];
+			VKPipeline->DATADESCs[i] = MATTYPE_ASSET.MATERIALTYPEDATA[i];
 		}
-		SHADERPROGRAMs.push_back(VKPipeline);
+		SHADERPROGRAMs.push_back(GFX->JobSys.GetThisThreadIndex(), VKPipeline);
 
 
 		LOG_STATUS_TAPI("Finished creating Graphics Pipeline");
-		return VKPipeline;
+		MaterialHandle = VKPipeline;
+		return TAPI_SUCCESS;
 	}
 	void GPU_ContentManager::Delete_MaterialType(GFX_API::GFXHandle Asset_ID){
 		LOG_NOTCODED_TAPI("VK::Unload_GlobalBuffer isn't coded!", true);
 	}
-	GFX_API::GFXHandle GPU_ContentManager::Create_MaterialInst(GFX_API::Material_Instance* MATINST_ASSET) {
-		if (!MATINST_ASSET) {
-			LOG_ERROR_TAPI("Create_MaterialInst() has failed because MATINST_ASSET is nullptr!");
-			return nullptr;
-		}
-
-		VK_GraphicsPipeline* VKPSO = (VK_GraphicsPipeline*)MATINST_ASSET->Material_Type;
+	TAPIResult GPU_ContentManager::Create_MaterialInst(const GFX_API::Material_Instance& MATINST_ASSET, GFX_API::GFXHandle& MaterialInstHandle) {
+		VK_GraphicsPipeline* VKPSO = (VK_GraphicsPipeline*)MATINST_ASSET.Material_Type;
 		if (!VKPSO) {
 			LOG_ERROR_TAPI("Create_MaterialInst() has failed because Material Type isn't found!");
-			return nullptr;
+			return TAPI_INVALIDARGUMENT;
 		}
 
 		//Descriptor Set Creation
@@ -1008,27 +1093,27 @@ namespace Vulkan {
 
 		//Check MaterialData's incompatiblity then write Descriptor Updates!
 		vector<VkWriteDescriptorSet> DescriptorSetUpdates;
-		if (VKPSO->DESCCOUNT != MATINST_ASSET->MATERIALDATAs.size()) {
+		if (VKPSO->DESCCOUNT != MATINST_ASSET.MATERIALDATAs.size()) {
 			LOG_CRASHING_TAPI("Link_MaterialType() has failed because Material Instance's DATAINSTANCEs size should match with Material Type's!");
-			return nullptr;
+			return TAPI_FAIL;
 		}
-		for (unsigned int i = 0; i < MATINST_ASSET->MATERIALDATAs.size(); i++) {
-			GFX_API::MaterialInstanceData& instance_data = MATINST_ASSET->MATERIALDATAs[i];
-			GFX_API::MaterialDataDescriptor* datadesc = nullptr;
+		for (unsigned int i = 0; i < MATINST_ASSET.MATERIALDATAs.size(); i++) {
+			const GFX_API::MaterialInstanceData& instance_data = MATINST_ASSET.MATERIALDATAs[i];
+			const GFX_API::MaterialDataDescriptor* datadesc = nullptr;
 
 			//Search for matching data
 			for (unsigned int bindingsearchindex = 0; bindingsearchindex < VKPSO->DESCCOUNT; bindingsearchindex++) {
 				if (VKPSO->DATADESCs[bindingsearchindex].BINDINGPOINT == instance_data.BINDINGPOINT) {
 					if (datadesc) {
 						LOG_ERROR_TAPI("Link_MaterialType() has failed because one of the GENERALDATA matches with multiple type general data descriptor!");
-						return nullptr;
+						return TAPI_FAIL;
 					}
 					datadesc = &VKPSO->DATADESCs[bindingsearchindex];
 				}
 			}
 			if (!datadesc) {
 				LOG_ERROR_TAPI("Link_MaterialType() has failed because one of the GENERALDATA doesn't match with any type general data descriptor!");
-				return nullptr;
+				return TAPI_FAIL;
 			}
 
 			DescriptorSetUpdates.push_back(VkWriteDescriptorSet());
@@ -1073,47 +1158,65 @@ namespace Vulkan {
 
 
 		VKPInstance->PROGRAM = VKPSO;
-		SHADERPINSTANCEs.push_back(VKPInstance);
-		return VKPInstance;
+		SHADERPINSTANCEs.push_back(GFX->JobSys.GetThisThreadIndex(), VKPInstance);
+		MaterialInstHandle = VKPInstance;
+		return TAPI_SUCCESS;
 	}
 	void GPU_ContentManager::Delete_MaterialInst(GFX_API::GFXHandle Asset_ID) {
-
+		LOG_CRASHING_TAPI("Delete_MaterialInst() isn't coded yet!");
 	}
 
-	GFX_API::GFXHandle GPU_ContentManager::Create_RTSlotSet(const vector<GFX_API::RTSLOT_Description>& Description) {
+	TAPIResult GPU_ContentManager::Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) {
 		if (!VKRENDERER->Is_ConstructingRenderGraph()) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_RTSlotSet() has failed because you can't create a RTSlotSet if you aren't constructing a RenderGraph!");
-			return nullptr;
+			return TAPI_FAIL;
 		}
-		unsigned int DEPTHSLOT_VECTORINDEX = Description.size();
+
+		for (unsigned int SlotIndex = 0; SlotIndex < Descriptions.size(); SlotIndex++) {
+			const GFX_API::RTSLOT_Description& desc = Descriptions[SlotIndex];
+			VK_Texture* FirstHandle = GFXHandleConverter(VK_Texture*, desc.TextureHandles[0]);
+			VK_Texture* SecondHandle = GFXHandleConverter(VK_Texture*, desc.TextureHandles[0]);
+			if ((FirstHandle->CHANNELs != SecondHandle->CHANNELs) ||
+				(FirstHandle->WIDTH != SecondHandle->WIDTH) ||
+				(FirstHandle->HEIGHT != SecondHandle->HEIGHT)
+				) {
+				LOG_ERROR_TAPI("GFXContentManager->Create_RTSlotSet() has failed because one of the slots has texture handles that doesn't match channel type, width or height!");
+				return TAPI_INVALIDARGUMENT;
+			}
+			if (!FirstHandle->USAGE.isRenderableTo || !SecondHandle->USAGE.isRenderableTo) {
+				LOG_ERROR_TAPI("GFXContentManager->Create_RTSlotSet() has failed because one of the slots has a handle that doesn't use is_RenderableTo in its USAGEFLAG!");
+				return TAPI_INVALIDARGUMENT;
+			}
+		}
+		unsigned int DEPTHSLOT_VECTORINDEX = Descriptions.size();
 		//Validate the list and find Depth Slot if there is any
-		for (unsigned int i = 0; i < Description.size(); i++) {
-			const GFX_API::RTSLOT_Description& desc = Description[i];
-			VK_Texture* RT = nullptr;
-			if (desc.IS_SWAPCHAIN != GFX_API::SWAPCHAIN_IDENTIFIER::NO_SWPCHN) {
-				RT = GFXHandleConverter(VK_Texture*, VKWINDOW->Swapchain_Textures[0]);
-			}
-			else {
-				RT = GFXHandleConverter(VK_Texture*, desc.RT_Handle);
-			}
-			if (!RT) {
-				LOG_ERROR_TAPI("Create_RTSlotSet() has failed because intended RT isn't found!");
-				return 0;
-			}
-			if (desc.OPTYPE == GFX_API::OPERATION_TYPE::UNUSED) {
-				LOG_ERROR_TAPI("Create_RTSlotSet() has failed because you can't create a Base RT SlotSet that has unused attachment!");
-				return nullptr;
-			}
-			if (RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8 || RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
-				DEPTHSLOT_VECTORINDEX = i;
-				continue;
-			}
-			if (desc.SLOTINDEX > Description.size() - 1) {
-				LOG_ERROR_TAPI("Create_RTSlotSet() has failed because you gave a overflowing SLOTINDEX to a RTSLOT!");
-				return nullptr;
+		for (unsigned int SlotIndex = 0; SlotIndex < Descriptions.size(); SlotIndex++) {
+			const GFX_API::RTSLOT_Description& desc = Descriptions[SlotIndex];
+			for (unsigned int RTIndex = 0; RTIndex < 2; RTIndex++) {
+				VK_Texture* RT = GFXHandleConverter(VK_Texture*, desc.TextureHandles[RTIndex]);
+				if (!RT) {
+					LOG_ERROR_TAPI("Create_RTSlotSet() has failed because intended RT isn't found!");
+					return TAPI_INVALIDARGUMENT;
+				}
+				if (desc.OPTYPE == GFX_API::OPERATION_TYPE::UNUSED) {
+					LOG_ERROR_TAPI("Create_RTSlotSet() has failed because you can't create a Base RT SlotSet that has unused attachment!");
+					return TAPI_INVALIDARGUMENT;
+				}
+				if (RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8 || RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
+					if (DEPTHSLOT_VECTORINDEX != Descriptions.size()) {
+						LOG_ERROR_TAPI("Create_RTSlotSet() has failed because you can't use two depth buffers at the same slotset (If you're trying to use D24S8 or D32 for color textures, that's not allowed!)");
+						return TAPI_INVALIDARGUMENT;
+					}
+					DEPTHSLOT_VECTORINDEX = SlotIndex;
+					continue;
+				}
+				if (desc.SLOTINDEX > Descriptions.size() - 1) {
+					LOG_ERROR_TAPI("Create_RTSlotSet() has failed because you gave a overflowing SLOTINDEX to a RTSLOT!");
+					return TAPI_INVALIDARGUMENT;
+				}
 			}
 		}
-		unsigned char COLORRT_COUNT = (DEPTHSLOT_VECTORINDEX != Description.size()) ? Description.size() - 1 : Description.size();
+		unsigned char COLORRT_COUNT = (DEPTHSLOT_VECTORINDEX != Descriptions.size()) ? Descriptions.size() - 1 : Descriptions.size();
 
 		unsigned int i = 0;
 		unsigned int j = 0;
@@ -1125,53 +1228,52 @@ namespace Vulkan {
 				if (i + j == DEPTHSLOT_VECTORINDEX) {
 					continue;
 				}
-				if (Description[i].SLOTINDEX == Description[i + j].SLOTINDEX) {
+				if (Descriptions[i].SLOTINDEX == Descriptions[i + j].SLOTINDEX) {
 					LOG_ERROR_TAPI("Create_RTSlotSet() has failed because some SLOTINDEXes are same, but each SLOTINDEX should be unique and lower then COLOR SLOT COUNT!");
-					return nullptr;
+					return TAPI_INVALIDARGUMENT;
 				}
 			}
 		}
 
 
 		VK_RTSLOTSET* VKSLOTSET = new VK_RTSLOTSET;
-		VKSLOTSET->COLOR_SLOTs = new VK_COLORRTSLOT[COLORRT_COUNT];
-		VKSLOTSET->COLORSLOTs_COUNT = COLORRT_COUNT;
-		if (DEPTHSLOT_VECTORINDEX != Description.size()) {
-			VKSLOTSET->DEPTHSTENCIL_SLOT = new VK_DEPTHSTENCILSLOT;
-			VK_DEPTHSTENCILSLOT* slot = VKSLOTSET->DEPTHSTENCIL_SLOT;
-			const GFX_API::RTSLOT_Description& DEPTHDESC = Description[DEPTHSLOT_VECTORINDEX];
-			slot->CLEAR_COLOR = vec2(DEPTHDESC.CLEAR_VALUE.x, DEPTHDESC.CLEAR_VALUE.y);
-			slot->DEPTH_OPTYPE = DEPTHDESC.OPTYPE;
-			slot->RT = GFXHandleConverter(VK_Texture*, DEPTHDESC.RT_Handle);
-			slot->STENCIL_OPTYPE = GFX_API::OPERATION_TYPE::UNUSED;
-			LOG_NOTCODED_TAPI("Create_RTSlotSet() sets STENCIL_OPTYPE as UNUSED hard-coded for now, fix it in future!", false);
-		}
-		for(unsigned int i = 0; i < COLORRT_COUNT; i++){
-			const GFX_API::RTSLOT_Description& desc = Description[i];
-			VK_Texture* RT = nullptr;
-			if (desc.IS_SWAPCHAIN != GFX_API::SWAPCHAIN_IDENTIFIER::NO_SWPCHN) {
-				RT = GFXHandleConverter(VK_Texture*, VKWINDOW->Swapchain_Textures[0]);
+		for (unsigned int SlotSetIndex = 0; SlotSetIndex < 2; SlotSetIndex++) {
+			VK_RTSLOTs& PF_SLOTSET = VKSLOTSET->PERFRAME_SLOTSETs[SlotSetIndex];
+
+			PF_SLOTSET.COLOR_SLOTs = new VK_COLORRTSLOT[COLORRT_COUNT];
+			PF_SLOTSET.COLORSLOTs_COUNT = COLORRT_COUNT;
+			if (DEPTHSLOT_VECTORINDEX != Descriptions.size()) {
+				PF_SLOTSET.DEPTHSTENCIL_SLOT = new VK_DEPTHSTENCILSLOT;
+				VK_DEPTHSTENCILSLOT* slot = PF_SLOTSET.DEPTHSTENCIL_SLOT;
+				const GFX_API::RTSLOT_Description& DEPTHDESC = Descriptions[DEPTHSLOT_VECTORINDEX];
+				slot->CLEAR_COLOR = vec2(DEPTHDESC.CLEAR_VALUE.x, DEPTHDESC.CLEAR_VALUE.y);
+				slot->DEPTH_OPTYPE = DEPTHDESC.OPTYPE;
+				slot->RT = GFXHandleConverter(VK_Texture*, DEPTHDESC.TextureHandles[SlotSetIndex]);
+				slot->STENCIL_OPTYPE = GFX_API::OPERATION_TYPE::UNUSED;
+				LOG_NOTCODED_TAPI("Create_RTSlotSet() sets STENCIL_OPTYPE as UNUSED hard-coded for now, fix it in future!", false);
 			}
-			else {
-				RT = GFXHandleConverter(VK_Texture*, desc.RT_Handle);
+			for (unsigned int i = 0; i < COLORRT_COUNT; i++) {
+				const GFX_API::RTSLOT_Description& desc = Descriptions[i];
+				VK_Texture* RT = GFXHandleConverter(VK_Texture*, desc.TextureHandles[SlotSetIndex]);
+				VK_COLORRTSLOT SLOT;
+				SLOT.RT_OPERATIONTYPE = desc.OPTYPE;
+				SLOT.LOADSTATE = desc.LOADOP;
+				SLOT.RT = RT;
+				SLOT.CLEAR_COLOR = desc.CLEAR_VALUE;
+				PF_SLOTSET.COLOR_SLOTs[desc.SLOTINDEX] = SLOT;
 			}
-			VK_COLORRTSLOT SLOT;
-			SLOT.RT_OPERATIONTYPE = desc.OPTYPE;
-			SLOT.LOADSTATE = desc.LOADOP;
-			SLOT.RT = RT;
-			SLOT.CLEAR_COLOR = desc.CLEAR_VALUE;
-			VKSLOTSET->COLOR_SLOTs[desc.SLOTINDEX] = SLOT;
 		}
 
-		RT_SLOTSETs.push_back(VKSLOTSET);
-		return VKSLOTSET;
+		RT_SLOTSETs.push_back(GFX->JobSys.GetThisThreadIndex(), VKSLOTSET);
+		RTSlotSetHandle = VKSLOTSET;
+		return TAPI_SUCCESS;
 	}
-	GFX_API::GFXHandle GPU_ContentManager::Inherite_RTSlotSet(const GFX_API::GFXHandle SLOTSETHandle, const vector<GFX_API::IRTSLOT_Description>& Descriptions) {
-		if (!SLOTSETHandle) {
+	TAPIResult GPU_ContentManager::Inherite_RTSlotSet(const vector<GFX_API::RTSLOTUSAGE_Description>& Descriptions, GFX_API::GFXHandle RTSlotSetHandle, GFX_API::GFXHandle& InheritedSlotSetHandle) {
+		if (!RTSlotSetHandle) {
 			LOG_ERROR_TAPI("Inherite_RTSlotSet() has failed because Handle is invalid!");
-			return nullptr;
+			return TAPI_INVALIDARGUMENT;
 		}
-		VK_RTSLOTSET* BaseSet = GFXHandleConverter(VK_RTSLOTSET*, SLOTSETHandle);
+		VK_RTSLOTSET* BaseSet = GFXHandleConverter(VK_RTSLOTSET*, RTSlotSetHandle);
 		VK_IRTSLOTSET* InheritedSet = new VK_IRTSLOTSET;
 		InheritedSet->BASESLOTSET = BaseSet;
 
@@ -1179,20 +1281,22 @@ namespace Vulkan {
 		bool DEPTH_FOUND = false;
 		unsigned char COLORSLOT_COUNT = 0, DEPTHDESC_VECINDEX = 0;
 		for (unsigned char i = 0; i < Descriptions.size(); i++) {
-			const GFX_API::IRTSLOT_Description& DESC = Descriptions[i];
+			const GFX_API::RTSLOTUSAGE_Description& DESC = Descriptions[i];
 			if (DESC.IS_DEPTH) {
 				if (DEPTH_FOUND) {
 					LOG_ERROR_TAPI("Inherite_RTSlotSet() has failed because there are two depth buffers in the description, which is not supported!");
-					return nullptr;
+					delete InheritedSet;
+					return TAPI_INVALIDARGUMENT;
 				}
 				DEPTH_FOUND = true;
 				DEPTHDESC_VECINDEX = i;
-				if (BaseSet->DEPTHSTENCIL_SLOT->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY &&
+				if (BaseSet->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY &&
 					(DESC.OPTYPE == GFX_API::OPERATION_TYPE::WRITE_ONLY || DESC.OPTYPE == GFX_API::OPERATION_TYPE::READ_AND_WRITE)
 					) 
 				{
 					LOG_ERROR_TAPI("Inherite_RTSlotSet() has failed because you can't use a Read-Only DepthSlot with Write Access in a Inherited Set!");
-					return nullptr;
+					delete InheritedSet;
+					return TAPI_INVALIDARGUMENT;
 				}
 				InheritedSet->DEPTH_OPTYPE = DESC.OPTYPE;
 				InheritedSet->STENCIL_OPTYPE = GFX_API::OPERATION_TYPE::UNUSED;
@@ -1204,9 +1308,10 @@ namespace Vulkan {
 		if (!DEPTH_FOUND) {
 			InheritedSet->DEPTH_OPTYPE = GFX_API::OPERATION_TYPE::UNUSED;
 		}
-		if (COLORSLOT_COUNT != BaseSet->COLORSLOTs_COUNT) {
+		if (COLORSLOT_COUNT != BaseSet->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT) {
 			LOG_ERROR_TAPI("Inherite_RTSlotSet() has failed because BaseSet's Color Slot count doesn't match given Descriptions's one!");
-			return nullptr;
+			delete InheritedSet;
+			return TAPI_INVALIDARGUMENT;
 		}
 
 		//Check SlotIndexes of Color Slots
@@ -1220,11 +1325,13 @@ namespace Vulkan {
 				}
 				if (Descriptions[i].SLOTINDEX >= COLORSLOT_COUNT) {
 					LOG_ERROR_TAPI("Inherite_RTSlotSet() has failed because some ColorSlots have indexes that are more than or equal to ColorSlotCount! Each slot's index should be unique and lower than ColorSlotCount!");
-					return nullptr;
+					delete InheritedSet;
+					return TAPI_INVALIDARGUMENT;
 				}
 				if (Descriptions[i].SLOTINDEX == Descriptions[i + j].SLOTINDEX) {
 					LOG_ERROR_TAPI("Inherite_RTSlotSet() has failed because given Descriptions have some ColorSlots that has same indexes! Each slot's index should be unique and lower than ColorSlotCount!");
-					return nullptr;
+					delete InheritedSet;
+					return TAPI_INVALIDARGUMENT;
 				}
 			}
 		}
@@ -1235,18 +1342,21 @@ namespace Vulkan {
 			if (i == DEPTHDESC_VECINDEX) {
 				continue;
 			}
-			const GFX_API::OPERATION_TYPE& BSLOT_OPTYPE = BaseSet->COLOR_SLOTs[Descriptions[i].SLOTINDEX].RT_OPERATIONTYPE;
+			const GFX_API::OPERATION_TYPE& BSLOT_OPTYPE = BaseSet->PERFRAME_SLOTSETs[0].COLOR_SLOTs[Descriptions[i].SLOTINDEX].RT_OPERATIONTYPE;
 
 			if (BSLOT_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY &&
 					(Descriptions[i].OPTYPE == GFX_API::OPERATION_TYPE::WRITE_ONLY || Descriptions[i].OPTYPE == GFX_API::OPERATION_TYPE::READ_AND_WRITE)
 				) 
 			{
 				LOG_ERROR_TAPI("Inherite_RTSlotSet() has failed because you can't use a Read-Only ColorSlot with Write Access in a Inherited Set!");
-				return nullptr;
+				delete InheritedSet;
+				return TAPI_INVALIDARGUMENT;
 			}
 			InheritedSet->COLOR_OPTYPEs[Descriptions[i].SLOTINDEX] = Descriptions[i].OPTYPE;
 		}
-		return InheritedSet;
+
+		InheritedSlotSetHandle = InheritedSet;
+		return TAPI_SUCCESS;
 	}
 
 
@@ -1256,21 +1366,31 @@ namespace Vulkan {
 	bool GPU_ContentManager::Delete_VertexAttribute(GFX_API::GFXHandle Attribute_ID) {
 		VK_VertexAttribute* FOUND_ATTRIB = GFXHandleConverter(VK_VertexAttribute*, Attribute_ID);
 		//Check if it's still in use in a Layout
-		for (unsigned int i = 0; i < VERTEXATTRIBLAYOUTs.size(); i++) {
-			VK_VertexAttribLayout* VERTEXATTRIBLAYOUT = VERTEXATTRIBLAYOUTs[i];
-			for (unsigned int j = 0; j < VERTEXATTRIBLAYOUT->Attribute_Number; j++) {
-				if (VERTEXATTRIBLAYOUT->Attributes[j] == FOUND_ATTRIB) {
-					return false;
+		std::unique_lock<std::mutex> SearchLock;
+		VERTEXATTRIBLAYOUTs.PauseAllOperations(SearchLock);
+		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys.GetThreadCount(); ThreadID++) {
+			for (unsigned int i = 0; i < VERTEXATTRIBLAYOUTs.size(ThreadID); i++) {
+				VK_VertexAttribLayout* VERTEXATTRIBLAYOUT = VERTEXATTRIBLAYOUTs.get(ThreadID, i);
+				for (unsigned int j = 0; j < VERTEXATTRIBLAYOUT->Attribute_Number; j++) {
+					if (VERTEXATTRIBLAYOUT->Attributes[j] == FOUND_ATTRIB) {
+						return false;
+					}
 				}
 			}
 		}
+		SearchLock.unlock();
+
+
 		unsigned int vector_index = 0;
-		for (unsigned int i = 0; i < VERTEXATTRIBUTEs.size(); i++) {
-			if (VERTEXATTRIBUTEs[i] == FOUND_ATTRIB) {
-				VERTEXATTRIBUTEs.erase(VERTEXATTRIBUTEs.begin() + i);
+		VERTEXATTRIBUTEs.PauseAllOperations(SearchLock);
+		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys.GetThreadCount(); ThreadID++) {
+			unsigned int elementindex = 0;
+			if (VERTEXATTRIBUTEs.Search(FOUND_ATTRIB, ThreadID, elementindex)) {
+				VERTEXATTRIBUTEs.erase(ThreadID, elementindex);
 				delete FOUND_ATTRIB;
 			}
 		}
+		return true;
 	}
 
 	/*
@@ -1402,13 +1522,4 @@ namespace Vulkan {
 		LOG_WARNING("Find_RTSLOTSET_byID has failed! ID: " + to_string(SlotSetID));
 		return nullptr;
 	}*/
-
-
-	//STRUCT FILLING
-	GFX_API::GFXHandle GPU_ContentManager::Create_VertexAttribute(GFX_API::DATA_TYPE TYPE, bool is_perVertex) {
-		VK_VertexAttribute* Attribute = new VK_VertexAttribute;
-		Attribute->DATATYPE = TYPE;
-		VERTEXATTRIBUTEs.push_back(Attribute);
-		return Attribute;
-	}
 }

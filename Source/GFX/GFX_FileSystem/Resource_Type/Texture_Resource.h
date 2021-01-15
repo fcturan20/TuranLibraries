@@ -14,7 +14,7 @@ namespace GFX_API {
 
 	struct GFXAPI TEXTUREUSAGEFLAG {
 		//bool hasMipMaps			: 1;	//I don't support it for now!
-		bool isCopiableFrom			: 1;	//If it is true, other textures or buffers are able to copy some from this texture
+		bool isCopiableFrom			: 1;	//If it is true, other textures or buffers are able to copy something from this texture
 		bool isCopiableTo			: 1;	//If it is true, this texture may copy data from other buffers or textures
 		bool isRenderableTo			: 1;	//If it is true, it is a Render Target for at least one DrawPass
 		bool isSampledReadOnly		: 1;	//If it is true, it is accessed as a uniform texture that you're not able to write to it in the shader
@@ -31,7 +31,7 @@ namespace GFX_API {
 			But you should use UsageBarrier for this kind of usage and specify it in RenderGraph
 			3) You can't use Staging Buffers to store and access textures, they are just for transfer operations
 	*/
-	struct GFXAPI Texture_Description {
+	struct GFXAPI Texture_Resource {
 	public:
 		Texture_Properties Properties;
 		unsigned int WIDTH, HEIGHT;

@@ -9,7 +9,6 @@ namespace GFX_API {
 		//RenderGraph States
 		bool Record_RenderGraphConstruction = false;
 		unsigned char FrameIndex = 0, FrameCount = 2;
-		unsigned char Get_LastFrameIndex();
 		void Set_NextFrameIndex();
 
 		//Renderer States
@@ -31,28 +30,38 @@ namespace GFX_API {
 		virtual void Finish_RenderGraphConstruction() = 0;
 		//SubDrawPassIDs is used to return created SubDrawPasses IDs and DrawPass ID
 		//SubDrawPassIDs argument array's order is in the order of passed SubDrawPass_Description vector
-		virtual GFXHandle Create_DrawPass(const vector<SubDrawPass_Description>& SubDrawPasses, GFXHandle RTSLOTSET_ID, const vector<GFX_API::PassWait_Description>& WAITs, GFXHandle* SubDrawPassIDs, const char* NAME) = 0;
-		virtual GFXHandle Create_TransferPass(const TransferPass_Description& TransferPassDescription) = 0;
-		//PassRunCondition is used to control the RenderGraph's rendering path
-		//For example: You can disable all the world rendering related passes and just render UI
-		//But you should give this handle to every pass that you want to disable (instead of the only one pass wait all other passes wait for)
-		//Because for example: World Renderer Passes are using Swapchains so UI have to wait for World Renderer
-		//When World Renderer is disabled, because UI depends on World Renderer (for Swapchain), GFX API would disable UI too!
-		//If is_DEFAULTACTIVATED is true, passes depends on this condition will run by default
-		//When you deactivate a PassRunCondition, it is deactivated until you activate it again!
-		//virtual GFXHandle Create_PassRunCondition(bool is_DEFAULTACTIVATED) = 0;
+		virtual TAPIResult Create_DrawPass(const vector<SubDrawPass_Description>& SubDrawPasses, GFXHandle RTSLOTSET_ID, const vector<GFX_API::PassWait_Description>& WAITs, const char* NAME, vector<GFXHandle>& SubDrawPassIDs, GFXHandle& DPHandle) = 0;
+		/*
+		* There are 4 types of TransferPasses and each type only support its type of GFXContentManager command: Barrier, Copy, Upload, Download
+		* Barrier means passes waits for the given resources (also image usage changes may happen that may change layout of the image)
+		And Barrier commands are also useful for creating resources that don't depend on CPU side data and GPU operations creates the data
+		That means you generally should use Barrier TP to create RTs
+		* Upload cmd uploads resource from CPU to GPU
+		* Download cmd downloads resource from GPU to CPU
+		* Copy cmd copies resources between each other on GPU
+
+		Upload TP:
+		1) If your texture data comes from the CPU, you should create the texture in the pass that suits your upload timing
+		For example: If you first create a Texture (without uploading any data) in UTP-1, you can not upload texture data in UTP-2.
+
+		Download TP:
+		1) Don't forget that you should carefully set IMUSAGEs of the Download cmds!
+		2) If you're gonna delete the texture (Save the texture to CPU and delete), you can set LATER_IMUSAGE same with PREVIOUS_IMUSAGE so no barrier will be created
+
+		Copy TP:
+		1) Don't forget that you should carefully set IMUSAGEs of the Copy cmds!
+
+		*/
+		virtual TAPIResult Create_TransferPass(const vector<PassWait_Description>& WaitDescriptions, const TRANFERPASS_TYPE& TP_TYPE, const string& NAME, GFX_API::GFXHandle& TPHandle) = 0;
+		virtual TAPIResult Create_WindowPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, const string& NAME, GFX_API::GFXHandle& WindowPassHandle) = 0;
 
 		//Rendering Functions
 
+		virtual void Render_DrawCall(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) = 0;
+		virtual void SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle, const GFX_API::IMAGEUSAGE& PREVIOUS_IMUSAGE, const GFX_API::SHADERSTAGEs_FLAG& PREVIOUS_SHADERSTAGE) = 0;
+
+		
 		//Everything you call after this, will be proccessed for next frame!
 		virtual void Run() = 0;
-		virtual void Render_DrawCall(DrawCall_Description drawcall) = 0;
-		//If should_ACTIVATE is true, condition is activated. Otherwise, it is deactivated.
-		//virtual void Set_PassRunCondition(GFXHandle ConditionHandle, bool should_ACTIVATE) = 0;
-
-		/*
-			In a GL specific GFX API (Vulkan, OpenGL4 etc), you should specify functions like Find_DrawPass_byID to access draw passes on other systems
-			You shouldn't define here, because that would any user to access these structures which isn't safe.
-		*/
 	};
 }

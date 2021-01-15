@@ -15,8 +15,6 @@ namespace Vulkan {
 		string* PASSNAME;
 	};
 
-	TPType FindWaitedTPType(GFX_API::SHADERSTAGEs_FLAG flag);
-
 	struct VK_GeneralPassLinkedList {
 		VK_GeneralPass* CurrentGP = nullptr;
 		VK_GeneralPassLinkedList* NextElement = nullptr;
@@ -144,7 +142,7 @@ namespace Vulkan {
 				std::cout << "Execution Order: " + to_string(GPIndex) + " and TP Name: " + GFXHandleConverter(VK_TransferPass*, Pass.Handle)->NAME << std::endl;
 				break;
 			case TPType::WP:
-				std::cout << "Execution Order: " + to_string(GPIndex) + " and WP Name: " + GFXHandleConverter(VK_WindowPass*, Pass.Handle)->NAME << std::endl;
+				std::cout << "Execution Order: " + to_string(GPIndex) + " and WP Name: " + GFXHandleConverter(VK_TransferPass*, Pass.Handle)->NAME << std::endl;
 				break;
 			default:
 				LOG_NOTCODED_TAPI("PrintRBSpecs() is not coded for this type of Pass!", true);
@@ -163,6 +161,7 @@ namespace Vulkan {
 	}
 
 	//Check if Pass is already in a RP, if it is not then Create New RP
+	//Why there is such a check? Because algorithm
 	//Create New RP: Set dependent RPs of the new RP as DependentRPs and give newRP to them as LaterExecutedRPs element
 	VK_RenderingPath* Create_NewRP(VK_GeneralPass* Pass, vector<VK_RenderingPath*>& RPs) {
 		VK_RenderingPath* RP;
@@ -248,7 +247,7 @@ namespace Vulkan {
 			bool is_RPCreated = false;
 			for (unsigned int WaitIndex = 0; WaitIndex < GP->WAITs->size() && !is_RPCreated; WaitIndex++) {
 				GFX_API::PassWait_Description& Waitdesc = (*GP->WAITs)[WaitIndex];
-				if (Waitdesc.WaitLastFramesPass || FindWaitedTPType(Waitdesc.WaitedStage) == TPType::WP) {
+				if (Waitdesc.WaitLastFramesPass) {
 					LFD_RPs.push_back(Create_NewRP(GP, RPs));
 					is_RPCreated = true;
 					ListHeader = DeleteGP_FromGPLinkedList(ListHeader, GP);
@@ -262,7 +261,7 @@ namespace Vulkan {
 		
 		//Step 2
 		//Create RPs for passes that's being dependent on by next frame
-		//I mean, create RPs for passes that Step1 RPs above depends on from next frame
+		//I mean, create RPs for passes that created RPs above depends on from next frame
 		CurrentCheck = ListHeader;
 		while (CurrentCheck) {
 			VK_GeneralPass* GP = CurrentCheck->CurrentGP;
@@ -270,7 +269,7 @@ namespace Vulkan {
 			for (unsigned int LFDRPIndex = 0; LFDRPIndex < LFD_RPs.size() && !is_RPCreated; LFDRPIndex++) {
 				for (unsigned int LFDRPWaitIndex = 0; LFDRPWaitIndex < LFD_RPs[LFDRPIndex]->ExecutionOrder[0]->WAITs->size(); LFDRPWaitIndex++) {
 					GFX_API::PassWait_Description& Waitdesc = (*LFD_RPs[LFDRPIndex]->ExecutionOrder[0]->WAITs)[LFDRPWaitIndex];
-					if ((Waitdesc.WaitLastFramesPass || FindWaitedTPType(Waitdesc.WaitedStage) == TPType::WP) && *Waitdesc.WaitedPass == GP->Handle) {
+					if (Waitdesc.WaitLastFramesPass && *Waitdesc.WaitedPass == GP->Handle) {
 						NFD_RPs.push_back(Create_NewRP(GP, RPs));
 						is_RPCreated = true;
 						ListHeader = DeleteGP_FromGPLinkedList(ListHeader, GP);
@@ -291,10 +290,6 @@ namespace Vulkan {
 			VK_GeneralPass* NFDRP_Pass = NFD_RPs[NFDRPIndex]->ExecutionOrder[0];
 			CurrentCheck = ListHeader;
 
-			//This is an exception, because passes that waits for a window pass with "WaitLastFrame == false" are already in their own RPs
-			if (CurrentCheck->CurrentGP->TYPE == TPType::WP) {
-				continue;
-			}
 			while (CurrentCheck) {
 				VK_GeneralPass* RPlessPass = CurrentCheck->CurrentGP;
 				bool is_RPCreated = false;
@@ -515,7 +510,10 @@ namespace Vulkan {
 			VK_GeneralPassLinkedList* AttachableGP_CheckLoopElement = AttachableGPs_ListHeader;
 			while (AttachableGP_CheckLoopElement) {
 				VK_GeneralPass* GP_Check = AttachableGP_CheckLoopElement->CurrentGP;
-				if (AttachableGP_CheckLoopElement != AttachableGP_MainLoopElement && is_AnyWaitPass_Common(GP_Find, GP_Check)) {
+				if (AttachableGP_CheckLoopElement == AttachableGP_MainLoopElement) {
+
+				}
+				else if (is_AnyWaitPass_Common(GP_Find, GP_Check)) {
 					doeshave_anycommonWaitPass = true;
 					PushBack_ToGPLinkedList(GP_Check, CommonlyWaited_Passes);
 				}
@@ -536,10 +534,7 @@ namespace Vulkan {
 				VK_RenderingPath* Attached_RP = nullptr;
 				for (unsigned int WaitPassIndex = 0; WaitPassIndex < GP_Find->WAITs->size() && !break_allloops; WaitPassIndex++) {
 					GFX_API::PassWait_Description& Waitdesc = (*GP_Find->WAITs)[WaitPassIndex];
-					if (Waitdesc.WaitLastFramesPass
-						|| FindWaitedTPType(Waitdesc.WaitedStage) == TPType::WP //I don't know if this should be here!
-						) {
-						LOG_NOTCODED_TAPI("I added a condition but don't think it will work!", false);
+					if (Waitdesc.WaitLastFramesPass) {
 						continue;
 					}
 					for (unsigned int CheckedRPIndex = 0; CheckedRPIndex < RPs.size() && !break_allloops; CheckedRPIndex++) {
@@ -562,7 +557,6 @@ namespace Vulkan {
 										if (CheckedRP == waitrp_check) {
 											continue;
 										}
-										if(!waitrp_check->ExecutionOrder.size())
 										for (unsigned int lastwaitcheck_index = 0; lastwaitcheck_index < waitrp_check->ExecutionOrder[0]->WAITs->size() && !break_allloops; lastwaitcheck_index++) {
 											GFX_API::PassWait_Description& lastwaitcheckdesc = (*waitrp_check->ExecutionOrder[0]->WAITs)[lastwaitcheck_index];
 											if (*lastwaitcheckdesc.WaitedPass == CheckedRP->ExecutionOrder[CheckedRP->ExecutionOrder.size() - 1]->Handle) {
@@ -664,7 +658,7 @@ namespace Vulkan {
 					is_RootDP = true;
 				}
 				for (unsigned char WaitIndex = 0; WaitIndex < DP->WAITs.size(); WaitIndex++) {
-					if (!DP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedTPType(DP->WAITs[WaitIndex].WaitedStage) != TPType::WP) {
+					if (!DP->WAITs[WaitIndex].WaitLastFramesPass) {
 						is_RootDP = false;
 					}
 				}
@@ -688,20 +682,20 @@ namespace Vulkan {
 			for (unsigned char WPIndex = 0; WPIndex < WindowPasses.size(); WPIndex++) {
 				VK_WindowPass* WP = WindowPasses[WPIndex];
 				//Check if it is root DP and if it is not, then pass it to the RPless_passes
-				bool is_RootDP = false;
+				bool is_RootWP = false;
 				if (WP->WAITs.size() == 0) {
-					is_RootDP = true;
+					is_RootWP = true;
 				}
 				for (unsigned char WaitIndex = 0; WaitIndex < WP->WAITs.size(); WaitIndex++) {
 					if (!WP->WAITs[WaitIndex].WaitLastFramesPass) {
-						is_RootDP = false;
+						is_RootWP = false;
 					}
 				}
-				if (is_RootDP) {
-					Create_NewRP(&AllPasses[WPIndex + DrawPasses.size()], RPs);
+				if (is_RootWP) {
+					Create_NewRP(&AllPasses[WPIndex] + DrawPasses.size(), RPs);
 				}
 				else {
-					PushBack_ToGPLinkedList(&AllPasses[WPIndex + DrawPasses.size()], GPHeader);
+					PushBack_ToGPLinkedList(&AllPasses[WPIndex] + DrawPasses.size(), GPHeader);
 				}
 			}
 			//Do the same thing to the TPs too
@@ -722,7 +716,7 @@ namespace Vulkan {
 					is_RootTP = true;
 				}
 				for (unsigned char WaitIndex = 0; WaitIndex < TP->WAITs.size(); WaitIndex++) {
-					if (!TP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedTPType(TP->WAITs[WaitIndex].WaitedStage) != TPType::WP) {
+					if (!TP->WAITs[WaitIndex].WaitLastFramesPass) {
 						is_RootTP = false;
 					}
 				}
@@ -766,7 +760,7 @@ namespace Vulkan {
 			LOG_STATUS_TAPI("There is no RP to print!");
 		}
 
-		/*
+
 		//Create RGBranches
 		{
 			//Create Branches and VkFramebuffers, fill passes
@@ -794,29 +788,24 @@ namespace Vulkan {
 								Branch.CorePasses[PassIndex].TYPE = GP->TYPE;
 								Branch.CorePasses[PassIndex].Handle = DPInstance;
 								Create_VkFrameBuffers(&Branch.CorePasses[PassIndex], FGIndex);
+								break;
 							}
-							break;
 							case TPType::TP:
 							{
 								Branch.CorePasses[PassIndex].TYPE = GP->TYPE;
 								Branch.CorePasses[PassIndex].Handle = GP->Handle;	//Which means Handle is VK_TransferPass*
+								break;
 							}
-							break;
 							case TPType::WP:
 							{
 								Branch.CorePasses[PassIndex].Handle = GP->Handle;
 								Branch.CorePasses[PassIndex].TYPE = GP->TYPE;
+								break;
 							}
-							break;
 							default:
 							{
-								std::cout << "Unsupported Pass' name: " << *GP->PASSNAME << "\n";
-								if (GP->TYPE == TPType::WP) {
-									std::cout << "Now it gets problematic!\n";
-								}
 								LOG_NOTCODED_TAPI("Create RGBRanch doesn't support this type of TP for now!", true);
 							}
-							break;
 						}
 
 					}
@@ -832,21 +821,8 @@ namespace Vulkan {
 					VK_RGBranch& FillBranch = FrameGraphs[FGIndex].FrameGraphTree[RBIndex];
 					VK_RenderingPath* RP = RPs[RBIndex];
 
-					//Count the number of Current Frame RPs (Respect to Window Pass dependencies)
-					{
-						unsigned int CFDRPCountNaive = RP->CFDependentRPs.size();
-						for (unsigned int CFDRPIndex = 0; CFDRPIndex < RP->LFDependentRPs.size(); CFDRPIndex++) {
-							VK_RenderingPath* LFDRP = RP->LFDependentRPs[CFDRPIndex];
-							if (LFDRP->ExecutionOrder[0]->TYPE == TPType::WP) {
-								CFDRPCountNaive--;
-							}
-						}
-						FillBranch.CFDependentBranchCount = CFDRPCountNaive;
-
-						FillBranch.PenultimateSwapchainBranchCount = RP->CFDependentRPs.size() - CFDRPCountNaive;
-						FillBranch.PenultimateSwapchainBranches = new VK_RGBranch * [FillBranch.PenultimateSwapchainBranchCount];
-					}
 					FillBranch.LFDependentBranchCount = RP->LFDependentRPs.size();
+					FillBranch.CFDependentBranchCount = RP->CFDependentRPs.size();
 					if (FillBranch.LFDependentBranchCount) {
 						FillBranch.LFDependentBranches = new VK_RGBranch * [FillBranch.LFDependentBranchCount];
 					}
@@ -869,33 +845,19 @@ namespace Vulkan {
 							}
 						}
 					}
-					{
-						unsigned char CFDependentArrayIndex = 0;
-						unsigned char PenultimateWindowPassIndex = 0;
-						for (unsigned char CFDependentRPIndex = 0; CFDependentRPIndex < RP->CFDependentRPs.size(); CFDependentRPIndex++) {
-							unsigned char SearchID = RP->CFDependentRPs[CFDependentRPIndex]->ID;
-							bool is_found = false;
-							for (unsigned char BranchSearchIndex = 0; BranchSearchIndex < FrameGraphs[FGIndex].BranchCount; BranchSearchIndex++) {
-								VK_RGBranch& CFDBranch = FrameGraphs[FGIndex].FrameGraphTree[BranchSearchIndex];
-								if (SearchID == CFDBranch.ID) {
-									//It depends on penultimate window pass, so we should add id 
-									if (CFDBranch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported) {
-										FillBranch.PenultimateSwapchainBranches[PenultimateWindowPassIndex] = &FrameGraphs[FGIndex].FrameGraphTree[BranchSearchIndex];
-										PenultimateWindowPassIndex++;
-										is_found = true;
-										break;
-									}
-									else {
-										FillBranch.CFDependentBranches[CFDependentArrayIndex] = &FrameGraphs[FGIndex].FrameGraphTree[BranchSearchIndex];
-										CFDependentArrayIndex++;
-										is_found = true;
-										break;
-									}
-								}
+					for (unsigned char CFDependentRPIndex = 0; CFDependentRPIndex < RP->CFDependentRPs.size(); CFDependentRPIndex++) {
+						unsigned char SearchID = RP->CFDependentRPs[CFDependentRPIndex]->ID;
+						bool is_found = false;
+						for (unsigned char BranchSearchIndex = 0; BranchSearchIndex < FrameGraphs[FGIndex].BranchCount; BranchSearchIndex++) {
+							VK_RGBranch& CFDBranch = FrameGraphs[FGIndex].FrameGraphTree[BranchSearchIndex];
+							if (SearchID == CFDBranch.ID) {
+								FillBranch.CFDependentBranches[CFDependentRPIndex] = &FrameGraphs[FGIndex].FrameGraphTree[BranchSearchIndex];
+								is_found = true;
+								break;
 							}
-							if (!is_found) {
-								LOG_ERROR_TAPI("NFExecutedRP linkage has failed!");
-							}
+						}
+						if (!is_found) {
+							LOG_ERROR_TAPI("NFExecutedRP linkage has failed!");
 						}
 					}
 					for (unsigned char CFLaterExecutedRPIndex = 0; CFLaterExecutedRPIndex < RP->CFLaterExecutedRPs.size(); CFLaterExecutedRPIndex++) {
@@ -932,7 +894,6 @@ namespace Vulkan {
 			VK_RenderingPath* RP = RPs[RPClearIndex];
 			delete RP;
 		}
-		*/
 	}
 
 
@@ -1041,7 +1002,6 @@ namespace Vulkan {
 
 		//Set wait semaphores
 		//LOG_NOTCODED_TAPI("CreateSubmit_ForRGB() doesn't support Semaphore index storage, fix it!", false);
-		
 	}
 	//Returns if attach is successful!
 	void AttachRGB(VK_FrameGraph* CurrentFG, unsigned char BranchIndex, VK_FrameGraph* LastFG, vector<unsigned char>& SubmitlessBranches, unsigned char& NumberofSubmitlessBranches) {

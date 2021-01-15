@@ -1,11 +1,8 @@
 #include "Vulkan_Core.h"
 #include "TuranAPI/Logger_Core.h"
-#define WINDOW_WIDTH 1280
-#define WINDOW_HEIGHT 720
-
 
 namespace Vulkan {
-	Vulkan_Core::Vulkan_Core() {
+	Vulkan_Core::Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem& JobSystem) : GFX_Core(Monitors, GPUs, JobSystem) {
 		//Set static GFX_API variable as created Vulkan_Core, because there will only one GFX_API in run-time
 		//And we will use this SELF to give commands to GFX_API in window callbacks
 		SELF = this;
@@ -17,11 +14,23 @@ namespace Vulkan {
 		glfwInit();
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-		Save_Monitors();
+		Save_Monitors(Monitors);
 
-		//Note that: Vulkan initialization need a Window to be created before, so we should create one with GLFW
-		Create_MainWindow();
-		Initialization();
+		Create_Instance();
+#ifdef VULKAN_DEBUGGING
+		Setup_Debugging();
+#endif
+		Check_Computer_Specs(GPUs);
+		Setup_LogicalDevice();
+
+
+		//Some basic algorithms accesses some of the GPU's datas
+		//Because GFX API doesn't support multi-GPU, just give the GPU Handle to VK_States
+		//Because everything in Vulkan API accesses this VK_States
+		VK_States.GPU_TO_RENDER = GFXHandleConverter(GPU*, GPU_TO_RENDER);
+
+
+
 
 		GFXRENDERER = new Vulkan::Renderer;
 		ContentManager = new Vulkan::GPU_ContentManager;
@@ -33,39 +42,35 @@ namespace Vulkan {
 		Destroy_GFX_Resources();
 	}
 
-	void Vulkan_Core::Create_MainWindow() {
-		LOG_STATUS_TAPI("VulkanCore: Creating a window named");
-
-		//Create window as it will share resources with Renderer Context to get display texture!
-		GLFWwindow* glfw_window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Vulkan Window", NULL, nullptr);
-		WINDOW* Vulkan_Window = new WINDOW(WINDOW_WIDTH, WINDOW_HEIGHT, GFX_API::WINDOW_MODE::WINDOWED, &CONNECTED_Monitors[0], CONNECTED_Monitors[0].REFRESH_RATE, "Vulkan Window", GFX_API::V_SYNC::VSYNC_OFF);
-		//glfwSetWindowMonitor(glfw_window, NULL, 0, 0, Vulkan_Window->Get_Window_Mode().x, Vulkan_Window->Get_Window_Mode().y, Vulkan_Window->Get_Window_Mode().z);
-		Vulkan_Window->GLFW_WINDOW = glfw_window;
-
-		//Check and Report if GLFW fails
-		if (glfw_window == NULL) {
-			LOG_CRASHING_TAPI("VulkanCore: We failed to create the window because of GLFW!");
-			glfwTerminate();
-		}
-
-		Main_Window = Vulkan_Window;
-	}
-
-	void Vulkan_Core::Initialization() {
-		//GLFW initialized in Vulkan_Core::Vulkan_Core()
-		
-		Create_Instance();
-#ifdef VULKAN_DEBUGGING
-		Setup_Debugging();
-#endif
-		Create_Surface_forWindow();
-		Check_Computer_Specs();
-		
-		Setup_LogicalDevice();
-		Create_MainWindow_SwapChain();
-	}
 	void Vulkan_Core::GFX_Error_Callback(int error_code, const char* description) {
 		LOG_CRASHING_TAPI(description, true);
+	}
+	void Vulkan_Core::Save_Monitors(vector<GFX_API::MonitorDescription>& Monitors) {
+		Monitors.clear();
+		int monitor_count;
+		GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
+		LOG_STATUS_TAPI("VulkanCore: " + to_string(monitor_count) + " number of monitor(s) detected!");
+		for (unsigned int i = 0; i < monitor_count; i++) {
+			GLFWmonitor* monitor = monitors[i];
+
+			//Get monitor name provided by OS! It is a driver based name, so it maybe incorrect!
+			const char* monitor_name = glfwGetMonitorName(monitor);
+			Monitors.push_back(GFX_API::MonitorDescription());
+			GFX_API::MonitorDescription& Monitor = Monitors[Monitors.size() - 1];
+			Monitor.NAME = monitor_name;
+
+			//Get videomode to detect at which resolution the OS is using the monitor
+			const GLFWvidmode* monitor_vid_mode = glfwGetVideoMode(monitor);
+			Monitor.WIDTH = monitor_vid_mode->width;
+			Monitor.HEIGHT = monitor_vid_mode->height;
+			Monitor.COLOR_BITES = monitor_vid_mode->blueBits;
+			Monitor.REFRESH_RATE = monitor_vid_mode->refreshRate;
+			Monitor.Handle = new MONITOR;
+			CONNECTED_Monitors.push_back(Monitor.Handle);
+
+			//Get monitor's physical size, developer may want to use it!
+			glfwGetMonitorPhysicalSize(monitor, &Monitor.PHYSICAL_WIDTH, &Monitor.PHYSICAL_HEIGHT);
+		}
 	}
 	void Vulkan_Core::Create_Instance() {
 		//APPLICATION INFO
@@ -147,19 +152,11 @@ namespace Vulkan {
 		}
 		LOG_STATUS_TAPI("Vulkan Debug Callback system is started!");
 	}
-	void Vulkan_Core::Create_Surface_forWindow() {
-		WINDOW* Vulkan_Window = (WINDOW*)Main_Window;
-		VkSurfaceKHR Window_Surface = {};
-		if (glfwCreateWindowSurface(VK_States.Vulkan_Instance, Vulkan_Window->GLFW_WINDOW, nullptr, &Window_Surface) != VK_SUCCESS) {
-			LOG_ERROR_TAPI("GLFW failed to create a window surface");
-		}
-		else {
-			LOG_STATUS_TAPI("GLFW created a window surface!");
-		}
-		Vulkan_Window->Window_Surface = Window_Surface;
-	}
-	void Vulkan_Core::Check_Computer_Specs() {
+
+
+	void Vulkan_Core::Check_Computer_Specs(vector<GFX_API::GPUDescription>& GPUdescs) {
 		LOG_STATUS_TAPI("Started to check Computer Specifications!");
+		GPUdescs.clear();
 
 		//CHECK GPUs
 		uint32_t GPU_NUMBER = 0;
@@ -176,25 +173,26 @@ namespace Vulkan {
 
 		//GET GPU INFORMATIONs, QUEUE FAMILIES etc
 		for (unsigned int i = 0; i < GPU_NUMBER; i++) {
-			GPU* Vulkan_GPU = new GPU;
-			Vulkan_GPU->Physical_Device = Physical_GPU_LIST[i];
-			vkGetPhysicalDeviceProperties(Vulkan_GPU->Physical_Device, &Vulkan_GPU->Device_Properties);
-			vkGetPhysicalDeviceFeatures(Vulkan_GPU->Physical_Device, &Vulkan_GPU->Device_Features);
-			const char* VendorName = VK_States.Convert_VendorID_toaString(Vulkan_GPU->Device_Properties.vendorID);
+			GPU* VKGPU = new GPU;
+			GFX_API::GPUDescription GPUdesc;
+			VKGPU->Physical_Device = Physical_GPU_LIST[i];
+			vkGetPhysicalDeviceProperties(VKGPU->Physical_Device, &VKGPU->Device_Properties);
+			vkGetPhysicalDeviceFeatures(VKGPU->Physical_Device, &VKGPU->Device_Features);
+			const char* VendorName = VK_States.Convert_VendorID_toaString(VKGPU->Device_Properties.vendorID);
 
-			//SAVE BASIC INFOs TO THE GPU OBJECT
-			Vulkan_GPU->MODEL = Vulkan_GPU->Device_Properties.deviceName;
-			Vulkan_GPU->DRIVER_VERSION = Vulkan_GPU->Device_Properties.driverVersion;
-			Vulkan_GPU->API_VERSION = Vulkan_GPU->Device_Properties.apiVersion;
-			Vulkan_GPU->DRIVER_VERSION = Vulkan_GPU->Device_Properties.driverVersion;
+			//SAVE BASIC INFOs TO THE GPU DESC
+			GPUdesc.MODEL = VKGPU->Device_Properties.deviceName;
+			GPUdesc.DRIVER_VERSION = VKGPU->Device_Properties.driverVersion;
+			GPUdesc.API_VERSION = VKGPU->Device_Properties.apiVersion;
+			GPUdesc.DRIVER_VERSION = VKGPU->Device_Properties.driverVersion;
 
 			//CHECK IF GPU IS DISCRETE OR INTEGRATED
-			switch (Vulkan_GPU->Device_Properties.deviceType) {
+			switch (VKGPU->Device_Properties.deviceType) {
 			case VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-				Vulkan_GPU->GPU_TYPE = GFX_API::GPU_TYPEs::DISCRETE_GPU;
+				GPUdesc.GPU_TYPE = GFX_API::GPU_TYPEs::DISCRETE_GPU;
 				break;
 			case VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-				Vulkan_GPU->GPU_TYPE = GFX_API::GPU_TYPEs::INTEGRATED_GPU;
+				GPUdesc.GPU_TYPE = GFX_API::GPU_TYPEs::INTEGRATED_GPU;
 				break;
 			default:
 				//const char* CrashingError = Text_Add("Vulkan_Core::Check_Computer_Specs failed to find GPU's Type (Only Discrete and Integrated GPUs supported!), Type is:",
@@ -205,77 +203,75 @@ namespace Vulkan {
 
 			//GET QUEUE FAMILIES, SAVE THEM TO GPU OBJECT, CHECK AND SAVE GRAPHICS,COMPUTE,TRANSFER QUEUEFAMILIES INDEX
 			uint32_t queueFamilyCount = 0;
-			vkGetPhysicalDeviceQueueFamilyProperties(Vulkan_GPU->Physical_Device, &queueFamilyCount, nullptr);
-			Vulkan_GPU->QueueFamilies.resize(queueFamilyCount);
-			vkGetPhysicalDeviceQueueFamilyProperties(Vulkan_GPU->Physical_Device, &queueFamilyCount, Vulkan_GPU->QueueFamilies.data());
+			vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, nullptr);
+			VkQueueFamilyProperties* QueueFamilyProperties = new VkQueueFamilyProperties[queueFamilyCount];
+			vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, QueueFamilyProperties);
 
 			bool is_presentationfound = false;
-			for (unsigned int queuefamily_index = 0; queuefamily_index < Vulkan_GPU->QueueFamilies.size(); queuefamily_index++) {
-				VkQueueFamilyProperties* QueueFamily = &Vulkan_GPU->QueueFamilies[queuefamily_index];
+			for (unsigned int queuefamily_index = 0; queuefamily_index < queueFamilyCount; queuefamily_index++) {
+				VkQueueFamilyProperties* QueueFamily = &QueueFamilyProperties[queuefamily_index];
 				VK_QUEUE VKQUEUE;
 				VKQUEUE.QueueFamilyIndex = queuefamily_index;
 				if (QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-					Vulkan_GPU->is_GraphicOperations_Supported = true;
+					GPUdesc.is_GraphicOperations_Supported = true;
 					VKQUEUE.SupportFlag.is_GRAPHICSsupported = true;
+					VKQUEUE.QueueFeatureScore++;
 				}
 				if (QueueFamily->queueFlags & VK_QUEUE_COMPUTE_BIT) {
-					Vulkan_GPU->is_ComputeOperations_Supported = true;
+					GPUdesc.is_ComputeOperations_Supported = true;
 					VKQUEUE.SupportFlag.is_COMPUTEsupported = true;
-					Vulkan_GPU->COMPUTE_supportedqueuecount++;
+					VKGPU->COMPUTE_supportedqueuecount++;
+					VKQUEUE.QueueFeatureScore++;
 				}
 				if (QueueFamily->queueFlags & VK_QUEUE_TRANSFER_BIT) {
-					Vulkan_GPU->is_TransferOperations_Supported = true;
+					GPUdesc.is_TransferOperations_Supported = true;
 					VKQUEUE.SupportFlag.is_TRANSFERsupported = true;
-					Vulkan_GPU->TRANSFERs_supportedqueuecount++;
+					VKGPU->TRANSFERs_supportedqueuecount++;
+					VKQUEUE.QueueFeatureScore++;
 				}
 
-				//Check Presentation Support
-				if (!is_presentationfound) {
-					VkBool32 is_Presentation_Supported;
-					vkGetPhysicalDeviceSurfaceSupportKHR(Vulkan_GPU->Physical_Device, queuefamily_index, ((WINDOW*)Main_Window)->Window_Surface, &is_Presentation_Supported);
-					if (is_Presentation_Supported) {
-						Vulkan_GPU->is_DisplayOperations_Supported = true;
-						VKQUEUE.SupportFlag.is_PRESENTATIONsupported = true;
+				VKGPU->QUEUEs.push_back(VKQUEUE);
+				if (VKQUEUE.SupportFlag.is_GRAPHICSsupported) {
+					VKGPU->GRAPHICS_QUEUEIndex = VKGPU->QUEUEs.size() - 1;
+				}
+			}
+			if (!GPUdesc.is_GraphicOperations_Supported || !GPUdesc.is_TransferOperations_Supported || !GPUdesc.is_ComputeOperations_Supported) {
+				LOG_CRASHING_TAPI("The GPU doesn't support one of the following operations, so we can't let you use this GPU: Compute, Transfer, Graphics");
+				continue;
+			}
+			//Sort the queues by their feature count (Example: Element 0 is Transfer Only, Element 1 is Transfer-Compute, Element 2 is Graphics-Transfer-Compute etc)
+			//Quick Sort algorithm
+			if (VKGPU->QUEUEs.size()) {
+				bool should_Sort = true;
+				while (should_Sort) {
+					should_Sort = false;
+					for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size() - 1; QueueIndex++) {
+						if (VKGPU->QUEUEs[QueueIndex + 1].QueueFeatureScore < VKGPU->QUEUEs[QueueIndex].QueueFeatureScore) {
+							should_Sort = true;
+							VK_QUEUE SecondQueue = VKGPU->QUEUEs[QueueIndex + 1];
+							VKGPU->QUEUEs[QueueIndex + 1] = VKGPU->QUEUEs[QueueIndex];
+							VKGPU->QUEUEs[QueueIndex] = SecondQueue;
+						}
 					}
 				}
-
-				Vulkan_GPU->QUEUEs.push_back(VKQUEUE);
-				if (VKQUEUE.SupportFlag.is_GRAPHICSsupported) {
-					Vulkan_GPU->GRAPHICS_QUEUEIndex = Vulkan_GPU->QUEUEs.size() - 1;
-				}
-				if (VKQUEUE.SupportFlag.is_PRESENTATIONsupported) {
-					Vulkan_GPU->DISPLAY_QUEUEIndex = Vulkan_GPU->QUEUEs.size() - 1;
-				}
 			}
+			delete QueueFamilyProperties;
 
-			//Check GPU Surface Capabilities
-			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Vulkan_GPU->Physical_Device, ((WINDOW*)Main_Window)->Window_Surface, &Vulkan_GPU->SurfaceCapabilities);
+			vkGetPhysicalDeviceMemoryProperties(VKGPU->Physical_Device, &VKGPU->MemoryProperties);
 
-			uint32_t FormatCount = 0;
-			vkGetPhysicalDeviceSurfaceFormatsKHR(Vulkan_GPU->Physical_Device, ((WINDOW*)Main_Window)->Window_Surface, &FormatCount, nullptr);
-			Vulkan_GPU->SurfaceFormats.resize(FormatCount);
-			if (FormatCount != 0) {
-				vkGetPhysicalDeviceSurfaceFormatsKHR(Vulkan_GPU->Physical_Device, ((WINDOW*)Main_Window)->Window_Surface, &FormatCount, Vulkan_GPU->SurfaceFormats.data());
-			}
-
-			uint32_t PresentationModesCount = 0;
-			vkGetPhysicalDeviceSurfacePresentModesKHR(Vulkan_GPU->Physical_Device, ((WINDOW*)Main_Window)->Window_Surface, &PresentationModesCount, nullptr);
-			Vulkan_GPU->PresentationModes.resize(PresentationModesCount);
-			if (PresentationModesCount != 0) {
-				vkGetPhysicalDeviceSurfacePresentModesKHR(Vulkan_GPU->Physical_Device, ((WINDOW*)Main_Window)->Window_Surface, &PresentationModesCount, Vulkan_GPU->PresentationModes.data());
-			}
-
-			vkGetPhysicalDeviceMemoryProperties(Vulkan_GPU->Physical_Device, &Vulkan_GPU->MemoryProperties);
-
-			DEVICE_GPUs.push_back(Vulkan_GPU);
+			GPUdescs.push_back(GPUdesc);
+			DEVICE_GPUs.push_back(VKGPU);
 		}
-		LOG_STATUS_TAPI("Probably one GPU is detected!");
 		if (DEVICE_GPUs.size() == 1) {
 			GPU_TO_RENDER = DEVICE_GPUs[0];
 			LOG_STATUS_TAPI("The renderer GPU selected as first GPU, because there is only one GPU");
 		}
 		else {
-			LOG_WARNING_TAPI("There are more than one GPUs, please select one to use in rendering operations!");
+			string WarningText = "There are more than one GPUs, please select one to use in rendering operations!";
+			for (unsigned int i = 0; i < DEVICE_GPUs.size(); i++) {
+				WarningText.append("\nIndex: " + to_string(i) + " is " + GPUdescs[i].MODEL);
+			}
+			LOG_WARNING_TAPI(WarningText);
 			std::cout << "GPU index: ";
 			int i = 0;
 			std::cin >> i;
@@ -285,7 +281,7 @@ namespace Vulkan {
 				std::cin >> i;
 			}
 			GPU_TO_RENDER = DEVICE_GPUs[i];
-			LOG_STATUS_TAPI("GPU: " + GPU_TO_RENDER->MODEL + "is selected for rendering operations!");
+			LOG_STATUS_TAPI("GPU: " + GPUdescs[i].MODEL + " is selected for rendering operations!");
 		}
 
 
@@ -293,7 +289,7 @@ namespace Vulkan {
 	}
 	void Vulkan_Core::Setup_LogicalDevice() {
 		LOG_STATUS_TAPI("Starting to setup logical device");
-		GPU* Vulkan_GPU = (GPU*)this->GPU_TO_RENDER;
+		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
 		//We don't need for now, so leave it empty. But GPU has its own feature list already
 		VkPhysicalDeviceFeatures Features = {};
 
@@ -310,10 +306,6 @@ namespace Vulkan {
 			QueueInfo.pQueuePriorities = &QueuePriority;
 			QueueInfo.queueCount = 1;
 			QueueCreationInfos.push_back(QueueInfo);
-		}
-		if (!Vulkan_GPU->is_GraphicOperations_Supported && !Vulkan_GPU->is_DisplayOperations_Supported) {
-			LOG_CRASHING_TAPI("GPU doesn't support Graphics or Display Queue, so logical device creation failed!");
-			return;
 		}
 
 		VkDeviceCreateInfo Logical_Device_CreationInfo{};
@@ -336,21 +328,91 @@ namespace Vulkan {
 		}
 		LOG_STATUS_TAPI("Vulkan created a Logical Device!");
 
+		Vulkan_GPU->AllQueueFamilies = new uint32_t[Vulkan_GPU->QUEUEs.size()];
 		for (unsigned int QueueIndex = 0; QueueIndex < Vulkan_GPU->QUEUEs.size(); QueueIndex++) {
 			vkGetDeviceQueue(Vulkan_GPU->Logical_Device, Vulkan_GPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &Vulkan_GPU->QUEUEs[QueueIndex].Queue);
-
+			Vulkan_GPU->AllQueueFamilies[QueueIndex] = Vulkan_GPU->QUEUEs[QueueIndex].QueueFamilyIndex;
 		}
+
 		LOG_STATUS_TAPI("VulkanCore: Created logical device succesfully!");
 	}
-	void Vulkan_Core::Create_MainWindow_SwapChain() {
-		LOG_STATUS_TAPI("VulkanCore: Started to create SwapChain for GPU according to a Window");
-		WINDOW* Vulkan_Window = (WINDOW*)Main_Window;
-		GPU* Vulkan_GPU = (GPU*)GPU_TO_RENDER;
+
+	GFX_API::GFXHandle Vulkan_Core::CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) {
+		LOG_STATUS_TAPI("Window creation has started!");
+		LOG_NOTCODED_TAPI("Swapchain texture creation and returning them back isn't coded yet!", true);
+		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
+
+		//Create window as it will share resources with Renderer Context to get display texture!
+		GLFWwindow* glfw_window = glfwCreateWindow(Desc.WIDTH, Desc.HEIGHT, Desc.NAME, NULL, nullptr);
+		WINDOW* Vulkan_Window = new WINDOW;
+		Vulkan_Window->WIDTH = Desc.WIDTH;
+		Vulkan_Window->HEIGHT = Desc.HEIGHT;
+		Vulkan_Window->DISPLAYMODE = Desc.MODE;
+		Vulkan_Window->MONITOR = Desc.MONITOR;
+		Vulkan_Window->NAME = Desc.NAME;
+		//glfwSetWindowMonitor(glfw_window, NULL, 0, 0, Vulkan_Window->Get_Window_Mode().x, Vulkan_Window->Get_Window_Mode().y, Vulkan_Window->Get_Window_Mode().z);
+		Vulkan_Window->GLFW_WINDOW = glfw_window;
+
+		//Check and Report if GLFW fails
+		if (glfw_window == NULL) {
+			LOG_CRASHING_TAPI("VulkanCore: We failed to create the window because of GLFW!");
+			delete Vulkan_Window;
+			return nullptr;
+		}
+
+			//Window VulkanSurface Creation
+
+		VkSurfaceKHR Window_Surface = {};
+		if (glfwCreateWindowSurface(VK_States.Vulkan_Instance, Vulkan_Window->GLFW_WINDOW, nullptr, &Window_Surface) != VK_SUCCESS) {
+			LOG_CRASHING_TAPI("GLFW failed to create a window surface");
+			delete Vulkan_Window;
+			return nullptr;
+		}
+		else {
+			LOG_STATUS_TAPI("GLFW created a window surface!");
+		}
+		Vulkan_Window->Window_Surface = Window_Surface;
+
+		//Finding GPU_TO_RENDER's Surface Capabilities
+		
+		for (unsigned int QueueIndex = 0; QueueIndex < Vulkan_GPU->QUEUEs.size(); QueueIndex++) {
+			VkBool32 Does_Support = 0;
+			vkGetPhysicalDeviceSurfaceSupportKHR(Vulkan_GPU->Physical_Device, Vulkan_GPU->QUEUEs[QueueIndex].QueueFamilyIndex, Vulkan_Window->Window_Surface, &Does_Support);
+			if (Does_Support) {
+				Vulkan_GPU->QUEUEs[QueueIndex].SupportFlag.is_PRESENTATIONsupported = true;
+				Vulkan_GPU->QUEUEs[QueueIndex].QueueFeatureScore++;
+				Vulkan_Window->DISPLAY_QUEUEIndex = QueueIndex;
+				break;
+			}
+		}
+
+		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Vulkan_GPU->Physical_Device, Vulkan_Window->Window_Surface, &Vulkan_Window->SurfaceCapabilities);
+		uint32_t FormatCount = 0;
+		vkGetPhysicalDeviceSurfaceFormatsKHR(Vulkan_GPU->Physical_Device, Vulkan_Window->Window_Surface, &FormatCount, nullptr);
+		Vulkan_Window->SurfaceFormats.resize(FormatCount);
+		if (FormatCount != 0) {
+			vkGetPhysicalDeviceSurfaceFormatsKHR(Vulkan_GPU->Physical_Device, Vulkan_Window->Window_Surface, &FormatCount, Vulkan_Window->SurfaceFormats.data());
+		}
+		else {
+			LOG_CRASHING_TAPI("This GPU doesn't support this type of windows, please try again with a different window configuration!");
+			delete Vulkan_Window;
+			return nullptr;
+		}
+
+		uint32_t PresentationModesCount = 0;
+		vkGetPhysicalDeviceSurfacePresentModesKHR(Vulkan_GPU->Physical_Device, Vulkan_Window->Window_Surface, &PresentationModesCount, nullptr);
+		Vulkan_Window->PresentationModes.resize(PresentationModesCount);
+		if (PresentationModesCount != 0) {
+			vkGetPhysicalDeviceSurfacePresentModesKHR(Vulkan_GPU->Physical_Device, Vulkan_Window->Window_Surface, &PresentationModesCount, Vulkan_Window->PresentationModes.data());
+		}
+
+
+			//Swapchain Textures creation
 
 		//Choose Surface Format
 		VkSurfaceFormatKHR Window_SurfaceFormat = {};
-		for (unsigned int i = 0; i < Vulkan_GPU->SurfaceFormats.size(); i++) {
-			VkSurfaceFormatKHR& SurfaceFormat = Vulkan_GPU->SurfaceFormats[i];
+		for (unsigned int i = 0; i < Vulkan_Window->SurfaceFormats.size(); i++) {
+			VkSurfaceFormatKHR& SurfaceFormat = Vulkan_Window->SurfaceFormats[i];
 			if (SurfaceFormat.format == VK_FORMAT_B8G8R8A8_SRGB && SurfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
 				Window_SurfaceFormat = SurfaceFormat;
 			}
@@ -358,21 +420,23 @@ namespace Vulkan {
 
 		//Choose Surface Presentation Mode
 		VkPresentModeKHR Window_PresentationMode = {};
-		for (unsigned int i = 0; i < Vulkan_GPU->PresentationModes.size(); i++) {
-			VkPresentModeKHR& PresentationMode = Vulkan_GPU->PresentationModes[i];
+		for (unsigned int i = 0; i < Vulkan_Window->PresentationModes.size(); i++) {
+			VkPresentModeKHR& PresentationMode = Vulkan_Window->PresentationModes[i];
 			if (PresentationMode == VK_PRESENT_MODE_FIFO_KHR) {
 				Window_PresentationMode = PresentationMode;
 			}
 		}
 
 
-		VkExtent2D Window_ImageExtent = { Vulkan_Window->Get_Window_Mode().x, Vulkan_Window->Get_Window_Mode().y };
+		VkExtent2D Window_ImageExtent = { Vulkan_Window->WIDTH, Vulkan_Window->HEIGHT };
 		uint32_t image_count = 0;
-		if (Vulkan_GPU->SurfaceCapabilities.maxImageCount > Vulkan_GPU->SurfaceCapabilities.minImageCount) {
+		if (Vulkan_Window->SurfaceCapabilities.maxImageCount > Vulkan_Window->SurfaceCapabilities.minImageCount) {
 			image_count = 2;
 		}
 		else {
 			LOG_NOTCODED_TAPI("VulkanCore: Window Surface Capabilities have issues, maxImageCount <= minImageCount!", true);
+			delete Vulkan_Window;
+			return nullptr;
 		}
 		VkSwapchainCreateInfoKHR swpchn_ci = {};
 		swpchn_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -387,39 +451,51 @@ namespace Vulkan {
 		swpchn_ci.imageArrayLayers = 1;
 		swpchn_ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		swpchn_ci.clipped = VK_TRUE;
-		swpchn_ci.preTransform = Vulkan_GPU->SurfaceCapabilities.currentTransform;
+		swpchn_ci.preTransform = Vulkan_Window->SurfaceCapabilities.currentTransform;
 		swpchn_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 		swpchn_ci.oldSwapchain = nullptr;
 
-		swpchn_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		swpchn_ci.queueFamilyIndexCount = 1;
-		swpchn_ci.pQueueFamilyIndices = &Vulkan_GPU->QUEUEs[Vulkan_GPU->DISPLAY_QUEUEIndex].QueueFamilyIndex;
+		if (Vulkan_GPU->QUEUEs.size() > 1) {
+			swpchn_ci.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+		}
+		else {
+			swpchn_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		}
+		swpchn_ci.pQueueFamilyIndices = Vulkan_GPU->AllQueueFamilies;
+		swpchn_ci.queueFamilyIndexCount = Vulkan_GPU->QUEUEs.size();
 
 
 		if (vkCreateSwapchainKHR(Vulkan_GPU->Logical_Device, &swpchn_ci, nullptr, &Vulkan_Window->Window_SwapChain) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("VulkanCore: Failed to create a SwapChain for a Window");
+			delete Vulkan_Window;
+			return nullptr;
 		}
-		LOG_STATUS_TAPI("VulkanCore: Finished creating SwapChain for GPU according to a Window");
 
 		//Get Swapchain images
 		uint32_t created_imagecount = 0;
 		vkGetSwapchainImagesKHR(Vulkan_GPU->Logical_Device, Vulkan_Window->Window_SwapChain, &created_imagecount, nullptr);
 		VkImage* SWPCHN_IMGs = new VkImage[created_imagecount];
 		vkGetSwapchainImagesKHR(Vulkan_GPU->Logical_Device, Vulkan_Window->Window_SwapChain, &created_imagecount, SWPCHN_IMGs);
-		for (unsigned int vkim_index = 0; vkim_index < created_imagecount; vkim_index++) {
+		if (created_imagecount < 2) {
+			LOG_CRASHING_TAPI("GFX API asked for 2 swapchain textures but Vulkan gave less number of textures, so GFX API failed to run! Please contact us!");
+			return nullptr;
+		}
+		else if (created_imagecount > 2) {
+			LOG_WARNING_TAPI("GFX API asked for 2 swapchain textures but Vulkan gave more than that, so GFX API only used 2 of them! Please contact us!");
+		}
+		for (unsigned int vkim_index = 0; vkim_index < 2; vkim_index++) {
 			VK_Texture* SWAPCHAINTEXTURE = new VK_Texture;
 			SWAPCHAINTEXTURE->CHANNELs = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA8UB;
-			SWAPCHAINTEXTURE->HEIGHT = Main_Window->Get_Window_Mode().y;
-			SWAPCHAINTEXTURE->WIDTH = Main_Window->Get_Window_Mode().x;
+			SWAPCHAINTEXTURE->WIDTH = Vulkan_Window->WIDTH;
+			SWAPCHAINTEXTURE->HEIGHT = Vulkan_Window->HEIGHT;
 			SWAPCHAINTEXTURE->DATA_SIZE = SWAPCHAINTEXTURE->WIDTH * SWAPCHAINTEXTURE->HEIGHT * 4;
 			SWAPCHAINTEXTURE->Image = SWPCHN_IMGs[vkim_index];
 
 			Vulkan_Window->Swapchain_Textures.push_back(SWAPCHAINTEXTURE);
+			((GPU_ContentManager*)GFXContentManager)->TEXTUREs.push_back(GFX->JobSys.GetThisThreadIndex(), SWAPCHAINTEXTURE);
+			SwapchainTextureHandles[vkim_index] = SWAPCHAINTEXTURE;
 		}
 
-		LOG_STATUS_TAPI("VulkanCore: Finished getting VkImages of Swapchain");
-
-		LOG_STATUS_TAPI("VulkanCore: Started getting VkImageViews of Swapchain");
 		for (unsigned int i = 0; i < Vulkan_Window->Swapchain_Textures.size(); i++) {
 			VkImageViewCreateInfo ImageView_ci = {};
 			ImageView_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -442,41 +518,22 @@ namespace Vulkan {
 
 			if (vkCreateImageView(Vulkan_GPU->Logical_Device, &ImageView_ci, nullptr, &SwapchainTexture->ImageView) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("VulkanCore: Image View creation has failed!");
+				delete Vulkan_Window;
+				return nullptr;
 			}
-			LOG_STATUS_TAPI("VulkanCore: Created an Image View successfully!");
 		}
+
+		LOG_STATUS_TAPI("Window creation is successful!");
+		WINDOWs.push_back(Vulkan_Window);
+		return Vulkan_Window;
 	}
 
-	void Vulkan_Core::Save_Monitors() {
-		int monitor_count;
-		GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
-		LOG_STATUS_TAPI("VulkanCore: " + to_string(monitor_count) + " number of monitor(s) detected!");
-		for (unsigned int i = 0; i < monitor_count; i++) {
-			GLFWmonitor* monitor = monitors[i];
-
-			//Get monitor name provided by OS! It is a driver based name, so it maybe incorrect!
-			const char* monitor_name = glfwGetMonitorName(monitor);
-			GFX_API::MONITOR* gfx_monitor = new GFX_API::MONITOR(monitor, monitor_name);
-
-			//Get videomode to detect at which resolution the OS is using the monitor
-			const GLFWvidmode* monitor_vid_mode = glfwGetVideoMode(monitor);
-			gfx_monitor->Set_Monitor_VidMode(monitor_vid_mode->width, monitor_vid_mode->height, monitor_vid_mode->blueBits, monitor_vid_mode->refreshRate);
-
-			//Get monitor's physical size, developer may want to use it!
-			glfwGetMonitorPhysicalSize(monitor, &gfx_monitor->PHYSICAL_WIDTH, &gfx_monitor->PHYSICAL_HEIGHT);
-
-			CONNECTED_Monitors.push_back(gfx_monitor);
-		}
-	}
 
 	//Destroy Operations
 
 	void Vulkan_Core::Destroy_GFX_Resources() {
-		GPU* Vulkan_GPU = (GPU*)GPU_TO_RENDER;
-		
-		Destroy_SwapchainDependentData();
-		WINDOW* VK_WINDOW = (WINDOW*)Main_Window;
-		vkDestroySurfaceKHR(VK_States.Vulkan_Instance, VK_WINDOW->Window_Surface, nullptr);
+		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
+		LOG_NOTCODED_TAPI("Destroying GFX resources isn't coded yet!", true);
 
 		vkDestroyCommandPool(Vulkan_GPU->Logical_Device, FirstTriangle_CommandPool, nullptr);
 
@@ -488,7 +545,7 @@ namespace Vulkan {
 
 		//GPU deleting
 		for (unsigned int i = 0; i < DEVICE_GPUs.size(); i++) {
-			GPU* a_Vulkan_GPU = (GPU*)DEVICE_GPUs[i];
+			GPU* a_Vulkan_GPU = GFXHandleConverter(GPU*, DEVICE_GPUs[i]);
 			vkDestroyDevice(a_Vulkan_GPU->Logical_Device, nullptr);
 		}
 		VK_States.vkDestroyDebugUtilsMessengerEXT()(VK_States.Vulkan_Instance, VK_States.Debug_Messenger, nullptr);
@@ -498,21 +555,6 @@ namespace Vulkan {
 
 		LOG_STATUS_TAPI("Vulkan Resources are destroyed!");
 	}
-	void Vulkan_Core::Destroy_SwapchainDependentData() {
-		GPU* Vulkan_GPU = (GPU*)GPU_TO_RENDER;
-		WINDOW* VK_WINDOW = (WINDOW*)Main_Window;
-		
-		vkDestroyCommandPool(Vulkan_GPU->Logical_Device, FirstTriangle_CommandPool, nullptr);
-		FirstTriangle_CommandBuffers.clear();
-
-		vkDestroySemaphore(Vulkan_GPU->Logical_Device, Wait_GettingFramebuffer, nullptr);
-		vkDestroySemaphore(Vulkan_GPU->Logical_Device, Wait_RenderingFirstTriangle, nullptr);
-		for (unsigned int i = 0; i < 3; i++) {
-			vkDestroyFence(Vulkan_GPU->Logical_Device, SwapchainFences[i], nullptr);
-		}
-
-		vkDestroySwapchainKHR(Vulkan_GPU->Logical_Device, VK_WINDOW->Window_SwapChain, nullptr);
-	}
 
 	//Input (Keyboard-Controller) Operations
 	void Vulkan_Core::Take_Inputs() {
@@ -521,24 +563,12 @@ namespace Vulkan {
 	}
 
 	//CODE ALL OF THE BELOW FUNCTIONS!!!!
-	void Vulkan_Core::Change_Window_Resolution(unsigned int width, unsigned int height) {
+	void Vulkan_Core::Change_Window_Resolution(GFX_API::GFXHandle WindowHandle, unsigned int width, unsigned int height) {
 		LOG_NOTCODED_TAPI("VulkanCore: Change_Window_Resolution isn't coded!", true);
 	}
 	void Vulkan_Core::Window_ResizeCallback(GLFWwindow* window, int WIDTH, int HEIGHT) {
 		Vulkan_Core* THIS = (Vulkan_Core*)GFX;
-		WINDOW* VK_WINDOW = (WINDOW*)THIS->Main_Window;
-		if (((Renderer*)GFXRENDERER)->Is_ConstructingRenderGraph()) {
-			LOG_ERROR_TAPI("You can not change window's size while recording rendergraph!");
-			return;
-		}
-		VK_WINDOW->Change_Width_Height(WIDTH, HEIGHT);
-	}
-
-	void Vulkan_Core::Swapbuffers_ofMainWindow() {
-		glfwSwapBuffers(((WINDOW*)Main_Window)->GLFW_WINDOW);
-	}
-	void Vulkan_Core::Show_RenderTarget_onWindow(unsigned int RenderTarget_GFXID) {
-		LOG_NOTCODED_TAPI("VulkanCore: Show_RenderTarget_onWindow isn't coded!", true);
+		LOG_NOTCODED_TAPI("GLFW dependent callbacks is designed differently but not coded yet!", true);
 	}
 	void Vulkan_Core::Check_Errors() {
 		LOG_NOTCODED_TAPI("VulkanCore: Check_Errors isn't coded!", true);

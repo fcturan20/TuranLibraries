@@ -150,6 +150,7 @@ namespace GFX_API {
 		default:
 			LOG_ERROR_TAPI("GetTextureCHANNEL_byIndex doesn't support this index!");
 		}
+		return TEXTURE_CHANNELs::API_TEXTURE_D24S8;
 	}
 	GFXAPI unsigned int GetIndexOf_TextureCHANNEL(TEXTURE_CHANNELs CHANNEL) {
 		LOG_NOTCODED_TAPI("Texture Channels enum has changed but function related to it hasn't. Fix it!", true);
@@ -157,6 +158,7 @@ namespace GFX_API {
 		default:
 			LOG_ERROR_TAPI("GetIndexOf_TextureCHANNEL doesn't support this channel type!");
 		}
+		return 0;
 	}
 
 
@@ -201,5 +203,8 @@ namespace GFX_API {
 	SHADERSTAGEs_FLAG::SHADERSTAGEs_FLAG() {
 		VERTEXSHADER = false;
 		FRAGMENTSHADER = false;
+		COLORRTOUTPUT = false;
+		TRANSFERCMD = false;
+		SWAPCHAINDISPLAY = false;
 	};
 }

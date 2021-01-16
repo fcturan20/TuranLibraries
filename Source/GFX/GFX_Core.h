@@ -20,7 +20,6 @@ namespace GFX_API {
 		
 		//This is to remind that each GFX API should return a monitor list at initialization
 		GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSys);
-		GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs);
 	public:
 		virtual ~GFX_Core();
 

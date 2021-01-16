@@ -14,17 +14,4 @@ namespace GFX_API {
 
 		LOG_STATUS_TAPI("GFX Core systems are started!");
 	}
-	GFX_Core::GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs) : RENDERER(nullptr),
-		FOCUSED_WINDOW_index(0), GPU_TO_RENDER(nullptr), JobSys(nullptr) {
-		LOG_STATUS_TAPI("GFX Core systems are starting!");
-
-		GFX = this;
-
-		IMGUI = new GFX_API::IMGUI_Core;
-
-		LOG_STATUS_TAPI("GFX Core systems are started!");
-	}
-	GFX_Core::~GFX_Core() {
-		std::cout << "GFX_Core's destructor is called!\n";
-	}
 }

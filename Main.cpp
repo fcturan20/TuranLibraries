@@ -1,11 +1,10 @@
-#include "Main.h"
+#include "Source/Main.h"
 using namespace TuranEditor;
 
 void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
-	std::cout << "Fucking hell, that's first main with ThreadID: " << to_string(JobSystem->GetThisThreadIndex()) << std::endl;
-	Editor_System Systems(*JobSystem);
+	Editor_System Systems(JobSystem);
 
-	
+
 	//Create Window
 	GFX_API::GFXHandle SwapchainTextures[2], WindowHandle;
 	{
@@ -20,7 +19,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	RenderGraphConstruction_LastFrameUT();
 	LOG_CRASHING_TAPI("Okay, execution finished");
 
-	
+	LOG_STATUS_TAPI("Application returned back to the C++'s own main()");
 
 	/*
 	//Create first attribute layout and mesh buffer for first triangle
@@ -97,6 +96,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			WRITE_LOGs_toFILEs_TAPI();
 		}
 	}*/
+
 }
 
 int main() {
@@ -104,6 +104,5 @@ int main() {
 	new TuranAPI::Threading::JobSystem([&JobSys]()
 		{FirstMain(JobSys); }
 	, JobSys);
-	LOG_STATUS_TAPI("Application returned back to the C++'s own main()");
 
 }

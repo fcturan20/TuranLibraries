@@ -10,16 +10,18 @@ This project is a Vulkan backend for Turan Engine's (Non-DLL, Non-STL version) G
 6) dear IMGUI's integrated in GFX API's itself but dear IMGUI's graphics API related files are integrated in the related API's IMGUI folder and the needed connections are made at initialization proccess.
 7) You should call GFX->Create_Window() to create a window. Because it creates Swapchain Textures, it needs a barrier TP to convert its resources.
 
+
 # Plans:
 1) Finish all of the non-coded parts
 2) Add Multi-threading, so most of the Upload functions will be able to upload more than one at a function
 Because there will be sync across threads in each Upload call.
 3) Support reconstruction of RenderGraph and GFX API as fast as possible
+4) Add PassRunCondition feature to RenderGraph which is something like "If(PassRunCondition) {ActivateNode()}" but more meaningful
 
 # Work In Progress:
 1) Multi-threading library is coded but application doesn't benefit from it
-2) Workload driven dynamic rendergraph support (If there is no call for a pass, rendering command buffers doesn't include the pass);
+2) Workload driven dynamic rendergraph support (If there is no call for a pass, rendering command buffers doesn't include the pass); 
 It doesn't care how much work there is or anything fancy, just merges FrameGraph branches according to the workload
-3) Window Pass support (Best swapchain-rendergraph synchronization strategy) (Some random crashes happen for now, will be fixed)
+3) Window Pass support (Best swapchain-rendergraph synchronization strategy)
 4) Multiple window support (Application is free to create a window anytime, but swapchain texture handling is user's responsibility)
 5) Vulkan initialization process is getting cleaner

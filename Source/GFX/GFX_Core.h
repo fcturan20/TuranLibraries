@@ -19,7 +19,8 @@ namespace GFX_API {
 		vector<GFXHandle> CONNECTED_Monitors;
 		
 		//This is to remind that each GFX API should return a monitor list at initialization
-		GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs, TuranAPI::Threading::JobSystem& JobSys);
+		GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSys);
+		GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs);
 	public:
 		virtual ~GFX_Core();
 
@@ -27,7 +28,7 @@ namespace GFX_API {
 		Renderer* RENDERER;
 		GPU_ContentManager* ContentManager;
 		IMGUI_Core* IMGUI_o;
-		TuranAPI::Threading::JobSystem& JobSys;
+		TuranAPI::Threading::JobSystem* JobSys;
 
 		//Window Operations
 

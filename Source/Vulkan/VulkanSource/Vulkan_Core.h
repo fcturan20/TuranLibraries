@@ -47,7 +47,7 @@ namespace Vulkan {
 		//Destroy Operations
 		virtual void Destroy_GFX_Resources() override;
 
-		Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem& JobSystem);
+		Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSystem);
 		virtual ~Vulkan_Core();
 	};
 

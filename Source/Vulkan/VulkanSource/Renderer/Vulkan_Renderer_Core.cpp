@@ -290,7 +290,7 @@ namespace Vulkan {
 							{
 								std::unique_lock<std::mutex> BufferLocker;
 								TPB->BufferBarriers.PauseAllOperations(BufferLocker);
-								for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys.GetThreadCount(); ThreadID++) {
+								for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
 									if (TPB->BufferBarriers.size(ThreadID)) {
 										isThereAny = true;
 										break;
@@ -301,7 +301,7 @@ namespace Vulkan {
 							if (!isThereAny) {
 								std::unique_lock<std::mutex> TextureLocker;
 								TPB->TextureBarriers.PauseAllOperations(TextureLocker);
-								for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys.GetThreadCount(); ThreadID++) {
+								for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
 									if (TPB->TextureBarriers.size(ThreadID)) {
 										isThereAny = true;
 										break;
@@ -1061,7 +1061,7 @@ namespace Vulkan {
 		VK_ImUploadInfo info;
 		info.IMAGE = Image;
 		info.StagingBufferOffset = StagingBufferOffset;
-		UploadData->TextureUploads.push_back(GFX->JobSys.GetThisThreadIndex(), info);
+		UploadData->TextureUploads.push_back(GFX->JobSys->GetThisThreadIndex(), info);
 	}
 
 

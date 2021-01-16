@@ -26,11 +26,11 @@ namespace Vulkan {
 	}
 	void PushBack_ToGPLinkedList(VK_GeneralPass* GP, VK_GeneralPassLinkedList* GPLL) {
 		//Go to the last element in the list!
-		while (GPLL->NextElement) {
+		while (GPLL->NextElement != nullptr) {
 			GPLL = GPLL->NextElement;
 		}
 		//If element points to a GP, create new element
-		if (GPLL->CurrentGP) {
+		if (GPLL->CurrentGP != nullptr) {
 			VK_GeneralPassLinkedList* newelement = Create_GPLinkedList();
 			GPLL->NextElement = newelement;
 			newelement->CurrentGP = GP;
@@ -152,13 +152,16 @@ namespace Vulkan {
 			}
 		}
 		for (unsigned int CFDependentRPIndex = 0; CFDependentRPIndex < RB.CFDependentBranchCount; CFDependentRPIndex++) {
-			std::cout << ("Current Frame Dependent RP ID: " + to_string(RB.CFDependentBranches[CFDependentRPIndex]->ID)) << std::endl;
+			std::cout << ("Current Frame Dependent RB ID: " + to_string(RB.CFDependentBranches[CFDependentRPIndex]->ID)) << std::endl;
 		}
 		for (unsigned int LFDependentRPIndex = 0; LFDependentRPIndex < RB.LFDependentBranchCount; LFDependentRPIndex++) {
-			std::cout << ("Last Frame Dependent RP ID: " + to_string(RB.LFDependentBranches[LFDependentRPIndex]->ID)) << std::endl;
+			std::cout << ("Last Frame Dependent RB ID: " + to_string(RB.LFDependentBranches[LFDependentRPIndex]->ID)) << std::endl;
 		}
 		for (unsigned int CFLaterExecuteRPIndex = 0; CFLaterExecuteRPIndex < RB.LaterExecutedBranchCount; CFLaterExecuteRPIndex++) {
-			std::cout << ("Current Frame Later Executed RP ID: " + to_string(RB.LaterExecutedBranches[CFLaterExecuteRPIndex]->ID)) << std::endl;
+			std::cout << ("Current Frame Later Executed RB ID: " + to_string(RB.LaterExecutedBranches[CFLaterExecuteRPIndex]->ID)) << std::endl;
+		}
+		for (unsigned int PenultimateDependentWPBranchIndex = 0; PenultimateDependentWPBranchIndex < RB.PenultimateSwapchainBranchCount; PenultimateDependentWPBranchIndex++) {
+			std::cout << ("Penultimate Dependent RB ID: " + to_string(RB.PenultimateSwapchainBranches[PenultimateDependentWPBranchIndex]->ID)) << std::endl;
 		}
 	}
 
@@ -172,6 +175,7 @@ namespace Vulkan {
 			for (unsigned int RPPassIndex = 0; RPPassIndex < RP_Check->ExecutionOrder.size(); RPPassIndex++) {
 				VK_GeneralPass* GP_Check = RP_Check->ExecutionOrder[RPPassIndex];
 				if (GP_Check->Handle == Pass->Handle) {
+					LOG_CRASHING_TAPI("Pass is already in a RP!" + *Pass->PASSNAME);
 					return nullptr;
 				}
 			}
@@ -300,7 +304,7 @@ namespace Vulkan {
 				bool is_RPCreated = false;
 				for (unsigned int WaitIndex = 0; WaitIndex < RPlessPass->WAITs->size() && !is_RPCreated; WaitIndex++) {
 					GFX_API::PassWait_Description& Waitdesc = (*RPlessPass->WAITs)[WaitIndex];
-					if (!Waitdesc.WaitLastFramesPass && *Waitdesc.WaitedPass == NFDRP_Pass->Handle) {
+					if (!Waitdesc.WaitLastFramesPass && FindWaitedTPType(Waitdesc.WaitedStage) != TPType::WP && *Waitdesc.WaitedPass == NFDRP_Pass->Handle) {
 						STEP3_RPs.push_back(Create_NewRP(RPlessPass, RPs));
 						is_RPCreated = true;
 						ListHeader = DeleteGP_FromGPLinkedList(ListHeader, RPlessPass);
@@ -656,6 +660,26 @@ namespace Vulkan {
 				GP.PASSNAME = &DP->NAME;
 				AllPasses.push_back(GP);
 			}
+			//Do the same thing to the WPs too
+			for (unsigned char WPIndex = 0; WPIndex < WindowPasses.size(); WPIndex++) {
+				VK_WindowPass* WP = WindowPasses[WPIndex];
+				VK_GeneralPass GP;
+				GP.TYPE = TPType::WP;
+				GP.Handle = WP;
+				GP.WAITs = &WP->WAITs;
+				GP.PASSNAME = &WP->NAME;
+				AllPasses.push_back(GP);
+			}
+			//Do the same thing to the TPs too
+			for (unsigned char TPIndex = 0; TPIndex < TransferPasses.size(); TPIndex++) {
+				VK_TransferPass* TP = TransferPasses[TPIndex];
+				VK_GeneralPass GP;
+				GP.TYPE = TPType::TP;
+				GP.Handle = TP;
+				GP.WAITs = &TP->WAITs;
+				GP.PASSNAME = &TP->NAME;
+				AllPasses.push_back(GP);
+			}
 			for (unsigned char DPIndex = 0; DPIndex < DrawPasses.size(); DPIndex++) {
 				VK_DrawPass* DP = DrawPasses[DPIndex];
 				//Check if it is root DP and if it is not, then pass it to the RPless_passes
@@ -675,44 +699,24 @@ namespace Vulkan {
 					PushBack_ToGPLinkedList(&AllPasses[DPIndex], GPHeader);
 				}
 			}
-			//Do the same thing to the WPs too
-			for (unsigned char WPIndex = 0; WPIndex < WindowPasses.size(); WPIndex++) {
-				VK_WindowPass* WP = WindowPasses[WPIndex];
-				VK_GeneralPass GP;
-				GP.TYPE = TPType::WP;
-				GP.Handle = WP;
-				GP.WAITs = &WP->WAITs;
-				GP.PASSNAME = &WP->NAME;
-				AllPasses.push_back(GP);
-			}
 			for (unsigned char WPIndex = 0; WPIndex < WindowPasses.size(); WPIndex++) {
 				VK_WindowPass* WP = WindowPasses[WPIndex];
 				//Check if it is root DP and if it is not, then pass it to the RPless_passes
-				bool is_RootDP = false;
+				bool is_RootWP = false;
 				if (WP->WAITs.size() == 0) {
-					is_RootDP = true;
+					is_RootWP = true;
 				}
 				for (unsigned char WaitIndex = 0; WaitIndex < WP->WAITs.size(); WaitIndex++) {
-					if (!WP->WAITs[WaitIndex].WaitLastFramesPass) {
-						is_RootDP = false;
+					if (!WP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedTPType(WP->WAITs[WaitIndex].WaitedStage) != TPType::WP) {
+						is_RootWP = false;
 					}
 				}
-				if (is_RootDP) {
+				if (is_RootWP) {
 					Create_NewRP(&AllPasses[WPIndex + DrawPasses.size()], RPs);
 				}
 				else {
 					PushBack_ToGPLinkedList(&AllPasses[WPIndex + DrawPasses.size()], GPHeader);
 				}
-			}
-			//Do the same thing to the TPs too
-			for (unsigned char TPIndex = 0; TPIndex < TransferPasses.size(); TPIndex++) {
-				VK_TransferPass* TP = TransferPasses[TPIndex];
-				VK_GeneralPass GP;
-				GP.TYPE = TPType::TP;
-				GP.Handle = TP;
-				GP.WAITs = &TP->WAITs;
-				GP.PASSNAME = &TP->NAME;
-				AllPasses.push_back(GP);
 			}
 			for (unsigned char TPIndex = 0; TPIndex < TransferPasses.size(); TPIndex++) {
 				VK_TransferPass* TP = TransferPasses[TPIndex];
@@ -741,14 +745,15 @@ namespace Vulkan {
 
 			for (unsigned char RPIndex = 0; RPIndex < RPs.size(); RPIndex++) {
 				VK_RenderingPath* RP = RPs[RPIndex];
-				bool DoesAnyQueueSupport_theRP = false;
+				bool isSupported = false;
 				for (unsigned char QUEUEIndex = 0; QUEUEIndex < VKGPU->QUEUEs.size(); QUEUEIndex++) {
 					if (VKGPU->DoesQueue_Support(&VKGPU->QUEUEs[QUEUEIndex], RP->QueueFeatureRequirements)) {
-						DoesAnyQueueSupport_theRP = true;
+						isSupported = true;
+						break;
 					}
 				}
-				if (!DoesAnyQueueSupport_theRP) {
-					LOG_NOTCODED_TAPI("VulkanRenderer: GFXRenderer->Finish_RenderGraphCreation() has failed because one of the Rendering Paths isn't supported by any Vulkan Queue that your GPU supports! GFX API should be able to split Rendering Paths to different smaller paths but not supported for now!", true);
+				if (!isSupported) {
+					LOG_NOTCODED_TAPI("One of the Rendering Paths is not supported by your GPU's Vulkan Queues, this shouldn't have happened! Please contact me!", true);
 					return;
 				}
 			}
@@ -765,8 +770,8 @@ namespace Vulkan {
 		else {
 			LOG_STATUS_TAPI("There is no RP to print!");
 		}
-
-		/*
+		
+		
 		//Create RGBranches
 		{
 			//Create Branches and VkFramebuffers, fill passes
@@ -835,9 +840,9 @@ namespace Vulkan {
 					//Count the number of Current Frame RPs (Respect to Window Pass dependencies)
 					{
 						unsigned int CFDRPCountNaive = RP->CFDependentRPs.size();
-						for (unsigned int CFDRPIndex = 0; CFDRPIndex < RP->LFDependentRPs.size(); CFDRPIndex++) {
-							VK_RenderingPath* LFDRP = RP->LFDependentRPs[CFDRPIndex];
-							if (LFDRP->ExecutionOrder[0]->TYPE == TPType::WP) {
+						for (unsigned int CFDRPIndex = 0; CFDRPIndex < RP->CFDependentRPs.size(); CFDRPIndex++) {
+							VK_RenderingPath* CFDRP = RP->CFDependentRPs[CFDRPIndex];
+							if (CFDRP->ExecutionOrder[0]->TYPE == TPType::WP) {
 								CFDRPCountNaive--;
 							}
 						}
@@ -853,9 +858,12 @@ namespace Vulkan {
 					if (FillBranch.CFDependentBranchCount) {
 						FillBranch.CFDependentBranches = new VK_RGBranch * [FillBranch.CFDependentBranchCount];
 					}
-					FillBranch.LaterExecutedBranchCount = RP->CFLaterExecutedRPs.size();
-					if (FillBranch.LaterExecutedBranchCount) {
-						FillBranch.LaterExecutedBranches = new VK_RGBranch * [FillBranch.LaterExecutedBranchCount];
+					//A WP is an end point of the framegraph, so this is not Later Executes.
+					if (FillBranch.CorePasses[0].TYPE != TPType::WP) {
+						FillBranch.LaterExecutedBranchCount = RP->CFLaterExecutedRPs.size();
+						if (FillBranch.LaterExecutedBranchCount) {
+							FillBranch.LaterExecutedBranches = new VK_RGBranch * [FillBranch.LaterExecutedBranchCount];
+						}
 					}
 					for (unsigned char LFDependentRPIndex = 0; LFDependentRPIndex < RP->LFDependentRPs.size(); LFDependentRPIndex++) {
 						unsigned char SearchID = RP->LFDependentRPs[LFDependentRPIndex]->ID;
@@ -879,7 +887,7 @@ namespace Vulkan {
 								VK_RGBranch& CFDBranch = FrameGraphs[FGIndex].FrameGraphTree[BranchSearchIndex];
 								if (SearchID == CFDBranch.ID) {
 									//It depends on penultimate window pass, so we should add id 
-									if (CFDBranch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported) {
+									if (CFDBranch.CorePasses[0].TYPE == TPType::WP) {
 										FillBranch.PenultimateSwapchainBranches[PenultimateWindowPassIndex] = &FrameGraphs[FGIndex].FrameGraphTree[BranchSearchIndex];
 										PenultimateWindowPassIndex++;
 										is_found = true;
@@ -898,7 +906,7 @@ namespace Vulkan {
 							}
 						}
 					}
-					for (unsigned char CFLaterExecutedRPIndex = 0; CFLaterExecutedRPIndex < RP->CFLaterExecutedRPs.size(); CFLaterExecutedRPIndex++) {
+					for (unsigned char CFLaterExecutedRPIndex = 0; CFLaterExecutedRPIndex < FillBranch.LaterExecutedBranchCount; CFLaterExecutedRPIndex++) {
 						unsigned char SearchID = RP->CFLaterExecutedRPs[CFLaterExecutedRPIndex]->ID;
 						bool is_found = false;
 						for (unsigned char BranchSearchIndex = 0; BranchSearchIndex < FrameGraphs[FGIndex].BranchCount; BranchSearchIndex++) {
@@ -932,7 +940,7 @@ namespace Vulkan {
 			VK_RenderingPath* RP = RPs[RPClearIndex];
 			delete RP;
 		}
-		*/
+		
 	}
 
 

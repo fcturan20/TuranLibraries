@@ -2,7 +2,7 @@
 #include "TuranAPI/Logger_Core.h"
 
 namespace Vulkan {
-	Vulkan_Core::Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem& JobSystem) : GFX_Core(Monitors, GPUs, JobSystem) {
+	Vulkan_Core::Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSystem) : GFX_Core(Monitors, GPUs, JobSystem) {
 		//Set static GFX_API variable as created Vulkan_Core, because there will only one GFX_API in run-time
 		//And we will use this SELF to give commands to GFX_API in window callbacks
 		SELF = this;
@@ -277,7 +277,7 @@ namespace Vulkan {
 			std::cin >> i;
 			while (i >= DEVICE_GPUs.size()) {
 				std::cout << "Retry please, GPU index: ";
-				int i = 0;
+				i = 0;
 				std::cin >> i;
 			}
 			GPU_TO_RENDER = DEVICE_GPUs[i];
@@ -492,7 +492,7 @@ namespace Vulkan {
 			SWAPCHAINTEXTURE->Image = SWPCHN_IMGs[vkim_index];
 
 			Vulkan_Window->Swapchain_Textures.push_back(SWAPCHAINTEXTURE);
-			((GPU_ContentManager*)GFXContentManager)->TEXTUREs.push_back(GFX->JobSys.GetThisThreadIndex(), SWAPCHAINTEXTURE);
+			((GPU_ContentManager*)GFXContentManager)->TEXTUREs.push_back(GFX->JobSys->GetThisThreadIndex(), SWAPCHAINTEXTURE);
 			SwapchainTextureHandles[vkim_index] = SWAPCHAINTEXTURE;
 		}
 

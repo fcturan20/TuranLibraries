@@ -2,7 +2,7 @@
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
 
 namespace TuranEditor {
-	Editor_System::Editor_System(TuranAPI::Threading::JobSystem& JobSystem) {
+	Editor_System::Editor_System(TuranAPI::Threading::JobSystem* JobSystem) {
 		std::cout << "Editor System Constructor is started!\n";
 		new Vulkan::Vulkan_Core(Monitors, GPUs, JobSystem);
 	}

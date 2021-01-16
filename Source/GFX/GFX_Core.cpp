@@ -4,8 +4,18 @@
 namespace GFX_API {
 
 	GFX_Core* GFX_Core::SELF = nullptr;
-	GFX_Core::GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs, TuranAPI::Threading::JobSystem& JobSystem) : RENDERER(nullptr),
+	GFX_Core::GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSystem) : RENDERER(nullptr),
 		FOCUSED_WINDOW_index(0), GPU_TO_RENDER(nullptr), JobSys(JobSystem) {
+		LOG_STATUS_TAPI("GFX Core systems are starting!");
+
+		GFX = this;
+
+		IMGUI = new GFX_API::IMGUI_Core;
+
+		LOG_STATUS_TAPI("GFX Core systems are started!");
+	}
+	GFX_Core::GFX_Core(vector<MonitorDescription>& Monitors, vector<GPUDescription>& GPUs) : RENDERER(nullptr),
+		FOCUSED_WINDOW_index(0), GPU_TO_RENDER(nullptr), JobSys(nullptr) {
 		LOG_STATUS_TAPI("GFX Core systems are starting!");
 
 		GFX = this;

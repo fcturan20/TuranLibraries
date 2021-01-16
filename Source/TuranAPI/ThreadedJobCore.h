@@ -4,6 +4,7 @@
 #include "Profiler_Core.h"
 #include <functional>
 #include <mutex>
+#include <atomic>
 
 /*TuranAPI's Multi-Threading and Job System Library
 * If you created threads before, you can pass them to the Threader. Threader won't create any other thread.

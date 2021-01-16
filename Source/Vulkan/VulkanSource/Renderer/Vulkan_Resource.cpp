@@ -27,11 +27,11 @@ namespace Vulkan {
 		return FLAG;
 	}
 
-	VK_TPUploadDatas::VK_TPUploadDatas() : TextureUploads(GFX->JobSys), BufferUploads(GFX->JobSys) {
+	VK_TPUploadDatas::VK_TPUploadDatas() : TextureUploads(*GFX->JobSys), BufferUploads(*GFX->JobSys) {
 
 	}
 
-	VK_TPBarrierDatas::VK_TPBarrierDatas() : BufferBarriers(GFX->JobSys), TextureBarriers(GFX->JobSys) {
+	VK_TPBarrierDatas::VK_TPBarrierDatas() : BufferBarriers(*GFX->JobSys), TextureBarriers(*GFX->JobSys) {
 
 	}
 }

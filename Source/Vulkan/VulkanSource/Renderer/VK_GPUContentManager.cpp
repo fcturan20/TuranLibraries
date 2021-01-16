@@ -36,8 +36,8 @@ namespace Vulkan {
 		}
 		return buffer;
 	}
-	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(GFX->JobSys), TEXTUREs(GFX->JobSys), GLOBALBUFFERs(GFX->JobSys), SHADERSOURCEs(GFX->JobSys),
-		SHADERPROGRAMs(GFX->JobSys), SHADERPINSTANCEs(GFX->JobSys), VERTEXATTRIBUTEs(GFX->JobSys), VERTEXATTRIBLAYOUTs(GFX->JobSys), RT_SLOTSETs(GFX->JobSys) {
+	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
+		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBUTEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys) {
 		//Staging Buffer Memory Allocation
 		{
 			VkMemoryRequirements memrequirements;
@@ -175,7 +175,7 @@ namespace Vulkan {
 				vector<VkDescriptorSetLayoutBinding> bindings;
 				std::unique_lock<std::mutex> GlobalBufferLocker;
 				GLOBALBUFFERs.PauseAllOperations(GlobalBufferLocker);
-				for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys.GetThisThreadIndex(); ThreadID++) {
+				for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThisThreadIndex(); ThreadID++) {
 					for (unsigned int i = 0; i < GLOBALBUFFERs.size(ThreadID); i++) {
 						VK_GlobalBuffer* globbuf = GLOBALBUFFERs.get(ThreadID, i);
 						bindings.push_back(VkDescriptorSetLayoutBinding());
@@ -436,7 +436,7 @@ namespace Vulkan {
 		return size;
 	}
 	TAPIResult GPU_ContentManager::Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, const bool& is_perVertex, GFX_API::GFXHandle& Handle) {
-		unsigned char ThisThreadIndex = GFX->JobSys.GetThisThreadIndex();
+		unsigned char ThisThreadIndex = GFX->JobSys->GetThisThreadIndex();
 		if (!is_perVertex) {
 			LOG_ERROR_TAPI("A Vertex Attribute description is not per vertex, so creation fail at it! Descriptions that are after it aren't created!");
 			return TAPI_INVALIDARGUMENT;
@@ -562,7 +562,7 @@ namespace Vulkan {
 			Layout->AttribDescs[i].format = Find_VkFormat_byDataType(Layout->Attributes[i]->DATATYPE);
 			stride_ofcurrentattribute += GFX_API::Get_UNIFORMTYPEs_SIZEinbytes(Layout->Attributes[i]->DATATYPE);
 		}
-		VERTEXATTRIBLAYOUTs.push_back(GFX->JobSys.GetThisThreadIndex(), Layout);
+		VERTEXATTRIBLAYOUTs.push_back(GFX->JobSys->GetThisThreadIndex(), Layout);
 		Handle = Layout;
 		return TAPI_SUCCESS;
 	}
@@ -607,7 +607,7 @@ namespace Vulkan {
 
 		VKMesh->Layout = Layout;
 		VKMesh->VERTEX_COUNT = VertexCount;
-		MESHBUFFERs.push_back(GFX->JobSys.GetThisThreadIndex(), VKMesh);
+		MESHBUFFERs.push_back(GFX->JobSys->GetThisThreadIndex(), VKMesh);
 		VertexBufferHandle = VKMesh;
 		return TAPI_SUCCESS;
 	}
@@ -712,7 +712,7 @@ namespace Vulkan {
 			}
 		}
 		
-		TEXTUREs.push_back(GFX->JobSys.GetThisThreadIndex(), TEXTURE);
+		TEXTUREs.push_back(GFX->JobSys->GetThisThreadIndex(), TEXTURE);
 		TextureHandle = TEXTURE;
 		LOG_NOTCODED_TAPI("GFXContentManager->Upload_Texture(): Uploading the data isn't coded yet!", true);
 	}
@@ -755,7 +755,7 @@ namespace Vulkan {
 		
 		VK_ShaderSource* SHADERSOURCE = new VK_ShaderSource;
 		SHADERSOURCE->Module = Module;
-		SHADERSOURCEs.push_back(GFX->JobSys.GetThisThreadIndex(), SHADERSOURCE);
+		SHADERSOURCEs.push_back(GFX->JobSys->GetThisThreadIndex(), SHADERSOURCE);
 		LOG_STATUS_TAPI("Vertex Shader Module is successfully created!");
 		ShaderSourceHandle = SHADERSOURCE;
 		return TAPI_SUCCESS;
@@ -1069,7 +1069,7 @@ namespace Vulkan {
 		for (unsigned int i = 0; i < VKPipeline->DESCCOUNT; i++) {
 			VKPipeline->DATADESCs[i] = MATTYPE_ASSET.MATERIALTYPEDATA[i];
 		}
-		SHADERPROGRAMs.push_back(GFX->JobSys.GetThisThreadIndex(), VKPipeline);
+		SHADERPROGRAMs.push_back(GFX->JobSys->GetThisThreadIndex(), VKPipeline);
 
 
 		LOG_STATUS_TAPI("Finished creating Graphics Pipeline");
@@ -1158,7 +1158,7 @@ namespace Vulkan {
 
 
 		VKPInstance->PROGRAM = VKPSO;
-		SHADERPINSTANCEs.push_back(GFX->JobSys.GetThisThreadIndex(), VKPInstance);
+		SHADERPINSTANCEs.push_back(GFX->JobSys->GetThisThreadIndex(), VKPInstance);
 		MaterialInstHandle = VKPInstance;
 		return TAPI_SUCCESS;
 	}
@@ -1264,7 +1264,7 @@ namespace Vulkan {
 			}
 		}
 
-		RT_SLOTSETs.push_back(GFX->JobSys.GetThisThreadIndex(), VKSLOTSET);
+		RT_SLOTSETs.push_back(GFX->JobSys->GetThisThreadIndex(), VKSLOTSET);
 		RTSlotSetHandle = VKSLOTSET;
 		return TAPI_SUCCESS;
 	}
@@ -1368,7 +1368,7 @@ namespace Vulkan {
 		//Check if it's still in use in a Layout
 		std::unique_lock<std::mutex> SearchLock;
 		VERTEXATTRIBLAYOUTs.PauseAllOperations(SearchLock);
-		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys.GetThreadCount(); ThreadID++) {
+		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
 			for (unsigned int i = 0; i < VERTEXATTRIBLAYOUTs.size(ThreadID); i++) {
 				VK_VertexAttribLayout* VERTEXATTRIBLAYOUT = VERTEXATTRIBLAYOUTs.get(ThreadID, i);
 				for (unsigned int j = 0; j < VERTEXATTRIBLAYOUT->Attribute_Number; j++) {
@@ -1383,7 +1383,7 @@ namespace Vulkan {
 
 		unsigned int vector_index = 0;
 		VERTEXATTRIBUTEs.PauseAllOperations(SearchLock);
-		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys.GetThreadCount(); ThreadID++) {
+		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
 			unsigned int elementindex = 0;
 			if (VERTEXATTRIBUTEs.Search(FOUND_ATTRIB, ThreadID, elementindex)) {
 				VERTEXATTRIBUTEs.erase(ThreadID, elementindex);

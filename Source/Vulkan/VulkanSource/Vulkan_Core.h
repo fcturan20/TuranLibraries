@@ -11,12 +11,6 @@ namespace Vulkan {
 	class VK_API Vulkan_Core : public GFX_API::GFX_Core {
 	public:
 		Vulkan_States VK_States;
-		VkCommandPool FirstTriangle_CommandPool;
-		vector<VkCommandBuffer> FirstTriangle_CommandBuffers;
-		VkSemaphore Wait_GettingFramebuffer;
-		VkSemaphore Wait_RenderingFirstTriangle;
-		vector<VkFence> SwapchainFences;
-		VkShaderModule* FirstShaderProgram;
 
 		//Initialization Processes
 
@@ -28,6 +22,7 @@ namespace Vulkan {
 
 		virtual GFX_API::GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) override;
 		virtual void Change_Window_Resolution(GFX_API::GFXHandle Window, unsigned int width, unsigned int height) override;
+		vector<GFX_API::GFXHandle>& Get_WindowHandles();
 
 		//Input (Keyboard-Controller) Operations
 		virtual void Take_Inputs() override;

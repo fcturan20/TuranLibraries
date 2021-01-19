@@ -436,7 +436,6 @@
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Renderer_Core.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Resource.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Core.h" />
-    <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Display.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Includes.h" />
   </ItemGroup>
   <ItemGroup>

@@ -5,7 +5,6 @@
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
 #define VKContentManager ((Vulkan::GPU_ContentManager*)GFXContentManager)
 #define VKGPU (((Vulkan::Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
-#define VKWINDOW ((Vulkan::WINDOW*)GFX->Main_Window)
 
 namespace Vulkan {
 	Renderer::Renderer() {
@@ -15,7 +14,8 @@ namespace Vulkan {
 	//Create framegraphs to lower the cost of per frame rendergraph optimization (Pass Culling, Pass Merging, Wait Culling etc) proccess!
 	void Create_FrameGraphs(const vector<VK_DrawPass*>& DrawPasses, const vector<VK_TransferPass*>& TransferPasses, const vector<VK_WindowPass*>& WindowPasses, VK_FrameGraph* FrameGraphs);
 	//Merge branches into submits that will execute on GPU's Queues
-	void Create_VkSubmits(VK_FrameGraph* CurrentFramegraph, VK_FrameGraph* LastFrameGraph);
+	//Also link submits (attach signal semaphores to submits and set wait semaphores according to it)
+	void Create_VkSubmits(VK_FrameGraph* CurrentFramegraph, VK_FrameGraph* LastFrameGraph, vector<VK_Semaphore>& Semaphores);
 
 	void Renderer::Start_RenderGraphConstruction() {
 		if (Record_RenderGraphConstruction) {
@@ -241,7 +241,7 @@ namespace Vulkan {
 		return true;
 	}
 
-	void Renderer::Run_CurrentFramegraph() {
+	void Renderer::Record_CurrentFramegraph() {
 		TURAN_PROFILE_SCOPE_MCS("Run_CurrentFramegraph()");
 		VK_FrameGraph& Current_FrameGraph = FrameGraphs[Get_FrameIndex(false)];
 		VK_FrameGraph& Last_FrameGraph = FrameGraphs[Get_FrameIndex(true)];
@@ -330,6 +330,7 @@ namespace Vulkan {
 							break;
 						}
 				}
+					break;
 					case TPType::DP: 
 					{
 						VK_DrawPass* DP = GFXHandleConverter(VK_DrawPassInstance*, CorePass->Handle)->BasePass;
@@ -343,7 +344,7 @@ namespace Vulkan {
 							}
 						}
 					}
-						break;
+					break;
 					case TPType::WP:
 					{
 						VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, CorePass->Handle);
@@ -355,16 +356,17 @@ namespace Vulkan {
 						}
 
 					}
-						break;
+					break;
 					default:
 						LOG_NOTCODED_TAPI("Specified Pass Type isn't coded yet to pass as a Branch!", true);
 				}
 			}
 		}
 
-		Create_VkSubmits(&FrameGraphs[Get_FrameIndex(false)], &FrameGraphs[Get_FrameIndex(true)]);
+		Create_VkSubmits(&FrameGraphs[Get_FrameIndex(false)], &FrameGraphs[Get_FrameIndex(true)], Semaphores);
 	}
-
+	//Each framegraph is constructed as same, so there is no difference about passing different framegraphs here
+	void Create_VkDataofRGBranches(const VK_FrameGraph& FrameGraph, vector<VK_Semaphore>& Semaphores);
 	void Renderer::Finish_RenderGraphConstruction() {
 		if (!Record_RenderGraphConstruction) {
 			LOG_CRASHING_TAPI("VulkanRenderer->Finish_RenderGraphCreation() has failed because you either didn't start it or finished before!");
@@ -401,70 +403,38 @@ namespace Vulkan {
 			cp_ci_g.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 			cp_ci_g.pNext = nullptr;
 
-			if (vkCreateCommandPool(VKGPU->Logical_Device, &cp_ci_g, nullptr, &VKGPU->QUEUEs[QUEUEIndex].CommandPool) != VK_SUCCESS) {
+			if (vkCreateCommandPool(VKGPU->Logical_Device, &cp_ci_g, nullptr, &VKGPU->QUEUEs[QUEUEIndex].CommandPool.CPHandle) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("VulkanCore: Logical Device Setup has failed at vkCreateCommandPool()!");
 				return;
 			}
 		}
 
 
-		/*
-		//Swapchain Synch Data Creation
-		{
-			VkSemaphoreCreateInfo Semaphore_ci = {};
-			Semaphore_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-			Semaphore_ci.flags = 0;
-			Semaphore_ci.pNext = nullptr;
-			if (vkCreateSemaphore(VKGPU->Logical_Device, &Semaphore_ci, nullptr, &Waitfor_PresentingSwapchain) != VK_SUCCESS ||
-				vkCreateSemaphore(VKGPU->Logical_Device, &Semaphore_ci, nullptr, &Waitfor_SwapchainRenderGraphIdle) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("VulkanRenderer: Semaphore creation has failed!");
-			}
 
-			//Set fences as signaled for the first frame!
-			for (unsigned int i = 0; i < 2; i++) {
+		//Create Command Buffer for each RGBranch for maximum workload cases
+		Create_VkDataofRGBranches(FrameGraphs[0], Semaphores);
+		
+		//RenderGraph Synch Fence Creation
+		for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+			for (unsigned char i = 0; i < 2; i++) {
 				VkFenceCreateInfo Fence_ci = {};
 				Fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 				Fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 				Fence_ci.pNext = nullptr;
-				if (vkCreateFence(VKGPU->Logical_Device, &Fence_ci, nullptr, &RenderGraph_RunFences[i]) != VK_SUCCESS) {
+				if (vkCreateFence(VKGPU->Logical_Device, &Fence_ci, nullptr, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[i]) != VK_SUCCESS) {
 					LOG_CRASHING_TAPI("VulkanRenderer: Fence creation has failed!");
+				}
+				if (vkResetFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[i]) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("Fix the reset fence at FinishConstruction!");
 				}
 			}
 		}
 
+
+		/*
 		//Swapchain Layout Operations
 		//Note: One CB is created because this will be used only at the start of the frame
 		{
-			VK_CommandBuffer* Swapchain_CreationCB = new VK_CommandBuffer;
-			Swapchain_CreationCB->CBs.resize(1);
-			Swapchain_CreationCB->CBs[0] = new VkCommandBuffer;
-			Swapchain_CreationCB->Queue = &VKGPU->QUEUEs[VKGPU->GRAPHICS_QUEUEIndex].Queue;
-			Swapchain_CreationCB->SignalSemaphores.clear();
-			Swapchain_CreationCB->WaitSemaphores.clear();
-			Swapchain_CreationCB->WaitSemaphoreStages.clear();
-			VkCommandBufferAllocateInfo CB_AI = {};
-			CB_AI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			CB_AI.commandBufferCount = 1;
-			CB_AI.commandPool = VKGPU->QUEUEs[VKGPU->GRAPHICS_QUEUEIndex].CommandPool;
-			CB_AI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			CB_AI.pNext = nullptr;
-			if (vkAllocateCommandBuffers(VKGPU->Logical_Device, &CB_AI, Swapchain_CreationCB->CBs[0]) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("GFXRenderer->Finish_RenderGraphCreation() has failed at vkAllocateCommandBuffers() of the Swapchain Creation CB!");
-				return;
-			}
-
-
-			VkCommandBufferBeginInfo bi = {};
-			bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-			bi.pInheritanceInfo = nullptr;
-			bi.pNext = nullptr;
-
-			if (vkBeginCommandBuffer(*Swapchain_CreationCB->CBs[0], &bi) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("VulkanRenderer: SWPCHN_IMLAYCB has has failed at vkBeginCommandBuffer()!");
-				return;
-			}
-
 			VkImageMemoryBarrier* SWPCHN_IMLAYBARRIER = new VkImageMemoryBarrier[VKWINDOW->Swapchain_Textures.size()];
 			for (unsigned int swpchn_index = 0; swpchn_index < VKWINDOW->Swapchain_Textures.size(); swpchn_index++) {
 				VK_Texture* SWPCHN_im = GFXHandleConverter(VK_Texture*, VKWINDOW->Swapchain_Textures[swpchn_index]);
@@ -691,7 +661,8 @@ namespace Vulkan {
 		dependencies.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		dependencies.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 	}
-	TAPIResult Renderer::Create_DrawPass(const vector<GFX_API::SubDrawPass_Description>& SubDrawPasses, GFX_API::GFXHandle RTSLOTSET_ID, const vector<GFX_API::PassWait_Description>& WAITs, const char* NAME, vector<GFX_API::GFXHandle>& SubDrawPassIDs, GFX_API::GFXHandle& DPHandle) {
+	TAPIResult Renderer::Create_DrawPass(const vector<GFX_API::SubDrawPass_Description>& SubDrawPasses, GFX_API::GFXHandle RTSLOTSET_ID, 
+		const vector<GFX_API::PassWait_Description>& WAITs, const char* NAME, vector<GFX_API::GFXHandle>& SubDrawPassIDs, GFX_API::GFXHandle& DPHandle) {
 		if (!Record_RenderGraphConstruction) {
 			LOG_CRASHING_TAPI("GFXRENDERER->CreateDrawPass() has failed because you first need to call Start_RenderGraphCreation()!");
 			return TAPI_FAIL;
@@ -793,7 +764,8 @@ namespace Vulkan {
 
 
 
-	TAPIResult Renderer::Create_TransferPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, const GFX_API::TRANFERPASS_TYPE& TP_TYPE, const string& NAME, GFX_API::GFXHandle& TPHandle) {
+	TAPIResult Renderer::Create_TransferPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions,
+		const GFX_API::TRANFERPASS_TYPE& TP_TYPE, const string& NAME, GFX_API::GFXHandle& TPHandle) {
 		VK_TransferPass* TRANSFERPASS = new VK_TransferPass;
 
 		TRANSFERPASS->WAITs = WaitDescriptions;
@@ -820,7 +792,9 @@ namespace Vulkan {
 
 		WP->NAME = NAME;
 		WP->WAITs = WaitDescriptions;
-		WP->WindowCalls.clear();
+		WP->WindowCalls[0].clear();
+		WP->WindowCalls[1].clear();
+		WP->WindowCalls[2].clear();
 
 		WindowPassHandle = WP;
 		WindowPasses.push_back(WP);
@@ -1001,31 +975,35 @@ namespace Vulkan {
 	}*/
 
 	void Renderer::Run() {
-		Run_CurrentFramegraph();
-		//Command Buffers are ready now but we shouldn't send them until 2 frames ago's command buffers ends
-		//With that way, we are sure that command buffers won't collapse
-		//But presentation of the swapchain texture and rendering to the same texture may collapse
-		//This is handled at RenderGraph construction level as you defined a pass's wait dependency to the Window Pass
+		//Wait for command buffers to end
+		for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+			vkWaitForFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex], true, UINT64_MAX);
+			vkResetFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex]);
+		}
 
-		//WaitForCBtoEnd();
-
-		/*
-		//Get current swapchain!
-		{
+		//Record command buffers
+		Record_CurrentFramegraph();
+		
+		//Maybe the rendering of the last frame took less than V-Sync, this is to handle this case
+		//Because that means the swapchain texture we will render to in above command buffers is being displayed
+		for(unsigned char WindowIndex = 0; WindowIndex < ((Vulkan_Core*)GFX)->Get_WindowHandles().size(); WindowIndex++) {
+			WINDOW* VKWINDOW = GFXHandleConverter(WINDOW*, ((Vulkan_Core*)GFX)->Get_WindowHandles()[WindowIndex]);
 			uint32_t SwapchainImage_Index;
-			vkAcquireNextImageKHR(VKGPU->Logical_Device, VKWINDOW->Window_SwapChain, UINT64_MAX, Waitfor_PresentingSwapchain, VK_NULL_HANDLE, &SwapchainImage_Index);
+			vkAcquireNextImageKHR(VKGPU->Logical_Device, VKWINDOW->Window_SwapChain, UINT64_MAX,
+			VKWINDOW->PresentationWaitSemaphores[FrameIndex], VK_NULL_HANDLE, &SwapchainImage_Index);
 			if (SwapchainImage_Index != FrameIndex) {
 				std::cout << "Current SwapchainImage_Index: " << SwapchainImage_Index << std::endl;
 				std::cout << "Current FrameCount: " << FrameIndex << std::endl;
 				LOG_CRASHING_TAPI("Renderer's FrameCount and Vulkan's SwapchainIndex don't match, there is something!");
 			}
 		}
-		vkWaitForFences(VKGPU->Logical_Device, 1, &RenderGraph_RunFences[FrameIndex], true, UINT64_MAX);
-		vkResetFences(VKGPU->Logical_Device, 1, &RenderGraph_RunFences[FrameIndex]);
 
-		RenderGraph_ResolveThisFrame();
-
-
+		//Send command buffers
+		for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraphs[FrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
+			VK_Submit* Submit = FrameGraphs[FrameIndex].CurrentFrameSubmits[SubmitIndex];
+			
+		}
+		
 		VkPresentInfoKHR SwapchainImage_PresentationInfo = {};
 		SwapchainImage_PresentationInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		SwapchainImage_PresentationInfo.pNext = nullptr;
@@ -1041,10 +1019,19 @@ namespace Vulkan {
 		if (vkQueuePresentKHR(VKGPU->DISPLAYQueue.Queue, &SwapchainImage_PresentationInfo) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("Submitting Presentation Queue has failed!");
 		}
+		
 
-		//We presented this frame, there's no way to continue this frame!
-		FrameIndex++;*/
+		//Shift all WindowCall buffers of all Window Passes!
+		for (unsigned char WPIndex = 0; WPIndex < WindowPasses.size(); WPIndex++) {
+			VK_WindowPass* WP = WindowPasses[WPIndex];
+			WP->WindowCalls[0] = WP->WindowCalls[1];
+			WP->WindowCalls[1] = WP->WindowCalls[2];
+			WP->WindowCalls[2].clear();
+		}
+
+		//Current frame has finished, so every call after this call affects to the next frame
 		Set_NextFrameIndex();
+
 	}
 	void Renderer::Render_DrawCall(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) {
 		VK_SubDrawPass* SP = GFXHandleConverter(VK_SubDrawPass*, SubDrawPass_ID);

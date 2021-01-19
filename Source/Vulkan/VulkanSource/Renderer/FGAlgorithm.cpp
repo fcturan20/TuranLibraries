@@ -5,7 +5,8 @@
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
 #define VKContentManager ((Vulkan::GPU_ContentManager*)GFXContentManager)
 #define VKGPU (((Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
-#define VKWINDOW ((Vulkan::WINDOW*)GFX->Main_Window)
+#define VKRENDERER ((Renderer*)GFX->RENDERER)
+#define VKCORE ((Vulkan_Core*)GFX)
 
 namespace Vulkan {
 	struct VK_GeneralPass {
@@ -815,10 +816,6 @@ namespace Vulkan {
 							break;
 							default:
 							{
-								std::cout << "Unsupported Pass' name: " << *GP->PASSNAME << "\n";
-								if (GP->TYPE == TPType::WP) {
-									std::cout << "Now it gets problematic!\n";
-								}
 								LOG_NOTCODED_TAPI("Create RGBRanch doesn't support this type of TP for now!", true);
 							}
 							break;
@@ -942,7 +939,62 @@ namespace Vulkan {
 		}
 		
 	}
+	//Each framegraph is constructed as same, so there is no difference about passing different framegraphs here
+	void Create_VkDataofRGBranches(const VK_FrameGraph& FrameGraph, vector<VK_Semaphore>& Semaphores) {
+		for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraph.CurrentFrameSubmits.size(); SubmitIndex++) {
+			VK_Submit* Submit = FrameGraph.CurrentFrameSubmits[SubmitIndex];
 
+			bool isWPonly = false;
+			if (FrameGraph.FrameGraphTree[Submit->BranchIndexes[0] - 1].CorePasses[0].TYPE == TPType::WP) {
+				LOG_STATUS_TAPI("There is one Window Pass only branch, we don't create a CB for it!");
+				isWPonly = true;
+			}
+
+			//Create Command Buffers if submit is not Window Pass only
+			if(!isWPonly){
+				VK_CommandPool& CP = Submit->Run_Queue->CommandPool;
+
+				VkCommandBufferAllocateInfo cb_ai = {};
+				cb_ai.commandBufferCount = 2;
+				cb_ai.commandPool = CP.CPHandle;
+				cb_ai.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+				cb_ai.pNext = nullptr;
+				cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+
+				VkCommandBuffer NewCBs[2];
+
+				if (vkAllocateCommandBuffers(VKGPU->Logical_Device, &cb_ai, NewCBs) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
+					return;
+				}
+
+				CP.CBs.push_back(NewCBs[0]);
+				CP.CBs.push_back(NewCBs[1]);
+			}
+		}
+
+		unsigned int SemaphoreCount = FrameGraph.CurrentFrameSubmits.size() * 2;
+		Semaphores.clear();
+
+
+		for (unsigned int SemaphoreIndex = 0; SemaphoreIndex < SemaphoreCount; SemaphoreIndex++) {
+			VkSemaphoreCreateInfo Semaphore_ci = {};
+			Semaphore_ci.flags = 0;
+			Semaphore_ci.pNext = nullptr;
+			Semaphore_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+			VkSemaphore NewSemaphore;
+
+			if (vkCreateSemaphore(VKGPU->Logical_Device, &Semaphore_ci, nullptr, &NewSemaphore) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("vkCreateSemaphore has failed while creating semaphores of RGBranches, please report!");
+				return;
+			}
+
+			VK_Semaphore data;
+			data.isUsed = false;
+			data.SPHandle = NewSemaphore;
+			Semaphores.push_back(data);
+		}
+	}
 
 
 
@@ -1020,19 +1072,21 @@ namespace Vulkan {
 		CurrentFG->CurrentFrameSubmits.push_back(NewSubmit);
 
 		//Merge Barrier TP only branches
-		for (unsigned char CFDBVectorIndex = 0; CFDBVectorIndex < MainBranch.CFDynamicDependents.size(); CFDBVectorIndex++) {
-			unsigned char CFDBIndex = MainBranch.CFDynamicDependents[CFDBVectorIndex];
-			VK_RGBranch& CFDBranch = CurrentFG->FrameGraphTree[CFDBIndex];
-			VK_Submit* CFDSubmit = CFDBranch.AttachedSubmit;
-			//Dependent branch is Barrier TP only, so merge it
-			if (!CFDSubmit) {
-				NewSubmit->BranchIndexes.push_back(CFDBIndex + 1);
-				CFDBranch.AttachedSubmit = NewSubmit;
-				EraseFromSubmitlessList(CFDBIndex, SubmitlessBranches, NumberofSubmitless_RGBs);
-				continue;
-			}
-			else {
-				EndSubmit(CFDSubmit);
+		if (!MainBranch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported) {
+			for (unsigned char CFDBVectorIndex = 0; CFDBVectorIndex < MainBranch.CFDynamicDependents.size(); CFDBVectorIndex++) {
+				unsigned char CFDBIndex = MainBranch.CFDynamicDependents[CFDBVectorIndex];
+				VK_RGBranch& CFDBranch = CurrentFG->FrameGraphTree[CFDBIndex];
+				VK_Submit* CFDSubmit = CFDBranch.AttachedSubmit;
+				//Dependent branch is Barrier TP only, so merge it
+				if (!CFDSubmit) {
+					NewSubmit->BranchIndexes.push_back(CFDBIndex + 1);
+					CFDBranch.AttachedSubmit = NewSubmit;
+					EraseFromSubmitlessList(CFDBIndex, SubmitlessBranches, NumberofSubmitless_RGBs);
+					continue;
+				}
+				else {
+					EndSubmit(CFDSubmit);
+				}
 			}
 		}
 
@@ -1051,10 +1105,9 @@ namespace Vulkan {
 		//LOG_NOTCODED_TAPI("CreateSubmit_ForRGB() doesn't support Semaphore index storage, fix it!", false);
 		
 	}
-	//Returns if attach is successful!
 	void AttachRGB(VK_FrameGraph* CurrentFG, unsigned char BranchIndex, VK_FrameGraph* LastFG, vector<unsigned char>& SubmitlessBranches, unsigned char& NumberofSubmitlessBranches) {
 		VK_RGBranch* MainBranch = &CurrentFG->FrameGraphTree[BranchIndex];
-		if (CurrentFG->FrameGraphTree[MainBranch->CFDynamicDependents[0]].AttachedSubmit->is_Ended) {
+		if (CurrentFG->FrameGraphTree[MainBranch->CFDynamicDependents[0]].AttachedSubmit->is_Ended || MainBranch->CFNeeded_QueueSpecs.is_PRESENTATIONsupported) {
 			CreateSubmit_ForRGB(CurrentFG, BranchIndex, LastFG, FindAvailableQueue(MainBranch->CFNeeded_QueueSpecs), SubmitlessBranches, NumberofSubmitlessBranches);
 			return;
 		}
@@ -1188,7 +1241,11 @@ namespace Vulkan {
 		}
 	}
 
-	void Create_VkSubmits(VK_FrameGraph* Current_FrameGraph, VK_FrameGraph* LastFrameGraph) {
+
+	void SetSignalSemaphoresOfSubmit() {
+
+	}
+	void Create_VkSubmits(VK_FrameGraph* Current_FrameGraph, VK_FrameGraph* LastFrameGraph, vector<VK_Semaphore>& Semaphores) {
 		//Index + 1
 		vector<unsigned char> Submitless_RGBs;
 		//Count the submitless RGBs, because traversing the list to check if there is submitless RGB each time is meaningless
@@ -1218,6 +1275,9 @@ namespace Vulkan {
 				if (!MainBranch.CFDynamicDependents.size()) {
 					CreateSubmit_ForRGB(Current_FrameGraph, BranchIndex, LastFrameGraph, FindAvailableQueue(MainBranch.CFNeeded_QueueSpecs), Submitless_RGBs, NumberOfSubmitless_RGBs);
 					//std::cout << "Created submit for root branch: " << unsigned int(MainBranch.ID) << std::endl;
+				}
+				else if (MainBranch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported) {
+					CreateSubmit_ForRGB(Current_FrameGraph, BranchIndex, LastFrameGraph, FindAvailableQueue(MainBranch.CFNeeded_QueueSpecs), Submitless_RGBs, NumberOfSubmitless_RGBs);
 				}
 				//If Create_NewSubmit() attached this branch to a Submit already, skip it
 				else if(!MainBranch.AttachedSubmit){
@@ -1255,7 +1315,89 @@ namespace Vulkan {
 
 
 		FindRGBranches_dependentSubmits(Current_FrameGraph, LastFrameGraph, Submitless_RGBs, NumberOfSubmitless_RGBs);
-		//PrintSubmits(Current_FrameGraph);
+		PrintSubmits(Current_FrameGraph);
+
+		//Give a Signal Semaphore to each Submit
+		for (unsigned char SubmitIndex = 0; SubmitIndex < Current_FrameGraph->CurrentFrameSubmits.size(); SubmitIndex++) {
+			VK_Submit* Submit = Current_FrameGraph->CurrentFrameSubmits[SubmitIndex];
+
+			//Find the first active branch
+			unsigned char BranchFGIndex = 255;
+			for (unsigned int BranchElement = 0; BranchElement < Submit->BranchIndexes.size(); BranchElement++) {
+				if (!Submit->BranchIndexes[BranchElement]) {
+					continue;
+				}
+				BranchFGIndex = Submit->BranchIndexes[BranchElement] - 1;
+				break;
+			}
+
+			if (BranchFGIndex == 255) {
+				LOG_CRASHING_TAPI("This submit is not active but this shouldn't happen!", true);
+				continue;
+			}
+
+			//Skip this process if Submit is WP only, because signal semaphores are set with VkAcquireNextImageKHR() at the end
+			//and also VK_Submit structure only supports one signal semaphore for now
+			if (Current_FrameGraph->FrameGraphTree[BranchFGIndex].CorePasses[0].TYPE == TPType::WP) {
+				continue;
+			}
+			for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < Semaphores.size(); SemaphoreIndex++) {
+				if (!Semaphores[SemaphoreIndex].isUsed) {
+					Submit->SignalSemaphoreIndex = SemaphoreIndex;
+					Semaphores[SemaphoreIndex].isUsed = true;
+					break;
+				}
+			}
+		}
+		//Find all Wait Semaphores of each Submit
+		for (unsigned char SubmitIndex = 0; SubmitIndex < Current_FrameGraph->CurrentFrameSubmits.size(); SubmitIndex++) {
+			VK_Submit* Submit = Current_FrameGraph->CurrentFrameSubmits[SubmitIndex];
+
+			//Find the first active branch
+			unsigned char BranchFGIndex = 255;
+			for (unsigned int BranchElement = 0; BranchElement < Submit->BranchIndexes.size(); BranchElement++) {
+				if (!Submit->BranchIndexes[BranchElement]) {
+					continue;
+				}
+				BranchFGIndex = Submit->BranchIndexes[BranchElement] - 1;
+				break;
+			}
+
+			if (BranchFGIndex == 255) {
+				LOG_CRASHING_TAPI("This submit is not active but this shouldn't happen!", true);
+				continue;
+			}
+
+			const VK_RGBranch& MainBranch = Current_FrameGraph->FrameGraphTree[BranchFGIndex];
+
+			//Find last frame dynamic dependent branches and get their signal semaphores to wait
+			for (unsigned char LFDBIndex = 0; LFDBIndex < MainBranch.LFDynamicDependents.size(); LFDBIndex++) {
+				const VK_RGBranch& LFDBranch = LastFrameGraph->FrameGraphTree[MainBranch.LFDynamicDependents[LFDBIndex]];
+				//This is a window pass, so we should access to each Window to get the related semaphores
+				if (LFDBranch.CorePasses[0].TYPE == TPType::WP) {
+					VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, LFDBranch.CorePasses[0].Handle);
+					for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[1].size(); WindowIndex++) {
+						Submit->WaitSemaphoreIndexes.push_back(WP->WindowCalls[1][WindowIndex].Window->PresentationWaitSemaphoreIndexes[(GFXRENDERER->GetCurrentFrameIndex() + 1) % 2]);
+					}
+				}
+				else {
+					Submit->WaitSemaphoreIndexes.push_back(LFDBranch.AttachedSubmit->SignalSemaphoreIndex);
+				}
+			}
+			//Find Penultimate Window Pass only branches that current submit depends on and get their signal semaphores to wait
+			for (unsigned char PenultimateBIndex = 0; PenultimateBIndex < MainBranch.PenultimateSwapchainBranchCount; PenultimateBIndex++) {
+				const VK_RGBranch* PenultimateWPBranch = MainBranch.PenultimateSwapchainBranches[PenultimateBIndex];
+				VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, PenultimateWPBranch->CorePasses[0].Handle);
+				for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[0].size(); WindowIndex++) {
+					Submit->WaitSemaphoreIndexes.push_back(WP->WindowCalls[0][WindowIndex].Window->PresentationWaitSemaphoreIndexes[GFXRENDERER->GetCurrentFrameIndex()]);
+				}
+			}
+			//Find Current Frame dependent submits and get their signal semaphores to wait
+			for (unsigned char CFDBIndex = 0; CFDBIndex < MainBranch.CFDependentBranchCount; CFDBIndex++) {
+				const VK_RGBranch* CFDBranch = MainBranch.CFDependentBranches[CFDBIndex];
+				Submit->WaitSemaphoreIndexes.push_back(CFDBranch->AttachedSubmit->SignalSemaphoreIndex);
+			}
+		}
 	}
 
 }

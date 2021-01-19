@@ -8,6 +8,9 @@ namespace GFX_API {
 	void Renderer::Set_NextFrameIndex() {
 		FrameIndex = (FrameIndex + 1) % FrameCount;
 	}
+	unsigned char Renderer::GetCurrentFrameIndex() {
+		return FrameIndex;
+	}
 
 
 }

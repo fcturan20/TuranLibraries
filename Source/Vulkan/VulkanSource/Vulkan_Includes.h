@@ -20,13 +20,24 @@ namespace Vulkan {
 		//bool is_VTMEMsupported : 1;	Not supported for now!
 	};
 
+	struct VK_CommandPool {
+		std::mutex Sync;
+		vector<VkCommandBuffer> CBs;
+		VkCommandPool CPHandle;
+		VK_CommandPool();
+		VK_CommandPool(const VK_CommandPool& RefCP);
+		void operator= (const VK_CommandPool& RefCP);
+	};
+
 	struct VK_API VK_QUEUE {
 		VK_QUEUEFLAG SupportFlag;
 		VkQueue Queue;
 		uint32_t QueueFamilyIndex;
-		VkCommandPool CommandPool;
+		VK_CommandPool CommandPool;
+		VkFence RenderGraphFences[2];
 		vector<GFX_API::GFXHandle> ActiveSubmits;
 		unsigned char QueueFeatureScore = 0;
+		VK_QUEUE();
 	};
 
 	struct VK_API GPU {
@@ -55,7 +66,7 @@ namespace Vulkan {
 	};
 
 	struct VK_API MONITOR {
-
+		//I will fill this structure when I investigate monitor configurations deeper!
 	};
 
 	//Window will be accessed from only Vulkan.dll, so the programmer may be aware what he can cause
@@ -68,6 +79,7 @@ namespace Vulkan {
 		VkSurfaceKHR Window_Surface = {};
 		VkSwapchainKHR Window_SwapChain = {};
 		GLFWwindow* GLFW_WINDOW = {};
+		unsigned char PresentationWaitSemaphoreIndexes[2];
 		vector<GFX_API::GFXHandle> Swapchain_Textures;
 		VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
 		vector<VkSurfaceFormatKHR> SurfaceFormats;

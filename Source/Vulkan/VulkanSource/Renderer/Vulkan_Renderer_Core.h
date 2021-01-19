@@ -10,15 +10,7 @@ namespace Vulkan {
 		vector<VK_TransferPass*> TransferPasses;
 		vector<VK_WindowPass*> WindowPasses;
 		VK_FrameGraph FrameGraphs[2];
-		//All of this vectors are at a size that is divisible by FrameCount
-		vector<VK_CommandBuffer*> CommandBuffers;
-		vector<VkSemaphore> Semaphores;
-		VkFence RenderGraph_RunFences[2];
-
-
-		//Swapchain Sync
-		VkSemaphore Waitfor_PresentingSwapchain,			//Wait for this framebuffer to finish presenting on the window
-			Waitfor_SwapchainRenderGraphIdle;				//Wait for RenderGraph to finish the passes that uses the swapchain
+		vector<VK_Semaphore> Semaphores;
 
 
 		bool Is_ConstructingRenderGraph();
@@ -34,7 +26,7 @@ namespace Vulkan {
 		virtual TAPIResult Create_TransferPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, const GFX_API::TRANFERPASS_TYPE& TP_TYPE, const string& NAME, GFX_API::GFXHandle& TPHandle) override;
 		virtual TAPIResult Create_WindowPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, const string& NAME, GFX_API::GFXHandle& WindowPassHandle) override;
 		bool Check_WaitHandles();
-		void Run_CurrentFramegraph();
+		void Record_CurrentFramegraph();
 		void Create_VulkanCalls();
 
 

@@ -1034,9 +1034,6 @@
     <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Core.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Display.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Vulkan\VulkanSource\Vulkan_Includes.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -3,14 +3,10 @@
 
 
 namespace Vulkan {
-	struct VK_API VK_CommandBuffer {
-		//All of these have sizes that divisible by FrameCount in Renderer
-		vector<VkSemaphore*> WaitSemaphores, SignalSemaphores;
-		vector<VkPipelineStageFlags*> WaitSemaphoreStages;
-		vector<VkCommandBuffer*> CBs;
-		VkQueue* Queue;
+	struct VK_API VK_Semaphore {
+		VkSemaphore SPHandle;
+		bool isUsed = false;
 	};
-
 
 	struct VK_API VK_MemoryBlock {
 		VkDeviceSize Size = 0, Offset = 0;
@@ -200,7 +196,6 @@ namespace Vulkan {
 	};
 
 	struct VK_TransferPass {
-		VK_CommandBuffer* CommandBuffer;
 		GFX_API::GFXHandle TransferDatas;
 		vector<GFX_API::PassWait_Description> WAITs;
 		GFX_API::TRANFERPASS_TYPE TYPE;
@@ -227,11 +222,12 @@ namespace Vulkan {
 	struct VK_API VK_WindowCall {
 		VK_ImBarrierInfo BarrierInfo;
 		std::function<void()> JobToDo;
-		VkSwapchainKHR Swapchain;
+		WINDOW* Window;
 	};
 	struct VK_API VK_WindowPass {
 		string NAME;
-		vector<VK_WindowCall> WindowCalls;
+		//Element 0 is the Penultimate, Element 1 is the Last, Element 2 is the Current buffers.
+		vector<VK_WindowCall> WindowCalls[3];
 		vector<GFX_API::PassWait_Description> WAITs;
 	};
 
@@ -271,11 +267,12 @@ namespace Vulkan {
 	*/
 	struct VK_RGBranch;
 	struct VK_Submit {
-		VK_CommandBuffer* CB = nullptr;
+		vector<VkPipelineStageFlags*> WaitSemaphoreStages;
+		vector<unsigned char> WaitSemaphoreIndexes;
+		unsigned char SignalSemaphoreIndex;
+		VkCommandBuffer* CB;
 		//Index + 1
 		vector<unsigned char> BranchIndexes;
-		vector<unsigned char> WaitSemaphoreIndexes;
-		unsigned char SignalSemaphoreIndex = 0;
 		VK_QUEUE* Run_Queue = nullptr;
 		bool is_EndSubmit = false, is_Ended = false;
 	};

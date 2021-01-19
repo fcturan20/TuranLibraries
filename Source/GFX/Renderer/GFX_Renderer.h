@@ -61,6 +61,7 @@ namespace GFX_API {
 		virtual void SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle, const GFX_API::IMAGEUSAGE& PREVIOUS_IMUSAGE, const GFX_API::SHADERSTAGEs_FLAG& PREVIOUS_SHADERSTAGE) = 0;
 
 		
+		unsigned char GetCurrentFrameIndex();
 		//Everything you call after this, will be proccessed for next frame!
 		virtual void Run() = 0;
 	};

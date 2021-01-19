@@ -1,5 +1,6 @@
 #include "Vulkan_Core.h"
 #include "TuranAPI/Logger_Core.h"
+#define VKRENDERER ((Renderer*)GFX->RENDERER)
 
 namespace Vulkan {
 	Vulkan_Core::Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSystem) : GFX_Core(Monitors, GPUs, JobSystem) {
@@ -206,7 +207,6 @@ namespace Vulkan {
 			vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, nullptr);
 			VkQueueFamilyProperties* QueueFamilyProperties = new VkQueueFamilyProperties[queueFamilyCount];
 			vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, QueueFamilyProperties);
-
 			bool is_presentationfound = false;
 			for (unsigned int queuefamily_index = 0; queuefamily_index < queueFamilyCount; queuefamily_index++) {
 				VkQueueFamilyProperties* QueueFamily = &QueueFamilyProperties[queuefamily_index];
@@ -240,7 +240,7 @@ namespace Vulkan {
 				continue;
 			}
 			//Sort the queues by their feature count (Example: Element 0 is Transfer Only, Element 1 is Transfer-Compute, Element 2 is Graphics-Transfer-Compute etc)
-			//Quick Sort algorithm
+			//QuickSort Algorithm
 			if (VKGPU->QUEUEs.size()) {
 				bool should_Sort = true;
 				while (should_Sort) {
@@ -248,7 +248,8 @@ namespace Vulkan {
 					for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size() - 1; QueueIndex++) {
 						if (VKGPU->QUEUEs[QueueIndex + 1].QueueFeatureScore < VKGPU->QUEUEs[QueueIndex].QueueFeatureScore) {
 							should_Sort = true;
-							VK_QUEUE SecondQueue = VKGPU->QUEUEs[QueueIndex + 1];
+							VK_QUEUE SecondQueue;
+							SecondQueue = VKGPU->QUEUEs[QueueIndex + 1];
 							VKGPU->QUEUEs[QueueIndex + 1] = VKGPU->QUEUEs[QueueIndex];
 							VKGPU->QUEUEs[QueueIndex] = SecondQueue;
 						}
@@ -523,11 +524,32 @@ namespace Vulkan {
 			}
 		}
 
+		//Create presentation wait semaphores
+		for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < 2; SemaphoreIndex++) {
+			VkSemaphoreCreateInfo Semaphore_ci = {};
+			Semaphore_ci.flags = 0;
+			Semaphore_ci.pNext = nullptr;
+			Semaphore_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+			VK_Semaphore VKdata;
+			VKdata.isUsed = true;
+
+			if (vkCreateSemaphore(Vulkan_GPU->Logical_Device, &Semaphore_ci, nullptr, &VKdata.SPHandle) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Window creation has failed while creating semaphores for each swapchain texture!");
+				return nullptr;
+			}
+
+			VKRENDERER->Semaphores.push_back(VKdata);
+			Vulkan_Window->PresentationWaitSemaphoreIndexes[SemaphoreIndex] = VKRENDERER->Semaphores.size() - 1;
+		}
+
+
 		LOG_STATUS_TAPI("Window creation is successful!");
 		WINDOWs.push_back(Vulkan_Window);
 		return Vulkan_Window;
 	}
-
+	vector<GFX_API::GFXHandle>& Vulkan_Core::Get_WindowHandles() {
+		return WINDOWs;
+	}
 
 	//Destroy Operations
 
@@ -535,13 +557,6 @@ namespace Vulkan {
 		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
 		LOG_NOTCODED_TAPI("Destroying GFX resources isn't coded yet!", true);
 
-		vkDestroyCommandPool(Vulkan_GPU->Logical_Device, FirstTriangle_CommandPool, nullptr);
-
-		//Shader Module Deleting
-		for (size_t i = 0; i < 2; i++) {
-			VkShaderModule& ShaderModule = FirstShaderProgram[i];
-			vkDestroyShaderModule(Vulkan_GPU->Logical_Device, ShaderModule, nullptr);
-		}
 
 		//GPU deleting
 		for (unsigned int i = 0; i < DEVICE_GPUs.size(); i++) {

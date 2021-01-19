@@ -3,7 +3,6 @@
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
 #define VKRENDERER ((Vulkan::Renderer*)GFXRENDERER)
 #define VKGPU (((Vulkan::Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
-#define VKWINDOW ((Vulkan::WINDOW*)GFX->Main_Window)
 #define STAGINGBUFFER_SIZE 20480
 #define GPULOCAL_BUFSIZE (1024 * 1024 * 10)
 #define GPULOCAL_TEXSIZE (1024 * 1024 * 10)

@@ -41,6 +41,21 @@ namespace Vulkan {
 		}
 		return true;
 	}
+
+	VK_CommandPool::VK_CommandPool() {
+
+	}
+	VK_CommandPool::VK_CommandPool(const VK_CommandPool& RefCP) {
+		CPHandle = RefCP.CPHandle;
+		CBs = RefCP.CBs;
+	}
+	void VK_CommandPool::operator=(const VK_CommandPool& RefCP) {
+		CPHandle = RefCP.CPHandle;
+		CBs = RefCP.CBs;
+	}
+	VK_QUEUE::VK_QUEUE() {
+
+	}
 	unsigned int GPU::Find_vkMemoryTypeIndex(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
 		for (uint32_t i = 0; i < MemoryProperties.memoryTypeCount; i++) {
 			if ((typeFilter & (1 << i)) && (MemoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {

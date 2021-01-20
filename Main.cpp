@@ -19,8 +19,6 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	RenderGraphConstruction_LastFrameUT();
 	LOG_CRASHING_TAPI("Okay, execution finished");
 
-	LOG_STATUS_TAPI("Application returned back to the C++'s own main()");
-
 	/*
 	//Create first attribute layout and mesh buffer for first triangle
 	GFX_API::GFXHandle MESHBUFFER_ID = 0, VAL_ID = 0;

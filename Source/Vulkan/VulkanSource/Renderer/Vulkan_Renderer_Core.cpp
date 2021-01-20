@@ -980,6 +980,14 @@ namespace Vulkan {
 			vkWaitForFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex], true, UINT64_MAX);
 			vkResetFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex]);
 		}
+		//Reset semaphore infos
+		for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraphs[FrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
+			VK_Submit* Submit = FrameGraphs[FrameIndex].CurrentFrameSubmits[SubmitIndex];
+
+			Submit->WaitSemaphoreIndexes.clear();
+			Submit->WaitSemaphoreStages.clear();
+			Semaphores[Submit->SignalSemaphoreIndex].isUsed = false;
+		}
 
 		//Record command buffers
 		Record_CurrentFramegraph();
@@ -990,7 +998,7 @@ namespace Vulkan {
 			WINDOW* VKWINDOW = GFXHandleConverter(WINDOW*, ((Vulkan_Core*)GFX)->Get_WindowHandles()[WindowIndex]);
 			uint32_t SwapchainImage_Index;
 			vkAcquireNextImageKHR(VKGPU->Logical_Device, VKWINDOW->Window_SwapChain, UINT64_MAX,
-			VKWINDOW->PresentationWaitSemaphores[FrameIndex], VK_NULL_HANDLE, &SwapchainImage_Index);
+			Semaphores[VKWINDOW->PresentationWaitSemaphoreIndexes[FrameIndex]].SPHandle, VK_NULL_HANDLE, &SwapchainImage_Index);
 			if (SwapchainImage_Index != FrameIndex) {
 				std::cout << "Current SwapchainImage_Index: " << SwapchainImage_Index << std::endl;
 				std::cout << "Current FrameCount: " << FrameIndex << std::endl;
@@ -998,27 +1006,64 @@ namespace Vulkan {
 			}
 		}
 
-		//Send command buffers
+		//Send rendercommand buffers
 		for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraphs[FrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
 			VK_Submit* Submit = FrameGraphs[FrameIndex].CurrentFrameSubmits[SubmitIndex];
-			
+		}
+
+		//Send displays
+		for (unsigned char WindowPassIndex = 0; WindowPassIndex < WindowPasses.size(); WindowPassIndex++) {
+			VK_WindowPass* WP = WindowPasses[WindowPassIndex];
+			if (!WP->WindowCalls->size()) {
+				continue;
+			}
+
+			//Fill swapchain and image indices vectors
+			uint32_t FrameIndex_uint32_t = FrameIndex;
+			vector<VkSwapchainKHR> Swapchains;	Swapchains.resize(WP->WindowCalls[FrameIndex].size());
+			vector<uint32_t> ImageIndices;		ImageIndices.resize(WP->WindowCalls[FrameIndex].size());
+			for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[FrameIndex].size(); WindowIndex++) {
+				ImageIndices[WindowIndex] = FrameIndex;	//All windows are using the same swapchain index, because otherwise it'd be complicated
+				Swapchains[WindowIndex] = WP->WindowCalls[FrameIndex][WindowIndex].Window->Window_SwapChain;
+			}
+
+			//Find the submit to get the wait semaphores
+			vector<VkSemaphore> WaitSemaphores;
+			for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraphs[FrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
+				VK_Submit* Submit = FrameGraphs[FrameIndex].CurrentFrameSubmits[SubmitIndex];
+
+				//Window Pass only submits only contain one branch and the branch is Window Pass only too!
+				if (Submit->BranchIndexes[0]) {
+					VK_BranchPass& Pass = FrameGraphs[FrameIndex].FrameGraphTree[Submit->BranchIndexes[0] - 1].CorePasses[0];
+					if (Pass.Handle == WP) {
+						for (unsigned char WaitSemaphoreIndex = 0; WaitSemaphoreIndex < Submit->WaitSemaphoreIndexes.size();) {
+							WaitSemaphores.push_back(Semaphores[Submit->WaitSemaphoreIndexes[WaitSemaphoreIndex]].SPHandle);
+						}
+					}
+				}
+			}
+
+			VkPresentInfoKHR SwapchainImage_PresentationInfo = {};
+			SwapchainImage_PresentationInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+			SwapchainImage_PresentationInfo.pNext = nullptr;
+			SwapchainImage_PresentationInfo.swapchainCount = Swapchains.size();
+			SwapchainImage_PresentationInfo.pSwapchains = Swapchains.data();
+			SwapchainImage_PresentationInfo.pImageIndices = ImageIndices.data();
+			SwapchainImage_PresentationInfo.pResults = nullptr;
+
+			SwapchainImage_PresentationInfo.waitSemaphoreCount = WaitSemaphores.size();
+			SwapchainImage_PresentationInfo.pWaitSemaphores = WaitSemaphores.data();
+			VkQueue DisplayQueue = {};
+			for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+				if (VKGPU->QUEUEs[QueueIndex].SupportFlag.is_PRESENTATIONsupported) {
+					DisplayQueue = VKGPU->QUEUEs[QueueIndex].Queue;
+				}
+			}
+			if (vkQueuePresentKHR(DisplayQueue, &SwapchainImage_PresentationInfo) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Submitting Presentation Queue has failed!");
+			}
 		}
 		
-		VkPresentInfoKHR SwapchainImage_PresentationInfo = {};
-		SwapchainImage_PresentationInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		SwapchainImage_PresentationInfo.pNext = nullptr;
-		SwapchainImage_PresentationInfo.waitSemaphoreCount = 1;
-		SwapchainImage_PresentationInfo.pWaitSemaphores = &Waitfor_SwapchainRenderGraphIdle;
-
-		VkSwapchainKHR Swapchains[] = { VKWINDOW->Window_SwapChain };
-		SwapchainImage_PresentationInfo.swapchainCount = 1;
-		SwapchainImage_PresentationInfo.pSwapchains = Swapchains;
-		uint32_t FrameIndex_uint32_t = FrameIndex;
-		SwapchainImage_PresentationInfo.pImageIndices = &FrameIndex_uint32_t;
-		SwapchainImage_PresentationInfo.pResults = nullptr;
-		if (vkQueuePresentKHR(VKGPU->DISPLAYQueue.Queue, &SwapchainImage_PresentationInfo) != VK_SUCCESS) {
-			LOG_CRASHING_TAPI("Submitting Presentation Queue has failed!");
-		}
 		
 
 		//Shift all WindowCall buffers of all Window Passes!

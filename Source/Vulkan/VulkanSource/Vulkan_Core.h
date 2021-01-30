@@ -35,7 +35,6 @@ namespace Vulkan {
 		void Create_Instance();
 		//Initialization calls this function if TURAN_DEBUGGING is defined
 		void Setup_Debugging();
-		//A Graphics Queue is created for learning purpose
 		void Setup_LogicalDevice();
 
 
@@ -43,6 +42,8 @@ namespace Vulkan {
 		virtual void Destroy_GFX_Resources() override;
 
 		Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSystem);
+		//All of the sizes should be in bytes
+		TAPIResult Start_SecondStage(unsigned char GPUIndex, unsigned int DeviceLocal_AllocSize, unsigned int HostVisible_AllocSize, unsigned int FastHostVisible_AllocSize, unsigned int Readback_AllocSize);
 		virtual ~Vulkan_Core();
 	};
 

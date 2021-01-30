@@ -12,15 +12,6 @@ namespace GFX_API {
 			TEXTURE_WRAPPING wrapping = TEXTURE_WRAPPING::API_TEXTURE_REPEAT, TEXTURE_CHANNELs channel_type = TEXTURE_CHANNELs::API_TEXTURE_RGB8UB);
 	};
 
-	struct GFXAPI TEXTUREUSAGEFLAG {
-		//bool hasMipMaps			: 1;	//I don't support it for now!
-		bool isCopiableFrom			: 1;	//If it is true, other textures or buffers are able to copy something from this texture
-		bool isCopiableTo			: 1;	//If it is true, this texture may copy data from other buffers or textures
-		bool isRenderableTo			: 1;	//If it is true, it is a Render Target for at least one DrawPass
-		bool isSampledReadOnly		: 1;	//If it is true, it is accessed as a uniform texture that you're not able to write to it in the shader
-		bool isRandomlyWrittenTo	: 1;	//If it is true, compute and draw pipeline shaders are able to write to it (Render Target isn't considered here)
-		TEXTUREUSAGEFLAG();
-	};
 
 	/*
 		Texture Resource Specifications:

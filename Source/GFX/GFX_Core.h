@@ -1,6 +1,5 @@
 #pragma once
 #include "GFX_Includes.h"
-#include "GFX_Display.h"
 #include "Renderer/GFX_Renderer.h"
 #include "Renderer/GPU_ContentManager.h"
 #include "IMGUI/IMGUI_Core.h"

@@ -176,17 +176,16 @@ namespace GFX_API {
 		bool SWAPCHAINDISPLAY : 1;
 		SHADERSTAGEs_FLAG();
 	};
+	SHADERSTAGEs_FLAG Create_ShaderStageFlag(bool vs, bool fs, bool rt_output, bool transfercmd, bool swpchn_diplay);
 
-
-	//If you change this enum, don't forget that Textures and Global Buffers uses this enum. So, consider them.
-	//Note 2: Change this enum to use in Vertex and Index buffers too!
-
-	enum class BUFFER_VISIBILITY : unsigned char {
-		CPUREADWRITE_GPUREADONLY = 0,			//Use this when all the data responsibility on the CPU and GPU just reads it (Global Camera Matrixes, CPU Software Rasterization Depth reads from the GPU etc.)
-		CPUREADWRITE_GPUREADWRITE,				//Use this when both CPU and GPU changes the data, no matter frequency. This has the worst performance on modern APIs
-		CPUREADONLY_GPUREADWRITE,				//Use this when CPU needs feedback of the data proccessed on the GPU (Occlusion Culling on the CPU according to last frame's depth buffer etc.)
-		CPUEXISTENCE_GPUREADWRITE,				//Use this for CPU never touchs the data and GPU has the all responsibility (Framebuffer attachments, GPU-driven pipeline buffers etc.)
-		CPUEXISTENCE_GPUREADONLY,				//Use this when data never changes, just uploaded or deleted from the GPU (Object material rendering textures, constant global buffers etc.)
+	struct GFXAPI TEXTUREUSAGEFLAG {
+		//bool hasMipMaps			: 1;	//I don't support it for now!
+		bool isCopiableFrom : 1;	//If it is true, other textures or buffers are able to copy something from this texture
+		bool isCopiableTo : 1;	//If it is true, this texture may copy data from other buffers or textures
+		bool isRenderableTo : 1;	//If it is true, it is a Render Target for at least one DrawPass
+		bool isSampledReadOnly : 1;	//If it is true, it is accessed as a uniform texture that you're not able to write to it in the shader
+		bool isRandomlyWrittenTo : 1;	//If it is true, compute and draw pipeline shaders are able to write to it (Render Target isn't considered here)
+		TEXTUREUSAGEFLAG();
 	};
 
 
@@ -195,7 +194,9 @@ namespace GFX_API {
 		READWRITE_RTATTACHMENT = 1,				//That means you have both read and write access to the attachment (Attachment Type will be found by GFX API)
 		SHADERTEXTURESAMPLING,					//That means you are reading texture in shader as uniform (most performant way)
 		SHADERIMAGELOADING,						//That means you have both random "read and write" access in shaders to the texture (But not as RT)
-		TEXTUREDATATRANSFER,					//That means you are reading or writing to this texture with GPU or CPU copy operations
+		DATATRANSFER_SRC,						//That means you are reading from this texture with GPU or CPU copy operations
+		DATATRANSFER_DST,						//That means you are writing to this texture with GPU or CPU copy operations
+		SWAPCHAIN_DISPLAY,
 		UNUSED									//That means you are using it for the first time (PREVIOUS_IMUSAGE) or not using it again (LATER_IMUSAGE) which may improve performance
 	};
 
@@ -208,9 +209,23 @@ namespace GFX_API {
 	};
 	enum class TRANFERPASS_TYPE : unsigned char {
 		TP_BARRIER = 0,
-		TP_UPLOAD = 1,
-		TP_COPY = 2,
-		TP_DOWNLOAD = 3
+		TP_COPY = 1
+	};
+	
+	enum class IMAGE_ACCESS : unsigned char {
+		RTCOLOR_READONLY	= 0,
+		RTCOLOR_WRITEONLY	= 1,
+		RTCOLOR_READWRITE,
+		DEPTHSTENCIL_READONLY,
+		DEPTHSTENCIL_WRITEONLY,
+		DEPTHSTENCIL_READWRITE,
+		SWAPCHAIN_DISPLAY,
+		TRANSFER_DIST,
+		TRANSFER_SRC,
+		NO_ACCESS,
+		SHADER_SAMPLEONLY,
+		SHADER_WRITEONLY,
+		SHADER_SAMPLEWRITE
 	};
 
 
@@ -230,4 +245,46 @@ namespace GFX_API {
 		CONSTSBUFFER_PI,
 		CONSTSBUFFER_G
 	};
+
+	enum class SUBALLOCATEBUFFERTYPEs : unsigned char {
+		DEVICELOCAL = 0,
+		HOSTVISIBLE = 1,
+		FASTHOSTVISIBLE = 2,
+		READBACK = 3
+	};
+
+	struct GFXAPI BoxRegion {
+		unsigned int Width, Height, Depth, WidthOffset, HeightOffset, DepthOffset;
+	};
+
+	struct GFXAPI GPUMemoryDescription {
+		unsigned int MaxSize_inBytes, TotalAllocationSize_inBytes; 
+	};
+
+	struct GFXAPI MonitorDescription {
+		GFXHandle Handle;
+		string NAME;
+		unsigned int WIDTH, HEIGHT, COLOR_BITES, REFRESH_RATE;
+		int PHYSICAL_WIDTH, PHYSICAL_HEIGHT;	//milimeters
+		WINDOW_MODE DESKTOP_MODE;
+	};
+
+	struct GFXAPI GPUDescription {
+	public:
+		string MODEL;
+		uint32_t API_VERSION;
+		uint32_t DRIVER_VERSION;
+		GPU_TYPEs GPU_TYPE;
+		bool is_GraphicOperations_Supported = false, is_ComputeOperations_Supported = false, is_TransferOperations_Supported = false;
+		unsigned int DEVICELOCAL_MaxMemorySize, HOSTVISIBLE_MaxMemorySize, FASTHOSTVISIBLE_MaxMemorySize, READBACK_MaxMemorySize;
+	};
+
+	struct GFXAPI WindowDescription {
+		const char* NAME;
+		unsigned int WIDTH, HEIGHT;
+		GFX_API::WINDOW_MODE MODE;
+		GFX_API::GFXHandle MONITOR;
+		TEXTUREUSAGEFLAG SWAPCHAINUSAGEs;
+	};
+
 }

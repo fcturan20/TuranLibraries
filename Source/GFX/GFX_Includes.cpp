@@ -207,4 +207,13 @@ namespace GFX_API {
 		TRANSFERCMD = false;
 		SWAPCHAINDISPLAY = false;
 	};
+	SHADERSTAGEs_FLAG Create_ShaderStageFlag(bool vs, bool fs, bool rt_output, bool transfercmd, bool swpchn_diplay){
+		SHADERSTAGEs_FLAG x;
+		x.COLORRTOUTPUT = rt_output;
+		x.FRAGMENTSHADER = fs;
+		x.SWAPCHAINDISPLAY = swpchn_diplay;
+		x.TRANSFERCMD = transfercmd;
+		x.VERTEXSHADER = vs;
+		return x;
+	}
 }

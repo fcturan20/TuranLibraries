@@ -3,36 +3,27 @@
 
 
 namespace Vulkan {
+	struct MemoryBlock {
+		GFX_API::SUBALLOCATEBUFFERTYPEs Type;
+		VkDeviceSize Offset;
+	};
 	struct VK_API VK_Semaphore {
 		VkSemaphore SPHandle;
 		bool isUsed = false;
 	};
-
-	struct VK_API VK_MemoryBlock {
-		VkDeviceSize Size = 0, Offset = 0;
-		bool isEmpty = true;
-	};
-
-	struct VK_API VK_MemoryAllocation {
-		unsigned int FullSize, UnusedSize;
-		VkBufferUsageFlags Usage;
-		VkBuffer Base_Buffer;
-		VkMemoryRequirements Requirements;
-		VkDeviceMemory Allocated_Memory;
-		vector<VK_MemoryBlock> Allocated_Blocks;
-	};
+	
 
 	struct VK_API VK_Texture {
 		unsigned int WIDTH, HEIGHT, DATA_SIZE;
 		GFX_API::TEXTURE_CHANNELs CHANNELs;
 		GFX_API::TEXTUREUSAGEFLAG USAGE;
-		SUBALLOCATEBUFFERTYPEs MEMORYREGION;
 
 		VkImage Image = {};
 		VkImageView ImageView = {};
-		VkDeviceSize GPUMemoryOffset;
+		MemoryBlock Block;
 	};
 	VK_API VkImageUsageFlags Find_VKImageUsage_forVKTexture(VK_Texture& TEXTURE);
+	VK_API void Find_AccessPattern_byIMAGEACCESS(const GFX_API::IMAGE_ACCESS& Access, VkAccessFlags& TargetAccessFlag, VkImageLayout& TargetImageLayout);
 
 	struct VK_API VK_COLORRTSLOT {
 		VK_Texture* RT;
@@ -89,15 +80,14 @@ namespace Vulkan {
 		unsigned int VERTEX_COUNT;
 		VK_VertexAttribLayout* Layout;
 		VkBuffer Buffer;
+		MemoryBlock Block;
 	};
-
-
-
 
 
 	struct VK_API VK_GlobalBuffer {
 		unsigned int DATA_SIZE, BINDINGPOINT;
-		GFX_API::BUFFER_VISIBILITY VISIBILITY;
+		MemoryBlock Block;
+		bool isUniform;
 		GFX_API::SHADERSTAGEs_FLAG ACCESSED_STAGEs;
 	};
 
@@ -141,7 +131,7 @@ namespace Vulkan {
 
 	//RenderNodes
 
-	enum class TPType : unsigned char {
+	enum class PassType : unsigned char {
 		ERROR = 0,
 		DP = 1,
 		TP = 2,
@@ -164,25 +154,29 @@ namespace Vulkan {
 		VK_Texture* IMAGE;
 	};
 
-	struct VK_ImUploadInfo {
+	struct VK_BUFtoIMinfo {
 		VK_Texture* IMAGE;
 		VkDeviceSize StagingBufferOffset;
 	};
-	struct VK_BufUploadInfo {
+	struct VK_BUFtoBUFinfo {
 		VK_BUFFERTYPEs BufferType;
 		GFX_API::GFXHandle BUFFER;
 		VkDeviceSize StagingBufferOffset;
 	};
-	struct VK_TPUploadDatas {
-		TuranAPI::Threading::TLVector<VK_ImUploadInfo> TextureUploads;
-		TuranAPI::Threading::TLVector<VK_BufUploadInfo> BufferUploads;
-		VK_TPUploadDatas();
+	struct VK_IMtoIMinfo {
+		VK_Texture* IMAGE;
+	};
+	struct VK_TPCopyDatas {
+		TuranAPI::Threading::TLVector<VK_BUFtoIMinfo> BUFIMCopies;
+		TuranAPI::Threading::TLVector<VK_BUFtoBUFinfo> BUFBUFCopies;
+		TuranAPI::Threading::TLVector<VK_IMtoIMinfo> IMIMCopies;
+		VK_TPCopyDatas();
 	};
 
 	struct VK_ImBarrierInfo {
-		VK_Texture* IMAGE;
-		GFX_API::IMAGEUSAGE PREVIOUSUSAGE, LATERUSAGE;
-		GFX_API::SHADERSTAGEs_FLAG WAITSTAGE, SIGNALSTAGE;
+		VkImage Image;
+		VkAccessFlags LASTACCESS, NEXTACCESS;
+		VkImageLayout LASTLAYOUT, NEXTLAYOUT;
 	};
 	struct VK_BufBarrierInfo {
 		VK_BUFFERTYPEs BufferType;
@@ -202,11 +196,16 @@ namespace Vulkan {
 		string NAME;
 	};
 
+	struct VK_DrawCall {
+		VK_VertexBuffer* VB;
+		VK_GraphicsPipeline* MatInst;
+	};
 	struct VK_API VK_SubDrawPass {
 		unsigned char Binding_Index;
 		VK_IRTSLOTSET* SLOTSET;
 		GFX_API::GFXHandle DrawPass;
-		//vector<GFX_API::DrawCall_Description> DrawCalls;
+		TuranAPI::Threading::TLVector<VK_DrawCall> DrawCalls;
+		VK_SubDrawPass();
 	};
 	struct VK_API VK_DrawPass {
 		//Name is to debug the rendergraph algorithms, production ready code won't use it!
@@ -216,12 +215,12 @@ namespace Vulkan {
 		VK_RTSLOTSET* SLOTSET;
 		unsigned char Subpass_Count;
 		VK_SubDrawPass* Subpasses;
+		VkFramebuffer FBs[2];
+		GFX_API::BoxRegion RenderRegion;
 		vector<GFX_API::PassWait_Description> WAITs;
 	};
 
 	struct VK_API VK_WindowCall {
-		VK_ImBarrierInfo BarrierInfo;
-		std::function<void()> JobToDo;
 		WINDOW* Window;
 	};
 	struct VK_API VK_WindowPass {
@@ -237,16 +236,9 @@ namespace Vulkan {
 
 
 	//RenderGraph Algorithm Related Resources
-
-	struct VK_DrawPassInstance {
-		VK_DrawPass* BasePass;
-		VkFramebuffer Framebuffer;
-	};
-
-
 	struct VK_BranchPass {
-		GFX_API::GFXHandle Handle;	//Use VK_DrawPassInstance if is_TransferPass is true, otherwise use VK_TransferPass
-		TPType TYPE;
+		GFX_API::GFXHandle Handle;
+		PassType TYPE;
 	};
 	/*
 	1) VK_RGBranch consists of one or more passes that should be executed serially without executing any other passes
@@ -267,10 +259,9 @@ namespace Vulkan {
 	*/
 	struct VK_RGBranch;
 	struct VK_Submit {
-		vector<VkPipelineStageFlags*> WaitSemaphoreStages;
+		vector<VkPipelineStageFlags> WaitSemaphoreStages;
 		vector<unsigned char> WaitSemaphoreIndexes;
-		unsigned char SignalSemaphoreIndex;
-		VkCommandBuffer* CB;
+		unsigned char SignalSemaphoreIndex, CBIndex = 255;
 		//Index + 1
 		vector<unsigned char> BranchIndexes;
 		VK_QUEUE* Run_Queue = nullptr;

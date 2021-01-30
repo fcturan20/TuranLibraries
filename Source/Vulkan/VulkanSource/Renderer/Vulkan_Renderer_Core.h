@@ -32,8 +32,19 @@ namespace Vulkan {
 
 		//Rendering operations
 		virtual void Run() override;
-		virtual void Render_DrawCall(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) override;
-		virtual void SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle, const GFX_API::IMAGEUSAGE& PREVIOUS_IMUSAGE, const GFX_API::SHADERSTAGEs_FLAG& PREVIOUS_SHADERSTAGE) override;
+		virtual void Render_DrawCall(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID
+			, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) override;
+		virtual void SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle) override;
+		//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
+		//Target Buffer should be created with DEVICELOCAL
+		virtual void UploadTo_Buffer(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle TargetBuffer_Handle
+			, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) override;
+		//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
+		virtual void UploadTo_Image(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle Texture_Handle
+			, unsigned int SourceBuffer_Offset, unsigned int Size, GFX_API::BoxRegion Texture_TargetRegion) override;
+		virtual void ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
+			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, GFX_API::GFXHandle BarrierTPHandle) override;
+
 
 		//Transfer Operations
 		virtual void TransferCall_ImUpload(VK_TransferPass* TP, VK_Texture* Image, VkDeviceSize StagingBufferOffset);

@@ -181,11 +181,22 @@ namespace TuranAPI {
 
 
 
+		AtomicUINT::AtomicUINT(uint64_t Ref) : data(Ref) {
+		}
+		AtomicUINT::AtomicUINT() : data(0){
+
+		}
 		uint64_t AtomicUINT::DirectAdd(const uint64_t& add) {
 			return data.fetch_add(add);
 		}
 		uint64_t AtomicUINT::DirectSubtract(const uint64_t& sub) {
 			return data.fetch_sub(sub);
+		}
+		void AtomicUINT::DirectStore(const uint64_t& Store) {
+			data.store(Store);
+		}
+		uint64_t AtomicUINT::DirectLoad() {
+			return data.load();
 		}
 		bool AtomicUINT::LimitedAdd_weak(const uint64_t& add, const uint64_t& maxlimit) {
 			uint64_t x = data.load();
@@ -205,9 +216,9 @@ namespace TuranAPI {
 				std::this_thread::yield();
 			}
 		}
-		bool AtomicUINT::LimitedSubtract_weak(const uint64_t& subtract, const uint64_t& maxlimit) {
+		bool AtomicUINT::LimitedSubtract_weak(const uint64_t& subtract, const uint64_t& minlimit) {
 			uint64_t x = data.load();
-			if (x - subtract < maxlimit ||	//Subtraction is bigger
+			if (x - subtract < minlimit ||	//Subtraction is bigger
 				x - subtract > x				//UINT overflow
 				) {
 				return false;
@@ -215,9 +226,9 @@ namespace TuranAPI {
 
 			return data.compare_exchange_strong(x, x - subtract);
 		}
-		void AtomicUINT::LimitedSubtract_strong(const uint64_t& subtract, const uint64_t& maxlimit) {
+		void AtomicUINT::LimitedSubtract_strong(const uint64_t& subtract, const uint64_t& minlimit) {
 			while (true) {
-				if (LimitedSubtract_weak(subtract, maxlimit)) {
+				if (LimitedSubtract_weak(subtract, minlimit)) {
 					return;
 				}
 				std::this_thread::yield();

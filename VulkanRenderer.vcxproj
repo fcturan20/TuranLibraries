@@ -45,8 +45,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)bin</OutDir>
-    <IntDir>$(SolutionDir)bin-int</IntDir>
+    <OutDir>$(SolutionDir)bin\$(Configuration)</OutDir>
+    <IntDir>$(SolutionDir)bin-int\$(Configuration)</IntDir>
     <IncludePath>$(SolutionDir)3rdPartyLibraries\Includes;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)3rdPartyLibraries\Libs;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
@@ -54,6 +54,8 @@
     <LinkIncremental>false</LinkIncremental>
     <IncludePath>$(SolutionDir)3rdPartyLibraries\Includes;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)3rdPartyLibraries\Libs;$(LibraryPath)</LibraryPath>
+    <OutDir>$(SolutionDir)bin\$(Configuration)</OutDir>
+    <IntDir>$(SolutionDir)bin-int\$(Configuration)</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -408,7 +410,6 @@
     <ClInclude Include="Source\Editor\FileSystem\ResourceTypes\Resource_Identifier.h" />
     <ClInclude Include="Source\Editor\FileSystem\ResourceTypes\Scene_Resource.h" />
     <ClInclude Include="Source\GFX\GFX_Core.h" />
-    <ClInclude Include="Source\GFX\GFX_Display.h" />
     <ClInclude Include="Source\GFX\GFX_FileSystem\Resource_Type\Material_Type_Resource.h" />
     <ClInclude Include="Source\GFX\GFX_FileSystem\Resource_Type\Texture_Resource.h" />
     <ClInclude Include="Source\GFX\GFX_Includes.h" />

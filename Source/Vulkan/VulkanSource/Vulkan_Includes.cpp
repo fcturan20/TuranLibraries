@@ -56,15 +56,6 @@ namespace Vulkan {
 	VK_QUEUE::VK_QUEUE() {
 
 	}
-	unsigned int GPU::Find_vkMemoryTypeIndex(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-		for (uint32_t i = 0; i < MemoryProperties.memoryTypeCount; i++) {
-			if ((typeFilter & (1 << i)) && (MemoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-				return i;
-			}
-		}
-		LOG_CRASHING_TAPI("Find_vkMemoryTypeIndex() has failed! Returned 0");
-		return 0;
-	}
 
 	Vulkan_States::Vulkan_States()  {
 		
@@ -138,6 +129,9 @@ namespace Vulkan {
 			}
 		}
 		LOG_STATUS_TAPI("Checked Required Device Extensions for the GPU!");
+	}
+	VK_MemoryAllocation::VK_MemoryAllocation() {
+
 	}
 
 	VKAPI_ATTR VkBool32 VKAPI_CALL Vulkan_States::VK_DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT Message_Severity, VkDebugUtilsMessageTypeFlagsEXT Message_Type, const VkDebugUtilsMessengerCallbackDataEXT* pCallback_Data, void* pUserData) {
@@ -246,29 +240,46 @@ namespace Vulkan {
 			return VK_FORMAT_UNDEFINED;
 		}
 	}
-	VkShaderStageFlags Find_VkStages(GFX_API::SHADERSTAGEs_FLAG flag) {
+	VkShaderStageFlags Find_VkShaderStages(GFX_API::SHADERSTAGEs_FLAG flag) {
 		VkShaderStageFlags found = 0;
+		if (flag.COLORRTOUTPUT && flag.FRAGMENTSHADER && flag.VERTEXSHADER) {
+			found |= VK_SHADER_STAGE_ALL_GRAPHICS;
+		}
 		if (flag.VERTEXSHADER) {
 			found = found | VK_SHADER_STAGE_VERTEX_BIT;
 		}
 		if (flag.FRAGMENTSHADER) {
 			found = found | VK_SHADER_STAGE_FRAGMENT_BIT;
 		}
+		if (flag.SWAPCHAINDISPLAY) {
+			found = 0;
+		}
+		if (flag.TRANSFERCMD) {
+			found = 0;
+		}
 		return found;
 	}
-	VkDescriptorType Find_VkDescType_byVisibility(GFX_API::BUFFER_VISIBILITY BUFVIS) {
-		switch (BUFVIS) {
-		case GFX_API::BUFFER_VISIBILITY::CPUEXISTENCE_GPUREADWRITE:
-		case GFX_API::BUFFER_VISIBILITY::CPUREADONLY_GPUREADWRITE:
-		case GFX_API::BUFFER_VISIBILITY::CPUREADWRITE_GPUREADWRITE:
-			return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		case GFX_API::BUFFER_VISIBILITY::CPUEXISTENCE_GPUREADONLY:
-		case GFX_API::BUFFER_VISIBILITY::CPUREADWRITE_GPUREADONLY:
-			return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		default:
-			LOG_CRASHING_TAPI("Find_VkDescType_byBUFVIS() doesn't support this type of Buffer_Visibility!");
-			return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+	VkPipelineStageFlags Find_VkPipelineStages(GFX_API::SHADERSTAGEs_FLAG flag) {
+		if (flag.COLORRTOUTPUT && flag.FRAGMENTSHADER && flag.VERTEXSHADER) {
+			return VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
 		}
+		if (flag.SWAPCHAINDISPLAY) {
+			return VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		}
+		VkPipelineStageFlags f = 0;
+		if (flag.COLORRTOUTPUT) {
+			f |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		}
+		if (flag.FRAGMENTSHADER) {
+			f |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		}
+		if (flag.VERTEXSHADER) {
+			f |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+		}
+		if (flag.TRANSFERCMD) {
+			f |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+		}
+		return f;
 	}
 	VkDescriptorType Find_VkDescType_byMATDATATYPE(GFX_API::MATERIALDATA_TYPE TYPE) {
 		switch (TYPE) {

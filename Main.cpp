@@ -11,15 +11,23 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		GFX_API::WindowDescription WindowDesc;
 		WindowDesc.WIDTH = 1280; WindowDesc.HEIGHT = 720; WindowDesc.MODE = GFX_API::WINDOW_MODE::WINDOWED;
 		WindowDesc.MONITOR = Systems.Monitors[0].Handle; WindowDesc.NAME = "Vulkan Window";
+		WindowDesc.SWAPCHAINUSAGEs.isCopiableTo = true;
+		WindowDesc.SWAPCHAINUSAGEs.isRenderableTo = true;
+		WindowDesc.SWAPCHAINUSAGEs.isRandomlyWrittenTo = true;
+		WindowDesc.SWAPCHAINUSAGEs.isSampledReadOnly = true;
 		GFX_API::Texture_Properties SwapchainProperties;
 		WindowHandle = GFX->CreateWindow(WindowDesc, SwapchainTextures, SwapchainProperties);
 	}
 
 	//Construct RenderGraph
-	RenderGraphConstruction_LastFrameUT();
-	LOG_CRASHING_TAPI("Okay, execution finished");
+	GFX_API::GFXHandle SubpassID, ISlotSetID, WP_ID, FirstBarrierTP_ID, UploadTP_ID, FinalBarrierTP_ID;
+	RenderGraphConstruction_DrawPassed(SwapchainTextures[0], SwapchainTextures[1], SubpassID, ISlotSetID, WP_ID, FirstBarrierTP_ID, UploadTP_ID, FinalBarrierTP_ID);
 
-	/*
+	GFX_API::GFXHandle StagingBuffer;
+	if (GFXContentManager->Create_StagingBuffer(1024 * 1024 * 10, GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE, StagingBuffer) != TAPI_SUCCESS) {
+		LOG_CRASHING_TAPI("Staging buffer creation has failed, fix it!");
+	}
+	
 	//Create first attribute layout and mesh buffer for first triangle
 	GFX_API::GFXHandle MESHBUFFER_ID = 0, VAL_ID = 0;
 	{
@@ -38,7 +46,14 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC3, true, ColorVA_ID);
 		vector<GFX_API::GFXHandle> VAs{ PositionVA_ID, ColorVA_ID };
 		GFXContentManager->Create_VertexAttributeLayout(VAs, VAL_ID);
-		GFXContentManager->Create_VertexBuffer(VAL_ID, VertexData, 3, GFX_API::BUFFER_VISIBILITY::CPUEXISTENCE_GPUREADONLY, nullptr, MESHBUFFER_ID);
+		if (GFXContentManager->Create_VertexBuffer(VAL_ID, 3, GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, MESHBUFFER_ID) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("First Vertex Buffer creation has failed!");
+		}
+
+		/*
+		if (GFXContentManager->Uploadto_StagingBuffer(StagingBuffer, VertexData, 60, 0) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading vertex buffer to staging buffer has failed!");
+		}*/
 	}
 
 	//Create and Link first material type
@@ -59,9 +74,9 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		GFX_API::Material_Type MATTYPE;
 		MATTYPE.VERTEXSOURCE_ID = VS_ID;
 		MATTYPE.FRAGMENTSOURCE_ID = FS_ID;
-		MATTYPE.SubDrawPass_ID = FIRSTSUBPASS_ID;
+		MATTYPE.SubDrawPass_ID = SubpassID;
 		MATTYPE.MATERIALTYPEDATA.clear();	//There is no buffer or texture access for now!
-		MATTYPE.RTSLOTSET_ID = RTSlotSet_ID;
+		MATTYPE.IRTSLOTSET_ID = ISlotSetID;
 		MATTYPE.ATTRIBUTELAYOUT_ID = VAL_ID;
 		GFX_API::GFXHandle MATTYPE_ID;
 		GFXContentManager->Link_MaterialType(MATTYPE, MATTYPE_ID);
@@ -71,13 +86,29 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		GFXContentManager->Create_MaterialInst(MATINST, FIRSTMATINST_ID);
 	}
 
+	GFXRENDERER->ImageBarrier(SwapchainTextures[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
+	GFXRENDERER->Render_DrawCall(MESHBUFFER_ID, nullptr, FIRSTMATINST_ID, SubpassID);
+	GFXRENDERER->ImageBarrier(SwapchainTextures[0], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, FinalBarrierTP_ID);
+	GFXRENDERER->SwapBuffers(WindowHandle, WP_ID);
+	GFXRENDERER->Run();
+	Editor_System::Take_Inputs();
+
+	GFXRENDERER->ImageBarrier(SwapchainTextures[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
+	GFXRENDERER->Render_DrawCall(MESHBUFFER_ID, nullptr, FIRSTMATINST_ID, SubpassID);
+	GFXRENDERER->ImageBarrier(SwapchainTextures[1], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, FinalBarrierTP_ID);
+	GFXRENDERER->SwapBuffers(WindowHandle, WP_ID);
+	GFXRENDERER->Run();
+	Editor_System::Take_Inputs();
+
 	unsigned int i = 0;
 	while (true) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 
 
-		//Cook Draw Call
-		GFXRENDERER->Render_DrawCall(MESHBUFFER_ID, nullptr, FIRSTMATINST_ID, FIRSTSUBPASS_ID);
+		GFXRENDERER->ImageBarrier(SwapchainTextures[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
+		GFXRENDERER->Render_DrawCall(MESHBUFFER_ID, nullptr, FIRSTMATINST_ID, SubpassID);
+		GFXRENDERER->ImageBarrier(SwapchainTextures[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, FinalBarrierTP_ID);
+		GFXRENDERER->SwapBuffers(WindowHandle, WP_ID);
 		GFXRENDERER->Run();
 		//IMGUI->New_Frame();
 		//IMGUI_RUNWINDOWS();
@@ -93,7 +124,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			i = 0;
 			WRITE_LOGs_toFILEs_TAPI();
 		}
-	}*/
+	}
 
 }
 

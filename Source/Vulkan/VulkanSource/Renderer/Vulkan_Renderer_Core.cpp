@@ -24,27 +24,27 @@ namespace Vulkan {
 		}
 		Record_RenderGraphConstruction = true;
 	}
-	TPType FindWaitedTPType(GFX_API::SHADERSTAGEs_FLAG flag) {
+	PassType FindWaitedPassType(GFX_API::SHADERSTAGEs_FLAG flag) {
 		bool SupportedOnes = 0;
 		if (flag.COLORRTOUTPUT || flag.FRAGMENTSHADER || flag.VERTEXSHADER) {
 			if (flag.SWAPCHAINDISPLAY || flag.TRANSFERCMD) {
 				LOG_CRASHING_TAPI("You set Wait Info->Stage wrong!");
-				return TPType::ERROR;
+				return PassType::ERROR;
 			}
-			return TPType::DP;
+			return PassType::DP;
 		}
 		if (flag.SWAPCHAINDISPLAY) {
 			if (flag.TRANSFERCMD) {
 				LOG_CRASHING_TAPI("You set Wait Info->Stage wrong!");
-				return TPType::ERROR;
+				return PassType::ERROR;
 			}
-			return TPType::WP;
+			return PassType::WP;
 		}
 		if (flag.TRANSFERCMD) {
-			return TPType::TP;
+			return PassType::TP;
 		}
 		LOG_NOTCODED_TAPI("You set WaitInfo->Stage to a stage that isn't supported right now by FindWaitedTPType!", true);
-		return TPType::ERROR;
+		return PassType::ERROR;
 	}
 	bool Renderer::Check_WaitHandles() {
 		for (unsigned int DPIndex = 0; DPIndex < DrawPasses.size(); DPIndex++) {
@@ -57,8 +57,8 @@ namespace Vulkan {
 				}
 
 				//Search through all pass types
-				switch (FindWaitedTPType(Wait_desc.WaitedStage)) {
-					case TPType::DP:
+				switch (FindWaitedPassType(Wait_desc.WaitedStage)) {
+					case PassType::DP:
 					{
 						bool is_Found = false;
 						for (unsigned int CheckedDP = 0; CheckedDP < DrawPasses.size(); CheckedDP++) {
@@ -73,7 +73,7 @@ namespace Vulkan {
 						}
 						break;
 					}
-					case TPType::TP:
+					case PassType::TP:
 					{
 						bool is_Found = false;
 						for (unsigned int CheckedTP = 0; CheckedTP < TransferPasses.size(); CheckedTP++) {
@@ -88,7 +88,7 @@ namespace Vulkan {
 						}
 						break;
 					}
-					case TPType::WP:
+					case PassType::WP:
 					{
 						bool is_Found = false;
 						for (unsigned int CheckedWP = 0; CheckedWP < WindowPasses.size(); CheckedWP++) {
@@ -103,7 +103,7 @@ namespace Vulkan {
 						}
 						break;
 					}
-					case TPType::ERROR:
+					case PassType::ERROR:
 					{
 						LOG_CRASHING_TAPI("Finding a proper TPType has failed, so Check Wait has failed!");
 						return false;
@@ -123,8 +123,8 @@ namespace Vulkan {
 					return false;
 				}
 
-				switch (FindWaitedTPType(Wait_desc.WaitedStage)) {
-				case TPType::DP:
+				switch (FindWaitedPassType(Wait_desc.WaitedStage)) {
+				case PassType::DP:
 				{
 					bool is_Found = false;
 					for (unsigned int CheckedDP = 0; CheckedDP < DrawPasses.size(); CheckedDP++) {
@@ -139,7 +139,7 @@ namespace Vulkan {
 					}
 				}
 				break;
-				case TPType::TP:
+				case PassType::TP:
 				{
 					VK_TransferPass* currentTP = GFXHandleConverter(VK_TransferPass*, *Wait_desc.WaitedPass);
 					bool is_Found = false;
@@ -155,10 +155,10 @@ namespace Vulkan {
 					}
 				}
 				break;
-				case TPType::WP:
+				case PassType::WP:
 					LOG_CRASHING_TAPI("A window pass can't wait for another window pass, Check Wait Handle failed!");
 					return false;
-				case TPType::ERROR:
+				case PassType::ERROR:
 					LOG_CRASHING_TAPI("Finding a TPType has failed, so Check Wait Handle too!");
 					return false;
 				default:
@@ -176,8 +176,8 @@ namespace Vulkan {
 					return false;
 				}
 
-				switch (FindWaitedTPType(Wait_desc.WaitedStage)) {
-					case TPType::DP:
+				switch (FindWaitedPassType(Wait_desc.WaitedStage)) {
+					case PassType::DP:
 					{
 						bool is_Found = false;
 						for (unsigned int CheckedDP = 0; CheckedDP < DrawPasses.size(); CheckedDP++) {
@@ -193,7 +193,7 @@ namespace Vulkan {
 						}
 					}
 					break;
-					case TPType::TP:
+					case PassType::TP:
 					{
 						VK_TransferPass* currentTP = GFXHandleConverter(VK_TransferPass*, *Wait_desc.WaitedPass);
 						bool is_Found = false;
@@ -209,7 +209,7 @@ namespace Vulkan {
 						}
 						break;
 					}
-					case TPType::WP: 
+					case PassType::WP: 
 					{
 						bool is_Found = false;
 						for (unsigned int CheckedWP = 0; CheckedWP < WindowPasses.size(); CheckedWP++) {
@@ -224,7 +224,7 @@ namespace Vulkan {
 						}
 						break;
 					}
-					case TPType::ERROR:
+					case PassType::ERROR:
 					{
 						LOG_CRASHING_TAPI("Finding a TPType has failed, so Check Wait Handle too!");
 						return false;
@@ -241,130 +241,6 @@ namespace Vulkan {
 		return true;
 	}
 
-	void Renderer::Record_CurrentFramegraph() {
-		TURAN_PROFILE_SCOPE_MCS("Run_CurrentFramegraph()");
-		VK_FrameGraph& Current_FrameGraph = FrameGraphs[Get_FrameIndex(false)];
-		VK_FrameGraph& Last_FrameGraph = FrameGraphs[Get_FrameIndex(true)];
-		for (unsigned char CFSubmitIndex = 0; CFSubmitIndex < Current_FrameGraph.CurrentFrameSubmits.size(); CFSubmitIndex++) {
-			delete Current_FrameGraph.CurrentFrameSubmits[CFSubmitIndex];
-		}
-		Current_FrameGraph.CurrentFrameSubmits.clear();
-		//CPU Vulkan Workload Analysis
-		//When multi-threading comes, this part will be the first one that's multi-threaded
-		//But of course, more precise workload analysis (both on GPU and CPU side) will be added
-		//But GPU side workload analysis needs custom shading language (Without it, only transfers maybe analyzed)
-		for (unsigned char BranchIndex = 0; BranchIndex < Current_FrameGraph.BranchCount; BranchIndex++) {
-			VK_RGBranch& Branch = Current_FrameGraph.FrameGraphTree[BranchIndex];
-			//If branch is used previous frame, clear frame dependent dynamic datas
-			if (Branch.CurrentFramePassesIndexes[0]) {
-				unsigned char CheckIndex = 0;
-				while (Branch.CurrentFramePassesIndexes[CheckIndex]) {
-					Branch.CurrentFramePassesIndexes[CheckIndex] = 0;
-					CheckIndex++;
-				}
-				Branch.AttachedSubmit = nullptr;
-				Branch.CFDynamicDependents.clear();
-				Branch.LFDynamicDependents.clear();
-				Branch.DynamicLaterExecutes.clear();
-				VK_QUEUEFLAG empty;
-				Branch.CFNeeded_QueueSpecs = empty;
-			}
-
-			//Find active passes
-			unsigned char CurrentFrameIndexesArray_Element = 0;
-			for (unsigned char PassIndex = 0; PassIndex < Branch.PassCount; PassIndex++) {
-				VK_BranchPass* CorePass = &Branch.CorePasses[PassIndex];
-				switch (CorePass->TYPE) {
-					case TPType::TP:
-					{
-						VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, CorePass->Handle);
-						if (!TP->TransferDatas) {
-							//continue;
-						}
-						switch (TP->TYPE) {
-						case GFX_API::TRANFERPASS_TYPE::TP_BARRIER:
-						{
-							bool isThereAny = false;
-							VK_TPBarrierDatas* TPB = GFXHandleConverter(VK_TPBarrierDatas*, TP->TransferDatas);
-							//Check Buffer Barriers
-							{
-								std::unique_lock<std::mutex> BufferLocker;
-								TPB->BufferBarriers.PauseAllOperations(BufferLocker);
-								for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-									if (TPB->BufferBarriers.size(ThreadID)) {
-										isThereAny = true;
-										break;
-									}
-								}
-							}
-							//Check Texture Barriers
-							if (!isThereAny) {
-								std::unique_lock<std::mutex> TextureLocker;
-								TPB->TextureBarriers.PauseAllOperations(TextureLocker);
-								for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-									if (TPB->TextureBarriers.size(ThreadID)) {
-										isThereAny = true;
-										break;
-									}
-								}
-							}
-						}
-							break;
-						case GFX_API::TRANFERPASS_TYPE::TP_COPY:
-							LOG_NOTCODED_TAPI("VulkanRenderer: COPY TP Datas isn't coded, so traversing it has failed!", false);
-							break;
-						case GFX_API::TRANFERPASS_TYPE::TP_DOWNLOAD:
-							LOG_NOTCODED_TAPI("VulkanRenderer: DOWNLOAD TP Datas isn't coded, so traversing it has failed!", false);
-							break;
-						case GFX_API::TRANFERPASS_TYPE::TP_UPLOAD:
-							if (//GFXHandleConverter(VK_TPUploadDatas*, TP->TransferDatas)->BufferUploads.size() ||
-								//GFXHandleConverter(VK_TPUploadDatas*, TP->TransferDatas)->TextureUploads.size()
-								true) {
-								Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
-								CurrentFrameIndexesArray_Element++;
-								Branch.CFNeeded_QueueSpecs.is_TRANSFERsupported = true;
-							}
-							break;
-						default:
-							LOG_NOTCODED_TAPI("VulkanRenderer: CurrentFrame_WorkloadAnalysis() doesn't support this type of transfer pass type!", true);
-							break;
-						}
-				}
-					break;
-					case TPType::DP: 
-					{
-						VK_DrawPass* DP = GFXHandleConverter(VK_DrawPassInstance*, CorePass->Handle)->BasePass;
-						for (unsigned char SubpassIndex = 0; SubpassIndex < DP->Subpass_Count; SubpassIndex++) {
-							const VK_SubDrawPass& SP = DP->Subpasses[SubpassIndex];
-							if (//SP.DrawCalls.size()
-								true) {
-								Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
-								CurrentFrameIndexesArray_Element++;
-								Branch.CFNeeded_QueueSpecs.is_GRAPHICSsupported = true;
-							}
-						}
-					}
-					break;
-					case TPType::WP:
-					{
-						VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, CorePass->Handle);
-						if (//WP->WindowCalls.size()
-							true) {
-							Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
-							CurrentFrameIndexesArray_Element++;
-							Branch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported = true;
-						}
-
-					}
-					break;
-					default:
-						LOG_NOTCODED_TAPI("Specified Pass Type isn't coded yet to pass as a Branch!", true);
-				}
-			}
-		}
-
-		Create_VkSubmits(&FrameGraphs[Get_FrameIndex(false)], &FrameGraphs[Get_FrameIndex(true)], Semaphores);
-	}
 	//Each framegraph is constructed as same, so there is no difference about passing different framegraphs here
 	void Create_VkDataofRGBranches(const VK_FrameGraph& FrameGraph, vector<VK_Semaphore>& Semaphores);
 	void Renderer::Finish_RenderGraphConstruction() {
@@ -410,7 +286,6 @@ namespace Vulkan {
 		}
 
 
-
 		//Create Command Buffer for each RGBranch for maximum workload cases
 		Create_VkDataofRGBranches(FrameGraphs[0], Semaphores);
 		
@@ -421,11 +296,11 @@ namespace Vulkan {
 				Fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 				Fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 				Fence_ci.pNext = nullptr;
-				if (vkCreateFence(VKGPU->Logical_Device, &Fence_ci, nullptr, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[i]) != VK_SUCCESS) {
+				if (vkCreateFence(VKGPU->Logical_Device, &Fence_ci, nullptr, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[i].Fence_o) != VK_SUCCESS) {
 					LOG_CRASHING_TAPI("VulkanRenderer: Fence creation has failed!");
 				}
-				if (vkResetFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[i]) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("Fix the reset fence at FinishConstruction!");
+				if (vkResetFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[i].Fence_o) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("VulkanRenderer: Fence reset has failed!");
 				}
 			}
 		}
@@ -518,7 +393,6 @@ namespace Vulkan {
 			Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		}
 
-		if(Attachment)
 		Desc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		Desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		if (Attachment->RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
@@ -706,6 +580,14 @@ namespace Vulkan {
 		VKDrawPass->Subpasses = Final_Subpasses;
 		VKDrawPass->NAME = NAME;
 		VKDrawPass->WAITs = WAITs;
+		VKDrawPass->RenderRegion.WidthOffset = 0;
+		VKDrawPass->RenderRegion.HeightOffset = 0;
+		VKDrawPass->RenderRegion.Depth = 1;
+		VKDrawPass->RenderRegion.DepthOffset = 0;
+		if (SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT) {
+			VKDrawPass->RenderRegion.Width = SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[0].RT->WIDTH;
+			VKDrawPass->RenderRegion.Height = SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[0].RT->HEIGHT;
+		}
 		DrawPasses.push_back(VKDrawPass);
 
 
@@ -775,8 +657,8 @@ namespace Vulkan {
 		case GFX_API::TRANFERPASS_TYPE::TP_BARRIER:
 			TRANSFERPASS->TransferDatas = new VK_TPBarrierDatas;
 			break;
-		case GFX_API::TRANFERPASS_TYPE::TP_UPLOAD:
-			TRANSFERPASS->TransferDatas = new VK_TPUploadDatas;
+		case GFX_API::TRANFERPASS_TYPE::TP_COPY:
+			TRANSFERPASS->TransferDatas = new VK_TPCopyDatas;
 			break;
 		default:
 			LOG_NOTCODED_TAPI("VulkanRenderer: Create_TransferPass() has failed because this type of TP creation isn't supported!", true);
@@ -974,19 +856,207 @@ namespace Vulkan {
 		vkEndCommandBuffer(PerFrame_CommandBuffers[SwapchainIndex]);
 	}*/
 
+	void RecordRGBranchCalls(VK_RGBranch& Branch, VkCommandBuffer CB);
+	void Renderer::Record_CurrentFramegraph() {
+		TURAN_PROFILE_SCOPE_MCS("Run_CurrentFramegraph()");
+		VK_FrameGraph& Current_FrameGraph = FrameGraphs[Get_FrameIndex(false)];
+		VK_FrameGraph& Last_FrameGraph = FrameGraphs[Get_FrameIndex(true)];
+		for (unsigned char CFSubmitIndex = 0; CFSubmitIndex < Current_FrameGraph.CurrentFrameSubmits.size(); CFSubmitIndex++) {
+			delete Current_FrameGraph.CurrentFrameSubmits[CFSubmitIndex];
+		}
+		Current_FrameGraph.CurrentFrameSubmits.clear();
+		//CPU Vulkan Workload Analysis
+		//When multi-threading comes, this part will be the first one that's multi-threaded
+		//But of course, more precise workload analysis (both on GPU and CPU side) will be added
+		//But GPU side workload analysis needs custom shading language (Without it, only transfers maybe analyzed)
+		for (unsigned char BranchIndex = 0; BranchIndex < Current_FrameGraph.BranchCount; BranchIndex++) {
+			VK_RGBranch& Branch = Current_FrameGraph.FrameGraphTree[BranchIndex];
+			//If branch is used previous frame, clear frame dependent dynamic datas
+			if (Branch.CurrentFramePassesIndexes[0]) {
+				unsigned char CheckIndex = 0;
+				while (Branch.CurrentFramePassesIndexes[CheckIndex]) {
+					Branch.CurrentFramePassesIndexes[CheckIndex] = 0;
+					CheckIndex++;
+				}
+				Branch.AttachedSubmit = nullptr;
+				Branch.CFDynamicDependents.clear();
+				Branch.LFDynamicDependents.clear();
+				Branch.DynamicLaterExecutes.clear();
+				VK_QUEUEFLAG empty;
+				Branch.CFNeeded_QueueSpecs = empty;
+			}
+
+			//Find active passes
+			unsigned char CurrentFrameIndexesArray_Element = 0;
+			for (unsigned char PassIndex = 0; PassIndex < Branch.PassCount; PassIndex++) {
+				VK_BranchPass* CorePass = &Branch.CorePasses[PassIndex];
+				switch (CorePass->TYPE) {
+				case PassType::TP:
+				{
+					VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, CorePass->Handle);
+					if (!TP->TransferDatas) {
+						continue;
+					}
+					switch (TP->TYPE) {
+					case GFX_API::TRANFERPASS_TYPE::TP_BARRIER:
+					{
+						bool isThereAny = false;
+						VK_TPBarrierDatas* TPB = GFXHandleConverter(VK_TPBarrierDatas*, TP->TransferDatas);
+						//Check Buffer Barriers
+						{
+							std::unique_lock<std::mutex> BufferLocker;
+							TPB->BufferBarriers.PauseAllOperations(BufferLocker);
+							for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+								if (TPB->BufferBarriers.size(ThreadID)) {
+									isThereAny = true;
+									break;
+								}
+							}
+						}
+						//Check Texture Barriers
+						if (!isThereAny) {
+							std::unique_lock<std::mutex> TextureLocker;
+							TPB->TextureBarriers.PauseAllOperations(TextureLocker);
+							for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+								if (TPB->TextureBarriers.size(ThreadID)) {
+									isThereAny = true;
+									break;
+								}
+							}
+						}
+						Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
+						CurrentFrameIndexesArray_Element++;
+					}
+					break;
+					case GFX_API::TRANFERPASS_TYPE::TP_COPY:
+					{
+						bool isThereAny = false;
+						VK_TPCopyDatas* DATAs = GFXHandleConverter(VK_TPCopyDatas*, TP->TransferDatas);
+						{
+							std::unique_lock<std::mutex> BUFBUFLOCKER;
+							DATAs->BUFBUFCopies.PauseAllOperations(BUFBUFLOCKER);
+							for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+								if (DATAs->BUFBUFCopies.size(ThreadIndex)) {
+									isThereAny = true;
+									break;
+								}
+							}
+						}
+						if(!isThereAny){
+							std::unique_lock<std::mutex> BUFIMLOCKER;
+							DATAs->BUFIMCopies.PauseAllOperations(BUFIMLOCKER);
+							for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+								if (DATAs->BUFIMCopies.size(ThreadIndex)) {
+									isThereAny = true;
+									break;
+								}
+							}
+						}
+						if (!isThereAny) {
+							std::unique_lock<std::mutex> IMIMLOCKER;
+							DATAs->IMIMCopies.PauseAllOperations(IMIMLOCKER);
+							for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+								if (DATAs->IMIMCopies.size(ThreadIndex)) {
+									isThereAny = true;
+									break;
+								}
+							}
+						}
+
+						if (isThereAny) {
+							Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
+							CurrentFrameIndexesArray_Element++;
+							Branch.CFNeeded_QueueSpecs.is_TRANSFERsupported = true;
+						}
+					}
+						break;
+					default:
+						LOG_NOTCODED_TAPI("VulkanRenderer: CurrentFrame_WorkloadAnalysis() doesn't support this type of transfer pass type!", true);
+						break;
+					}
+				}
+				break;
+				case PassType::DP:
+				{
+					VK_DrawPass* DP = GFXHandleConverter(VK_DrawPass*, CorePass->Handle);
+					for (unsigned char SubpassIndex = 0; SubpassIndex < DP->Subpass_Count; SubpassIndex++) {
+						const VK_SubDrawPass& SP = DP->Subpasses[SubpassIndex];
+						if (//SP.DrawCalls.size()
+							true) {
+							Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
+							CurrentFrameIndexesArray_Element++;
+							Branch.CFNeeded_QueueSpecs.is_GRAPHICSsupported = true;
+						}
+					}
+				}
+				break;
+				case PassType::WP:
+				{
+					VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, CorePass->Handle);
+					if (//WP->WindowCalls.size()
+						true) {
+						Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
+						CurrentFrameIndexesArray_Element++;
+						Branch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported = true;
+					}
+
+				}
+				break;
+				default:
+					LOG_NOTCODED_TAPI("Specified Pass Type isn't coded yet to pass as a Branch!", true);
+				}
+			}
+		}
+		
+		Create_VkSubmits(&FrameGraphs[Get_FrameIndex(false)], &FrameGraphs[Get_FrameIndex(true)], Semaphores);
+
+		for (unsigned char SubmitIndex = 0; SubmitIndex < Current_FrameGraph.CurrentFrameSubmits.size(); SubmitIndex++) {
+			VK_Submit* Submit = Current_FrameGraph.CurrentFrameSubmits[SubmitIndex];
+			if (Current_FrameGraph.FrameGraphTree[Submit->BranchIndexes[0] - 1].CorePasses[0].TYPE == PassType::WP) {
+				continue;
+			}
+			
+			VkCommandBufferBeginInfo cb_bi = {};
+			cb_bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+			cb_bi.pInheritanceInfo = nullptr;
+			cb_bi.pNext = nullptr;
+			cb_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			vkBeginCommandBuffer(Submit->Run_Queue->CommandPool.CBs[Submit->CBIndex].CB, &cb_bi);
+			
+			for (unsigned char BranchIndex = 0; BranchIndex < Submit->BranchIndexes.size(); BranchIndex++) {
+				VK_RGBranch& Branch = Current_FrameGraph.FrameGraphTree[Submit->BranchIndexes[BranchIndex] - 1];
+				RecordRGBranchCalls(Branch, Submit->Run_Queue->CommandPool.CBs[Submit->CBIndex].CB);
+			}
+			vkEndCommandBuffer(Submit->Run_Queue->CommandPool.CBs[Submit->CBIndex].CB);
+		}
+	}
 	void Renderer::Run() {
+		LOG_STATUS_TAPI("Run has started!");
 		//Wait for command buffers to end
 		for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
-			vkWaitForFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex], true, UINT64_MAX);
-			vkResetFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex]);
+			if (!VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].is_Used) {
+				continue;
+			}
+			if (vkWaitForFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].Fence_o, true, UINT64_MAX) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("VulkanRenderer: Fence wait has failed!");
+			}
+			if (vkResetFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].Fence_o) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("VulkanRenderer: Fence reset has failed!");
+			}
 		}
+		LOG_STATUS_TAPI("Wait has finished!");
 		//Reset semaphore infos
 		for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraphs[FrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
 			VK_Submit* Submit = FrameGraphs[FrameIndex].CurrentFrameSubmits[SubmitIndex];
 
 			Submit->WaitSemaphoreIndexes.clear();
 			Submit->WaitSemaphoreStages.clear();
-			Semaphores[Submit->SignalSemaphoreIndex].isUsed = false;
+			if (FrameGraphs[FrameIndex].FrameGraphTree[Submit->BranchIndexes[0] - 1].CorePasses[0].TYPE != PassType::WP) {
+				Submit->Run_Queue->CommandPool.CBs[Submit->CBIndex].is_Used = false;
+				Submit->CBIndex = 255;
+				Semaphores[Submit->SignalSemaphoreIndex].isUsed = false;
+				Submit->SignalSemaphoreIndex = 255;
+			}
 		}
 
 		//Record command buffers
@@ -1007,24 +1077,59 @@ namespace Vulkan {
 		}
 
 		//Send rendercommand buffers
-		for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraphs[FrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
-			VK_Submit* Submit = FrameGraphs[FrameIndex].CurrentFrameSubmits[SubmitIndex];
+		for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+			vector<VkSubmitInfo> FINALSUBMITs;
+			vector<vector<VkSemaphore>> WaitSemaphoreLists;
+			for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraphs[FrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
+				VK_Submit* Submit = FrameGraphs[FrameIndex].CurrentFrameSubmits[SubmitIndex];
+				if (Submit->Run_Queue != &VKGPU->QUEUEs[QueueIndex] || Submit->CBIndex == 255) {
+					continue;
+				}
+
+				VkSubmitInfo submitinfo = {};
+				submitinfo.commandBufferCount = 1;
+				submitinfo.pCommandBuffers = &VKGPU->QUEUEs[QueueIndex].CommandPool.CBs[Submit->CBIndex].CB;
+				submitinfo.pNext = nullptr;
+				submitinfo.pSignalSemaphores = &Semaphores[Submit->SignalSemaphoreIndex].SPHandle;
+				WaitSemaphoreLists.push_back(vector<VkSemaphore>());
+				vector<VkSemaphore>& WaitSemaphoreList = WaitSemaphoreLists[WaitSemaphoreLists.size() - 1];
+				for (unsigned char WaitIndex = 0; WaitIndex < Submit->WaitSemaphoreIndexes.size(); WaitIndex++) {
+					WaitSemaphoreList.push_back(Semaphores[Submit->WaitSemaphoreIndexes[WaitIndex]].SPHandle);
+				}
+
+				submitinfo.pWaitSemaphores = WaitSemaphoreList.data();
+				submitinfo.pWaitDstStageMask = Submit->WaitSemaphoreStages.data();
+				submitinfo.waitSemaphoreCount = Submit->WaitSemaphoreIndexes.size();
+				submitinfo.signalSemaphoreCount = 1;
+				submitinfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+				FINALSUBMITs.push_back(submitinfo);
+			}
+			if (!FINALSUBMITs.size()) {
+				VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].is_Used = false;
+				continue;
+			}
+			std::cout << "Gonderilen: " << unsigned int(QueueIndex) << std::endl;
+			if (vkQueueSubmit(VKGPU->QUEUEs[QueueIndex].Queue, FINALSUBMITs.size(), FINALSUBMITs.data(), VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].Fence_o) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Vulkan Queue Submission has failed!");
+				return;
+			}
+			VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].is_Used = true;
 		}
 
 		//Send displays
 		for (unsigned char WindowPassIndex = 0; WindowPassIndex < WindowPasses.size(); WindowPassIndex++) {
 			VK_WindowPass* WP = WindowPasses[WindowPassIndex];
-			if (!WP->WindowCalls->size()) {
+			if (!WP->WindowCalls[2].size()) {
 				continue;
 			}
 
 			//Fill swapchain and image indices vectors
 			uint32_t FrameIndex_uint32_t = FrameIndex;
-			vector<VkSwapchainKHR> Swapchains;	Swapchains.resize(WP->WindowCalls[FrameIndex].size());
-			vector<uint32_t> ImageIndices;		ImageIndices.resize(WP->WindowCalls[FrameIndex].size());
-			for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[FrameIndex].size(); WindowIndex++) {
+			vector<VkSwapchainKHR> Swapchains;	Swapchains.resize(WP->WindowCalls[2].size());
+			vector<uint32_t> ImageIndices;		ImageIndices.resize(WP->WindowCalls[2].size());
+			for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[2].size(); WindowIndex++) {
 				ImageIndices[WindowIndex] = FrameIndex;	//All windows are using the same swapchain index, because otherwise it'd be complicated
-				Swapchains[WindowIndex] = WP->WindowCalls[FrameIndex][WindowIndex].Window->Window_SwapChain;
+				Swapchains[WindowIndex] = WP->WindowCalls[2][WindowIndex].Window->Window_SwapChain;
 			}
 
 			//Find the submit to get the wait semaphores
@@ -1036,7 +1141,7 @@ namespace Vulkan {
 				if (Submit->BranchIndexes[0]) {
 					VK_BranchPass& Pass = FrameGraphs[FrameIndex].FrameGraphTree[Submit->BranchIndexes[0] - 1].CorePasses[0];
 					if (Pass.Handle == WP) {
-						for (unsigned char WaitSemaphoreIndex = 0; WaitSemaphoreIndex < Submit->WaitSemaphoreIndexes.size();) {
+						for (unsigned char WaitSemaphoreIndex = 0; WaitSemaphoreIndex < Submit->WaitSemaphoreIndexes.size(); WaitSemaphoreIndex++) {
 							WaitSemaphores.push_back(Semaphores[Submit->WaitSemaphoreIndexes[WaitSemaphoreIndex]].SPHandle);
 						}
 					}
@@ -1061,6 +1166,7 @@ namespace Vulkan {
 			}
 			if (vkQueuePresentKHR(DisplayQueue, &SwapchainImage_PresentationInfo) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Submitting Presentation Queue has failed!");
+				return;
 			}
 		}
 		
@@ -1076,24 +1182,56 @@ namespace Vulkan {
 
 		//Current frame has finished, so every call after this call affects to the next frame
 		Set_NextFrameIndex();
-
 	}
 	void Renderer::Render_DrawCall(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) {
+		LOG_NOTCODED_TAPI("Index buffer creation is not coded, so rendering it is not coded either!", false);
 		VK_SubDrawPass* SP = GFXHandleConverter(VK_SubDrawPass*, SubDrawPass_ID);
-		LOG_NOTCODED_TAPI("GFXRenderer->Render_DrawCall() isn't coded yet!", true);
+		VK_DrawCall call;
+		call.MatInst = GFXHandleConverter(VK_PipelineInstance*, MaterialInstance_ID)->PROGRAM;
+		call.VB = GFXHandleConverter(VK_VertexBuffer*, VertexBuffer_ID);
+		SP->DrawCalls.push_back(GFX->JobSys->GetThisThreadIndex(), call);
 	}
-	void Renderer::SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle, const GFX_API::IMAGEUSAGE& PREVIOUS_IMUSAGE, const GFX_API::SHADERSTAGEs_FLAG& PREVIOUS_SHADERSTAGE) {
-		LOG_NOTCODED_TAPI("SwapBuffers() is not coded yet!", true);
+	void Renderer::SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle) {
+		VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, WindowPassHandle);
+		WINDOW* Window = GFXHandleConverter(WINDOW*, WindowHandle);
+		VK_WindowCall WC;
+		WC.Window = Window;
+		WP->WindowCalls[2].push_back(WC);
+	}
+	void Renderer::UploadTo_Buffer(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle TargetBuffer_Handle, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) {
+		LOG_NOTCODED_TAPI("UploadTo_Buffer() is not coded yet!", true);
+	}
+	void Renderer::UploadTo_Image(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle Texture_Handle, unsigned int SourceBuffer_Offset, unsigned int Size, GFX_API::BoxRegion Texture_TargetRegion) {
+		LOG_NOTCODED_TAPI("UploadTo_Image() is not coded yet!", true);
+	}
+
+	void Renderer::ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
+		, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, GFX_API::GFXHandle BarrierTPHandle) {
+		VK_Texture* Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
+		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, BarrierTPHandle);
+		if (TP->TYPE != GFX_API::TRANFERPASS_TYPE::TP_BARRIER) {
+			LOG_ERROR_TAPI("You should give the handle of a Barrier Transfer Pass! Given Transfer Pass' type isn't Barrier.");
+			return;
+		}
+		VK_TPBarrierDatas* TPDatas = GFXHandleConverter(VK_TPBarrierDatas*, TP->TransferDatas);
+
+		
+		VK_ImBarrierInfo im_bi;
+		im_bi.Image = Texture->Image;
+		Find_AccessPattern_byIMAGEACCESS(LAST_ACCESS, im_bi.LASTACCESS, im_bi.LASTLAYOUT);
+		Find_AccessPattern_byIMAGEACCESS(NEXT_ACCESS, im_bi.NEXTACCESS, im_bi.NEXTLAYOUT);
+		TPDatas->TextureBarriers.push_back(GFX->JobSys->GetThisThreadIndex(), im_bi);
 	}
 
 
-
+	
 	void Renderer::TransferCall_ImUpload(VK_TransferPass* TP, VK_Texture* Image, VkDeviceSize StagingBufferOffset) {
+		/*
 		VK_TPUploadDatas* UploadData = GFXHandleConverter(VK_TPUploadDatas*, TP->TransferDatas);
 		VK_ImUploadInfo info;
 		info.IMAGE = Image;
 		info.StagingBufferOffset = StagingBufferOffset;
-		UploadData->TextureUploads.push_back(GFX->JobSys->GetThisThreadIndex(), info);
+		UploadData->TextureUploads.push_back(GFX->JobSys->GetThisThreadIndex(), info);*/
 	}
 
 

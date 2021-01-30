@@ -3,9 +3,6 @@
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
 #define VKRENDERER ((Vulkan::Renderer*)GFXRENDERER)
 #define VKGPU (((Vulkan::Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
-#define STAGINGBUFFER_SIZE 20480
-#define GPULOCAL_BUFSIZE (1024 * 1024 * 10)
-#define GPULOCAL_TEXSIZE (1024 * 1024 * 10)
 
 #define MAXDESCSETCOUNT_PERPOOL 100; 
 #define MAXUBUFFERCOUNT_PERPOOL 100; 
@@ -37,101 +34,112 @@ namespace Vulkan {
 	}
 	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
 		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBUTEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys) {
-		//Staging Buffer Memory Allocation
-		{
+
+		//GPU Local Memory Allocation
+		if (VKGPU->GPULOCAL_ALLOC.FullSize) {
+				VkMemoryRequirements memrequirements;
+				VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+				uint64_t AllocSize = VKGPU->GPULOCAL_ALLOC.FullSize;
+				VkBuffer GPULOCAL_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
+				vkGetBufferMemoryRequirements(VKGPU->Logical_Device, GPULOCAL_buf, &memrequirements);
+				if (!(memrequirements.memoryTypeBits & (1 << VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex))) {
+					LOG_CRASHING_TAPI("GPU Local Memory Allocation doesn't support the MemoryType!");
+					return;
+				}
+				VkMemoryAllocateInfo ci{};
+				ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+				ci.allocationSize = memrequirements.size;
+				ci.memoryTypeIndex = VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex;
+				VkDeviceMemory allocated_memory;
+				if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
+				}
+				VKGPU->GPULOCAL_ALLOC.Allocated_Memory = allocated_memory;
+				VKGPU->GPULOCAL_ALLOC.UnusedSize = AllocSize;
+				VKGPU->GPULOCAL_ALLOC.MappedMemory = nullptr;
+		}
+		//Host Visible Memory Allocation
+		if (VKGPU->HOSTVISIBLE_ALLOC.FullSize) {
 			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-			VkBuffer stagingbuffer = Create_VkBuffer(STAGINGBUFFER_SIZE, USAGEFLAGs);
+			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | 
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			uint64_t AllocSize = VKGPU->HOSTVISIBLE_ALLOC.FullSize;
+			VkBuffer stagingbuffer = Create_VkBuffer(AllocSize, USAGEFLAGs);
 			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, stagingbuffer, &memrequirements);
-			unsigned int memtypeindex = VKGPU->Find_vkMemoryTypeIndex(memrequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			if (!(memrequirements.memoryTypeBits & (1u << VKGPU->HOSTVISIBLE_ALLOC.MemoryTypeIndex))) {
+				LOG_CRASHING_TAPI("Host Visible Memory Allocation doesn't support the related MemoryType!");
+				return;
+			}
+
 			VkMemoryAllocateInfo ci{};
 			ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 			ci.allocationSize = memrequirements.size;
-			ci.memoryTypeIndex = memtypeindex;
+			ci.memoryTypeIndex = VKGPU->HOSTVISIBLE_ALLOC.MemoryTypeIndex;
 			VkDeviceMemory allocated_memory;
 			if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("GPU_ContentManager has failed because vkAllocateMemory has failed!");
 			}
-			vkBindBufferMemory(VKGPU->Logical_Device, stagingbuffer, allocated_memory, 0);
-			STAGINGBUFFERALLOC.Base_Buffer = stagingbuffer;
-			STAGINGBUFFERALLOC.Requirements = memrequirements;
-			STAGINGBUFFERALLOC.FullSize = STAGINGBUFFER_SIZE;
-			STAGINGBUFFERALLOC.Usage = USAGEFLAGs;
-			STAGINGBUFFERALLOC.Allocated_Memory = allocated_memory;
-			STAGINGBUFFERALLOC.UnusedSize = STAGINGBUFFER_SIZE;
+			VKGPU->HOSTVISIBLE_ALLOC.Allocated_Memory = allocated_memory;
+			VKGPU->HOSTVISIBLE_ALLOC.UnusedSize = AllocSize;
+			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &VKGPU->HOSTVISIBLE_ALLOC.MappedMemory) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Mapping the HOSTVISIBLE memory has failed!");
+				return;
+			}
 		}
-		//GPU Local Buffer Memory Allocation
-		{
+		//Fast Host Visible Memory Allocation
+		if (VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize) {
 			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-			VkBuffer GPULOCAL_buf = Create_VkBuffer(GPULOCAL_BUFSIZE, USAGEFLAGs);
-			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, GPULOCAL_buf, &memrequirements);
-			unsigned int memtypeindex = VKGPU->Find_vkMemoryTypeIndex(memrequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+			uint64_t AllocSize = VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize;
+			VkBuffer stagingbuffer = Create_VkBuffer(AllocSize, USAGEFLAGs);
+			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, stagingbuffer, &memrequirements);
+			if (!(memrequirements.memoryTypeBits & (1u << VKGPU->FASTHOSTVISIBLE_ALLOC.MemoryTypeIndex))) {
+				LOG_CRASHING_TAPI("Fast Host Visible Memory Allocation doesn't support the related MemoryType!");
+				return;
+			}
+
 			VkMemoryAllocateInfo ci{};
 			ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 			ci.allocationSize = memrequirements.size;
-			ci.memoryTypeIndex = memtypeindex;
+			ci.memoryTypeIndex = VKGPU->FASTHOSTVISIBLE_ALLOC.MemoryTypeIndex;
+			VkDeviceMemory allocated_memory;
+			if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("GPU_ContentManager has failed because vkAllocateMemory has failed!");
+			}
+			VKGPU->FASTHOSTVISIBLE_ALLOC.Allocated_Memory = allocated_memory;
+			VKGPU->FASTHOSTVISIBLE_ALLOC.UnusedSize = AllocSize;
+			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &VKGPU->FASTHOSTVISIBLE_ALLOC.MappedMemory) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Mapping the FASTHOSTVISIBLE memory has failed!");
+				return;
+			}
+		}
+		//Readback Memory Allocation
+		if (VKGPU->READBACK_ALLOC.FullSize) {
+			VkMemoryRequirements memrequirements;
+			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+			uint64_t AllocSize = VKGPU->READBACK_ALLOC.FullSize;
+			VkBuffer READBACK_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
+			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, READBACK_buf, &memrequirements);
+			if (!(memrequirements.memoryTypeBits & (1u << VKGPU->READBACK_ALLOC.MemoryTypeIndex))) {
+				LOG_CRASHING_TAPI("GPU Local Memory Allocation doesn't support the related MemoryType!");
+				return;
+			}
+			VkMemoryAllocateInfo ci{};
+			ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			ci.allocationSize = memrequirements.size;
+			ci.memoryTypeIndex = VKGPU->READBACK_ALLOC.MemoryTypeIndex;
 			VkDeviceMemory allocated_memory;
 			if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
 			}
-			vkBindBufferMemory(VKGPU->Logical_Device, GPULOCAL_buf, allocated_memory, 0);
-			GPULOCAL_BUFFERALLOC.Base_Buffer = GPULOCAL_buf;
-			GPULOCAL_BUFFERALLOC.Requirements = memrequirements;
-			GPULOCAL_BUFFERALLOC.FullSize = GPULOCAL_BUFSIZE;
-			GPULOCAL_BUFFERALLOC.Usage = USAGEFLAGs;
-			GPULOCAL_BUFFERALLOC.Allocated_Memory = allocated_memory;
-			GPULOCAL_BUFFERALLOC.UnusedSize = GPULOCAL_BUFSIZE;
+			VKGPU->READBACK_ALLOC.Allocated_Memory = allocated_memory;
+			VKGPU->READBACK_ALLOC.UnusedSize = AllocSize;
+			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &VKGPU->READBACK_ALLOC.MappedMemory) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Mapping the READBACK memory has failed!");
+				return;
+			}
 		}
-		//GPU Local Texture Memory Allocation
-		{
-			VkMemoryRequirements memrequirements;
-			VkImageCreateInfo im_ci = {};
-			{
-				im_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-				im_ci.arrayLayers = 1;
-				im_ci.extent.width = 1920;
-				im_ci.extent.height = 1080;
-				im_ci.extent.depth = 1;
-				im_ci.flags = 0;
-				im_ci.format = VK_FORMAT_R8G8B8A8_SINT;
-				im_ci.imageType = VK_IMAGE_TYPE_2D;
-				im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-				im_ci.mipLevels = 1;
-				im_ci.pNext = nullptr;
-				im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
-				if (VKGPU->QUEUEs.size() > 1) {
-					im_ci.sharingMode = VK_SHARING_MODE_CONCURRENT;
-				}
-				else {
-					im_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-				}
-				im_ci.pQueueFamilyIndices = VKGPU->AllQueueFamilies;
-				im_ci.queueFamilyIndexCount = VKGPU->QUEUEs.size();
-				im_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
-				im_ci.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-			}
-			VkImage GPULOCAL_im;
-			if (vkCreateImage(VKGPU->Logical_Device, &im_ci, nullptr, &GPULOCAL_im) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkCreateImage has failed!");
-			}
-			vkGetImageMemoryRequirements(VKGPU->Logical_Device, GPULOCAL_im, &memrequirements);
-			unsigned int memtypeindex = VKGPU->Find_vkMemoryTypeIndex(memrequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-			VkMemoryAllocateInfo ci{};
-			ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			ci.allocationSize = GPULOCAL_TEXSIZE;
-			ci.memoryTypeIndex = memtypeindex;
-			VkDeviceMemory allocated_memory;
-			if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkAllocateMemory GPULocalTexture has failed!");
-			}
-			GPULOCAL_TEXTUREALLOC.Base_Buffer = VK_NULL_HANDLE;
-			GPULOCAL_TEXTUREALLOC.Requirements = memrequirements;
-			GPULOCAL_TEXTUREALLOC.FullSize = GPULOCAL_TEXSIZE;
-			GPULOCAL_TEXTUREALLOC.Usage = 0;
-			GPULOCAL_TEXTUREALLOC.Allocated_Memory = allocated_memory;
-			GPULOCAL_TEXTUREALLOC.UnusedSize = GPULOCAL_TEXSIZE;
-		}
+
 		//Default Sampler Creation
 		{
 			VkSamplerCreateInfo ci = {};
@@ -180,9 +188,15 @@ namespace Vulkan {
 						bindings.push_back(VkDescriptorSetLayoutBinding());
 						bindings[i].binding = globbuf->BINDINGPOINT;
 						bindings[i].descriptorCount = 1;
-						bindings[i].descriptorType = Find_VkDescType_byVisibility(globbuf->VISIBILITY);
+						VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+						if (globbuf->isUniform) {
+							bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+						}
+						else {
+							bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+						}
 						bindings[i].pImmutableSamplers = VK_NULL_HANDLE;
-						bindings[i].stageFlags = Find_VkStages(globbuf->ACCESSED_STAGEs);
+						bindings[i].stageFlags = Find_VkShaderStages(globbuf->ACCESSED_STAGEs);
 						//Buffer Type Counting
 						switch (bindings[i].descriptorType) {
 						case VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
@@ -252,7 +266,7 @@ namespace Vulkan {
 		}
 	}
 
-	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset) {
+	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset) {
 		VkMemoryRequirements bufferreq;
 		vkGetBufferMemoryRequirements(VKGPU->Logical_Device, BUFFER, &bufferreq);
 		VkDeviceSize size = bufferreq.size;
@@ -261,95 +275,40 @@ namespace Vulkan {
 		bool Found_Offset = false;
 		VK_MemoryAllocation* MEMALLOC = nullptr;
 		switch (GPUregion) {
-		case SUBALLOCATEBUFFERTYPEs::GPULOCALBUF:
-			MEMALLOC = &GPULOCAL_BUFFERALLOC;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL:
+			MEMALLOC = &VKGPU->GPULOCAL_ALLOC;
 			break;
-		case SUBALLOCATEBUFFERTYPEs::GPULOCALTEX:
-			MEMALLOC = &GPULOCAL_TEXTUREALLOC;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
+			MEMALLOC = &VKGPU->HOSTVISIBLE_ALLOC;
 			break;
-		case SUBALLOCATEBUFFERTYPEs::STAGING:
-			LOG_CRASHING_TAPI("Suballocate_Buffer() has failed because SUBALLOCATEBUFFERTYPE is STAGING!");
-			return TAPI_INVALIDARGUMENT;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
+			MEMALLOC = &VKGPU->FASTHOSTVISIBLE_ALLOC;
+			break;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
+			MEMALLOC = &VKGPU->READBACK_ALLOC;
+			break;
 		default:
 			LOG_CRASHING_TAPI("Suballocate_Buffer() has failed because SUBALLOCATEBUFFERTYPE isn't supported!");
 			return TAPI_NOTCODED;
 		}
-		if (MEMALLOC->Allocated_Blocks.size() == 0) {
-			VK_MemoryBlock FirstBlock;
-			FirstBlock.isEmpty = false;
-			FirstBlock.Size = size;
-			FirstBlock.Offset = 0;
-			MEMALLOC->UnusedSize -= size;
-			MEMALLOC->Allocated_Blocks.push_back(FirstBlock);
-			Offset = FirstBlock.Offset;
-			Found_Offset = true;
-		}
-		for (unsigned int i = 0; i < MEMALLOC->Allocated_Blocks.size() && !Found_Offset; i++) {
-			VK_MemoryBlock& Block = MEMALLOC->Allocated_Blocks[i];
-			if (Block.isEmpty && size < Block.Size && size > Block.Size / 5 * 3) {
-				Block.isEmpty = false;
-				Offset = Block.Offset;
-				Found_Offset = true;
-				break;
-			}
-		}
-		//There is no empty block, so create new one!
-		if (MEMALLOC->UnusedSize > size && Found_Offset) {
-			VK_MemoryBlock& LastBlock = MEMALLOC->Allocated_Blocks[MEMALLOC->Allocated_Blocks.size() - 1];
-			VK_MemoryBlock NewBlock;
-			NewBlock.isEmpty = false;
-			NewBlock.Size = size;
-			NewBlock.Offset = LastBlock.Offset + LastBlock.Size;
-			MEMALLOC->UnusedSize -= size;
-			MEMALLOC->Allocated_Blocks.push_back(NewBlock);
-			Offset = NewBlock.Offset;
-			Found_Offset = true;
-		}
-
-		if (!Found_Offset) {
-			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed because there is no way you can create a buffer at this size!");
-			return TAPI_INVALIDARGUMENT;
-		}
-		
-		if (vkBindBufferMemory(VKGPU->Logical_Device, BUFFER, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
-			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed at vkBindBufferMemory()!");
+		if (!(bufferreq.memoryTypeBits & (1u << MEMALLOC->MemoryTypeIndex))) {
+			LOG_ERROR_TAPI("Intended buffer doesn't support to be stored in specified memory region!");
 			return TAPI_FAIL;
 		}
-		MemoryOffset = Offset;
-		return TAPI_SUCCESS;
-	}
-	TAPIResult GPU_ContentManager::Suballocate_Image(VK_Texture& Texture) {
-		VkMemoryRequirements req;
-		vkGetImageMemoryRequirements(VKGPU->Logical_Device, Texture.Image, &req);
-		VkDeviceSize size = req.size;
-
-		VkDeviceSize Offset = 0;
-		bool Found_Offset = false;
-		VK_MemoryAllocation* MEMALLOC = nullptr;
-		switch (Texture.MEMORYREGION) {
-		case SUBALLOCATEBUFFERTYPEs::STAGING:
-			MEMALLOC = &STAGINGBUFFERALLOC;
-			break;
-		case SUBALLOCATEBUFFERTYPEs::GPULOCALBUF:
-			MEMALLOC = &GPULOCAL_BUFFERALLOC;
-			break;
-		case SUBALLOCATEBUFFERTYPEs::GPULOCALTEX:
-			MEMALLOC = &GPULOCAL_TEXTUREALLOC;
-			break;
-		default:
-			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed because SUBALLOCATEBUFFERTYPE isn't supported!");
-			return TAPI_NOTCODED;
-		}
+		MEMALLOC->Locker.lock();
 		if (MEMALLOC->Allocated_Blocks.size() == 0) {
 			VK_MemoryBlock FirstBlock;
 			FirstBlock.isEmpty = false;
 			FirstBlock.Size = size;
 			FirstBlock.Offset = 0;
-			MEMALLOC->UnusedSize -= size;
+			if (!(MEMALLOC->UnusedSize - size)) {
+				LOG_CRASHING_TAPI("LimitedSubtract_weak() has failed in Suballocate_Buffer(), returning TAPI_FAIL!");
+				return TAPI_FAIL;
+			}
 			MEMALLOC->Allocated_Blocks.push_back(FirstBlock);
-
 			Offset = FirstBlock.Offset;
 			Found_Offset = true;
+			MEMALLOC->Locker.unlock();
 		}
 		for (unsigned int i = 0; i < MEMALLOC->Allocated_Blocks.size() && !Found_Offset; i++) {
 			VK_MemoryBlock& Block = MEMALLOC->Allocated_Blocks[i];
@@ -357,6 +316,7 @@ namespace Vulkan {
 				Block.isEmpty = false;
 				Offset = Block.Offset;
 				Found_Offset = true;
+				MEMALLOC->Locker.unlock();
 				break;
 			}
 		}
@@ -371,6 +331,89 @@ namespace Vulkan {
 			MEMALLOC->Allocated_Blocks.push_back(NewBlock);
 			Offset = NewBlock.Offset;
 			Found_Offset = true;
+			MEMALLOC->Locker.unlock();
+		}
+
+		if (!Found_Offset) {
+			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed because there is no way you can create a buffer at this size!");
+			return TAPI_FAIL;
+		}
+		
+		if (vkBindBufferMemory(VKGPU->Logical_Device, BUFFER, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
+			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed at vkBindBufferMemory()!");
+			return TAPI_FAIL;
+		}
+		MemoryOffset = Offset;
+		return TAPI_SUCCESS;
+	}
+	TAPIResult GPU_ContentManager::Suballocate_Image(VK_Texture& Texture) {
+		VkMemoryRequirements req;
+		vkGetImageMemoryRequirements(VKGPU->Logical_Device, Texture.Image, &req);
+		VkDeviceSize size = req.size; 
+
+		VkDeviceSize Offset = 0;
+		bool Found_Offset = false;
+		VK_MemoryAllocation* MEMALLOC = nullptr;
+		switch (Texture.Block.Type) {
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
+			MEMALLOC = &VKGPU->HOSTVISIBLE_ALLOC;
+			break;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL:
+			MEMALLOC = &VKGPU->GPULOCAL_ALLOC;
+			break;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
+			MEMALLOC = &VKGPU->FASTHOSTVISIBLE_ALLOC;
+			break;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
+			MEMALLOC = &VKGPU->READBACK_ALLOC;
+			break;
+		default:
+			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed because SUBALLOCATEBUFFERTYPE isn't supported!");
+			return TAPI_NOTCODED;
+		}
+		if (!(req.memoryTypeBits & (1u << MEMALLOC->MemoryTypeIndex))) {
+			LOG_ERROR_TAPI("Intended texture doesn't support to be stored in the specified memory region!");
+			return TAPI_FAIL;
+		}
+		MEMALLOC->Locker.lock();
+		if (MEMALLOC->Allocated_Blocks.size() == 0) {
+			if (MEMALLOC->UnusedSize < req.size) {
+				LOG_ERROR_TAPI("Intended texture is bigger than memory allocation itself!");
+				return TAPI_FAIL;
+			}
+			VK_MemoryBlock FirstBlock;
+			FirstBlock.isEmpty = false;
+			FirstBlock.Size = size;
+			FirstBlock.Offset = 0;
+			MEMALLOC->UnusedSize -= size;
+			MEMALLOC->Allocated_Blocks.push_back(FirstBlock);
+
+			Offset = FirstBlock.Offset;
+			Found_Offset = true;
+			MEMALLOC->Locker.unlock();
+		}
+		for (unsigned int i = 0; i < MEMALLOC->Allocated_Blocks.size() && !Found_Offset; i++) {
+			VK_MemoryBlock& Block = MEMALLOC->Allocated_Blocks[i];
+			if (Block.isEmpty && size < Block.Size && size > Block.Size / 5 * 3) {
+				Block.isEmpty = false;
+				Offset = Block.Offset;
+				Found_Offset = true;
+				MEMALLOC->Locker.unlock();
+				break;
+			}
+		}
+		//There is no empty block, so create new one!
+		if (MEMALLOC->UnusedSize > size && !Found_Offset) {
+			VK_MemoryBlock& LastBlock = MEMALLOC->Allocated_Blocks[MEMALLOC->Allocated_Blocks.size() - 1];
+			VK_MemoryBlock NewBlock;
+			NewBlock.isEmpty = false;
+			NewBlock.Size = size;
+			NewBlock.Offset = LastBlock.Offset + LastBlock.Size;
+			MEMALLOC->UnusedSize -= size;
+			MEMALLOC->Allocated_Blocks.push_back(NewBlock);
+			Offset = NewBlock.Offset;
+			Found_Offset = true;
+			MEMALLOC->Locker.unlock();
 		}
 
 		if (!Found_Offset) {
@@ -382,49 +425,8 @@ namespace Vulkan {
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed at VkBindImageMemory()!");
 			return TAPI_FAIL;
 		}
-		Texture.GPUMemoryOffset = Offset;
+		Texture.Block.Offset = Offset;
 		return TAPI_SUCCESS;
-	}
-	VkDeviceSize GPU_ContentManager::Get_StagingBufferOffset(unsigned int size) {
-		if (STAGINGBUFFERALLOC.Allocated_Blocks.size() == 0) {
-			VK_MemoryBlock FirstBlock;
-			FirstBlock.isEmpty = false;
-			FirstBlock.Size = size;
-			FirstBlock.Offset = 0;
-			STAGINGBUFFERALLOC.UnusedSize -= size;
-			STAGINGBUFFERALLOC.Allocated_Blocks.push_back(FirstBlock);
-			return FirstBlock.Offset;
-		}
-		for (unsigned int i = 0; i < STAGINGBUFFERALLOC.Allocated_Blocks.size(); i++) {
-			VK_MemoryBlock& Block = STAGINGBUFFERALLOC.Allocated_Blocks[i];
-			if (Block.isEmpty && size < Block.Size && size > Block.Size / 5 * 3) {
-				Block.isEmpty = false;
-				return Block.Offset;
-			}
-		}
-		//There is no empty block, so create new one!
-		if (STAGINGBUFFERALLOC.UnusedSize > size) {
-			VK_MemoryBlock& LastBlock = STAGINGBUFFERALLOC.Allocated_Blocks[STAGINGBUFFERALLOC.Allocated_Blocks.size() - 1];
-			VK_MemoryBlock NewBlock;
-			NewBlock.isEmpty = false;
-			NewBlock.Size = size;
-			NewBlock.Offset = LastBlock.Offset + LastBlock.Size;
-			STAGINGBUFFERALLOC.UnusedSize -= size;
-			STAGINGBUFFERALLOC.Allocated_Blocks.push_back(NewBlock);
-			return NewBlock.Offset;
-		}
-
-		LOG_CRASHING_TAPI("VKContentManager->Get_StagingBufferOffset() has failed because there isn't enough memory for this staging allocation!");
-		return UINT64_MAX;
-	}
-	void GPU_ContentManager::CopyData_toStagingMemory(const void* data, unsigned int data_size, VkDeviceSize offset) {
-		void* map;
-		vkMapMemory(VKGPU->Logical_Device, STAGINGBUFFERALLOC.Allocated_Memory, offset, data_size, 0, &map);
-		memcpy(map, data, data_size);
-		vkUnmapMemory(VKGPU->Logical_Device, STAGINGBUFFERALLOC.Allocated_Memory);
-	}
-	void GPU_ContentManager::Clear_StagingMemory() {
-		STAGINGBUFFERALLOC.Allocated_Blocks.clear();
 	}
 
 	unsigned int GPU_ContentManager::Calculate_sizeofVertexLayout(const VK_VertexAttribute* const* ATTRIBUTEs, unsigned int count) {
@@ -532,6 +534,36 @@ namespace Vulkan {
 		return false;
 	}
 
+
+	bool GPU_ContentManager::Delete_VertexAttribute(GFX_API::GFXHandle Attribute_ID) {
+		VK_VertexAttribute* FOUND_ATTRIB = GFXHandleConverter(VK_VertexAttribute*, Attribute_ID);
+		//Check if it's still in use in a Layout
+		std::unique_lock<std::mutex> SearchLock;
+		VERTEXATTRIBLAYOUTs.PauseAllOperations(SearchLock);
+		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+			for (unsigned int i = 0; i < VERTEXATTRIBLAYOUTs.size(ThreadID); i++) {
+				VK_VertexAttribLayout* VERTEXATTRIBLAYOUT = VERTEXATTRIBLAYOUTs.get(ThreadID, i);
+				for (unsigned int j = 0; j < VERTEXATTRIBLAYOUT->Attribute_Number; j++) {
+					if (VERTEXATTRIBLAYOUT->Attributes[j] == FOUND_ATTRIB) {
+						return false;
+					}
+				}
+			}
+		}
+		SearchLock.unlock();
+
+
+		unsigned int vector_index = 0;
+		VERTEXATTRIBUTEs.PauseAllOperations(SearchLock);
+		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+			unsigned int elementindex = 0;
+			if (VERTEXATTRIBUTEs.Search(FOUND_ATTRIB, ThreadID, elementindex)) {
+				VERTEXATTRIBUTEs.erase(ThreadID, elementindex);
+				delete FOUND_ATTRIB;
+			}
+		}
+		return true;
+	}
 	TAPIResult GPU_ContentManager::Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) {
 		VK_VertexAttribLayout* Layout = new VK_VertexAttribLayout;
 		Layout->Attribute_Number = Attributes.size();
@@ -568,23 +600,111 @@ namespace Vulkan {
 	void GPU_ContentManager::Delete_VertexAttributeLayout(GFX_API::GFXHandle Layout_ID) {
 		LOG_NOTCODED_TAPI("Delete_VertexAttributeLayout() isn't coded yet!", true);
 	}
-	TAPIResult GPU_ContentManager::Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, const void* Data, unsigned int VertexCount, 
-		const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& VertexBufferHandle) {
-		LOG_NOTCODED_TAPI("GFXContentManager->Create_VertexBuffer() is not coded for TP and data upload yet!", true);
+
+
+	TAPIResult GPU_ContentManager::Create_StagingBuffer(unsigned int DATASIZE, const GFX_API::SUBALLOCATEBUFFERTYPEs& MemoryRegion, GFX_API::GFXHandle& Handle) {
+		if (!DATASIZE) {
+			LOG_ERROR_TAPI("Staging Buffer DATASIZE is zero!");
+			return TAPI_INVALIDARGUMENT;
+		}
+		if (MemoryRegion == GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL) {
+			LOG_ERROR_TAPI("You can't create a staging buffer in DEVICELOCAL memory!");
+			return TAPI_INVALIDARGUMENT;
+		}
+		VkBufferCreateInfo psuedo_ci = {};
+		psuedo_ci.flags = 0;
+		psuedo_ci.pNext = nullptr;
+		if (VKGPU->QUEUEs.size() > 1) {
+			psuedo_ci.sharingMode = VK_SHARING_MODE_CONCURRENT;
+		}
+		else {
+			psuedo_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		}
+		psuedo_ci.pQueueFamilyIndices = VKGPU->AllQueueFamilies;
+		psuedo_ci.queueFamilyIndexCount = VKGPU->QUEUEs.size();
+		psuedo_ci.size = DATASIZE;
+		psuedo_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		psuedo_ci.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+			| VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		VkBuffer Bufferobj;
+		if (vkCreateBuffer(VKGPU->Logical_Device, &psuedo_ci, nullptr, &Bufferobj) != VK_SUCCESS) {
+			LOG_ERROR_TAPI("Intended staging buffer's creation failed at vkCreateBuffer()!");
+			return TAPI_FAIL;
+		}
+		
+		VkDeviceSize Offset = 0;
+		if (Suballocate_Buffer(Bufferobj, MemoryRegion, Offset) != VK_SUCCESS) {
+			LOG_ERROR_TAPI("Suballocation has failed, so staging buffer creation too!");
+			return TAPI_FAIL;
+		}
+		MemoryBlock* StagingBuffer = new MemoryBlock;
+		StagingBuffer->Offset = Offset;
+		StagingBuffer->Type = MemoryRegion;
+		vkDestroyBuffer(VKGPU->Logical_Device, Bufferobj, nullptr);
+		Handle = StagingBuffer;
+		return TAPI_SUCCESS;
+	}
+	TAPIResult GPU_ContentManager::Uploadto_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) {
+		MemoryBlock* SB = GFXHandleConverter(MemoryBlock*, StagingBufferHandle);
+		void* MappedMemory = nullptr;
+		switch (SB->Type) {
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
+			MappedMemory = VKGPU->FASTHOSTVISIBLE_ALLOC.MappedMemory;
+			break;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
+			MappedMemory = VKGPU->HOSTVISIBLE_ALLOC.MappedMemory;
+			break;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
+			MappedMemory = VKGPU->READBACK_ALLOC.MappedMemory;
+			break;
+		default:
+			LOG_NOTCODED_TAPI("This type of memory block isn't supported for a staging buffer! Uploadto_StagingBuffer() has failed!", true);
+			return TAPI_NOTCODED;
+		}
+		VkDeviceSize UploadOFFSET = static_cast<VkDeviceSize>(OFFSET);
+		memcpy(((char*)MappedMemory) + SB->Offset + UploadOFFSET, DATA, DATA_SIZE);
+		return TAPI_SUCCESS;
+	}
+	void GPU_ContentManager::Delete_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle) {
+		MemoryBlock* SB = GFXHandleConverter(MemoryBlock*, StagingBufferHandle);
+		std::vector<VK_MemoryBlock>* MemoryBlockList = nullptr;
+		std::mutex* MutexPTR = nullptr;
+		switch (SB->Type) {
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
+			MutexPTR = &VKGPU->FASTHOSTVISIBLE_ALLOC.Locker;
+			MemoryBlockList = &VKGPU->FASTHOSTVISIBLE_ALLOC.Allocated_Blocks;
+			break;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
+			MutexPTR = &VKGPU->HOSTVISIBLE_ALLOC.Locker;
+			MemoryBlockList = &VKGPU->HOSTVISIBLE_ALLOC.Allocated_Blocks;
+			break;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
+			MutexPTR = &VKGPU->READBACK_ALLOC.Locker;
+			MemoryBlockList = &VKGPU->READBACK_ALLOC.Allocated_Blocks;
+			break;
+		default:
+			LOG_NOTCODED_TAPI("This type of memory block isn't supported for a staging buffer! Delete_StagingBuffer() has failed!", true);
+			return;
+		}
+		MutexPTR->lock();
+		for (unsigned int i = 0; i < MemoryBlockList->size(); i++) {
+			if ((*MemoryBlockList)[i].Offset == SB->Offset) {
+				(*MemoryBlockList)[i].isEmpty = true;
+				MutexPTR->unlock();
+				return;
+			}
+		}
+		MutexPTR->unlock();
+		LOG_ERROR_TAPI("Delete_StagingBuffer() didn't delete any memory!");
+	}
+
+	TAPIResult GPU_ContentManager::Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, unsigned int VertexCount, 
+		GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& VertexBufferHandle) {
 		if (!VertexCount) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because vertex_count is zero!");
 			return TAPI_INVALIDARGUMENT;
 		}
-		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, TransferPassHandle);
-		if (!TP) {
-			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because TransferPass is invalid!");
-			return TAPI_INVALIDARGUMENT;
-		}
 
-		if (TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_COPY || TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_DOWNLOAD) {
-			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because specified TP doesn't support buffer creation, use a BARRIER or UPLOAD TP!");
-			return TAPI_INVALIDARGUMENT;
-		}
 		VK_VertexAttribLayout* Layout = GFXHandleConverter(VK_VertexAttribLayout*, AttributeLayout);
 		if (!Layout) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because Attribute Layout ID is invalid!");
@@ -598,12 +718,13 @@ namespace Vulkan {
 
 		VKMesh->Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
 		VkDeviceSize offset = 0;
-		switch (Suballocate_Buffer(VKMesh->Buffer, SUBALLOCATEBUFFERTYPEs::GPULOCALBUF, offset)) {
-		case TAPI_FAIL:
+		if (Suballocate_Buffer(VKMesh->Buffer, MemoryType, offset) != TAPI_SUCCESS) {
 			LOG_ERROR_TAPI("There is no memory left in specified memory region, please try again later!");
 			return TAPI_FAIL;
 		}
 
+		VKMesh->Block.Offset = offset;
+		VKMesh->Block.Type = MemoryType;
 		VKMesh->Layout = Layout;
 		VKMesh->VERTEX_COUNT = VertexCount;
 		MESHBUFFERs.push_back(GFX->JobSys->GetThisThreadIndex(), VKMesh);
@@ -611,6 +732,12 @@ namespace Vulkan {
 		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::Upload_VertexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset) {
+		VK_VertexBuffer* MESH = GFXHandleConverter(VK_VertexBuffer*, BufferHandle);
+		if (!(MESH->Block.Type == GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE || MESH->Block.Type == GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE)) {
+			LOG_ERROR_TAPI("You can upload a vertex buffer to a buffer that's in either HOSTVISIBLE or FASTHOSTVISIBLE memory region!");
+			return TAPI_FAIL;
+		}
+
 		LOG_NOTCODED_TAPI("Upload_VertexBuffer() isn't coded yet!", true);
 		return TAPI_NOTCODED;
 	}
@@ -619,7 +746,10 @@ namespace Vulkan {
 	void GPU_ContentManager::Unload_VertexBuffer(GFX_API::GFXHandle MeshBuffer_ID) {
 		LOG_NOTCODED_TAPI("VK::Unload_MeshBuffer isn't coded!", true);
 	}
-	TAPIResult GPU_ContentManager::Create_IndexBuffer(const void* Data, unsigned int DataSize, const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& IndexBufferHandle) {
+
+
+
+	TAPIResult GPU_ContentManager::Create_IndexBuffer(unsigned int DataSize, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& IndexBufferHandle) {
 		LOG_NOTCODED_TAPI("Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!", true);
 		return TAPI_NOTCODED;
 	}
@@ -631,30 +761,19 @@ namespace Vulkan {
 		LOG_NOTCODED_TAPI("Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!", true);
 	}
 
-	TAPIResult GPU_ContentManager::Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, const void* DATA, const GFX_API::IMAGEUSAGE& FIRSTUSAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& TextureHandle) {
-		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, TransferPassHandle);
-		if (!TP) {
-			LOG_ERROR_TAPI("GFXContentManager->Create_Texture() has failed because TransferPass is invalid!");
-			return TAPI_INVALIDARGUMENT;
-		}
-		if (TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_COPY || TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_DOWNLOAD) {
-			LOG_ERROR_TAPI("GFXContentManager->Create_Texture() has failed because specified TP doesn't support texture creation, you should use either UPLOAD or BARRIER type of TP!");
-			return TAPI_INVALIDARGUMENT;
-		}
 
-		LOG_NOTCODED_TAPI("GFXContentManager->Create_Texture() should support mipmaps and check the left space in GPU Local memory!", false);
-
+	TAPIResult GPU_ContentManager::Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType,
+		const GFX_API::IMAGEUSAGE& FIRSTUSAGE, GFX_API::GFXHandle& TextureHandle) {
+		LOG_NOTCODED_TAPI("GFXContentManager->Create_Texture() should support mipmaps!", false);
 		VK_Texture* TEXTURE = new VK_Texture;
 		TEXTURE->CHANNELs = TEXTURE_ASSET.Properties.CHANNEL_TYPE;
 		TEXTURE->HEIGHT = TEXTURE_ASSET.HEIGHT;
 		TEXTURE->WIDTH = TEXTURE_ASSET.WIDTH;
 		TEXTURE->DATA_SIZE = TEXTURE_ASSET.WIDTH * TEXTURE_ASSET.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(TEXTURE_ASSET.Properties.CHANNEL_TYPE);
 		TEXTURE->USAGE = TEXTURE_ASSET.USAGE;
-		TEXTURE->MEMORYREGION = SUBALLOCATEBUFFERTYPEs::GPULOCALTEX;
+		TEXTURE->Block.Type = MemoryType;
 
-		//Upload data to the Staging Buffer and create a upload call (which means Staging->GPU Local copy call)
-		VKRENDERER->TransferCall_ImUpload(TP, TEXTURE, Get_StagingBufferOffset(TEXTURE->DATA_SIZE));	//-> This is wrong, there shouldn't happen any upload calls in Create_xxx functions
-		
+		//Create VkImage
 		{
 			VkImageCreateInfo im_ci = {};
 			im_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -686,7 +805,11 @@ namespace Vulkan {
 				return TAPI_FAIL;
 			}
 
-			Suballocate_Image(*TEXTURE);
+			if (Suballocate_Image(*TEXTURE) != TAPI_SUCCESS) {
+				LOG_ERROR_TAPI("Suballocation of the texture has failed! Please re-create later.");
+				delete TEXTURE;
+				return TAPI_FAIL;
+			}
 		}
 
 		//Create Image View
@@ -713,14 +836,18 @@ namespace Vulkan {
 		
 		TEXTUREs.push_back(GFX->JobSys->GetThisThreadIndex(), TEXTURE);
 		TextureHandle = TEXTURE;
+	}
+	TAPIResult GPU_ContentManager::Upload_Texture(GFX_API::GFXHandle TextureHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int TARGETOFFSET) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Upload_Texture(): Uploading the data isn't coded yet!", true);
+		return TAPI_NOTCODED;
 	}
 	void GPU_ContentManager::Unload_Texture(GFX_API::GFXHandle ASSET_ID) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Unload_Texture() isn't coded!", true);
 	}
 
 
-	TAPIResult GPU_ContentManager::Create_GlobalBuffer(const char* BUFFER_NAME, const void* DATA, unsigned int DATA_SIZE, const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle& GlobalBufferHandle) {
+	TAPIResult GPU_ContentManager::Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, 
+		GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Create_GlobalBuffer() isn't coded!", true);
 		if (!VKRENDERER->Is_ConstructingRenderGraph()) {
 			LOG_ERROR_TAPI("GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)!");
@@ -728,7 +855,7 @@ namespace Vulkan {
 		}
 		return TAPI_SUCCESS;
 	}
-	TAPIResult GPU_ContentManager::Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* DATA, unsigned int DATA_SIZE, GFX_API::GFXHandle TransferPassHandle) {
+	TAPIResult GPU_ContentManager::Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int TARGETOFFSET) {
 		LOG_NOTCODED_TAPI("Upload_GlobalBuffer() isn't coded yet!", true);
 		return TAPI_NOTCODED;
 	}
@@ -770,7 +897,6 @@ namespace Vulkan {
 		LOG_NOTCODED_TAPI("VK::Delete_ComputeShader isn't coded!", true);
 	}
 	TAPIResult GPU_ContentManager::Link_MaterialType(const GFX_API::Material_Type& MATTYPE_ASSET, GFX_API::GFXHandle& MaterialHandle) {
-		LOG_NOTCODED_TAPI("You forgot to use Inherited RT SlotSets instead of the Base SlotSets!", true);
 		if (VKRENDERER->Is_ConstructingRenderGraph()) {
 			LOG_ERROR_TAPI("You can't link a Material Type while recording RenderGraph!");
 			return TAPI_WRONGTIMING;
@@ -782,7 +908,7 @@ namespace Vulkan {
 			return TAPI_INVALIDARGUMENT;
 		}
 		VK_SubDrawPass* Subpass = GFXHandleConverter(VK_SubDrawPass*, MATTYPE_ASSET.SubDrawPass_ID);
-		if (Subpass->SLOTSET != MATTYPE_ASSET.RTSLOTSET_ID) {
+		if (Subpass->SLOTSET != MATTYPE_ASSET.IRTSLOTSET_ID) {
 			LOG_ERROR_TAPI("Link_MaterialType() has failed because Material Type's RenderTarget SlotSet doesn't match with the SubDrawPass'!");
 			return TAPI_FAIL;
 		}
@@ -924,7 +1050,7 @@ namespace Vulkan {
 						}
 
 						VkDescriptorSetLayoutBinding bn = {};
-						bn.stageFlags = Find_VkStages(gfxdesc.SHADERSTAGEs);
+						bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
 						bn.pImmutableSamplers = VK_NULL_HANDLE;
 						bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
 						bn.descriptorCount = 1;		//I don't support array descriptors for now!
@@ -977,7 +1103,7 @@ namespace Vulkan {
 							}
 						}
 						VkDescriptorSetLayoutBinding bn = {};
-						bn.stageFlags = Find_VkStages(gfxdesc.SHADERSTAGEs);
+						bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
 						bn.pImmutableSamplers = VK_NULL_HANDLE;
 						bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
 						bn.descriptorCount = 1;		//I don't support array descriptors for now!
@@ -1358,167 +1484,4 @@ namespace Vulkan {
 		return TAPI_SUCCESS;
 	}
 
-
-
-
-	//HELPER FUNCTIONs
-	bool GPU_ContentManager::Delete_VertexAttribute(GFX_API::GFXHandle Attribute_ID) {
-		VK_VertexAttribute* FOUND_ATTRIB = GFXHandleConverter(VK_VertexAttribute*, Attribute_ID);
-		//Check if it's still in use in a Layout
-		std::unique_lock<std::mutex> SearchLock;
-		VERTEXATTRIBLAYOUTs.PauseAllOperations(SearchLock);
-		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-			for (unsigned int i = 0; i < VERTEXATTRIBLAYOUTs.size(ThreadID); i++) {
-				VK_VertexAttribLayout* VERTEXATTRIBLAYOUT = VERTEXATTRIBLAYOUTs.get(ThreadID, i);
-				for (unsigned int j = 0; j < VERTEXATTRIBLAYOUT->Attribute_Number; j++) {
-					if (VERTEXATTRIBLAYOUT->Attributes[j] == FOUND_ATTRIB) {
-						return false;
-					}
-				}
-			}
-		}
-		SearchLock.unlock();
-
-
-		unsigned int vector_index = 0;
-		VERTEXATTRIBUTEs.PauseAllOperations(SearchLock);
-		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-			unsigned int elementindex = 0;
-			if (VERTEXATTRIBUTEs.Search(FOUND_ATTRIB, ThreadID, elementindex)) {
-				VERTEXATTRIBUTEs.erase(ThreadID, elementindex);
-				delete FOUND_ATTRIB;
-			}
-		}
-		return true;
-	}
-
-	/*
-	VK_GlobalBuffer* GPU_ContentManager::Find_GlobalBuffer_byID(unsigned int GlobalBufferID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < GLOBALBUFFERs.size(); i++) {
-			if (GLOBALBUFFERs[i]->ID == GlobalBufferID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return GLOBALBUFFERs[i];
-			}
-		}
-		LOG_WARNING("Intended Global Buffer isn't found in GPU_ContentManager!");
-		return nullptr;
-	}
-	VK_Mesh* GPU_ContentManager::Find_MeshBuffer_byID(unsigned int BufferID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < MESHBUFFERs.size(); i++) {
-			if (MESHBUFFERs[i]->ID == BufferID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return MESHBUFFERs[i];
-			}
-		}
-		LOG_WARNING("Intended Mesh Buffer isn't found in GPU_ContentManager!");
-		return nullptr;
-	}
-	VK_Texture* GPU_ContentManager::Find_GFXTexture_byID(unsigned int Texture_AssetID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < TEXTUREs.size(); i++) {
-			VK_Texture* TEXTURE = TEXTUREs[i];
-			if (TEXTURE->ASSET_ID == Texture_AssetID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return TEXTURE;
-			}
-		}
-		LOG_WARNING("Intended Texture isn't uploaded to GPU!" + to_string(Texture_AssetID));
-		return nullptr;
-	}
-	VK_ShaderSource* GPU_ContentManager::Find_GFXShaderSource_byID(unsigned int ShaderSource_AssetID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < SHADERSOURCEs.size(); i++) {
-			VK_ShaderSource* SHADERSOURCE = SHADERSOURCEs[i];
-			if (SHADERSOURCE->ASSET_ID == ShaderSource_AssetID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return SHADERSOURCE;
-			}
-		}
-		LOG_WARNING("Intended ShaderSource isn't uploaded to GPU!");
-		return nullptr;
-	}
-	/* GPU_ContentManager::Find_GFXComputeShader_byID(unsigned int ComputeShader_AssetID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < COMPUTESHADERs.size(); i++) {
-			GFX_API::GFX_ComputeShader& SHADERSOURCE = COMPUTESHADERs[i];
-			if (SHADERSOURCE.ASSET_ID == ComputeShader_AssetID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return &SHADERSOURCE;
-			}
-		}
-		LOG_WARNING("Intended ComputeShader isn't uploaded to GPU!");
-		return nullptr;
-	}
-	VK_GraphicsPipeline* GPU_ContentManager::Find_GFXShaderProgram_byID(unsigned int ShaderProgram_AssetID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < SHADERPROGRAMs.size(); i++) {
-			VK_GraphicsPipeline* SHADERPROGRAM = SHADERPROGRAMs[i];
-			if (SHADERPROGRAM->ASSET_ID == ShaderProgram_AssetID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return SHADERPROGRAM;
-			}
-		}
-		LOG_WARNING("Intended ShaderProgram isn't uploaded to GPU!");
-		return nullptr;
-	}
-	VK_PipelineInstance* GPU_ContentManager::Find_GFXShaderPInstance_byID(unsigned int ShaderPInstance_AssetID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < SHADERPINSTANCEs.size(); i++) {
-			VK_PipelineInstance* INSTANCE = SHADERPINSTANCEs[i];
-			if (INSTANCE->ASSET_ID == ShaderPInstance_AssetID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return INSTANCE;
-			}
-		}
-		LOG_WARNING("Intended Shader Program Instance isn't uploaded to GPU!");
-		return nullptr;
-	}
-	VK_VertexAttribute* GPU_ContentManager::Find_VertexAttribute_byID(unsigned int AttributeID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < VERTEXATTRIBUTEs.size(); i++) {
-			VK_VertexAttribute* ATTRIBUTE = VERTEXATTRIBUTEs[i];
-			if (ATTRIBUTE->ID == AttributeID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return ATTRIBUTE;
-			}
-		}
-		LOG_WARNING("Find_VertexAttribute_byID has failed! ID: " + to_string(AttributeID));
-		return nullptr;
-	}
-	VK_VertexAttribLayout* GPU_ContentManager::Find_VertexAttributeLayout_byID(unsigned int LayoutID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < VERTEXATTRIBLAYOUTs.size(); i++) {
-			VK_VertexAttribLayout* LAYOUT = VERTEXATTRIBLAYOUTs[i];
-			if (LAYOUT->ID == LayoutID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return LAYOUT;
-			}
-		}
-		LOG_WARNING("Find_VertexAttributeLayout_byID has failed! ID: " + to_string(LayoutID));
-		return nullptr;
-	}
-	VK_RTSLOTSET* GPU_ContentManager::Find_RTSLOTSET_byID(unsigned int SlotSetID, unsigned int* vector_index) {
-		for (unsigned int i = 0; i < RT_SLOTSETs.size(); i++) {
-			VK_RTSLOTSET* SLOTSET = RT_SLOTSETs[i];
-			if (SLOTSET->ID == SlotSetID) {
-				if (vector_index) {
-					*vector_index = i;
-				}
-				return SLOTSET;
-			}
-		}
-		LOG_WARNING("Find_RTSLOTSET_byID has failed! ID: " + to_string(SlotSetID));
-		return nullptr;
-	}*/
 }

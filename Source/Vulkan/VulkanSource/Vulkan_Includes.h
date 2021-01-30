@@ -20,13 +20,23 @@ namespace Vulkan {
 		//bool is_VTMEMsupported : 1;	Not supported for now!
 	};
 
+	struct VK_CommandBuffer {
+		VkCommandBuffer CB;
+		bool is_Used = false;
+	};
+
 	struct VK_CommandPool {
 		std::mutex Sync;
-		vector<VkCommandBuffer> CBs;
+		vector<VK_CommandBuffer> CBs;
 		VkCommandPool CPHandle;
 		VK_CommandPool();
 		VK_CommandPool(const VK_CommandPool& RefCP);
 		void operator= (const VK_CommandPool& RefCP);
+	};
+
+	struct VK_Fence {
+		VkFence Fence_o;
+		bool is_Used = false;
 	};
 
 	struct VK_API VK_QUEUE {
@@ -34,10 +44,25 @@ namespace Vulkan {
 		VkQueue Queue;
 		uint32_t QueueFamilyIndex;
 		VK_CommandPool CommandPool;
-		VkFence RenderGraphFences[2];
+		VK_Fence RenderGraphFences[2];
 		vector<GFX_API::GFXHandle> ActiveSubmits;
 		unsigned char QueueFeatureScore = 0;
 		VK_QUEUE();
+	};
+
+	struct VK_API VK_MemoryBlock {
+		VkDeviceSize Size = 0, Offset = 0;
+		bool isEmpty = true;
+	};
+
+	struct VK_API VK_MemoryAllocation {
+		uint32_t FullSize, UnusedSize, MemoryTypeIndex;
+		void* MappedMemory;
+
+		VkDeviceMemory Allocated_Memory;
+		std::mutex Locker;
+		std::vector<VK_MemoryBlock> Allocated_Blocks;
+		VK_MemoryAllocation();
 	};
 
 	struct VK_API GPU {
@@ -52,7 +77,8 @@ namespace Vulkan {
 		vector<VkExtensionProperties> Supported_DeviceExtensions;
 		vector<const char*>* Required_DeviceExtensionNames;
 
-		unsigned int Find_vkMemoryTypeIndex(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+		VK_MemoryAllocation		GPULOCAL_ALLOC, HOSTVISIBLE_ALLOC, FASTHOSTVISIBLE_ALLOC, READBACK_ALLOC;
 		uint32_t* AllQueueFamilies;
 		//This function searches the best queue that has least specs but needed specs
 		//For example: Queue 1->Graphics,Transfer,Compute - Queue 2->Transfer, Compute - Queue 3->Transfer
@@ -80,7 +106,7 @@ namespace Vulkan {
 		VkSwapchainKHR Window_SwapChain = {};
 		GLFWwindow* GLFW_WINDOW = {};
 		unsigned char PresentationWaitSemaphoreIndexes[2];
-		vector<GFX_API::GFXHandle> Swapchain_Textures;
+		GFX_API::GFXHandle Swapchain_Textures[2];
 		VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
 		vector<VkSurfaceFormatKHR> SurfaceFormats;
 		vector<VkPresentModeKHR> PresentationModes;
@@ -127,14 +153,8 @@ namespace Vulkan {
 	VK_API VkFormat Find_VkFormat_byDataType(GFX_API::DATA_TYPE datatype);
 	VK_API VkFormat Find_VkFormat_byTEXTURECHANNELs(GFX_API::TEXTURE_CHANNELs channels);
 	VK_API VkAttachmentLoadOp Find_VkLoadOp_byAttachmentReadState(GFX_API::DRAWPASS_LOAD readstate);
-	VK_API VkShaderStageFlags Find_VkStages(GFX_API::SHADERSTAGEs_FLAG flag);
-	VK_API VkDescriptorType Find_VkDescType_byVisibility(GFX_API::BUFFER_VISIBILITY BUFVIS);
+	VK_API VkShaderStageFlags Find_VkShaderStages(GFX_API::SHADERSTAGEs_FLAG flag);
+	VkPipelineStageFlags Find_VkPipelineStages(GFX_API::SHADERSTAGEs_FLAG flag);
 	VK_API VkDescriptorType Find_VkDescType_byMATDATATYPE(GFX_API::MATERIALDATA_TYPE TYPE);
 
-	enum VK_API class SUBALLOCATEBUFFERTYPEs : unsigned char {
-		NOWHERE,
-		STAGING,
-		GPULOCALBUF,
-		GPULOCALTEX
-	};
 }

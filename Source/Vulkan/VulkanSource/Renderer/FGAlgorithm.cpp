@@ -2,6 +2,7 @@
 #include "VK_GPUContentManager.h"
 #include "Vulkan/VulkanSource/Renderer/Vulkan_Resource.h"
 #include "TuranAPI/Profiler_Core.h"
+#include "GFX/GFX_Core.h"
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
 #define VKContentManager ((Vulkan::GPU_ContentManager*)GFXContentManager)
 #define VKGPU (((Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
@@ -11,12 +12,12 @@
 namespace Vulkan {
 	struct VK_GeneralPass {
 		GFX_API::GFXHandle Handle;
-		TPType TYPE;
+		PassType TYPE;
 		vector<GFX_API::PassWait_Description>* WAITs;
 		string* PASSNAME;
 	};
 
-	TPType FindWaitedTPType(GFX_API::SHADERSTAGEs_FLAG flag);
+	PassType FindWaitedPassType(GFX_API::SHADERSTAGEs_FLAG flag);
 
 	struct VK_GeneralPassLinkedList {
 		VK_GeneralPass* CurrentGP = nullptr;
@@ -87,20 +88,20 @@ namespace Vulkan {
 		flag.is_TRANSFERsupported = false;
 		flag.is_PRESENTATIONsupported = false;
 		switch (GP->TYPE) {
-		case TPType::DP:
+		case PassType::DP:
 			flag.is_GRAPHICSsupported = true;
 			break;
-		case TPType::TP:
+		case PassType::TP:
 			if (GFXHandleConverter(VK_TransferPass*, GP->Handle)->TYPE == GFX_API::TRANFERPASS_TYPE::TP_BARRIER) {
 				//All is false means any queue can call this pass!
 				break;
 			}
 			flag.is_TRANSFERsupported = true;
 			break;
-		case TPType::CP:
+		case PassType::CP:
 			flag.is_COMPUTEsupported = true;
 			break;
-		case TPType::WP:
+		case PassType::WP:
 			flag.is_PRESENTATIONsupported = true;
 			break;
 		default:
@@ -138,13 +139,13 @@ namespace Vulkan {
 		for (unsigned int GPIndex = 0; GPIndex < RB.PassCount; GPIndex++) {
 			VK_BranchPass& Pass = RB.CorePasses[GPIndex];
 			switch (Pass.TYPE) {
-			case TPType::DP:
-				std::cout << "Execution Order: " + to_string(GPIndex) + " and DP Name: " + GFXHandleConverter(VK_DrawPassInstance*, Pass.Handle)->BasePass->NAME << std::endl;
+			case PassType::DP:
+				std::cout << "Execution Order: " + to_string(GPIndex) + " and DP Name: " + GFXHandleConverter(VK_DrawPass*, Pass.Handle)->NAME << std::endl;
 				break;
-			case TPType::TP:
+			case PassType::TP:
 				std::cout << "Execution Order: " + to_string(GPIndex) + " and TP Name: " + GFXHandleConverter(VK_TransferPass*, Pass.Handle)->NAME << std::endl;
 				break;
-			case TPType::WP:
+			case PassType::WP:
 				std::cout << "Execution Order: " + to_string(GPIndex) + " and WP Name: " + GFXHandleConverter(VK_WindowPass*, Pass.Handle)->NAME << std::endl;
 				break;
 			default:
@@ -253,7 +254,7 @@ namespace Vulkan {
 			bool is_RPCreated = false;
 			for (unsigned int WaitIndex = 0; WaitIndex < GP->WAITs->size() && !is_RPCreated; WaitIndex++) {
 				GFX_API::PassWait_Description& Waitdesc = (*GP->WAITs)[WaitIndex];
-				if (Waitdesc.WaitLastFramesPass || FindWaitedTPType(Waitdesc.WaitedStage) == TPType::WP) {
+				if (Waitdesc.WaitLastFramesPass || FindWaitedPassType(Waitdesc.WaitedStage) == PassType::WP) {
 					LFD_RPs.push_back(Create_NewRP(GP, RPs));
 					is_RPCreated = true;
 					ListHeader = DeleteGP_FromGPLinkedList(ListHeader, GP);
@@ -275,7 +276,7 @@ namespace Vulkan {
 			for (unsigned int LFDRPIndex = 0; LFDRPIndex < LFD_RPs.size() && !is_RPCreated; LFDRPIndex++) {
 				for (unsigned int LFDRPWaitIndex = 0; LFDRPWaitIndex < LFD_RPs[LFDRPIndex]->ExecutionOrder[0]->WAITs->size(); LFDRPWaitIndex++) {
 					GFX_API::PassWait_Description& Waitdesc = (*LFD_RPs[LFDRPIndex]->ExecutionOrder[0]->WAITs)[LFDRPWaitIndex];
-					if ((Waitdesc.WaitLastFramesPass || FindWaitedTPType(Waitdesc.WaitedStage) == TPType::WP) && *Waitdesc.WaitedPass == GP->Handle) {
+					if ((Waitdesc.WaitLastFramesPass || FindWaitedPassType(Waitdesc.WaitedStage) == PassType::WP) && *Waitdesc.WaitedPass == GP->Handle) {
 						NFD_RPs.push_back(Create_NewRP(GP, RPs));
 						is_RPCreated = true;
 						ListHeader = DeleteGP_FromGPLinkedList(ListHeader, GP);
@@ -296,8 +297,11 @@ namespace Vulkan {
 			VK_GeneralPass* NFDRP_Pass = NFD_RPs[NFDRPIndex]->ExecutionOrder[0];
 			CurrentCheck = ListHeader;
 
+			if (!CurrentCheck) {
+				continue;
+			}
 			//This is an exception, because passes that waits for a window pass with "WaitLastFrame == false" are already in their own RPs
-			if (CurrentCheck->CurrentGP->TYPE == TPType::WP) {
+			if (CurrentCheck->CurrentGP->TYPE == PassType::WP) {
 				continue;
 			}
 			while (CurrentCheck) {
@@ -305,7 +309,7 @@ namespace Vulkan {
 				bool is_RPCreated = false;
 				for (unsigned int WaitIndex = 0; WaitIndex < RPlessPass->WAITs->size() && !is_RPCreated; WaitIndex++) {
 					GFX_API::PassWait_Description& Waitdesc = (*RPlessPass->WAITs)[WaitIndex];
-					if (!Waitdesc.WaitLastFramesPass && FindWaitedTPType(Waitdesc.WaitedStage) != TPType::WP && *Waitdesc.WaitedPass == NFDRP_Pass->Handle) {
+					if (!Waitdesc.WaitLastFramesPass && FindWaitedPassType(Waitdesc.WaitedStage) != PassType::WP && *Waitdesc.WaitedPass == NFDRP_Pass->Handle) {
 						STEP3_RPs.push_back(Create_NewRP(RPlessPass, RPs));
 						is_RPCreated = true;
 						ListHeader = DeleteGP_FromGPLinkedList(ListHeader, RPlessPass);
@@ -453,6 +457,9 @@ namespace Vulkan {
 	//This is a Recursive Function that calls itself to find or create a Rendering Path for each of the RPless_passes
 	//But has "new"s that isn't followed by "delete", fix it when you have time
 	void FindPasses_dependentRPs(VK_GeneralPassLinkedList* RPless_passes, vector<VK_RenderingPath*>& RPs) {
+		if (!RPless_passes) {
+			return;
+		}
 		if (!RPless_passes->CurrentGP) {
 			return;
 		}
@@ -542,7 +549,7 @@ namespace Vulkan {
 				for (unsigned int WaitPassIndex = 0; WaitPassIndex < GP_Find->WAITs->size() && !break_allloops; WaitPassIndex++) {
 					GFX_API::PassWait_Description& Waitdesc = (*GP_Find->WAITs)[WaitPassIndex];
 					if (Waitdesc.WaitLastFramesPass
-						|| FindWaitedTPType(Waitdesc.WaitedStage) == TPType::WP //I don't know if this should be here!
+						|| FindWaitedPassType(Waitdesc.WaitedStage) == PassType::WP //I don't know if this should be here!
 						) {
 						LOG_NOTCODED_TAPI("I added a condition but don't think it will work!", false);
 						continue;
@@ -605,39 +612,37 @@ namespace Vulkan {
 		}
 	}
 	void Create_VkFrameBuffers(VK_BranchPass* DrawPassInstance, unsigned int FrameGraphIndex) {
-		LOG_NOTCODED_TAPI("VulkanRenderer: Create_VkFrameBuffers() is capable of creating more than one of the same VkFramebuffer objects, fix it when you have time!", false);
-		if (DrawPassInstance->TYPE != TPType::DP) {
+		if (DrawPassInstance->TYPE != PassType::DP) {
 			return;
 		}
 
-		VK_DrawPassInstance* RenderPassInstance = GFXHandleConverter(VK_DrawPassInstance*, DrawPassInstance->Handle);
+		VK_DrawPass* DP = GFXHandleConverter(VK_DrawPass*, DrawPassInstance->Handle);
 
-		LOG_NOTCODED_TAPI("VulkanRenderer: Create_DrawPassVkFrameBuffers() has failed because Color Slot creation should support back-buffered RT SLOTs! More information in FGAlgorithm.cpp line 410.", true);
-		/*
-		VkFramebuffer generation has failed now because users should be able to use different RTs for different frames
-		For example: Swapchain's one image should be used for FrameIndex = 0, other image should be used for FrameIndex = 1
-		This information should be passed at SlotSet creation process
-		*/
+
 		vector<VkImageView> Attachments;
-		for (unsigned int i = 0; i < RenderPassInstance->BasePass->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLORSLOTs_COUNT; i++) {
-			VK_Texture* VKTexture = RenderPassInstance->BasePass->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLOR_SLOTs[i].RT;
+		for (unsigned int i = 0; i < DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLORSLOTs_COUNT; i++) {
+			VK_Texture* VKTexture = DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLOR_SLOTs[i].RT;
+			if (!VKTexture->ImageView) {
+				LOG_CRASHING_TAPI("One of your RTs doesn't have a VkImageView! You can't use such a texture as RT. Generally this case happens when you forgot to specify your swapchain texture's usage (while creating a window).");
+				return;
+			}
 			Attachments.push_back(VKTexture->ImageView);
 		}
-		if (RenderPassInstance->BasePass->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].DEPTHSTENCIL_SLOT) {
-			Attachments.push_back(RenderPassInstance->BasePass->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].DEPTHSTENCIL_SLOT->RT->ImageView);
+		if (DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].DEPTHSTENCIL_SLOT) {
+			Attachments.push_back(DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].DEPTHSTENCIL_SLOT->RT->ImageView);
 		}
 		VkFramebufferCreateInfo FrameBuffer_ci = {};
 		FrameBuffer_ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		FrameBuffer_ci.renderPass = RenderPassInstance->BasePass->RenderPassObject;
+		FrameBuffer_ci.renderPass = DP->RenderPassObject;
 		FrameBuffer_ci.attachmentCount = Attachments.size();
 		FrameBuffer_ci.pAttachments = Attachments.data();
-		FrameBuffer_ci.width = RenderPassInstance->BasePass->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLOR_SLOTs[0].RT->WIDTH;
-		FrameBuffer_ci.height = RenderPassInstance->BasePass->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLOR_SLOTs[0].RT->HEIGHT;
+		FrameBuffer_ci.width = DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLOR_SLOTs[0].RT->WIDTH;
+		FrameBuffer_ci.height = DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLOR_SLOTs[0].RT->HEIGHT;
 		FrameBuffer_ci.layers = 1;
 		FrameBuffer_ci.pNext = nullptr;
 		FrameBuffer_ci.flags = 0;
 
-		if (vkCreateFramebuffer(VKGPU->Logical_Device, &FrameBuffer_ci, nullptr, &RenderPassInstance->Framebuffer) != VK_SUCCESS) {
+		if (vkCreateFramebuffer(VKGPU->Logical_Device, &FrameBuffer_ci, nullptr, &DP->FBs[FrameGraphIndex]) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("Renderer::Create_DrawPassFrameBuffers() has failed!");
 			return;
 		}
@@ -655,7 +660,7 @@ namespace Vulkan {
 			for (unsigned char DPIndex = 0; DPIndex < DrawPasses.size(); DPIndex++) {
 				VK_DrawPass* DP = DrawPasses[DPIndex];
 				VK_GeneralPass GP;
-				GP.TYPE = TPType::DP;
+				GP.TYPE = PassType::DP;
 				GP.Handle = DP;
 				GP.WAITs = &DP->WAITs;
 				GP.PASSNAME = &DP->NAME;
@@ -665,7 +670,7 @@ namespace Vulkan {
 			for (unsigned char WPIndex = 0; WPIndex < WindowPasses.size(); WPIndex++) {
 				VK_WindowPass* WP = WindowPasses[WPIndex];
 				VK_GeneralPass GP;
-				GP.TYPE = TPType::WP;
+				GP.TYPE = PassType::WP;
 				GP.Handle = WP;
 				GP.WAITs = &WP->WAITs;
 				GP.PASSNAME = &WP->NAME;
@@ -675,7 +680,7 @@ namespace Vulkan {
 			for (unsigned char TPIndex = 0; TPIndex < TransferPasses.size(); TPIndex++) {
 				VK_TransferPass* TP = TransferPasses[TPIndex];
 				VK_GeneralPass GP;
-				GP.TYPE = TPType::TP;
+				GP.TYPE = PassType::TP;
 				GP.Handle = TP;
 				GP.WAITs = &TP->WAITs;
 				GP.PASSNAME = &TP->NAME;
@@ -689,7 +694,7 @@ namespace Vulkan {
 					is_RootDP = true;
 				}
 				for (unsigned char WaitIndex = 0; WaitIndex < DP->WAITs.size(); WaitIndex++) {
-					if (!DP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedTPType(DP->WAITs[WaitIndex].WaitedStage) != TPType::WP) {
+					if (!DP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedPassType(DP->WAITs[WaitIndex].WaitedStage) != PassType::WP) {
 						is_RootDP = false;
 					}
 				}
@@ -708,7 +713,7 @@ namespace Vulkan {
 					is_RootWP = true;
 				}
 				for (unsigned char WaitIndex = 0; WaitIndex < WP->WAITs.size(); WaitIndex++) {
-					if (!WP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedTPType(WP->WAITs[WaitIndex].WaitedStage) != TPType::WP) {
+					if (!WP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedPassType(WP->WAITs[WaitIndex].WaitedStage) != PassType::WP) {
 						is_RootWP = false;
 					}
 				}
@@ -727,7 +732,7 @@ namespace Vulkan {
 					is_RootTP = true;
 				}
 				for (unsigned char WaitIndex = 0; WaitIndex < TP->WAITs.size(); WaitIndex++) {
-					if (!TP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedTPType(TP->WAITs[WaitIndex].WaitedStage) != TPType::WP) {
+					if (!TP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedPassType(TP->WAITs[WaitIndex].WaitedStage) != PassType::WP) {
 						is_RootTP = false;
 					}
 				}
@@ -792,23 +797,21 @@ namespace Vulkan {
 						VK_GeneralPass* GP = RP->ExecutionOrder[PassIndex];
 
 						switch (GP->TYPE) {
-							case TPType::DP:
+							case PassType::DP:
 							{
-								VK_DrawPassInstance* DPInstance = new VK_DrawPassInstance;
-								DPInstance->BasePass = GFXHandleConverter(VK_DrawPass*, RP->ExecutionOrder[0]->Handle);
-	
 								Branch.CorePasses[PassIndex].TYPE = GP->TYPE;
-								Branch.CorePasses[PassIndex].Handle = DPInstance;
+								//Branch.CorePasses[PassIndex].Handle = GFXHandleConverter(VK_DrawPass*, RP->ExecutionOrder[0]->Handle);
+								Branch.CorePasses[PassIndex].Handle = GP->Handle;
 								Create_VkFrameBuffers(&Branch.CorePasses[PassIndex], FGIndex);
 							}
 							break;
-							case TPType::TP:
+							case PassType::TP:
 							{
 								Branch.CorePasses[PassIndex].TYPE = GP->TYPE;
 								Branch.CorePasses[PassIndex].Handle = GP->Handle;	//Which means Handle is VK_TransferPass*
 							}
 							break;
-							case TPType::WP:
+							case PassType::WP:
 							{
 								Branch.CorePasses[PassIndex].Handle = GP->Handle;
 								Branch.CorePasses[PassIndex].TYPE = GP->TYPE;
@@ -839,7 +842,7 @@ namespace Vulkan {
 						unsigned int CFDRPCountNaive = RP->CFDependentRPs.size();
 						for (unsigned int CFDRPIndex = 0; CFDRPIndex < RP->CFDependentRPs.size(); CFDRPIndex++) {
 							VK_RenderingPath* CFDRP = RP->CFDependentRPs[CFDRPIndex];
-							if (CFDRP->ExecutionOrder[0]->TYPE == TPType::WP) {
+							if (CFDRP->ExecutionOrder[0]->TYPE == PassType::WP) {
 								CFDRPCountNaive--;
 							}
 						}
@@ -856,7 +859,7 @@ namespace Vulkan {
 						FillBranch.CFDependentBranches = new VK_RGBranch * [FillBranch.CFDependentBranchCount];
 					}
 					//A WP is an end point of the framegraph, so this is not Later Executes.
-					if (FillBranch.CorePasses[0].TYPE != TPType::WP) {
+					if (FillBranch.CorePasses[0].TYPE != PassType::WP) {
 						FillBranch.LaterExecutedBranchCount = RP->CFLaterExecutedRPs.size();
 						if (FillBranch.LaterExecutedBranchCount) {
 							FillBranch.LaterExecutedBranches = new VK_RGBranch * [FillBranch.LaterExecutedBranchCount];
@@ -884,7 +887,7 @@ namespace Vulkan {
 								VK_RGBranch& CFDBranch = FrameGraphs[FGIndex].FrameGraphTree[BranchSearchIndex];
 								if (SearchID == CFDBranch.ID) {
 									//It depends on penultimate window pass, so we should add id 
-									if (CFDBranch.CorePasses[0].TYPE == TPType::WP) {
+									if (CFDBranch.CorePasses[0].TYPE == PassType::WP) {
 										FillBranch.PenultimateSwapchainBranches[PenultimateWindowPassIndex] = &FrameGraphs[FGIndex].FrameGraphTree[BranchSearchIndex];
 										PenultimateWindowPassIndex++;
 										is_found = true;
@@ -941,18 +944,29 @@ namespace Vulkan {
 	}
 	//Each framegraph is constructed as same, so there is no difference about passing different framegraphs here
 	void Create_VkDataofRGBranches(const VK_FrameGraph& FrameGraph, vector<VK_Semaphore>& Semaphores) {
-		for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraph.CurrentFrameSubmits.size(); SubmitIndex++) {
-			VK_Submit* Submit = FrameGraph.CurrentFrameSubmits[SubmitIndex];
+		for (unsigned char BranchIndex = 0; BranchIndex < FrameGraph.BranchCount; BranchIndex++) {
+			VK_RGBranch& MainBranch = FrameGraph.FrameGraphTree[BranchIndex];
 
 			bool isWPonly = false;
-			if (FrameGraph.FrameGraphTree[Submit->BranchIndexes[0] - 1].CorePasses[0].TYPE == TPType::WP) {
+			if (MainBranch.CorePasses[0].TYPE == PassType::WP) {
 				LOG_STATUS_TAPI("There is one Window Pass only branch, we don't create a CB for it!");
 				isWPonly = true;
 			}
 
+
 			//Create Command Buffers if submit is not Window Pass only
-			if(!isWPonly){
-				VK_CommandPool& CP = Submit->Run_Queue->CommandPool;
+			if (isWPonly) {
+				continue;
+			}
+
+			//For each possible queue for the branch, create a command buffer in the related pool!
+			for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+				VK_QUEUE& VKQUEUE = VKGPU->QUEUEs[QueueIndex];
+				if (!VKGPU->DoesQueue_Support(&VKGPU->QUEUEs[QueueIndex], MainBranch.CFNeeded_QueueSpecs)) {
+					continue;
+				}
+				VK_CommandPool& CP = VKQUEUE.CommandPool;
+
 
 				VkCommandBufferAllocateInfo cb_ai = {};
 				cb_ai.commandBufferCount = 2;
@@ -967,14 +981,18 @@ namespace Vulkan {
 					LOG_CRASHING_TAPI("vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
 					return;
 				}
+				VK_CommandBuffer VK_CB[2];
+				VK_CB[0].CB = NewCBs[0];
+				VK_CB[1].CB = NewCBs[1];
+				VK_CB[0].is_Used = false;
+				VK_CB[1].is_Used = false;
 
-				CP.CBs.push_back(NewCBs[0]);
-				CP.CBs.push_back(NewCBs[1]);
+				CP.CBs.push_back(VK_CB[0]);
+				CP.CBs.push_back(VK_CB[1]);
 			}
 		}
 
-		unsigned int SemaphoreCount = FrameGraph.CurrentFrameSubmits.size() * 2;
-		Semaphores.clear();
+		unsigned int SemaphoreCount = FrameGraph.BranchCount * 2;
 
 
 		for (unsigned int SemaphoreIndex = 0; SemaphoreIndex < SemaphoreCount; SemaphoreIndex++) {
@@ -1099,6 +1117,8 @@ namespace Vulkan {
 		for (unsigned char LFDBranchIndex = 0; LFDBranchIndex < MainBranch.LFDynamicDependents.size(); LFDBranchIndex++) {
 			VK_Submit* LFDSubmit = LastFG->FrameGraphTree[MainBranch.LFDynamicDependents[LFDBranchIndex]].AttachedSubmit;
 			NewSubmit->WaitSemaphoreIndexes.push_back(LFDSubmit->SignalSemaphoreIndex);
+			//This is laziness but there is gonna probably a little gain while searching for a more "tight" one cost more 
+			NewSubmit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 		}
 
 		//Set wait semaphores
@@ -1270,6 +1290,8 @@ namespace Vulkan {
 				}
 				//If barrier TP only branch, skip it
 				if (!VKGPU->Find_BestQueue(MainBranch.CFNeeded_QueueSpecs)) {
+					Submitless_RGBs.push_back(BranchIndex + 1);
+					NumberOfSubmitless_RGBs++;
 					continue;
 				}
 				if (!MainBranch.CFDynamicDependents.size()) {
@@ -1317,28 +1339,13 @@ namespace Vulkan {
 		FindRGBranches_dependentSubmits(Current_FrameGraph, LastFrameGraph, Submitless_RGBs, NumberOfSubmitless_RGBs);
 		PrintSubmits(Current_FrameGraph);
 
-		//Give a Signal Semaphore to each Submit
+		//Give a Signal Semaphore and Command Buffer to each Submit
 		for (unsigned char SubmitIndex = 0; SubmitIndex < Current_FrameGraph->CurrentFrameSubmits.size(); SubmitIndex++) {
 			VK_Submit* Submit = Current_FrameGraph->CurrentFrameSubmits[SubmitIndex];
 
-			//Find the first active branch
-			unsigned char BranchFGIndex = 255;
-			for (unsigned int BranchElement = 0; BranchElement < Submit->BranchIndexes.size(); BranchElement++) {
-				if (!Submit->BranchIndexes[BranchElement]) {
-					continue;
-				}
-				BranchFGIndex = Submit->BranchIndexes[BranchElement] - 1;
-				break;
-			}
-
-			if (BranchFGIndex == 255) {
-				LOG_CRASHING_TAPI("This submit is not active but this shouldn't happen!", true);
-				continue;
-			}
-
 			//Skip this process if Submit is WP only, because signal semaphores are set with VkAcquireNextImageKHR() at the end
 			//and also VK_Submit structure only supports one signal semaphore for now
-			if (Current_FrameGraph->FrameGraphTree[BranchFGIndex].CorePasses[0].TYPE == TPType::WP) {
+			if (Current_FrameGraph->FrameGraphTree[Submit->BranchIndexes[0] - 1].CorePasses[0].TYPE == PassType::WP) {
 				continue;
 			}
 			for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < Semaphores.size(); SemaphoreIndex++) {
@@ -1348,40 +1355,42 @@ namespace Vulkan {
 					break;
 				}
 			}
+			
+			for (unsigned char CBIndex = 0; CBIndex < Submit->Run_Queue->CommandPool.CBs.size(); CBIndex++) {
+				VK_CommandBuffer& VK_CB = Submit->Run_Queue->CommandPool.CBs[CBIndex];
+				if (!VK_CB.is_Used) {
+					Submit->CBIndex = CBIndex;
+					VK_CB.is_Used = true;
+					break;
+				}
+			}
+			if (Submit->CBIndex == 255) {
+				LOG_CRASHING_TAPI("There is a problem!");
+			}
 		}
 		//Find all Wait Semaphores of each Submit
 		for (unsigned char SubmitIndex = 0; SubmitIndex < Current_FrameGraph->CurrentFrameSubmits.size(); SubmitIndex++) {
 			VK_Submit* Submit = Current_FrameGraph->CurrentFrameSubmits[SubmitIndex];
 
-			//Find the first active branch
-			unsigned char BranchFGIndex = 255;
-			for (unsigned int BranchElement = 0; BranchElement < Submit->BranchIndexes.size(); BranchElement++) {
-				if (!Submit->BranchIndexes[BranchElement]) {
-					continue;
-				}
-				BranchFGIndex = Submit->BranchIndexes[BranchElement] - 1;
-				break;
-			}
-
-			if (BranchFGIndex == 255) {
-				LOG_CRASHING_TAPI("This submit is not active but this shouldn't happen!", true);
-				continue;
-			}
-
-			const VK_RGBranch& MainBranch = Current_FrameGraph->FrameGraphTree[BranchFGIndex];
+			const VK_RGBranch& MainBranch = Current_FrameGraph->FrameGraphTree[Submit->BranchIndexes[0] - 1];
 
 			//Find last frame dynamic dependent branches and get their signal semaphores to wait
 			for (unsigned char LFDBIndex = 0; LFDBIndex < MainBranch.LFDynamicDependents.size(); LFDBIndex++) {
 				const VK_RGBranch& LFDBranch = LastFrameGraph->FrameGraphTree[MainBranch.LFDynamicDependents[LFDBIndex]];
 				//This is a window pass, so we should access to each Window to get the related semaphores
-				if (LFDBranch.CorePasses[0].TYPE == TPType::WP) {
+				if (LFDBranch.CorePasses[0].TYPE == PassType::WP) {
 					VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, LFDBranch.CorePasses[0].Handle);
 					for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[1].size(); WindowIndex++) {
-						Submit->WaitSemaphoreIndexes.push_back(WP->WindowCalls[1][WindowIndex].Window->PresentationWaitSemaphoreIndexes[(GFXRENDERER->GetCurrentFrameIndex() + 1) % 2]);
+						Submit->WaitSemaphoreIndexes.push_back(
+							WP->WindowCalls[1][WindowIndex].Window->PresentationWaitSemaphoreIndexes[(GFXRENDERER->GetCurrentFrameIndex() + 1) % 2]
+						);
+						Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 					}
 				}
 				else {
 					Submit->WaitSemaphoreIndexes.push_back(LFDBranch.AttachedSubmit->SignalSemaphoreIndex);
+					//This is laziness but there is gonna probably a little gain while searching for a more "tight" one cost more 
+					Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 				}
 			}
 			//Find Penultimate Window Pass only branches that current submit depends on and get their signal semaphores to wait
@@ -1389,15 +1398,294 @@ namespace Vulkan {
 				const VK_RGBranch* PenultimateWPBranch = MainBranch.PenultimateSwapchainBranches[PenultimateBIndex];
 				VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, PenultimateWPBranch->CorePasses[0].Handle);
 				for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[0].size(); WindowIndex++) {
-					Submit->WaitSemaphoreIndexes.push_back(WP->WindowCalls[0][WindowIndex].Window->PresentationWaitSemaphoreIndexes[GFXRENDERER->GetCurrentFrameIndex()]);
+					Submit->WaitSemaphoreIndexes.push_back(
+						WP->WindowCalls[0][WindowIndex].Window->PresentationWaitSemaphoreIndexes[GFXRENDERER->GetCurrentFrameIndex()]
+					);
+					Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 				}
 			}
 			//Find Current Frame dependent submits and get their signal semaphores to wait
-			for (unsigned char CFDBIndex = 0; CFDBIndex < MainBranch.CFDependentBranchCount; CFDBIndex++) {
-				const VK_RGBranch* CFDBranch = MainBranch.CFDependentBranches[CFDBIndex];
+			for (unsigned char CFDBIndex = 0; CFDBIndex < MainBranch.CFDynamicDependents.size(); CFDBIndex++) {
+				const VK_RGBranch* CFDBranch = &Current_FrameGraph->FrameGraphTree[MainBranch.CFDynamicDependents[CFDBIndex]];
 				Submit->WaitSemaphoreIndexes.push_back(CFDBranch->AttachedSubmit->SignalSemaphoreIndex);
+				//This is laziness but there is gonna probably a little gain while searching for a more "tight" one cost more
+				VkPipelineStageFlags flag = 0;
+				if (CFDBranch->CFNeeded_QueueSpecs.is_TRANSFERsupported) {
+					flag |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+				}
+				if (CFDBranch->CFNeeded_QueueSpecs.is_COMPUTEsupported) {
+					flag |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+				}
+				if (CFDBranch->CFNeeded_QueueSpecs.is_GRAPHICSsupported) {
+					flag |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+				}
+				
+				Submit->WaitSemaphoreStages.push_back(flag);
 			}
 		}
 	}
 
+
+
+	// Vulkan Render Command Buffer Recordings
+	void Record_RenderPass(VkCommandBuffer CB, VK_DrawPass* DrawPass) {
+		unsigned char FRAMEINDEX = GFXRENDERER->GetCurrentFrameIndex();
+		
+		VK_RTSLOTs& CF_SLOTs = DrawPass->SLOTSET->PERFRAME_SLOTSETs[FRAMEINDEX];
+		VkRenderPassBeginInfo rp_bi = {};
+		rp_bi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		rp_bi.renderPass = DrawPass->RenderPassObject;
+		rp_bi.renderArea.extent.width = DrawPass->RenderRegion.Width;
+		rp_bi.renderArea.extent.height = DrawPass->RenderRegion.Height;
+		rp_bi.renderArea.offset.x = DrawPass->RenderRegion.WidthOffset;
+		rp_bi.renderArea.offset.y = DrawPass->RenderRegion.HeightOffset;
+		rp_bi.pNext = nullptr;
+		rp_bi.pClearValues = nullptr;
+		vector<VkClearValue> CLEARVALUEs(CF_SLOTs.COLORSLOTs_COUNT);
+		if (CF_SLOTs.COLORSLOTs_COUNT) {
+			for (unsigned char COLORRTIndex = 0; COLORRTIndex < CF_SLOTs.COLORSLOTs_COUNT; COLORRTIndex++) {
+				CLEARVALUEs[COLORRTIndex] = { CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.x,
+				CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.y,
+				CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.z,
+				CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.w };
+				CLEARVALUEs[COLORRTIndex].depthStencil.depth = 0.0f;
+				CLEARVALUEs[COLORRTIndex].depthStencil.stencil = 0;
+			}
+			rp_bi.pClearValues = CLEARVALUEs.data();
+		}
+		rp_bi.clearValueCount = CLEARVALUEs.size();
+		rp_bi.framebuffer = DrawPass->FBs[GFXRENDERER->GetCurrentFrameIndex()];
+		
+		vkCmdBeginRenderPass(CB, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
+		for (unsigned char SubPassIndex = 0; SubPassIndex < DrawPass->Subpass_Count; SubPassIndex++) {
+			VK_SubDrawPass& SP = DrawPass->Subpasses[SubPassIndex];
+			if (SP.Binding_Index != SubPassIndex) {
+				LOG_NOTCODED_TAPI("Subpass Binding Index and the SubDrawPass' element index doesn't match, handle this case!", true);
+			}
+			std::unique_lock<std::mutex> DrawCallLocker;
+			SP.DrawCalls.PauseAllOperations(DrawCallLocker);
+			for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+				for (unsigned char DrawCallIndex = 0; DrawCallIndex < SP.DrawCalls.size(ThreadIndex); DrawCallIndex++) {
+					VK_DrawCall& DrawCall = SP.DrawCalls.get(ThreadIndex, DrawCallIndex);
+					VkViewport DefaultViewport = {};
+					DefaultViewport.height = (float)DrawPass->RenderRegion.Height;
+					DefaultViewport.maxDepth = 1.0f;
+					DefaultViewport.minDepth = 0.0f;
+					DefaultViewport.width = (float)DrawPass->RenderRegion.Width;
+					DefaultViewport.x = (float)DrawPass->RenderRegion.WidthOffset;
+					DefaultViewport.y = (float)DrawPass->RenderRegion.HeightOffset;
+					vkCmdSetViewport(CB, 0, 1, &DefaultViewport);
+					VkRect2D Scissor;
+					Scissor.extent.height = DrawPass->RenderRegion.Height;
+					Scissor.extent.width = DrawPass->RenderRegion.Width;
+					Scissor.offset.x = DrawPass->RenderRegion.WidthOffset;
+					Scissor.offset.y = DrawPass->RenderRegion.HeightOffset;
+					vkCmdSetScissor(CB, 0, 1, &Scissor);
+
+					vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatInst->PipelineObject);
+					VkDeviceSize Offsets[] = { 0 };
+					vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VB->Buffer, Offsets);
+					vkCmdDraw(CB, DrawCall.VB->VERTEX_COUNT, 1, 0, 0);
+				}
+				SP.DrawCalls.clear(ThreadIndex);
+			}
+			if (SubPassIndex < DrawPass->Subpass_Count - 1) {
+				vkCmdNextSubpass(CB, VK_SUBPASS_CONTENTS_INLINE);
+			}
+		}
+		vkCmdEndRenderPass(CB);
+	}
+
+
+
+
+	void SetBarrier_BetweenBranchPasses(VkCommandBuffer CB, VK_BranchPass* LastPass, VK_BranchPass* CurrentPass, VkPipelineStageFlags& srcPipelineStage) {
+		switch (CurrentPass->TYPE) {
+		case PassType::DP:
+		{
+			VK_DrawPass* DP = GFXHandleConverter(VK_DrawPass*, CurrentPass->Handle);
+			bool isdependencyfound = false;
+			for (unsigned char WaitIndex = 0; WaitIndex < DP->WAITs.size(); WaitIndex++) {
+				if (*DP->WAITs[WaitIndex].WaitedPass == LastPass->Handle) {
+					isdependencyfound = true;
+					vkCmdPipelineBarrier(CB, Find_VkPipelineStages(DP->WAITs[WaitIndex].WaitedStage), VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+						0, nullptr, 0, nullptr, 0, nullptr);
+					break;
+				}
+			}
+
+			if (!isdependencyfound) {
+				switch (LastPass->TYPE) {
+				case PassType::DP:
+					vkCmdPipelineBarrier(CB, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0,
+						0, nullptr, 0, nullptr, 0, nullptr);
+					break;
+				case PassType::TP:
+					vkCmdPipelineBarrier(CB, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0,
+						0, nullptr, 0, nullptr, 0, nullptr);
+					break;
+				default:
+					LOG_NOTCODED_TAPI("This type of barrier isn't supported to set in wait barrier for now!", true);
+				}
+			}
+		}
+		break;
+		case PassType::TP:
+		{
+			VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, CurrentPass->Handle);
+			bool isdependencyfound = false;
+			for (unsigned char WaitIndex = 0; WaitIndex < TP->WAITs.size(); WaitIndex++) {
+				if (*TP->WAITs[WaitIndex].WaitedPass == LastPass->Handle) {
+					isdependencyfound = true;
+					srcPipelineStage = Find_VkShaderStages(TP->WAITs[WaitIndex].WaitedStage);
+					break;
+				}
+			}
+
+			if (!isdependencyfound) {
+				switch (LastPass->TYPE) {
+				case PassType::DP:
+					srcPipelineStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+					break;
+				case PassType::TP:
+					srcPipelineStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+					break;
+				default:
+					LOG_NOTCODED_TAPI("This type of barrier isn't supported to set in wait barrier for now!", true);
+				}
+			}
+		}
+		break;
+		default:
+			LOG_NOTCODED_TAPI("This pass type isn't coded for recording yet!", true);
+		}
+	}
+
+	void Record_BarrierTP(VkCommandBuffer CB, VkPipelineStageFlags srcPipelineStage, VK_TPBarrierDatas* DATAs) {
+		std::unique_lock<std::mutex> Locker;
+		DATAs->TextureBarriers.PauseAllOperations(Locker);
+		vector<VkImageMemoryBarrier> IMBARRIES;
+		unsigned int LatestIndex = 0;
+		for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+			IMBARRIES.resize(IMBARRIES.size() + DATAs->TextureBarriers.size(ThreadIndex));
+			for (unsigned int i = 0; i < DATAs->TextureBarriers.size(ThreadIndex); i++) {
+				VK_ImBarrierInfo& info = DATAs->TextureBarriers.get(ThreadIndex, i);
+				VkImageMemoryBarrier& Barrier = IMBARRIES[LatestIndex];
+				Barrier.dstAccessMask = info.NEXTACCESS;
+				Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				Barrier.image = info.Image;
+				Barrier.newLayout = info.NEXTLAYOUT;
+				Barrier.oldLayout = info.LASTLAYOUT;
+				Barrier.pNext = nullptr;
+				Barrier.srcAccessMask = info.LASTACCESS;
+				Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				Barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+				if (info.LASTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT || info.LASTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT ||
+					info.NEXTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT || info.NEXTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+				{
+					Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+				}
+				else {
+					Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				}
+				LOG_NOTCODED_TAPI("Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!", false);
+				Barrier.subresourceRange.baseArrayLayer = 0;
+				Barrier.subresourceRange.baseMipLevel = 0;
+				Barrier.subresourceRange.layerCount = 1;
+				Barrier.subresourceRange.levelCount = 1;
+				LatestIndex++;
+			}
+			DATAs->TextureBarriers.clear(ThreadIndex);
+		}
+		if (srcPipelineStage == 0) {
+			srcPipelineStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		}
+		vkCmdPipelineBarrier(CB, srcPipelineStage, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, IMBARRIES.size(), IMBARRIES.data());
+	}
+
+	void Record_UploadTP(VkCommandBuffer CB, VK_TPCopyDatas* DATAs) {
+		/*
+		{
+			std::unique_lock<std::mutex> BufferLocker;
+			DATAs->BufferUploads.PauseAllOperations(BufferLocker);
+			unsigned int LastElementIndex = 0;
+			for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+				for (unsigned int i = 0; i < DATAs->BufferUploads.size(ThreadIndex); i++) {
+					VK_BufUploadInfo& info = DATAs->BufferUploads.get(ThreadIndex, i);
+					info.BUFFER;
+					vkCmdCopyBuffer(CB,);
+					LastElementIndex++;
+				}
+			}
+		}
+		{
+			std::unique_lock<std::mutex> TextureLocker;
+			DATAs->TextureUploads.PauseAllOperations(TextureLocker);
+			unsigned int LastElementIndex = 0;
+			for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+				for (unsigned int i = 0; i < DATAs->TextureUploads.size(ThreadIndex); i++) {
+
+				}
+			}
+		}
+		*/
+	}
+
+	void RecordRGBranchCalls(VK_RGBranch& Branch, VkCommandBuffer CB) {
+		unsigned char PassElementIndex = 0;
+		VK_BranchPass* LastPass = nullptr;
+		while (PassElementIndex < Branch.PassCount) {
+			VK_BranchPass* CurrentPass = nullptr;
+			for (PassElementIndex; PassElementIndex < Branch.PassCount; PassElementIndex++) {
+				if (Branch.CurrentFramePassesIndexes[PassElementIndex]) {
+					CurrentPass = &Branch.CorePasses[Branch.CurrentFramePassesIndexes[PassElementIndex] - 1];
+					break;
+				}
+			}
+			if (!CurrentPass) {
+				return;
+			}
+
+			VkPipelineStageFlags srcPipelineStage = 0;
+			//Set barriers between passes
+			if (LastPass) {
+				SetBarrier_BetweenBranchPasses(CB, LastPass, CurrentPass, srcPipelineStage);
+			}
+
+			switch (CurrentPass->TYPE) {
+			case PassType::DP:
+				Record_RenderPass(CB, GFXHandleConverter(VK_DrawPass*, CurrentPass->Handle));
+				break;
+			case PassType::TP:
+			{
+				VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, CurrentPass->Handle);
+				switch (TP->TYPE) {
+				case GFX_API::TRANFERPASS_TYPE::TP_BARRIER:
+				{
+					VK_TPBarrierDatas* TPDatas = GFXHandleConverter(VK_TPBarrierDatas*, TP->TransferDatas);
+					Record_BarrierTP(CB, srcPipelineStage, TPDatas);
+				}
+					break;
+				case GFX_API::TRANFERPASS_TYPE::TP_COPY:
+				{
+					VK_TPCopyDatas* TPDATAs = GFXHandleConverter(VK_TPCopyDatas*, TP->TransferDatas);
+					Record_UploadTP(CB, TPDATAs);
+				}
+					break;
+				default:
+					LOG_NOTCODED_TAPI("Recording vulkan commands of this TP type isn't coded yet!", true);
+				}
+			}
+				break;
+			case PassType::WP:
+				LOG_CRASHING_TAPI("This shouldn't happen, it should've been returned early!");
+				break;
+			default:
+				LOG_NOTCODED_TAPI("This pass type isn't coded for recording yet!", true);
+			}
+
+			LastPass = CurrentPass;
+			PassElementIndex++;
+		}
+	}
 }

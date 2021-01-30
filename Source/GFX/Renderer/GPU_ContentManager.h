@@ -9,14 +9,9 @@ namespace GFX_API {
 
 	/*			GFX Content Manager:
 	* This system manages all of the GFX asset and GPU memory management proccesses
-	* But some use cases are considered "bad" for now, so they're not allowed yet because I'm planning to make all GFX API multi-threaded
-	* A Transfer Pass is required for some of the Upload functions, because user should know the exact moment to upload
-	* For example; Data storage in Staging Memory (Generally 256MB of VRAM which is faster to be read/written by CPU) is not allowed
-	* For example; You can't  query current frame's any memory (GPU Local, Staging) status, only the last frame's is possible.
-	* If you upload a resource but it doesn't fit in Staging Memory, GFX API will fail in the related Upload function
-	* If you upload a resource and it fits Staging Memory but not the GPU Local Memory, GFX API will fail in GFXRenderer->Run()
-	* Except Descriptions, you generally give GFXHandle objects as arguments to GFX API functions. GFXHandle is a void* and storing it all is in your hands.
-	Because there is no type check or something. Be careful while storing it, it is possible to change its value with an equal operator.
+	* Create_xxx (Texture, Buffer etc) functions will suballocate memory from the specified MemoryType
+	* If you want to upload data to the GPU local memory, you should create a buffer to use as a staging memory in either HOSTVISIBLE or FASTHOSTVISIBLE memory
+	* Create_xxx and Delete_xxx functions are implicitly synchronized, means you don't have to worry about concurrency
 
 	How to Upload Vertex Buffers:
 	1) You should define a Vertex Attribute Layout (which is a collection of Vertex Attributes, so first Vertex Attributes).
@@ -24,7 +19,7 @@ namespace GFX_API {
 	3) Then while executing the RenderGraph, Staging->GPU Local copy will be executed 
 
 
-	Why Vertex Attribute Layout system that much complicated?
+	Why is Vertex Attribute Layout system that much complicated?
 	1) Vulkan API is very limiting in terms of Vertex Attribute Layout capabilities (Because the layout is given in the Graphics Pipeline compiling process).
 	2) So Turan Engine's Vertex Attribute Layout capabilities will be limited to interleaved rendering.
 	3) I want some matching all over the vertex attribute layouts because vertex attributes always has meanings (Position, Vertex Normal, Texture Coordinates etc)
@@ -64,25 +59,36 @@ namespace GFX_API {
 		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) = 0;
 		virtual void Delete_VertexAttributeLayout(GFXHandle Layout_ID) = 0;
 
+		virtual TAPIResult Create_StagingBuffer(unsigned int DATASIZE, const GFX_API::SUBALLOCATEBUFFERTYPEs& MemoryRegion, GFX_API::GFXHandle& Handle) = 0;
+		virtual TAPIResult Uploadto_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) = 0;
+		virtual void Delete_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle) = 0;
 		/*
-		* You should order your vertex data according to attribute layout, don't forget that
+		* You should sort your vertex data according to attribute layout, don't forget that
 		* VertexCount shouldn't be 0
 		*/
-		virtual TAPIResult Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, const void* Data, unsigned int VertexCount,
-			const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& VertexBufferHandle) = 0;
-		virtual TAPIResult Upload_VertexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset) = 0;
+		virtual TAPIResult Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, unsigned int VertexCount, 
+			GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& VertexBufferHandle) = 0;
+		virtual TAPIResult Upload_VertexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
+			unsigned int DataSize, unsigned int TargetOffset) = 0;
 		virtual void Unload_VertexBuffer(GFX_API::GFXHandle BufferHandle) = 0;
 
-		virtual TAPIResult Create_IndexBuffer(const void* Data, unsigned int DataSize, const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& IndexBufferHandle) = 0;
-		virtual TAPIResult Upload_IndexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset) = 0;
+		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& IndexBufferHandle) = 0;
+		virtual TAPIResult Upload_IndexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
+			unsigned int DataSize, unsigned int TargetOffset) = 0;
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) = 0;
 		
 
-		virtual TAPIResult Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, const void* DATA, const GFX_API::IMAGEUSAGE& FIRSTUSAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& TextureHandle) = 0;
+		virtual TAPIResult Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, 
+			const GFX_API::IMAGEUSAGE& FIRSTUSAGE, GFX_API::GFXHandle& TextureHandle) = 0;
+		virtual TAPIResult Upload_Texture(GFX_API::GFXHandle BufferHandle, const void* InputData,
+			unsigned int DataSize, unsigned int TargetOffset) = 0;
+		//TARGET OFFSET is the offset in the texture's buffer to copy to
 		virtual void Unload_Texture(GFXHandle TEXTUREHANDLE) = 0;
 
-		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, const void* DATA, unsigned int DATA_SIZE, const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
-		virtual TAPIResult Upload_GlobalBuffer(GFXHandle BufferHandle, const void* DATA, unsigned int DATA_SIZE, GFX_API::GFXHandle TransferPassHandle) = 0;
+		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE
+			, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
+		virtual TAPIResult Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
+			unsigned int DataSize, unsigned int TargetOffset) = 0;
 		virtual void Unload_GlobalBuffer(GFXHandle BUFFER_ID) = 0;
 
 

@@ -97,13 +97,19 @@ namespace TuranAPI {
 			}
 		};
 
+
 		class TURANAPI AtomicUINT {
 			std::atomic<uint64_t> data;
 		public:
+			AtomicUINT(uint64_t Ref);
+			AtomicUINT();
+
 			//Returns the old value
 			uint64_t DirectAdd(const uint64_t& add);
 			//Returns the old value
 			uint64_t DirectSubtract(const uint64_t& sub);
+			void DirectStore(const uint64_t& Store);
+			uint64_t DirectLoad();
 
 			//Deep Sleeping: The thread won't be available soon enough and application will fail at some point (or be buggy)
 			//because condition's not gonna be met soon enough. By the way, it keeps yielding at that time.
@@ -142,8 +148,6 @@ namespace TuranAPI {
 			bool LimitedSubtract_weak(const uint64_t& subtract, const uint64_t& minlimit);
 			//Similar but the reverse of the LimitedAdd_strong()
 			void LimitedSubtract_strong(const uint64_t& subtract, const uint64_t& minlimit);
-
-
 		};
 
 		//Thread Local std::vector implementation

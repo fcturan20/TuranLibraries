@@ -18,17 +18,10 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_VertexAttribLayout*> VERTEXATTRIBLAYOUTs;
 		TuranAPI::Threading::TLVector<VK_RTSLOTSET*> RT_SLOTSETs;
 
-		VK_MemoryAllocation		STAGINGBUFFERALLOC;
-		VK_MemoryAllocation		GPULOCAL_BUFFERALLOC;
-		VK_MemoryAllocation		GPULOCAL_TEXTUREALLOC;
 		//Suballocate and bind memory to VkBuffer object
-		TAPIResult				Suballocate_Buffer(VkBuffer BUFFER, SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset);
+		TAPIResult				Suballocate_Buffer(VkBuffer BUFFER, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset);
 		//Suballocate and bind memory to VkImage object
 		TAPIResult				Suballocate_Image(VK_Texture& Texture);
-		//Suballocate a memory block to safely copy data
-		VkDeviceSize			Get_StagingBufferOffset(unsigned int datasize);
-		void					CopyData_toStagingMemory(const void* data, unsigned int data_size, VkDeviceSize offset);
-		void					Clear_StagingMemory();
 
 		VkDescriptorPool		GlobalBuffers_DescPool;
 		VkDescriptorSet			GlobalBuffers_DescSet;
@@ -58,23 +51,34 @@ namespace Vulkan {
 		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) override;
 		virtual void Delete_VertexAttributeLayout(GFX_API::GFXHandle Layout_ID) override;
 
-		virtual TAPIResult Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, const void* Data, unsigned int VertexCount,
-			const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& VertexBufferHandle) override;
-		virtual TAPIResult Upload_VertexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset) override;
+		virtual TAPIResult Create_StagingBuffer(unsigned int DATASIZE, const GFX_API::SUBALLOCATEBUFFERTYPEs& MemoryRegion, GFX_API::GFXHandle& Handle) override;
+		virtual TAPIResult Uploadto_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) override;
+		virtual void Delete_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle) override;
+
+		virtual TAPIResult Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, unsigned int VertexCount, 
+			GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& VertexBufferHandle) override;
+		virtual TAPIResult Upload_VertexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, 
+			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_VertexBuffer(GFX_API::GFXHandle BufferHandle) override;
 
 
-		virtual TAPIResult Create_IndexBuffer(const void* Data, unsigned int DataSize, const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& IndexBufferHandle) override;
-		virtual TAPIResult Upload_IndexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset) override;
+		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& IndexBufferHandle) override;
+		virtual TAPIResult Upload_IndexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
+			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) override;
 
 
-		virtual TAPIResult Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, const void* DATA, const GFX_API::IMAGEUSAGE& FIRSTUSAGE, GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle& TextureHandle) override;
+		virtual TAPIResult Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType,
+			const GFX_API::IMAGEUSAGE& FIRSTUSAGE, GFX_API::GFXHandle& TextureHandle) override;
+		virtual TAPIResult Upload_Texture(GFX_API::GFXHandle BufferHandle, const void* InputData,
+			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_Texture(GFX_API::GFXHandle TEXTUREHANDLE) override;
 
 
-		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, const void* DATA, unsigned int DATA_SIZE, const GFX_API::BUFFER_VISIBILITY& USAGE, GFX_API::GFXHandle& GlobalBufferHandle) override;
-		virtual TAPIResult Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* DATA, unsigned int DATA_SIZE, GFX_API::GFXHandle TransferPassHandle) override;
+		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, 
+			GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) override;
+		virtual TAPIResult Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
+			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) override;
 
 

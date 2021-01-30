@@ -998,9 +998,6 @@
     <ClInclude Include="Source\GFX\GFX_Core.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\GFX\GFX_Display.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Source\GFX\GFX_Includes.h">
       <Filter>Header Files</Filter>
     </ClInclude>

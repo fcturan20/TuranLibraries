@@ -51,11 +51,5 @@ namespace GFX_API {
 		unsigned char SubDrawPass_Index;
 		vector<PassWait_Description> WaitDescriptions;
 	};
-	struct GFXAPI GlobalBuffer_Description {
-		const char* BUFFER_NAME;
-		const void* DATA;
-		unsigned int DATA_SIZE;
-		GFX_API::BUFFER_VISIBILITY USAGE;
-	};
 
 }

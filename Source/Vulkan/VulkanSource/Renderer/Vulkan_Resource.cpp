@@ -26,12 +26,75 @@ namespace Vulkan {
 		}
 		return FLAG;
 	}
+	VK_API void Find_AccessPattern_byIMAGEACCESS(const GFX_API::IMAGE_ACCESS& Access, VkAccessFlags& TargetAccessFlag, VkImageLayout& TargetImageLayout) {
+		switch (Access)
+		{
+		case GFX_API::IMAGE_ACCESS::DEPTHSTENCIL_READONLY:
+			TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::DEPTHSTENCIL_READWRITE:
+			TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::DEPTHSTENCIL_WRITEONLY:
+			TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::NO_ACCESS:
+			TargetAccessFlag = 0;
+			TargetImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			return;
+		case GFX_API::IMAGE_ACCESS::RTCOLOR_READONLY:
+			TargetAccessFlag = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE:
+			TargetAccessFlag = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::RTCOLOR_WRITEONLY:
+			TargetAccessFlag = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY:
+			TargetAccessFlag = VK_ACCESS_SHADER_READ_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE:
+			TargetAccessFlag = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_GENERAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::SHADER_WRITEONLY:
+			TargetAccessFlag = VK_ACCESS_SHADER_WRITE_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_GENERAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY:
+			TargetAccessFlag = 0;
+			TargetImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			return;
+		case GFX_API::IMAGE_ACCESS::TRANSFER_DIST:
+			TargetAccessFlag = VK_ACCESS_TRANSFER_WRITE_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			return;
+		case GFX_API::IMAGE_ACCESS::TRANSFER_SRC:
+			TargetAccessFlag = VK_ACCESS_TRANSFER_READ_BIT;
+			TargetImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			return;
+		default:
+			LOG_NOTCODED_TAPI("Find_AccessPattern_byIMAGEACCESS() doesn't support this access type!", true);
+			return;
+		}
+	}
 
-	VK_TPUploadDatas::VK_TPUploadDatas() : TextureUploads(*GFX->JobSys), BufferUploads(*GFX->JobSys) {
+	VK_TPCopyDatas::VK_TPCopyDatas() : BUFBUFCopies(*GFX->JobSys), BUFIMCopies(*GFX->JobSys), IMIMCopies(*GFX->JobSys) {
 
 	}
 
 	VK_TPBarrierDatas::VK_TPBarrierDatas() : BufferBarriers(*GFX->JobSys), TextureBarriers(*GFX->JobSys) {
+
+	}
+	VK_SubDrawPass::VK_SubDrawPass() : DrawCalls(*GFX->JobSys) {
 
 	}
 }

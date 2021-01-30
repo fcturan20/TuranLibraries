@@ -22,22 +22,30 @@ namespace Vulkan {
 		Setup_Debugging();
 #endif
 		Check_Computer_Specs(GPUs);
-		Setup_LogicalDevice();
+	}
 
-
+	TAPIResult Vulkan_Core::Start_SecondStage(unsigned char GPUIndex, unsigned int DeviceLocal_AllocSize, unsigned int HostVisible_AllocSize, unsigned int FastHostVisible_AllocSize, unsigned int Readback_AllocSize){
+		GPU_TO_RENDER = DEVICE_GPUs[GPUIndex];
 		//Some basic algorithms accesses some of the GPU's datas
 		//Because GFX API doesn't support multi-GPU, just give the GPU Handle to VK_States
 		//Because everything in Vulkan API accesses this VK_States
-		VK_States.GPU_TO_RENDER = GFXHandleConverter(GPU*, GPU_TO_RENDER);
+		GPU* VKGPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
+		VK_States.GPU_TO_RENDER = VKGPU; 
 
+		VKGPU->GPULOCAL_ALLOC.FullSize = DeviceLocal_AllocSize;
+		VKGPU->HOSTVISIBLE_ALLOC.FullSize = HostVisible_AllocSize;
+		VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize = FastHostVisible_AllocSize;
+		VKGPU->READBACK_ALLOC.FullSize = Readback_AllocSize;
 
+		Setup_LogicalDevice();
 
-
+	
 		GFXRENDERER = new Vulkan::Renderer;
 		ContentManager = new Vulkan::GPU_ContentManager;
 		LOG_NOTCODED_TAPI("VulkanCore: Vulkan's IMGUI support isn't coded!\n", false);
 
 		LOG_STATUS_TAPI("VulkanCore: Vulkan systems are started!");
+		return TAPI_SUCCESS;
 	}
 	Vulkan_Core::~Vulkan_Core() {
 		Destroy_GFX_Resources();
@@ -259,32 +267,58 @@ namespace Vulkan {
 			delete QueueFamilyProperties;
 
 			vkGetPhysicalDeviceMemoryProperties(VKGPU->Physical_Device, &VKGPU->MemoryProperties);
+			for (uint32_t MemoryTypeIndex = 0; MemoryTypeIndex < VKGPU->MemoryProperties.memoryTypeCount; MemoryTypeIndex++) {
+				VkMemoryType& MemoryType = VKGPU->MemoryProperties.memoryTypes[MemoryTypeIndex];
+				bool isDeviceLocal = false;
+				bool isHostVisible = false;
+				bool isHostCoherent = false;
+				bool isHostCached = false;
+
+				if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+					isDeviceLocal = true;
+				}
+				if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+					isHostVisible = true;
+				}
+				if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+					isHostCoherent = true;
+				}
+				if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
+					isHostCached = true;
+				}
+
+				if (GPUdesc.GPU_TYPE != GFX_API::GPU_TYPEs::DISCRETE_GPU) {
+					continue;
+				}
+				if (isDeviceLocal) {
+					if (isHostVisible && isHostCoherent) {
+						GPUdesc.FASTHOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+						VKGPU->FASTHOSTVISIBLE_ALLOC.MemoryTypeIndex = MemoryTypeIndex;
+						LOG_STATUS_TAPI("Found FAST HOST VISIBLE BIT! Size: " + to_string(GPUdesc.FASTHOSTVISIBLE_MaxMemorySize));
+					}
+					else {
+						GPUdesc.DEVICELOCAL_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+						VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex = MemoryTypeIndex;
+						LOG_STATUS_TAPI("Found DEVICE LOCAL BIT! Size: " + to_string(GPUdesc.DEVICELOCAL_MaxMemorySize));
+					}
+				}
+				else if (isHostVisible && isHostCoherent) {
+					if (isHostCached) {
+						GPUdesc.READBACK_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+						VKGPU->READBACK_ALLOC.MemoryTypeIndex = MemoryTypeIndex;
+						LOG_STATUS_TAPI("Found READBACK BIT! Size: " + to_string(GPUdesc.READBACK_MaxMemorySize));
+					}
+					else {
+						GPUdesc.HOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+						VKGPU->HOSTVISIBLE_ALLOC.MemoryTypeIndex = MemoryTypeIndex;
+						LOG_STATUS_TAPI("Found HOST VISIBLE BIT! Size: " + to_string(GPUdesc.HOSTVISIBLE_MaxMemorySize));
+					}
+				}
+			}
 
 			GPUdescs.push_back(GPUdesc);
 			DEVICE_GPUs.push_back(VKGPU);
 		}
-		if (DEVICE_GPUs.size() == 1) {
-			GPU_TO_RENDER = DEVICE_GPUs[0];
-			LOG_STATUS_TAPI("The renderer GPU selected as first GPU, because there is only one GPU");
-		}
-		else {
-			string WarningText = "There are more than one GPUs, please select one to use in rendering operations!";
-			for (unsigned int i = 0; i < DEVICE_GPUs.size(); i++) {
-				WarningText.append("\nIndex: " + to_string(i) + " is " + GPUdescs[i].MODEL);
-			}
-			LOG_WARNING_TAPI(WarningText);
-			std::cout << "GPU index: ";
-			int i = 0;
-			std::cin >> i;
-			while (i >= DEVICE_GPUs.size()) {
-				std::cout << "Retry please, GPU index: ";
-				i = 0;
-				std::cin >> i;
-			}
-			GPU_TO_RENDER = DEVICE_GPUs[i];
-			LOG_STATUS_TAPI("GPU: " + GPUdescs[i].MODEL + " is selected for rendering operations!");
-		}
-
 
 		LOG_STATUS_TAPI("Finished checking Computer Specifications!");
 	}
@@ -340,7 +374,6 @@ namespace Vulkan {
 
 	GFX_API::GFXHandle Vulkan_Core::CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) {
 		LOG_STATUS_TAPI("Window creation has started!");
-		LOG_NOTCODED_TAPI("Swapchain texture creation and returning them back isn't coded yet!", true);
 		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
 
 		//Create window as it will share resources with Renderer Context to get display texture!
@@ -450,6 +483,22 @@ namespace Vulkan {
 		swpchn_ci.imageColorSpace = Window_SurfaceFormat.colorSpace;
 		swpchn_ci.imageExtent = Window_ImageExtent;
 		swpchn_ci.imageArrayLayers = 1;
+		swpchn_ci.imageUsage = 0;
+		if (Desc.SWAPCHAINUSAGEs.isCopiableFrom) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		}
+		if (Desc.SWAPCHAINUSAGEs.isCopiableTo) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		}
+		if (Desc.SWAPCHAINUSAGEs.isRandomlyWrittenTo) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
+		}
+		if (Desc.SWAPCHAINUSAGEs.isRenderableTo) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		}
+		if (Desc.SWAPCHAINUSAGEs.isSampledReadOnly) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+		}
 		swpchn_ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		swpchn_ci.clipped = VK_TRUE;
 		swpchn_ci.preTransform = Vulkan_Window->SurfaceCapabilities.currentTransform;
@@ -491,36 +540,41 @@ namespace Vulkan {
 			SWAPCHAINTEXTURE->HEIGHT = Vulkan_Window->HEIGHT;
 			SWAPCHAINTEXTURE->DATA_SIZE = SWAPCHAINTEXTURE->WIDTH * SWAPCHAINTEXTURE->HEIGHT * 4;
 			SWAPCHAINTEXTURE->Image = SWPCHN_IMGs[vkim_index];
+			SWAPCHAINTEXTURE->USAGE.isCopiableFrom = true;
+			SWAPCHAINTEXTURE->USAGE.isCopiableTo = true;
+			SWAPCHAINTEXTURE->USAGE.isRenderableTo = true;
+			SWAPCHAINTEXTURE->USAGE.isSampledReadOnly = true;
 
-			Vulkan_Window->Swapchain_Textures.push_back(SWAPCHAINTEXTURE);
+			Vulkan_Window->Swapchain_Textures[vkim_index] = SWAPCHAINTEXTURE;
 			((GPU_ContentManager*)GFXContentManager)->TEXTUREs.push_back(GFX->JobSys->GetThisThreadIndex(), SWAPCHAINTEXTURE);
 			SwapchainTextureHandles[vkim_index] = SWAPCHAINTEXTURE;
 		}
 
-		for (unsigned int i = 0; i < Vulkan_Window->Swapchain_Textures.size(); i++) {
-			VkImageViewCreateInfo ImageView_ci = {};
-			ImageView_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			VK_Texture* SwapchainTexture = GFXHandleConverter(VK_Texture*, Vulkan_Window->Swapchain_Textures[i]);
-			ImageView_ci.image = SwapchainTexture->Image;
-			ImageView_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			//I'm tired, so set the value manually!
-			ImageView_ci.format = Window_SurfaceFormat.format;
-			ImageView_ci.flags = 0;
-			ImageView_ci.pNext = nullptr;
-			ImageView_ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			ImageView_ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			ImageView_ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			ImageView_ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			ImageView_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			ImageView_ci.subresourceRange.baseArrayLayer = 0;
-			ImageView_ci.subresourceRange.baseMipLevel = 0;
-			ImageView_ci.subresourceRange.layerCount = 1;
-			ImageView_ci.subresourceRange.levelCount = 1;
+		if (Desc.SWAPCHAINUSAGEs.isRandomlyWrittenTo || Desc.SWAPCHAINUSAGEs.isRenderableTo || Desc.SWAPCHAINUSAGEs.isSampledReadOnly) {
+			for (unsigned int i = 0; i < 2; i++) {
+				VkImageViewCreateInfo ImageView_ci = {};
+				ImageView_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+				VK_Texture* SwapchainTexture = GFXHandleConverter(VK_Texture*, Vulkan_Window->Swapchain_Textures[i]);
+				ImageView_ci.image = SwapchainTexture->Image;
+				ImageView_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+				ImageView_ci.format = Window_SurfaceFormat.format;
+				ImageView_ci.flags = 0;
+				ImageView_ci.pNext = nullptr;
+				ImageView_ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+				ImageView_ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+				ImageView_ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+				ImageView_ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+				ImageView_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				ImageView_ci.subresourceRange.baseArrayLayer = 0;
+				ImageView_ci.subresourceRange.baseMipLevel = 0;
+				ImageView_ci.subresourceRange.layerCount = 1;
+				ImageView_ci.subresourceRange.levelCount = 1;
 
-			if (vkCreateImageView(Vulkan_GPU->Logical_Device, &ImageView_ci, nullptr, &SwapchainTexture->ImageView) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("VulkanCore: Image View creation has failed!");
-				delete Vulkan_Window;
-				return nullptr;
+				if (vkCreateImageView(Vulkan_GPU->Logical_Device, &ImageView_ci, nullptr, &SwapchainTexture->ImageView) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("VulkanCore: Image View creation has failed!");
+					delete Vulkan_Window;
+					return nullptr;
+				}
 			}
 		}
 

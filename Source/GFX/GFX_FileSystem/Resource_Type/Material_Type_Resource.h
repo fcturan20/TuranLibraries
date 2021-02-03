@@ -56,7 +56,7 @@ namespace GFX_API {
 	public:
 		Material_Type();
 
-		GFXHandle VERTEXSOURCE_ID, FRAGMENTSOURCE_ID, ATTRIBUTELAYOUT_ID, IRTSLOTSET_ID, SubDrawPass_ID;
+		GFXHandle VERTEXSOURCE_ID, FRAGMENTSOURCE_ID, ATTRIBUTELAYOUT_ID, SubDrawPass_ID;
 		vector<MaterialDataDescriptor> MATERIALTYPEDATA;
 	};
 	

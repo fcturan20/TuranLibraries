@@ -43,7 +43,7 @@ namespace Vulkan {
 		VK_QUEUEFLAG SupportFlag;
 		VkQueue Queue;
 		uint32_t QueueFamilyIndex;
-		VK_CommandPool CommandPool;
+		VK_CommandPool CommandPools[2];
 		VK_Fence RenderGraphFences[2];
 		vector<GFX_API::GFXHandle> ActiveSubmits;
 		unsigned char QueueFeatureScore = 0;
@@ -60,6 +60,7 @@ namespace Vulkan {
 		void* MappedMemory;
 
 		VkDeviceMemory Allocated_Memory;
+		VkBuffer Buffer;
 		std::mutex Locker;
 		std::vector<VK_MemoryBlock> Allocated_Blocks;
 		VK_MemoryAllocation();
@@ -105,7 +106,7 @@ namespace Vulkan {
 		VkSurfaceKHR Window_Surface = {};
 		VkSwapchainKHR Window_SwapChain = {};
 		GLFWwindow* GLFW_WINDOW = {};
-		unsigned char PresentationWaitSemaphoreIndexes[2];
+		unsigned char PresentationWaitSemaphoreIndexes[3];
 		GFX_API::GFXHandle Swapchain_Textures[2];
 		VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
 		vector<VkSurfaceFormatKHR> SurfaceFormats;

@@ -155,7 +155,7 @@ namespace Vulkan {
 		DebugMessenger_CreationInfo.pfnUserCallback = Vulkan_States::VK_DebugCallback;
 		DebugMessenger_CreationInfo.pNext = nullptr;
 		DebugMessenger_CreationInfo.pUserData = nullptr;
-
+		
 		if (VK_States.vkCreateDebugUtilsMessengerEXT()(VK_States.Vulkan_Instance, &DebugMessenger_CreationInfo, nullptr, &VK_States.Debug_Messenger) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("Vulkan's Debug Callback system failed to start!");
 		}
@@ -447,7 +447,7 @@ namespace Vulkan {
 		VkSurfaceFormatKHR Window_SurfaceFormat = {};
 		for (unsigned int i = 0; i < Vulkan_Window->SurfaceFormats.size(); i++) {
 			VkSurfaceFormatKHR& SurfaceFormat = Vulkan_Window->SurfaceFormats[i];
-			if (SurfaceFormat.format == VK_FORMAT_B8G8R8A8_SRGB && SurfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			if (SurfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM && SurfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
 				Window_SurfaceFormat = SurfaceFormat;
 			}
 		}
@@ -531,11 +531,11 @@ namespace Vulkan {
 			return nullptr;
 		}
 		else if (created_imagecount > 2) {
-			LOG_WARNING_TAPI("GFX API asked for 2 swapchain textures but Vulkan gave more than that, so GFX API only used 2 of them! Please contact us!");
+			LOG_CRASHING_TAPI("GFX API asked for 2 swapchain textures but Vulkan gave more than that, so GFX API only used 2 of them! Please contact us!");
 		}
 		for (unsigned int vkim_index = 0; vkim_index < 2; vkim_index++) {
 			VK_Texture* SWAPCHAINTEXTURE = new VK_Texture;
-			SWAPCHAINTEXTURE->CHANNELs = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA8UB;
+			SWAPCHAINTEXTURE->CHANNELs = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_BGRA8UNORM;
 			SWAPCHAINTEXTURE->WIDTH = Vulkan_Window->WIDTH;
 			SWAPCHAINTEXTURE->HEIGHT = Vulkan_Window->HEIGHT;
 			SWAPCHAINTEXTURE->DATA_SIZE = SWAPCHAINTEXTURE->WIDTH * SWAPCHAINTEXTURE->HEIGHT * 4;
@@ -579,13 +579,16 @@ namespace Vulkan {
 		}
 
 		//Create presentation wait semaphores
-		for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < 2; SemaphoreIndex++) {
+		//We are creating 3 semaphores because if 2+ frames combined is faster than vertical blank, there is tearing!
+		//3 semaphores fixes it because VkQueuePresentKHR already blocks if you try to present the texture currently displayed
+		for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < 3; SemaphoreIndex++) {
 			VkSemaphoreCreateInfo Semaphore_ci = {};
 			Semaphore_ci.flags = 0;
 			Semaphore_ci.pNext = nullptr;
 			Semaphore_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 			VK_Semaphore VKdata;
 			VKdata.isUsed = true;
+
 
 			if (vkCreateSemaphore(Vulkan_GPU->Logical_Device, &Semaphore_ci, nullptr, &VKdata.SPHandle) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Window creation has failed while creating semaphores for each swapchain texture!");
@@ -594,6 +597,14 @@ namespace Vulkan {
 
 			VKRENDERER->Semaphores.push_back(VKdata);
 			Vulkan_Window->PresentationWaitSemaphoreIndexes[SemaphoreIndex] = VKRENDERER->Semaphores.size() - 1;
+		}
+		for (uint32_t i = 0; i < 3; i++) {
+			uint32_t swpchni = 0;
+			vkAcquireNextImageKHR(Vulkan_GPU->Logical_Device, Vulkan_Window->Window_SwapChain, UINT64_MAX,
+				VKRENDERER->Semaphores[Vulkan_Window->PresentationWaitSemaphoreIndexes[i]].SPHandle, VK_NULL_HANDLE, &swpchni);
+			if (i != swpchni) {
+				LOG_CRASHING_TAPI("WTF!");
+			}
 		}
 
 

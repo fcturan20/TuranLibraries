@@ -273,15 +273,17 @@ namespace Vulkan {
 				LOG_STATUS_TAPI("VulkanCore: One of the VkQueues only supports Presentation QUEUE, so GFX API didn't create a command pool for it!");
 				continue;
 			}
-			VkCommandPoolCreateInfo cp_ci_g = {};
-			cp_ci_g.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			cp_ci_g.queueFamilyIndex = VKGPU->QUEUEs[QUEUEIndex].QueueFamilyIndex;
-			cp_ci_g.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			cp_ci_g.pNext = nullptr;
+			for (unsigned char i = 0; i < 2; i++) {
+				VkCommandPoolCreateInfo cp_ci_g = {};
+				cp_ci_g.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+				cp_ci_g.queueFamilyIndex = VKGPU->QUEUEs[QUEUEIndex].QueueFamilyIndex;
+				cp_ci_g.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+				cp_ci_g.pNext = nullptr;
 
-			if (vkCreateCommandPool(VKGPU->Logical_Device, &cp_ci_g, nullptr, &VKGPU->QUEUEs[QUEUEIndex].CommandPool.CPHandle) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("VulkanCore: Logical Device Setup has failed at vkCreateCommandPool()!");
-				return;
+				if (vkCreateCommandPool(VKGPU->Logical_Device, &cp_ci_g, nullptr, &VKGPU->QUEUEs[QUEUEIndex].CommandPools[i].CPHandle) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("VulkanCore: Logical Device Setup has failed at vkCreateCommandPool()!");
+					return;
+				}
 			}
 		}
 
@@ -858,7 +860,7 @@ namespace Vulkan {
 
 	void RecordRGBranchCalls(VK_RGBranch& Branch, VkCommandBuffer CB);
 	void Renderer::Record_CurrentFramegraph() {
-		TURAN_PROFILE_SCOPE_MCS("Run_CurrentFramegraph()");
+		//TURAN_PROFILE_SCOPE_MCS("Run_CurrentFramegraph()");
 		VK_FrameGraph& Current_FrameGraph = FrameGraphs[Get_FrameIndex(false)];
 		VK_FrameGraph& Last_FrameGraph = FrameGraphs[Get_FrameIndex(true)];
 		for (unsigned char CFSubmitIndex = 0; CFSubmitIndex < Current_FrameGraph.CurrentFrameSubmits.size(); CFSubmitIndex++) {
@@ -1021,22 +1023,38 @@ namespace Vulkan {
 			cb_bi.pInheritanceInfo = nullptr;
 			cb_bi.pNext = nullptr;
 			cb_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			vkBeginCommandBuffer(Submit->Run_Queue->CommandPool.CBs[Submit->CBIndex].CB, &cb_bi);
+			vkBeginCommandBuffer(Submit->Run_Queue->CommandPools[FrameIndex].CBs[Submit->CBIndex].CB, &cb_bi);
 			
 			for (unsigned char BranchIndex = 0; BranchIndex < Submit->BranchIndexes.size(); BranchIndex++) {
 				VK_RGBranch& Branch = Current_FrameGraph.FrameGraphTree[Submit->BranchIndexes[BranchIndex] - 1];
-				RecordRGBranchCalls(Branch, Submit->Run_Queue->CommandPool.CBs[Submit->CBIndex].CB);
+				RecordRGBranchCalls(Branch, Submit->Run_Queue->CommandPools[FrameIndex].CBs[Submit->CBIndex].CB);
 			}
-			vkEndCommandBuffer(Submit->Run_Queue->CommandPool.CBs[Submit->CBIndex].CB);
+			vkEndCommandBuffer(Submit->Run_Queue->CommandPools[FrameIndex].CBs[Submit->CBIndex].CB);
 		}
 	}
 	void Renderer::Run() {
-		LOG_STATUS_TAPI("Run has started!");
+		//Maybe the rendering of the last frame took less than V-Sync, this is to handle this case
+		//Because that means the swapchain texture we will render to in above command buffers is being displayed
+		for (unsigned char WindowIndex = 0; WindowIndex < ((Vulkan_Core*)GFX)->Get_WindowHandles().size(); WindowIndex++) {
+			WINDOW* VKWINDOW = GFXHandleConverter(WINDOW*, ((Vulkan_Core*)GFX)->Get_WindowHandles()[WindowIndex]);
+
+			uint32_t SwapchainImage_Index;
+			vkAcquireNextImageKHR(VKGPU->Logical_Device, VKWINDOW->Window_SwapChain, UINT64_MAX,
+				Semaphores[VKWINDOW->PresentationWaitSemaphoreIndexes[2]].SPHandle, VK_NULL_HANDLE, &SwapchainImage_Index);
+			if (SwapchainImage_Index != FrameIndex) {
+				std::cout << "Current SwapchainImage_Index: " << SwapchainImage_Index << std::endl;
+				std::cout << "Current FrameCount: " << FrameIndex << std::endl;
+				LOG_CRASHING_TAPI("Renderer's FrameCount and Vulkan's SwapchainIndex don't match, there is something missing!");
+			}
+		}
+
+
 		//Wait for command buffers to end
 		for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
 			if (!VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].is_Used) {
 				continue;
 			}
+			TURAN_PROFILE_SCOPE_MCS("Waiting for fences!");
 			if (vkWaitForFences(VKGPU->Logical_Device, 1, &VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].Fence_o, true, UINT64_MAX) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("VulkanRenderer: Fence wait has failed!");
 			}
@@ -1044,7 +1062,6 @@ namespace Vulkan {
 				LOG_CRASHING_TAPI("VulkanRenderer: Fence reset has failed!");
 			}
 		}
-		LOG_STATUS_TAPI("Wait has finished!");
 		//Reset semaphore infos
 		for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraphs[FrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
 			VK_Submit* Submit = FrameGraphs[FrameIndex].CurrentFrameSubmits[SubmitIndex];
@@ -1052,30 +1069,18 @@ namespace Vulkan {
 			Submit->WaitSemaphoreIndexes.clear();
 			Submit->WaitSemaphoreStages.clear();
 			if (FrameGraphs[FrameIndex].FrameGraphTree[Submit->BranchIndexes[0] - 1].CorePasses[0].TYPE != PassType::WP) {
-				Submit->Run_Queue->CommandPool.CBs[Submit->CBIndex].is_Used = false;
+				Submit->Run_Queue->CommandPools[FrameIndex].CBs[Submit->CBIndex].is_Used = false;
 				Submit->CBIndex = 255;
 				Semaphores[Submit->SignalSemaphoreIndex].isUsed = false;
 				Submit->SignalSemaphoreIndex = 255;
 			}
 		}
 
+
+
+
 		//Record command buffers
 		Record_CurrentFramegraph();
-		
-		//Maybe the rendering of the last frame took less than V-Sync, this is to handle this case
-		//Because that means the swapchain texture we will render to in above command buffers is being displayed
-		for(unsigned char WindowIndex = 0; WindowIndex < ((Vulkan_Core*)GFX)->Get_WindowHandles().size(); WindowIndex++) {
-			WINDOW* VKWINDOW = GFXHandleConverter(WINDOW*, ((Vulkan_Core*)GFX)->Get_WindowHandles()[WindowIndex]);
-			uint32_t SwapchainImage_Index;
-			vkAcquireNextImageKHR(VKGPU->Logical_Device, VKWINDOW->Window_SwapChain, UINT64_MAX,
-			Semaphores[VKWINDOW->PresentationWaitSemaphoreIndexes[FrameIndex]].SPHandle, VK_NULL_HANDLE, &SwapchainImage_Index);
-			if (SwapchainImage_Index != FrameIndex) {
-				std::cout << "Current SwapchainImage_Index: " << SwapchainImage_Index << std::endl;
-				std::cout << "Current FrameCount: " << FrameIndex << std::endl;
-				LOG_CRASHING_TAPI("Renderer's FrameCount and Vulkan's SwapchainIndex don't match, there is something!");
-			}
-		}
-
 		//Send rendercommand buffers
 		for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
 			vector<VkSubmitInfo> FINALSUBMITs;
@@ -1088,16 +1093,16 @@ namespace Vulkan {
 
 				VkSubmitInfo submitinfo = {};
 				submitinfo.commandBufferCount = 1;
-				submitinfo.pCommandBuffers = &VKGPU->QUEUEs[QueueIndex].CommandPool.CBs[Submit->CBIndex].CB;
+				submitinfo.pCommandBuffers = &VKGPU->QUEUEs[QueueIndex].CommandPools[FrameIndex].CBs[Submit->CBIndex].CB;
 				submitinfo.pNext = nullptr;
 				submitinfo.pSignalSemaphores = &Semaphores[Submit->SignalSemaphoreIndex].SPHandle;
 				WaitSemaphoreLists.push_back(vector<VkSemaphore>());
-				vector<VkSemaphore>& WaitSemaphoreList = WaitSemaphoreLists[WaitSemaphoreLists.size() - 1];
+				vector<VkSemaphore>* WaitSemaphoreList = &WaitSemaphoreLists[WaitSemaphoreLists.size() - 1];
 				for (unsigned char WaitIndex = 0; WaitIndex < Submit->WaitSemaphoreIndexes.size(); WaitIndex++) {
-					WaitSemaphoreList.push_back(Semaphores[Submit->WaitSemaphoreIndexes[WaitIndex]].SPHandle);
+					WaitSemaphoreList->push_back(Semaphores[Submit->WaitSemaphoreIndexes[WaitIndex]].SPHandle);
 				}
 
-				submitinfo.pWaitSemaphores = WaitSemaphoreList.data();
+				submitinfo.pWaitSemaphores = WaitSemaphoreList->data();
 				submitinfo.pWaitDstStageMask = Submit->WaitSemaphoreStages.data();
 				submitinfo.waitSemaphoreCount = Submit->WaitSemaphoreIndexes.size();
 				submitinfo.signalSemaphoreCount = 1;
@@ -1108,13 +1113,14 @@ namespace Vulkan {
 				VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].is_Used = false;
 				continue;
 			}
-			std::cout << "Gonderilen: " << unsigned int(QueueIndex) << std::endl;
+			TURAN_PROFILE_SCOPE_MCS("CB sendage!");
 			if (vkQueueSubmit(VKGPU->QUEUEs[QueueIndex].Queue, FINALSUBMITs.size(), FINALSUBMITs.data(), VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].Fence_o) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Vulkan Queue Submission has failed!");
 				return;
 			}
 			VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].is_Used = true;
 		}
+
 
 		//Send displays
 		for (unsigned char WindowPassIndex = 0; WindowPassIndex < WindowPasses.size(); WindowPassIndex++) {
@@ -1137,7 +1143,7 @@ namespace Vulkan {
 			for (unsigned char SubmitIndex = 0; SubmitIndex < FrameGraphs[FrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
 				VK_Submit* Submit = FrameGraphs[FrameIndex].CurrentFrameSubmits[SubmitIndex];
 
-				//Window Pass only submits only contain one branch and the branch is Window Pass only too!
+				//Window Pass only submits, contains one branch and the branch is Window Pass only too!
 				if (Submit->BranchIndexes[0]) {
 					VK_BranchPass& Pass = FrameGraphs[FrameIndex].FrameGraphTree[Submit->BranchIndexes[0] - 1].CorePasses[0];
 					if (Pass.Handle == WP) {
@@ -1164,20 +1170,28 @@ namespace Vulkan {
 					DisplayQueue = VKGPU->QUEUEs[QueueIndex].Queue;
 				}
 			}
+			TURAN_PROFILE_SCOPE_MCS("Display sendage!");
 			if (vkQueuePresentKHR(DisplayQueue, &SwapchainImage_PresentationInfo) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Submitting Presentation Queue has failed!");
 				return;
 			}
 		}
 		
-		
 
 		//Shift all WindowCall buffers of all Window Passes!
+		//Also shift all of the window semaphores
 		for (unsigned char WPIndex = 0; WPIndex < WindowPasses.size(); WPIndex++) {
 			VK_WindowPass* WP = WindowPasses[WPIndex];
 			WP->WindowCalls[0] = WP->WindowCalls[1];
 			WP->WindowCalls[1] = WP->WindowCalls[2];
 			WP->WindowCalls[2].clear();
+		}
+		for (unsigned char WindowIndex = 0; WindowIndex < ((Vulkan_Core*)GFX)->Get_WindowHandles().size(); WindowIndex++) {
+			WINDOW* Window = GFXHandleConverter(WINDOW*, ((Vulkan_Core*)GFX)->Get_WindowHandles()[WindowIndex]);
+			unsigned char penultimate_semaphore = Window->PresentationWaitSemaphoreIndexes[0];
+			Window->PresentationWaitSemaphoreIndexes[0] = Window->PresentationWaitSemaphoreIndexes[1];
+			Window->PresentationWaitSemaphoreIndexes[1] = Window->PresentationWaitSemaphoreIndexes[2];
+			Window->PresentationWaitSemaphoreIndexes[2] = penultimate_semaphore;
 		}
 
 		//Current frame has finished, so every call after this call affects to the next frame
@@ -1198,11 +1212,91 @@ namespace Vulkan {
 		WC.Window = Window;
 		WP->WindowCalls[2].push_back(WC);
 	}
-	void Renderer::UploadTo_Buffer(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle TargetBuffer_Handle, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) {
-		LOG_NOTCODED_TAPI("UploadTo_Buffer() is not coded yet!", true);
+	VK_MemoryAllocation* GetMEMORYALLOCATIONHANDLE(const GFX_API::SUBALLOCATEBUFFERTYPEs& TYPE) {
+		switch (TYPE) {
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL:
+			return &VKGPU->GPULOCAL_ALLOC;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
+			return &VKGPU->HOSTVISIBLE_ALLOC;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
+			return &VKGPU->FASTHOSTVISIBLE_ALLOC;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
+			return &VKGPU->READBACK_ALLOC;
+		}
 	}
-	void Renderer::UploadTo_Image(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle Texture_Handle, unsigned int SourceBuffer_Offset, unsigned int Size, GFX_API::BoxRegion Texture_TargetRegion) {
-		LOG_NOTCODED_TAPI("UploadTo_Image() is not coded yet!", true);
+	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
+		switch (TYPE) {
+		case GFX_API::BUFFER_TYPE::VERTEX:
+			{
+				VK_VertexBuffer* buf = GFXHandleConverter(VK_VertexBuffer*, Handle);
+				TargetBuffer = GetMEMORYALLOCATIONHANDLE(buf->Block.Type)->Buffer;
+				TargetOffset += buf->Block.Offset;
+			}
+			break;
+		case GFX_API::BUFFER_TYPE::STAGING:
+			{
+				MemoryBlock* Staging = GFXHandleConverter(MemoryBlock*, Handle);
+				TargetBuffer = GetMEMORYALLOCATIONHANDLE(Staging->Type)->Buffer;
+				TargetOffset += Staging->Offset;
+			}
+			break;
+		default:
+			LOG_NOTCODED_TAPI("FindBufferOBJ_byBufType() doesn't support this type of buffer!", true);
+		}
+	}
+	void Renderer::CopyBuffer_toBuffer(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE, 
+		GFX_API::GFXHandle TargetBuffer_Handle, GFX_API::BUFFER_TYPE TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) {
+		VkBuffer SourceBuffer, DistanceBuffer;
+		VkDeviceSize SourceOffset = static_cast<VkDeviceSize>(SourceBuffer_Offset), DistanceOffset = static_cast<VkDeviceSize>(TargetBuffer_Offset);
+		FindBufferOBJ_byBufType(SourceBuffer_Handle, SourceBufferTYPE, SourceBuffer, SourceOffset);
+		FindBufferOBJ_byBufType(TargetBuffer_Handle, TargetBufferTYPE, DistanceBuffer, DistanceOffset);
+		VkBufferCopy Copy_i = {};
+		Copy_i.dstOffset = DistanceOffset;
+		Copy_i.srcOffset = SourceOffset;
+		Copy_i.size = static_cast<VkDeviceSize>(Size);
+		VK_TPCopyDatas* DATAs = GFXHandleConverter(VK_TPCopyDatas*, GFXHandleConverter(VK_TransferPass*, TransferPassHandle)->TransferDatas);
+		VK_BUFtoBUFinfo finalinfo;
+		finalinfo.DistanceBuffer = DistanceBuffer;
+		finalinfo.SourceBuffer = SourceBuffer;
+		finalinfo.info = Copy_i;
+		DATAs->BUFBUFCopies.push_back(GFX->JobSys->GetThisThreadIndex(), finalinfo);
+	}
+	void Renderer::CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
+		GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, unsigned int TargetTexture_OffsetWidth, unsigned int TargetTexture_OffsetHeight,
+		unsigned int TargetTexture_OffsetDepth, unsigned int TargetTexture_CopyWidth, unsigned int TargetTexture_CopyHeight, unsigned int TargetTexture_CopyDepth) {
+		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
+		VkDeviceSize finaloffset = static_cast<VkDeviceSize>(SourceBuffer_offset);
+		VK_BUFtoIMinfo x;
+		x.BufferImageCopy.bufferImageHeight = 0;
+		x.BufferImageCopy.bufferRowLength = 0;
+		x.BufferImageCopy.imageExtent.depth = TargetTexture_CopyDepth;
+		x.BufferImageCopy.imageExtent.height = TargetTexture_CopyHeight;
+		x.BufferImageCopy.imageExtent.width = TargetTexture_CopyWidth;
+		x.BufferImageCopy.imageOffset.x = TargetTexture_OffsetWidth;
+		x.BufferImageCopy.imageOffset.y = TargetTexture_OffsetHeight;
+		x.BufferImageCopy.imageOffset.z = TargetTexture_OffsetDepth;
+		if (TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
+			x.BufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+		else if (TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
+			x.BufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		}
+		else {
+			x.BufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		}
+		x.BufferImageCopy.imageSubresource.baseArrayLayer = 0;
+		x.BufferImageCopy.imageSubresource.layerCount = 1;
+		x.BufferImageCopy.imageSubresource.mipLevel = 0;
+		x.TargetImage = TEXTURE->Image;
+		FindBufferOBJ_byBufType(SourceBuffer_Handle, SourceBufferTYPE, x.SourceBuffer, finaloffset);
+		x.BufferImageCopy.bufferOffset = finaloffset;
+		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, TransferPassHandle);
+		if (TP->TYPE == GFX_API::TRANFERPASS_TYPE::TP_BARRIER) {
+			LOG_ERROR_TAPI("You gave an barrier TP handle to CopyBuffer_toImage(), this is wrong!");
+			return;
+		}
+		VK_TPCopyDatas* DATAs = GFXHandleConverter(VK_TPCopyDatas*, TP->TransferDatas);
+		DATAs->BUFIMCopies.push_back(GFX->JobSys->GetThisThreadIndex(), x);
 	}
 
 	void Renderer::ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
@@ -1221,17 +1315,6 @@ namespace Vulkan {
 		Find_AccessPattern_byIMAGEACCESS(LAST_ACCESS, im_bi.LASTACCESS, im_bi.LASTLAYOUT);
 		Find_AccessPattern_byIMAGEACCESS(NEXT_ACCESS, im_bi.NEXTACCESS, im_bi.NEXTLAYOUT);
 		TPDatas->TextureBarriers.push_back(GFX->JobSys->GetThisThreadIndex(), im_bi);
-	}
-
-
-	
-	void Renderer::TransferCall_ImUpload(VK_TransferPass* TP, VK_Texture* Image, VkDeviceSize StagingBufferOffset) {
-		/*
-		VK_TPUploadDatas* UploadData = GFXHandleConverter(VK_TPUploadDatas*, TP->TransferDatas);
-		VK_ImUploadInfo info;
-		info.IMAGE = Image;
-		info.StagingBufferOffset = StagingBufferOffset;
-		UploadData->TextureUploads.push_back(GFX->JobSys->GetThisThreadIndex(), info);*/
 	}
 
 

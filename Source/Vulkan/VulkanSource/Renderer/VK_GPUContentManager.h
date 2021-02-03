@@ -68,8 +68,7 @@ namespace Vulkan {
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) override;
 
 
-		virtual TAPIResult Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType,
-			const GFX_API::IMAGEUSAGE& FIRSTUSAGE, GFX_API::GFXHandle& TextureHandle) override;
+		virtual TAPIResult Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& TextureHandle) override;
 		virtual TAPIResult Upload_Texture(GFX_API::GFXHandle BufferHandle, const void* InputData,
 			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_Texture(GFX_API::GFXHandle TEXTUREHANDLE) override;

@@ -58,6 +58,13 @@ namespace GFX_API {
 		DEPTH_TEST_GEQUAL
 	};
 
+	enum class BUFFER_TYPE : unsigned char {
+		STAGING,
+		VERTEX,
+		INDEX,
+		GLOBAL
+	};
+
 	enum class DEPTH_MODEs : unsigned char {
 		DEPTH_READ_WRITE,
 		DEPTH_READ_ONLY,
@@ -98,6 +105,9 @@ namespace GFX_API {
 	GFXAPI TEXTURE_WRAPPING GetTextureWRAPPING_byIndex(unsigned int Index);
 
 	enum class TEXTURE_CHANNELs : unsigned char {
+		API_TEXTURE_BGRA8UB,	//Unsigned but non-normalized char
+		API_TEXTURE_BGRA8UNORM,	//Unsigned and normalized char
+
 		API_TEXTURE_RGBA32F,
 		API_TEXTURE_RGBA32UI,
 		API_TEXTURE_RGBA32I,

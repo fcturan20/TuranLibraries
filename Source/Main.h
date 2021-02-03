@@ -29,6 +29,4 @@ namespace TuranEditor {
 
 	void RenderGraphConstruction_BasicUT();
 	void RenderGraphConstruction_LastFrameUT();
-	void RenderGraphConstruction_DrawPassed(GFX_API::GFXHandle SWPCHT0, GFX_API::GFXHandle SWPCHT1, GFX_API::GFXHandle& SubpassID, GFX_API::GFXHandle& IRTSlotSetID, GFX_API::GFXHandle& WindowPassHandle
-		, GFX_API::GFXHandle& FirstBarrierTPHandle, GFX_API::GFXHandle& UploadTPHandle, GFX_API::GFXHandle& FinalBarrierTPHandle);
 }

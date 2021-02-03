@@ -27,7 +27,7 @@ namespace Vulkan {
 		virtual TAPIResult Create_WindowPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, const string& NAME, GFX_API::GFXHandle& WindowPassHandle) override;
 		bool Check_WaitHandles();
 		void Record_CurrentFramegraph();
-		void Create_VulkanCalls();
+
 
 
 		//Rendering operations
@@ -37,16 +37,14 @@ namespace Vulkan {
 		virtual void SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle) override;
 		//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 		//Target Buffer should be created with DEVICELOCAL
-		virtual void UploadTo_Buffer(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle TargetBuffer_Handle
-			, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) override;
+		virtual void CopyBuffer_toBuffer(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
+			GFX_API::GFXHandle TargetBuffer_Handle, GFX_API::BUFFER_TYPE TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) override;
 		//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
-		virtual void UploadTo_Image(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle Texture_Handle
-			, unsigned int SourceBuffer_Offset, unsigned int Size, GFX_API::BoxRegion Texture_TargetRegion) override;
+		virtual void CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
+			GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, unsigned int TargetTexture_OffsetWidth, unsigned int TargetTexture_OffsetHeight,
+			unsigned int TargetTexture_OffsetDepth, unsigned int TargetTexture_CopyWidth, unsigned int TargetTexture_CopyHeight, unsigned int TargetTexture_CopyDepth) override;
 		virtual void ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
 			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, GFX_API::GFXHandle BarrierTPHandle) override;
 
-
-		//Transfer Operations
-		virtual void TransferCall_ImUpload(VK_TransferPass* TP, VK_Texture* Image, VkDeviceSize StagingBufferOffset);
 	};
 }

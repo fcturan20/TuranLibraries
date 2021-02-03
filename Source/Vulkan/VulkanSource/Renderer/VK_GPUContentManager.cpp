@@ -57,6 +57,10 @@ namespace Vulkan {
 				VKGPU->GPULOCAL_ALLOC.Allocated_Memory = allocated_memory;
 				VKGPU->GPULOCAL_ALLOC.UnusedSize = AllocSize;
 				VKGPU->GPULOCAL_ALLOC.MappedMemory = nullptr;
+				VKGPU->GPULOCAL_ALLOC.Buffer = GPULOCAL_buf;
+				if (vkBindBufferMemory(VKGPU->Logical_Device, GPULOCAL_buf, allocated_memory, 0) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
+				}
 		}
 		//Host Visible Memory Allocation
 		if (VKGPU->HOSTVISIBLE_ALLOC.FullSize) {
@@ -81,6 +85,10 @@ namespace Vulkan {
 			}
 			VKGPU->HOSTVISIBLE_ALLOC.Allocated_Memory = allocated_memory;
 			VKGPU->HOSTVISIBLE_ALLOC.UnusedSize = AllocSize;
+			VKGPU->HOSTVISIBLE_ALLOC.Buffer = stagingbuffer;
+			if (vkBindBufferMemory(VKGPU->Logical_Device, stagingbuffer, allocated_memory, 0) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
+			}
 			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &VKGPU->HOSTVISIBLE_ALLOC.MappedMemory) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Mapping the HOSTVISIBLE memory has failed!");
 				return;
@@ -108,6 +116,10 @@ namespace Vulkan {
 			}
 			VKGPU->FASTHOSTVISIBLE_ALLOC.Allocated_Memory = allocated_memory;
 			VKGPU->FASTHOSTVISIBLE_ALLOC.UnusedSize = AllocSize;
+			VKGPU->FASTHOSTVISIBLE_ALLOC.Buffer = stagingbuffer;
+			if (vkBindBufferMemory(VKGPU->Logical_Device, stagingbuffer, allocated_memory, 0) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
+			}
 			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &VKGPU->FASTHOSTVISIBLE_ALLOC.MappedMemory) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Mapping the FASTHOSTVISIBLE memory has failed!");
 				return;
@@ -134,6 +146,10 @@ namespace Vulkan {
 			}
 			VKGPU->READBACK_ALLOC.Allocated_Memory = allocated_memory;
 			VKGPU->READBACK_ALLOC.UnusedSize = AllocSize;
+			VKGPU->READBACK_ALLOC.Buffer = READBACK_buf;
+			if (vkBindBufferMemory(VKGPU->Logical_Device, READBACK_buf, allocated_memory, 0) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
+			}
 			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &VKGPU->READBACK_ALLOC.MappedMemory) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Mapping the READBACK memory has failed!");
 				return;
@@ -716,12 +732,13 @@ namespace Vulkan {
 		VK_VertexBuffer* VKMesh = new VK_VertexBuffer;
 		VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
-		VKMesh->Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
+		VkBuffer Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
 		VkDeviceSize offset = 0;
-		if (Suballocate_Buffer(VKMesh->Buffer, MemoryType, offset) != TAPI_SUCCESS) {
+		if (Suballocate_Buffer(Buffer, MemoryType, offset) != TAPI_SUCCESS) {
 			LOG_ERROR_TAPI("There is no memory left in specified memory region, please try again later!");
 			return TAPI_FAIL;
 		}
+		vkDestroyBuffer(VKGPU->Logical_Device, Buffer, nullptr);
 
 		VKMesh->Block.Offset = offset;
 		VKMesh->Block.Type = MemoryType;
@@ -762,8 +779,7 @@ namespace Vulkan {
 	}
 
 
-	TAPIResult GPU_ContentManager::Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType,
-		const GFX_API::IMAGEUSAGE& FIRSTUSAGE, GFX_API::GFXHandle& TextureHandle) {
+	TAPIResult GPU_ContentManager::Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& TextureHandle) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Create_Texture() should support mipmaps!", false);
 		VK_Texture* TEXTURE = new VK_Texture;
 		TEXTURE->CHANNELs = TEXTURE_ASSET.Properties.CHANNEL_TYPE;
@@ -836,6 +852,7 @@ namespace Vulkan {
 		
 		TEXTUREs.push_back(GFX->JobSys->GetThisThreadIndex(), TEXTURE);
 		TextureHandle = TEXTURE;
+		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::Upload_Texture(GFX_API::GFXHandle TextureHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int TARGETOFFSET) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Upload_Texture(): Uploading the data isn't coded yet!", true);
@@ -908,10 +925,6 @@ namespace Vulkan {
 			return TAPI_INVALIDARGUMENT;
 		}
 		VK_SubDrawPass* Subpass = GFXHandleConverter(VK_SubDrawPass*, MATTYPE_ASSET.SubDrawPass_ID);
-		if (Subpass->SLOTSET != MATTYPE_ASSET.IRTSLOTSET_ID) {
-			LOG_ERROR_TAPI("Link_MaterialType() has failed because Material Type's RenderTarget SlotSet doesn't match with the SubDrawPass'!");
-			return TAPI_FAIL;
-		}
 		VK_DrawPass* MainPass = nullptr;
 		MainPass = GFXHandleConverter(VK_DrawPass*, Subpass->DrawPass);
 
@@ -992,9 +1005,11 @@ namespace Vulkan {
 			MSAAState.alphaToOneEnable = VK_FALSE;
 		}
 
+		vector<VkPipelineColorBlendAttachmentState> States;
 		VkPipelineColorBlendAttachmentState Attachment_ColorBlendState = {};
 		VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
 		{
+			//Non-blend settings
 			Attachment_ColorBlendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 			Attachment_ColorBlendState.blendEnable = VK_FALSE;
 			Attachment_ColorBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
@@ -1004,10 +1019,12 @@ namespace Vulkan {
 			Attachment_ColorBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
 			Attachment_ColorBlendState.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
 
+			States.resize(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT, Attachment_ColorBlendState);
+
 			Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 			Pipeline_ColorBlendState.logicOpEnable = VK_FALSE;
-			Pipeline_ColorBlendState.attachmentCount = 1;
-			Pipeline_ColorBlendState.pAttachments = &Attachment_ColorBlendState;
+			Pipeline_ColorBlendState.attachmentCount = States.size();
+			Pipeline_ColorBlendState.pAttachments = States.data();
 			Pipeline_ColorBlendState.logicOp = VK_LOGIC_OP_COPY; // Optional
 			Pipeline_ColorBlendState.blendConstants[0] = 0.0f; // Optional
 			Pipeline_ColorBlendState.blendConstants[1] = 0.0f; // Optional
@@ -1300,7 +1317,7 @@ namespace Vulkan {
 		for (unsigned int SlotIndex = 0; SlotIndex < Descriptions.size(); SlotIndex++) {
 			const GFX_API::RTSLOT_Description& desc = Descriptions[SlotIndex];
 			VK_Texture* FirstHandle = GFXHandleConverter(VK_Texture*, desc.TextureHandles[0]);
-			VK_Texture* SecondHandle = GFXHandleConverter(VK_Texture*, desc.TextureHandles[0]);
+			VK_Texture* SecondHandle = GFXHandleConverter(VK_Texture*, desc.TextureHandles[1]);
 			if ((FirstHandle->CHANNELs != SecondHandle->CHANNELs) ||
 				(FirstHandle->WIDTH != SecondHandle->WIDTH) ||
 				(FirstHandle->HEIGHT != SecondHandle->HEIGHT)

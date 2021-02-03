@@ -965,30 +965,28 @@ namespace Vulkan {
 				if (!VKGPU->DoesQueue_Support(&VKGPU->QUEUEs[QueueIndex], MainBranch.CFNeeded_QueueSpecs)) {
 					continue;
 				}
-				VK_CommandPool& CP = VKQUEUE.CommandPool;
+				for (unsigned char i = 0; i < 2; i++) {
+					VK_CommandPool& CP = VKQUEUE.CommandPools[i];
 
 
-				VkCommandBufferAllocateInfo cb_ai = {};
-				cb_ai.commandBufferCount = 2;
-				cb_ai.commandPool = CP.CPHandle;
-				cb_ai.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-				cb_ai.pNext = nullptr;
-				cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+					VkCommandBufferAllocateInfo cb_ai = {};
+					cb_ai.commandBufferCount = 1;
+					cb_ai.commandPool = CP.CPHandle;
+					cb_ai.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+					cb_ai.pNext = nullptr;
+					cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 
-				VkCommandBuffer NewCBs[2];
+					VkCommandBuffer NewCB;
+					if (vkAllocateCommandBuffers(VKGPU->Logical_Device, &cb_ai, &NewCB) != VK_SUCCESS) {
+						LOG_CRASHING_TAPI("vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
+						return;
+					}
+					VK_CommandBuffer VK_CB;
+					VK_CB.CB = NewCB;
+					VK_CB.is_Used = false;
 
-				if (vkAllocateCommandBuffers(VKGPU->Logical_Device, &cb_ai, NewCBs) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
-					return;
+					CP.CBs.push_back(VK_CB);
 				}
-				VK_CommandBuffer VK_CB[2];
-				VK_CB[0].CB = NewCBs[0];
-				VK_CB[1].CB = NewCBs[1];
-				VK_CB[0].is_Used = false;
-				VK_CB[1].is_Used = false;
-
-				CP.CBs.push_back(VK_CB[0]);
-				CP.CBs.push_back(VK_CB[1]);
 			}
 		}
 
@@ -1027,7 +1025,6 @@ namespace Vulkan {
 				VK_RGBranch& Branch = CurrentFG->FrameGraphTree[Submit->BranchIndexes[SubmitBranchIndex] - 1];
 				std::cout << "Branch ID: " << unsigned int(Branch.ID) << std::endl;
 			}
-			std::cout << std::endl;
 		}
 	}
 	VK_QUEUE* FindAvailableQueue(VK_QUEUEFLAG FLAG) {
@@ -1127,7 +1124,9 @@ namespace Vulkan {
 	}
 	void AttachRGB(VK_FrameGraph* CurrentFG, unsigned char BranchIndex, VK_FrameGraph* LastFG, vector<unsigned char>& SubmitlessBranches, unsigned char& NumberofSubmitlessBranches) {
 		VK_RGBranch* MainBranch = &CurrentFG->FrameGraphTree[BranchIndex];
-		if (CurrentFG->FrameGraphTree[MainBranch->CFDynamicDependents[0]].AttachedSubmit->is_Ended || MainBranch->CFNeeded_QueueSpecs.is_PRESENTATIONsupported) {
+		if (CurrentFG->FrameGraphTree[MainBranch->CFDynamicDependents[0]].AttachedSubmit->is_Ended || 
+			MainBranch->CFNeeded_QueueSpecs.is_PRESENTATIONsupported ||
+			!VKGPU->DoesQueue_Support(CurrentFG->FrameGraphTree[MainBranch->CFDynamicDependents[0]].AttachedSubmit->Run_Queue, MainBranch->CFNeeded_QueueSpecs)) {
 			CreateSubmit_ForRGB(CurrentFG, BranchIndex, LastFG, FindAvailableQueue(MainBranch->CFNeeded_QueueSpecs), SubmitlessBranches, NumberofSubmitlessBranches);
 			return;
 		}
@@ -1262,9 +1261,6 @@ namespace Vulkan {
 	}
 
 
-	void SetSignalSemaphoresOfSubmit() {
-
-	}
 	void Create_VkSubmits(VK_FrameGraph* Current_FrameGraph, VK_FrameGraph* LastFrameGraph, vector<VK_Semaphore>& Semaphores) {
 		//Index + 1
 		vector<unsigned char> Submitless_RGBs;
@@ -1337,7 +1333,7 @@ namespace Vulkan {
 
 
 		FindRGBranches_dependentSubmits(Current_FrameGraph, LastFrameGraph, Submitless_RGBs, NumberOfSubmitless_RGBs);
-		PrintSubmits(Current_FrameGraph);
+		//PrintSubmits(Current_FrameGraph);
 
 		//Give a Signal Semaphore and Command Buffer to each Submit
 		for (unsigned char SubmitIndex = 0; SubmitIndex < Current_FrameGraph->CurrentFrameSubmits.size(); SubmitIndex++) {
@@ -1355,9 +1351,9 @@ namespace Vulkan {
 					break;
 				}
 			}
-			
-			for (unsigned char CBIndex = 0; CBIndex < Submit->Run_Queue->CommandPool.CBs.size(); CBIndex++) {
-				VK_CommandBuffer& VK_CB = Submit->Run_Queue->CommandPool.CBs[CBIndex];
+			VK_CommandPool& CP = Submit->Run_Queue->CommandPools[GFXRENDERER->GetCurrentFrameIndex()];
+			for (unsigned char CBIndex = 0; CBIndex < CP.CBs.size(); CBIndex++) {
+				VK_CommandBuffer& VK_CB = CP.CBs[CBIndex];
 				if (!VK_CB.is_Used) {
 					Submit->CBIndex = CBIndex;
 					VK_CB.is_Used = true;
@@ -1382,7 +1378,7 @@ namespace Vulkan {
 					VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, LFDBranch.CorePasses[0].Handle);
 					for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[1].size(); WindowIndex++) {
 						Submit->WaitSemaphoreIndexes.push_back(
-							WP->WindowCalls[1][WindowIndex].Window->PresentationWaitSemaphoreIndexes[(GFXRENDERER->GetCurrentFrameIndex() + 1) % 2]
+							WP->WindowCalls[1][WindowIndex].Window->PresentationWaitSemaphoreIndexes[1]
 						);
 						Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 					}
@@ -1399,9 +1395,9 @@ namespace Vulkan {
 				VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, PenultimateWPBranch->CorePasses[0].Handle);
 				for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[0].size(); WindowIndex++) {
 					Submit->WaitSemaphoreIndexes.push_back(
-						WP->WindowCalls[0][WindowIndex].Window->PresentationWaitSemaphoreIndexes[GFXRENDERER->GetCurrentFrameIndex()]
+						WP-> WindowCalls[0][WindowIndex].Window->PresentationWaitSemaphoreIndexes[0]
 					);
-					Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+					Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 				}
 			}
 			//Find Current Frame dependent submits and get their signal semaphores to wait
@@ -1427,6 +1423,7 @@ namespace Vulkan {
 
 
 
+	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
 	// Vulkan Render Command Buffer Recordings
 	void Record_RenderPass(VkCommandBuffer CB, VK_DrawPass* DrawPass) {
 		unsigned char FRAMEINDEX = GFXRENDERER->GetCurrentFrameIndex();
@@ -1448,8 +1445,6 @@ namespace Vulkan {
 				CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.y,
 				CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.z,
 				CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.w };
-				CLEARVALUEs[COLORRTIndex].depthStencil.depth = 0.0f;
-				CLEARVALUEs[COLORRTIndex].depthStencil.stencil = 0;
 			}
 			rp_bi.pClearValues = CLEARVALUEs.data();
 		}
@@ -1484,7 +1479,9 @@ namespace Vulkan {
 
 					vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatInst->PipelineObject);
 					VkDeviceSize Offsets[] = { 0 };
-					vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VB->Buffer, Offsets);
+					VkBuffer TargetBuffer;
+					FindBufferOBJ_byBufType(DrawCall.VB, GFX_API::BUFFER_TYPE::VERTEX, TargetBuffer, Offsets[0]);
+					vkCmdBindVertexBuffers(CB, 0, 1, &TargetBuffer, Offsets);
 					vkCmdDraw(CB, DrawCall.VB->VERTEX_COUNT, 1, 0, 0);
 				}
 				SP.DrawCalls.clear(ThreadIndex);
@@ -1600,37 +1597,38 @@ namespace Vulkan {
 		if (srcPipelineStage == 0) {
 			srcPipelineStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 		}
-		vkCmdPipelineBarrier(CB, srcPipelineStage, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, IMBARRIES.size(), IMBARRIES.data());
+		vkCmdPipelineBarrier(CB, srcPipelineStage, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, IMBARRIES.size(), IMBARRIES.data());
 	}
 
-	void Record_UploadTP(VkCommandBuffer CB, VK_TPCopyDatas* DATAs) {
-		/*
+	void Record_CopyTP(VkCommandBuffer CB, VK_TPCopyDatas* DATAs) {
 		{
-			std::unique_lock<std::mutex> BufferLocker;
-			DATAs->BufferUploads.PauseAllOperations(BufferLocker);
+			std::unique_lock<std::mutex> BUFBUFLocker;
+			DATAs->BUFBUFCopies.PauseAllOperations(BUFBUFLocker);
 			unsigned int LastElementIndex = 0;
 			for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
-				for (unsigned int i = 0; i < DATAs->BufferUploads.size(ThreadIndex); i++) {
-					VK_BufUploadInfo& info = DATAs->BufferUploads.get(ThreadIndex, i);
-					info.BUFFER;
-					vkCmdCopyBuffer(CB,);
+				for (unsigned int i = 0; i < DATAs->BUFBUFCopies.size(ThreadIndex); i++) {
+					VK_BUFtoBUFinfo& info = DATAs->BUFBUFCopies.get(ThreadIndex, i);
+					vkCmdCopyBuffer(CB, info.SourceBuffer, info.DistanceBuffer, 1, &info.info);
 					LastElementIndex++;
 				}
+				DATAs->BUFBUFCopies.clear(ThreadIndex);
 			}
 		}
+
 		{
-			std::unique_lock<std::mutex> TextureLocker;
-			DATAs->TextureUploads.PauseAllOperations(TextureLocker);
+			std::unique_lock<std::mutex> BUFIMLocker;
+			DATAs->BUFIMCopies.PauseAllOperations(BUFIMLocker);
 			unsigned int LastElementIndex = 0;
 			for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
-				for (unsigned int i = 0; i < DATAs->TextureUploads.size(ThreadIndex); i++) {
-
+				for (unsigned int i = 0; i < DATAs->BUFIMCopies.size(ThreadIndex); i++) {
+					VK_BUFtoIMinfo& info = DATAs->BUFIMCopies.get(ThreadIndex, i);
+					vkCmdCopyBufferToImage(CB, info.SourceBuffer, info.TargetImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &info.BufferImageCopy);
+					LastElementIndex++;
 				}
+				DATAs->BUFIMCopies.clear(ThreadIndex);
 			}
 		}
-		*/
 	}
-
 	void RecordRGBranchCalls(VK_RGBranch& Branch, VkCommandBuffer CB) {
 		unsigned char PassElementIndex = 0;
 		VK_BranchPass* LastPass = nullptr;
@@ -1669,7 +1667,7 @@ namespace Vulkan {
 				case GFX_API::TRANFERPASS_TYPE::TP_COPY:
 				{
 					VK_TPCopyDatas* TPDATAs = GFXHandleConverter(VK_TPCopyDatas*, TP->TransferDatas);
-					Record_UploadTP(CB, TPDATAs);
+					Record_CopyTP(CB, TPDATAs);
 				}
 					break;
 				default:

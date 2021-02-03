@@ -83,7 +83,7 @@
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)Source</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Disabled</Optimization>
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <WholeProgramOptimization>true</WholeProgramOptimization>
     </ClCompile>

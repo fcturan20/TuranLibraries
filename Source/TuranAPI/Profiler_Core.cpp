@@ -29,7 +29,6 @@ namespace TuranAPI {
 			LOG_CRASHING_TAPI("You should specify timing between 0-3, not anything else!");
 			return false;
 		}
-		START_POINT = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
 		THREAD_ID = std::hash<std::thread::id>{}(std::this_thread::get_id());
 		Is_Recording = true;
 		return true;

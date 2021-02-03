@@ -22,7 +22,7 @@ namespace TuranAPI {
 			vector<LOG> LOGs;
 		public:
 			static Logger* SELF;
-			Logger();
+			Logger(const char* LogFolder);
 			~Logger();
 			void Write_LOGs_toTextFiles();
 			void Log_CrashingError(const char* log);

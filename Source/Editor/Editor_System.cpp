@@ -2,7 +2,7 @@
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
 
 namespace TuranEditor {
-	Editor_System::Editor_System(TuranAPI::Threading::JobSystem* JobSystem) {
+	Editor_System::Editor_System(TuranAPI::Threading::JobSystem* JobSystem) : LOGGING("C:/dev/VulkanRenderer") {
 		std::cout << "Editor System Constructor is started!\n";
 		Vulkan::Vulkan_Core* VK = new Vulkan::Vulkan_Core(Monitors, GPUs, JobSystem);
 		VK->Start_SecondStage(0, 1024 * 1024 * 20, 1024 * 1024 * 20, 0, 0);
@@ -132,106 +132,6 @@ namespace TuranEditor {
 		GFXRENDERER->Finish_RenderGraphConstruction();
 		LOG_CRASHING_TAPI("Application is successful, this is just to stop!");
 		
-	}
-	void RenderGraphConstruction_DrawPassed(GFX_API::GFXHandle SWPCHT0, GFX_API::GFXHandle SWPCHT1, GFX_API::GFXHandle& SubpassID, GFX_API::GFXHandle& IRTSlotSetID, GFX_API::GFXHandle& WindowPassHandle
-		, GFX_API::GFXHandle& FirstBarrierTPHandle, GFX_API::GFXHandle& UploadTPHandle, GFX_API::GFXHandle& FinalBarrierTPHandle) {
-		//Handles that're not used outside of the function
-		GFX_API::GFXHandle FIRSTDRAWPASS_ID, RTSlotSet_ID;
-
-		GFXRENDERER->Start_RenderGraphConstruction();
-
-		GFXRENDERER->Create_TransferPass({}, GFX_API::TRANFERPASS_TYPE::TP_COPY, "Uploader", UploadTPHandle);
-
-		//First Barrier TP
-		//This pass depends on both the uploader (changes the layouts of the uploaded textures)
-		//and also 2 frames ago's swapchain display (because this'll change the layout from SWPCHN_DSPLY to RTCOLORATTACHMENT)
-		{
-			GFX_API::PassWait_Description Upload_dep;
-			Upload_dep.WaitedPass = &UploadTPHandle;
-			Upload_dep.WaitedStage.TRANSFERCMD = true;
-			Upload_dep.WaitLastFramesPass = false;
-
-			GFX_API::PassWait_Description WP_dep;
-			WP_dep.WaitedPass = &WindowPassHandle;
-			WP_dep.WaitedStage.SWAPCHAINDISPLAY = true;
-			WP_dep.WaitLastFramesPass = false;
-
-			GFXRENDERER->Create_TransferPass({ Upload_dep, WP_dep }, GFX_API::TRANFERPASS_TYPE::TP_BARRIER, "First Barrier TP", FirstBarrierTPHandle);
-		}
-
-		vector<GFX_API::RTSLOT_Description> RTSlots;
-		//Create RT, Base RTSlotSet and the inherited one!
-		{
-			GFX_API::GFXHandle FIRSTRT;
-			GFX_API::Texture_Resource COLORRT;
-			COLORRT.WIDTH = 1280;
-			COLORRT.HEIGHT = 720;
-			COLORRT.USAGE.isCopiableFrom = true;
-			COLORRT.USAGE.isCopiableTo = false;
-			COLORRT.USAGE.isRandomlyWrittenTo = false;
-			COLORRT.USAGE.isRenderableTo = true;
-			COLORRT.USAGE.isSampledReadOnly = false;
-			COLORRT.Properties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA8UB;
-			COLORRT.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
-			COLORRT.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_1MIP;
-			COLORRT.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
-			GFXContentManager->Create_Texture(COLORRT, GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, GFX_API::IMAGEUSAGE::READWRITE_RTATTACHMENT, FIRSTRT);
-
-			GFX_API::RTSLOT_Description FirstRTSLOT;
-			FirstRTSLOT.CLEAR_VALUE = vec4(0.1f, 0.5f, 0.5f, 1.0f);
-			FirstRTSLOT.LOADOP = GFX_API::DRAWPASS_LOAD::CLEAR;
-			FirstRTSLOT.OPTYPE = GFX_API::OPERATION_TYPE::WRITE_ONLY;
-			FirstRTSLOT.TextureHandles[0] = SWPCHT0;
-			FirstRTSLOT.TextureHandles[1] = SWPCHT1;
-			FirstRTSLOT.SLOTINDEX = 0;
-			RTSlots.push_back(FirstRTSLOT);
-
-			GFXContentManager->Create_RTSlotset(RTSlots, RTSlotSet_ID);
-
-
-			GFX_API::RTSLOTUSAGE_Description IRTSlot;
-			IRTSlot.IS_DEPTH = false;
-			IRTSlot.OPTYPE = GFX_API::OPERATION_TYPE::WRITE_ONLY;
-			IRTSlot.SLOTINDEX = 0;
-			GFXContentManager->Inherite_RTSlotSet({ IRTSlot }, RTSlotSet_ID, IRTSlotSetID);
-		}
-
-		//Create Draw Pass
-		{
-			GFX_API::SubDrawPass_Description Subpass_desc;
-			Subpass_desc.INHERITEDSLOTSET = IRTSlotSetID;
-			Subpass_desc.SubDrawPass_Index = 0;
-			vector<GFX_API::SubDrawPass_Description> DESCS{ Subpass_desc };
-			vector<GFX_API::GFXHandle> SPs_ofFIRSTDP;
-
-
-			GFX_API::PassWait_Description FirstBarrierTP_dep;
-			FirstBarrierTP_dep.WaitedPass = &FirstBarrierTPHandle;
-			FirstBarrierTP_dep.WaitedStage.TRANSFERCMD = true;
-			FirstBarrierTP_dep.WaitLastFramesPass = false;
-			GFXRENDERER->Create_DrawPass(DESCS, RTSlotSet_ID, { FirstBarrierTP_dep }, "FirstDP", SPs_ofFIRSTDP, FIRSTDRAWPASS_ID);
-			SubpassID = SPs_ofFIRSTDP[0];
-		}
-
-		//Create Final Barrier TP (to change layout of the Swapchain texture)
-		{
-			GFX_API::PassWait_Description DP_dep;
-			DP_dep.WaitedPass = &FIRSTDRAWPASS_ID;
-			DP_dep.WaitedStage.COLORRTOUTPUT = true;
-			DP_dep.WaitLastFramesPass = false;
-			GFXRENDERER->Create_TransferPass({ DP_dep }, GFX_API::TRANFERPASS_TYPE::TP_BARRIER, "Final Barrier TP", FinalBarrierTPHandle);
-		}
-
-		//Create Window Pass
-		{
-			GFX_API::PassWait_Description FTP_ID;
-			FTP_ID.WaitedPass = &FinalBarrierTPHandle;
-			FTP_ID.WaitedStage.TRANSFERCMD = true;
-			FTP_ID.WaitLastFramesPass = false;
-			GFXRENDERER->Create_WindowPass({ FTP_ID }, "First WP", WindowPassHandle);
-		}
-
-		GFXRENDERER->Finish_RenderGraphConstruction();
 	}
 
 

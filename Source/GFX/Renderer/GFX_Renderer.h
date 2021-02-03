@@ -59,11 +59,11 @@ namespace GFX_API {
 
 		virtual void Render_DrawCall(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) = 0;
 		virtual void SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle) = 0;
-		//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
-		//Target Buffer should be created with DEVICELOCAL
-		virtual void UploadTo_Buffer(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle TargetBuffer_Handle, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) = 0;
-		//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
-		virtual void UploadTo_Image(GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::GFXHandle Texture_Handle, unsigned int SourceBuffer_Offset, unsigned int Size, GFX_API::BoxRegion Texture_TargetRegion) = 0;
+		virtual void CopyBuffer_toBuffer(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE, 
+			GFX_API::GFXHandle TargetBuffer_Handle, GFX_API::BUFFER_TYPE TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) = 0;
+		virtual void CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
+			GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, unsigned int TargetTexture_OffsetWidth, unsigned int TargetTexture_OffsetHeight,
+			unsigned int TargetTexture_OffsetDepth, unsigned int TargetTexture_CopyWidth, unsigned int TargetTexture_CopyHeight, unsigned int TargetTexture_CopyDepth) = 0;
 		virtual void ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
 			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, GFX_API::GFXHandle BarrierTPHandle) = 0;
 

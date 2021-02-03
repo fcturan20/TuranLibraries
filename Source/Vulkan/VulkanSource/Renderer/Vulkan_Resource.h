@@ -79,7 +79,6 @@ namespace Vulkan {
 	struct VK_API VK_VertexBuffer {
 		unsigned int VERTEX_COUNT;
 		VK_VertexAttribLayout* Layout;
-		VkBuffer Buffer;
 		MemoryBlock Block;
 	};
 
@@ -155,13 +154,13 @@ namespace Vulkan {
 	};
 
 	struct VK_BUFtoIMinfo {
-		VK_Texture* IMAGE;
-		VkDeviceSize StagingBufferOffset;
+		VkImage TargetImage;
+		VkBuffer SourceBuffer;
+		VkBufferImageCopy BufferImageCopy;
 	};
 	struct VK_BUFtoBUFinfo {
-		VK_BUFFERTYPEs BufferType;
-		GFX_API::GFXHandle BUFFER;
-		VkDeviceSize StagingBufferOffset;
+		VkBuffer SourceBuffer, DistanceBuffer;
+		VkBufferCopy info;
 	};
 	struct VK_IMtoIMinfo {
 		VK_Texture* IMAGE;

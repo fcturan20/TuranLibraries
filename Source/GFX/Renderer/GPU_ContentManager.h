@@ -84,8 +84,8 @@ namespace GFX_API {
 		//TARGET OFFSET is the offset in the texture's buffer to copy to
 		virtual void Unload_Texture(GFXHandle TEXTUREHANDLE) = 0;
 
-		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE
-			, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
+		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
+			GFX_API::SHADERSTAGEs_FLAG AccessableStages, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
 		virtual TAPIResult Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
 			unsigned int DataSize, unsigned int TargetOffset) = 0;
 		virtual void Unload_GlobalBuffer(GFXHandle BUFFER_ID) = 0;
@@ -101,8 +101,11 @@ namespace GFX_API {
 		virtual TAPIResult Link_MaterialType(const GFX_API::Material_Type& MATTYPE_ASSET, GFX_API::GFXHandle& MaterialHandle) = 0;
 		virtual void Delete_MaterialType(GFXHandle ID) = 0;
 		//Return handle to reference in GFX!
-		virtual TAPIResult Create_MaterialInst(const GFX_API::Material_Instance& MATINST_ASSET, GFX_API::GFXHandle& MaterialInstHandle) = 0;
+		virtual TAPIResult Create_MaterialInst(GFX_API::GFXHandle MaterialType, GFX_API::GFXHandle& MaterialInstHandle) = 0;
 		virtual void Delete_MaterialInst(GFXHandle ID) = 0;
+		//If isMaterialType is false, MaterialType_orInstance input will be proccessed as MaterialInstance handle
+		virtual void SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
+			GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) = 0;
 
 
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) = 0;

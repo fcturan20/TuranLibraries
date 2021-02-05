@@ -15,17 +15,4 @@ namespace GFX_API {
 	}
 
 
-
-
-
-
-
-
-
-	//MATERIAL INSTANCE FUNCTIONs
-
-	Material_Instance::Material_Instance() {
-
-	}
-
 }

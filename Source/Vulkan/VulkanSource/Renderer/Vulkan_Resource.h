@@ -3,6 +3,7 @@
 
 
 namespace Vulkan {
+	//This structure defines offset of the suballocation in the big memory allocation that happens at initialization
 	struct MemoryBlock {
 		GFX_API::SUBALLOCATEBUFFERTYPEs Type;
 		VkDeviceSize Offset;
@@ -65,7 +66,6 @@ namespace Vulkan {
 			Vertex Attributes are created as seperate objects because this helps debug visualization of the data
 			Vertex Attributes are goona be ordered by VertexAttributeLayout's vector elements order and this also defines attribute's in-shader location
 			That means if position attribute is second element in "Attributes" vector, MaterialType that using this layout uses position attribute at location = 1 instead of 0.
-
 	*/
 	struct VK_API VK_VertexAttribLayout {
 		VK_VertexAttribute** Attributes;
@@ -84,19 +84,48 @@ namespace Vulkan {
 
 
 	struct VK_API VK_GlobalBuffer {
-		unsigned int DATA_SIZE, BINDINGPOINT;
+		VkDeviceSize DATA_SIZE, BINDINGPOINT;
 		MemoryBlock Block;
 		bool isUniform;
 		GFX_API::SHADERSTAGEs_FLAG ACCESSED_STAGEs;
 	};
 
-	struct VK_API VK_DescSetLayout {
-		VkDescriptorSetLayout Layout;
-		unsigned int IMAGEDESCCOUNT = 0, SAMPLERDESCCOUNT = 0, UBUFFERDESCCOUNT = 0, SBUFFERDESCCOUNT = 0;
+	enum class DescType : unsigned char {
+		IMAGE,
+		SAMPLER,
+		UBUFFER,
+		SBUFFER
+	};
+	struct VK_API VK_DescBuffer {
+		unsigned int BindingIndex;
+		VkDescriptorBufferInfo Info;
+		std::atomic<bool> IsUpdated;
+		VK_DescBuffer();
+		VK_DescBuffer(const VK_DescBuffer& copyDesc);
+	};
+	struct VK_API VK_DescImage {
+		VkDescriptorImageInfo info;
+		unsigned int BindingIndex;
+		std::atomic_bool IsUpdated;
+		VK_DescImage();
+		VK_DescImage(const VK_DescImage& copyDesc);
+	};
+	struct VK_API VK_DescSet {
+		VkDescriptorSet Set = VK_NULL_HANDLE;
+		VkDescriptorSetLayout Layout = VK_NULL_HANDLE;
+		VK_DescBuffer* DescUBuffers = nullptr, *DescSBuffers = nullptr;
+		VK_DescImage* DescImages = nullptr, *DescSamplers = nullptr;
+		unsigned int DescUBuffersCount = 0, DescSBuffersCount = 0, DescSamplersCount = 0, DescImagesCount = 0;
+		std::atomic_bool ShouldRecreate = false;
+	};
+	struct VK_API VK_DescSetUpdateCall {
+		VK_DescSet* Set;
+		DescType Type;
+		unsigned int ArrayIndex;
 	};
 	struct VK_API VK_DescPool {
 		VkDescriptorPool pool;
-		unsigned int REMAINING_SET, REMAINING_UBUFFER, REMAINING_SBUFFER, REMAINING_SAMPLER, REMAINING_IMAGE;
+		TuranAPI::Threading::AtomicUINT REMAINING_SET, REMAINING_UBUFFER, REMAINING_SBUFFER, REMAINING_SAMPLER, REMAINING_IMAGE;
 	};
 
 
@@ -109,18 +138,15 @@ namespace Vulkan {
 	struct VK_SubDrawPass;
 	struct VK_API VK_GraphicsPipeline {
 		VK_SubDrawPass* GFX_Subpass;
-		GFX_API::MaterialDataDescriptor* DATADESCs;
-		unsigned int DESCCOUNT, ASSET_ID;
 
 		VkPipelineLayout PipelineLayout;
 		VkPipeline PipelineObject;
-		VK_DescSetLayout General_DescSetLayout, Instance_DescSetLayout;
-		VkDescriptorSet General_DescSet;
+		VK_DescSet General_DescSet, Instance_DescSet;
 	};
 	struct VK_API VK_PipelineInstance {
 		VK_GraphicsPipeline* PROGRAM;
 
-		VkDescriptorSet DescSet;
+		VK_DescSet DescSet;
 	};
 	struct VK_API VK_Sampler {
 	};
@@ -138,11 +164,6 @@ namespace Vulkan {
 		WP = 4,
 	};
 
-	enum class VK_BUFFERTYPEs : unsigned char {
-		MESH = 0,
-		STORAGE = 1,
-		UNIFORM = 2
-	};
 	struct VK_ImCopyInfo {
 		VK_Texture* SOURCE_IM, DESTINATION_IM;
 		GFX_API::IMAGEUSAGE SOURCE_PREVIOUSUSAGE, SOURCE_LATERUSAGE;
@@ -178,7 +199,6 @@ namespace Vulkan {
 		VkImageLayout LASTLAYOUT, NEXTLAYOUT;
 	};
 	struct VK_BufBarrierInfo {
-		VK_BUFFERTYPEs BufferType;
 		GFX_API::GFXHandle BUFFER;
 		GFX_API::SHADERSTAGEs_FLAG WAITSTAGE, SIGNALSTAGE;
 	};
@@ -197,7 +217,7 @@ namespace Vulkan {
 
 	struct VK_DrawCall {
 		VK_VertexBuffer* VB;
-		VK_GraphicsPipeline* MatInst;
+		VK_PipelineInstance* MatInst;
 	};
 	struct VK_API VK_SubDrawPass {
 		unsigned char Binding_Index;

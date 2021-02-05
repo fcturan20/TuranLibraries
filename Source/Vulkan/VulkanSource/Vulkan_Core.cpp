@@ -598,14 +598,6 @@ namespace Vulkan {
 			VKRENDERER->Semaphores.push_back(VKdata);
 			Vulkan_Window->PresentationWaitSemaphoreIndexes[SemaphoreIndex] = VKRENDERER->Semaphores.size() - 1;
 		}
-		for (uint32_t i = 0; i < 3; i++) {
-			uint32_t swpchni = 0;
-			vkAcquireNextImageKHR(Vulkan_GPU->Logical_Device, Vulkan_Window->Window_SwapChain, UINT64_MAX,
-				VKRENDERER->Semaphores[Vulkan_Window->PresentationWaitSemaphoreIndexes[i]].SPHandle, VK_NULL_HANDLE, &swpchni);
-			if (i != swpchni) {
-				LOG_CRASHING_TAPI("WTF!");
-			}
-		}
 
 
 		LOG_STATUS_TAPI("Window creation is successful!");

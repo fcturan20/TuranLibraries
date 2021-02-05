@@ -36,8 +36,7 @@ namespace GFX_API {
 	* In OpenGL, this structure's NAME should match with in-shader buffer's name (You shouldn't set binding in shader!). At linking, ContentManager finds BINDINGPOINT and stores it
 	*/
 	struct GFXAPI MaterialDataDescriptor {
-		unsigned int DATA_SIZE = 0;
-		void* BINDINGPOINT;
+		unsigned int DATA_SIZE = 0, BINDINGPOINT = 0;
 		string NAME;
 		SHADERSTAGEs_FLAG SHADERSTAGEs;
 		MATERIALDATA_TYPE TYPE;
@@ -59,18 +58,6 @@ namespace GFX_API {
 		GFXHandle VERTEXSOURCE_ID, FRAGMENTSOURCE_ID, ATTRIBUTELAYOUT_ID, SubDrawPass_ID;
 		vector<MaterialDataDescriptor> MATERIALTYPEDATA;
 	};
-	
-	//Don't forget, data handling for each uniform type is the responsibility of the user!
-	class GFXAPI Material_Instance {
-	public:
-		Material_Instance();
-		
-		//Uniforms won't change at run-time because we are defining uniforms at compile-time, but it is an easier syntax for now!
-		//This list will be defined per material type (for example: Surface_PBR, Surface_Phong, Texture View etc.)
-		void* Material_Type;
-		vector<MaterialInstanceData> MATERIALDATAs;
-	};
-
 
 	
 	class GFXAPI ComputeShader_Resource {

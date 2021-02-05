@@ -17,7 +17,7 @@
 #pragma once
 
 #define TURANAPI
-//#define TURAN_DEBUGGING 1
+#define TURAN_DEBUGGING 1
 /*
 #ifdef WINDOWS10_FORENGINE
 #ifdef TURANAPI_BUILD

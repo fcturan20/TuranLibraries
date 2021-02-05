@@ -19,26 +19,37 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_RTSLOTSET*> RT_SLOTSETs;
 
 		//Suballocate and bind memory to VkBuffer object
-		TAPIResult				Suballocate_Buffer(VkBuffer BUFFER, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset);
+		TAPIResult				Suballocate_Buffer(VkBuffer BUFFER, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset, VkDeviceSize& RequiredSize, bool ShouldBind);
 		//Suballocate and bind memory to VkImage object
 		TAPIResult				Suballocate_Image(VK_Texture& Texture);
 
-		VkDescriptorPool		GlobalBuffers_DescPool;
-		VkDescriptorSet			GlobalBuffers_DescSet;
+		//This vector contains descriptor sets that are for material types/instances that are created this frame
+		TuranAPI::Threading::TLVector<VK_DescSet*> DescSets_toCreate;
+		//This vector contains descriptor sets that needs update
+		//These desc sets are created before and is used in last 2 frames (So new descriptor set creation and updating it is necessary)
+		TuranAPI::Threading::TLVector<VK_DescSetUpdateCall> DescSets_toCreateUpdate;
+		//These desc sets are not used recently in draw calls. So don't go to create-update-delete process, just update.
+		TuranAPI::Threading::TLVector<VK_DescSetUpdateCall> DescSets_toJustUpdate;
+		//These are the desc sets that should be destroyed 2 frames later!
+		vector<VkDescriptorSet> UnboundDescSetList[2];
+		unsigned int UnboundDescSetImageCount[2], UnboundDescSetSamplerCount[2], UnboundDescSetUBufferCount[2], UnboundDescSetSBufferCount[2];
+		VK_DescPool MaterialRelated_DescPool;
+		VkDescriptorPool GlobalBuffers_DescPool;
+		VkDescriptorSet GlobalBuffers_DescSet;
 		VkDescriptorSetLayout	GlobalBuffers_DescSetLayout;
+		bool Create_DescSet(VK_DescSet* Set);
 
-
-		vector<VK_DescPool> MaterialData_DescPools;
-		//Creates same set by SetCount times! Sets should be a pointer to an array that's at SetCount size!
-		bool Create_DescSets(const VK_DescSetLayout& Layout, VkDescriptorSet* Sets, unsigned int SetCount);
-
+		//Create Global descriptor sets
 		void Resource_Finalizations();
 
 		VkSampler DefaultSampler;
+
+
+
+
+
+
 		//INHERITANCE
-
-
-
 
 		GPU_ContentManager();
 		virtual ~GPU_ContentManager();
@@ -74,8 +85,8 @@ namespace Vulkan {
 		virtual void Unload_Texture(GFX_API::GFXHandle TEXTUREHANDLE) override;
 
 
-		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, 
-			GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) override;
+		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
+			GFX_API::SHADERSTAGEs_FLAG AccessableStages, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) override;
 		virtual TAPIResult Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
 			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) override;
@@ -87,8 +98,10 @@ namespace Vulkan {
 		virtual void Delete_ComputeShader(GFX_API::GFXHandle ASSET_ID) override;
 		virtual TAPIResult Link_MaterialType(const GFX_API::Material_Type& MATTYPE_ASSET, GFX_API::GFXHandle& MaterialHandle) override;
 		virtual void Delete_MaterialType(GFX_API::GFXHandle Asset_ID) override;
-		virtual TAPIResult Create_MaterialInst(const GFX_API::Material_Instance& MATINST_ASSET, GFX_API::GFXHandle& MaterialInstHandle) override;
+		virtual TAPIResult Create_MaterialInst(GFX_API::GFXHandle MaterialType, GFX_API::GFXHandle& MaterialInstHandle) override;
 		virtual void Delete_MaterialInst(GFX_API::GFXHandle Asset_ID) override;
+		virtual void SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
+			GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) override;
 
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) override;
 		virtual TAPIResult Inherite_RTSlotSet(const vector<GFX_API::RTSLOTUSAGE_Description>& Descriptions, GFX_API::GFXHandle RTSlotSetHandle, GFX_API::GFXHandle& InheritedSlotSetHandle) override;

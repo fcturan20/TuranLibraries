@@ -97,4 +97,17 @@ namespace Vulkan {
 	VK_SubDrawPass::VK_SubDrawPass() : DrawCalls(*GFX->JobSys) {
 
 	}
+
+	VK_DescBuffer::VK_DescBuffer() : IsUpdated(0), Info(), BindingIndex(0) {
+
+	}
+	VK_DescBuffer::VK_DescBuffer(const VK_DescBuffer& copyBuf) : IsUpdated(copyBuf.IsUpdated.load()), Info(copyBuf.Info), BindingIndex(copyBuf.BindingIndex) {
+
+	}
+	VK_DescImage::VK_DescImage() : IsUpdated(0), info(), BindingIndex(0) {
+
+	}
+	VK_DescImage::VK_DescImage(const VK_DescImage& copyIm) : IsUpdated(copyIm.IsUpdated.load()), info(copyIm.info), BindingIndex(copyIm.BindingIndex) {
+
+	}
 }

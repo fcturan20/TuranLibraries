@@ -4,11 +4,11 @@
 #define VKRENDERER ((Vulkan::Renderer*)GFXRENDERER)
 #define VKGPU (((Vulkan::Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
 
-#define MAXDESCSETCOUNT_PERPOOL 100; 
-#define MAXUBUFFERCOUNT_PERPOOL 100; 
-#define MAXSBUFFERCOUNT_PERPOOL 100; 
-#define MAXSAMPLERCOUNT_PERPOOL 100;
-#define MAXIMAGECOUNT_PERPOOL	100;
+#define MAXDESCSETCOUNT_PERPOOL 100
+#define MAXUBUFFERCOUNT_PERPOOL 100
+#define MAXSBUFFERCOUNT_PERPOOL 100
+#define MAXSAMPLERCOUNT_PERPOOL 100
+#define MAXIMAGECOUNT_PERPOOL	100
 
 namespace Vulkan {
 	VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage) {
@@ -33,39 +33,40 @@ namespace Vulkan {
 		return buffer;
 	}
 	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
-		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBUTEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys) {
+		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBUTEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys),
+		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys){
 
 		//GPU Local Memory Allocation
 		if (VKGPU->GPULOCAL_ALLOC.FullSize) {
-				VkMemoryRequirements memrequirements;
-				VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-				uint64_t AllocSize = VKGPU->GPULOCAL_ALLOC.FullSize;
-				VkBuffer GPULOCAL_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
-				vkGetBufferMemoryRequirements(VKGPU->Logical_Device, GPULOCAL_buf, &memrequirements);
-				if (!(memrequirements.memoryTypeBits & (1 << VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex))) {
-					LOG_CRASHING_TAPI("GPU Local Memory Allocation doesn't support the MemoryType!");
-					return;
-				}
-				VkMemoryAllocateInfo ci{};
-				ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-				ci.allocationSize = memrequirements.size;
-				ci.memoryTypeIndex = VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex;
-				VkDeviceMemory allocated_memory;
-				if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
-				}
-				VKGPU->GPULOCAL_ALLOC.Allocated_Memory = allocated_memory;
-				VKGPU->GPULOCAL_ALLOC.UnusedSize = AllocSize;
-				VKGPU->GPULOCAL_ALLOC.MappedMemory = nullptr;
-				VKGPU->GPULOCAL_ALLOC.Buffer = GPULOCAL_buf;
-				if (vkBindBufferMemory(VKGPU->Logical_Device, GPULOCAL_buf, allocated_memory, 0) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
-				}
+			VkMemoryRequirements memrequirements;
+			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+			uint64_t AllocSize = VKGPU->GPULOCAL_ALLOC.FullSize;
+			VkBuffer GPULOCAL_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
+			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, GPULOCAL_buf, &memrequirements);
+			if (!(memrequirements.memoryTypeBits & (1 << VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex))) {
+				LOG_CRASHING_TAPI("GPU Local Memory Allocation doesn't support the MemoryType!");
+				return;
+			}
+			VkMemoryAllocateInfo ci{};
+			ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			ci.allocationSize = memrequirements.size;
+			ci.memoryTypeIndex = VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex;
+			VkDeviceMemory allocated_memory;
+			if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
+			}
+			VKGPU->GPULOCAL_ALLOC.Allocated_Memory = allocated_memory;
+			VKGPU->GPULOCAL_ALLOC.UnusedSize = AllocSize;
+			VKGPU->GPULOCAL_ALLOC.MappedMemory = nullptr;
+			VKGPU->GPULOCAL_ALLOC.Buffer = GPULOCAL_buf;
+			if (vkBindBufferMemory(VKGPU->Logical_Device, GPULOCAL_buf, allocated_memory, 0) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
+			}
 		}
 		//Host Visible Memory Allocation
 		if (VKGPU->HOSTVISIBLE_ALLOC.FullSize) {
 			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | 
+			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
 				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 			uint64_t AllocSize = VKGPU->HOSTVISIBLE_ALLOC.FullSize;
 			VkBuffer stagingbuffer = Create_VkBuffer(AllocSize, USAGEFLAGs);
@@ -156,6 +157,46 @@ namespace Vulkan {
 			}
 		}
 
+		UnboundDescSetImageCount[0] = 0;
+		UnboundDescSetImageCount[1] = 0;
+		UnboundDescSetSamplerCount[0] = 0;
+		UnboundDescSetSamplerCount[1] = 0;
+		UnboundDescSetSBufferCount[0] = 0;
+		UnboundDescSetSBufferCount[1] = 0;
+		UnboundDescSetUBufferCount[0] = 0;
+		UnboundDescSetUBufferCount[1] = 0;
+
+		//Material Related Descriptor Pool Creation
+		{
+			VkDescriptorPoolCreateInfo dp_ci = {};
+			dp_ci.flags = 0;
+			dp_ci.maxSets = MAXDESCSETCOUNT_PERPOOL;
+			dp_ci.pNext = nullptr;
+			dp_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			VkDescriptorPoolSize SIZEs[4];
+			SIZEs[0].descriptorCount = MAXIMAGECOUNT_PERPOOL;
+			SIZEs[0].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+			SIZEs[1].descriptorCount = MAXSAMPLERCOUNT_PERPOOL;
+			SIZEs[1].type = VK_DESCRIPTOR_TYPE_SAMPLER;
+			SIZEs[2].descriptorCount = MAXSBUFFERCOUNT_PERPOOL;
+			SIZEs[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			SIZEs[3].descriptorCount = MAXUBUFFERCOUNT_PERPOOL;
+			SIZEs[3].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+			dp_ci.poolSizeCount = 4;
+			dp_ci.pPoolSizes = SIZEs;
+			if (vkCreateDescriptorPool(VKGPU->Logical_Device, &dp_ci, nullptr, &MaterialRelated_DescPool.pool) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Material Related Descriptor Pool Creation has failed! So GFXContentManager system initialization has failed!");
+				return;
+			}
+
+			MaterialRelated_DescPool.REMAINING_IMAGE.DirectStore(MAXIMAGECOUNT_PERPOOL);
+			MaterialRelated_DescPool.REMAINING_SAMPLER.DirectStore(MAXSAMPLERCOUNT_PERPOOL);
+			MaterialRelated_DescPool.REMAINING_SBUFFER.DirectStore(MAXSBUFFERCOUNT_PERPOOL);
+			MaterialRelated_DescPool.REMAINING_UBUFFER.DirectStore(MAXUBUFFERCOUNT_PERPOOL);
+			MaterialRelated_DescPool.REMAINING_SET.DirectStore(MAXDESCSETCOUNT_PERPOOL);
+		}
+
 		//Default Sampler Creation
 		{
 			VkSamplerCreateInfo ci = {};
@@ -188,17 +229,19 @@ namespace Vulkan {
 	void GPU_ContentManager::Unload_AllResources() {
 
 	}
+	VK_MemoryAllocation* GetMEMORYALLOCATIONHANDLE(const GFX_API::SUBALLOCATEBUFFERTYPEs& TYPE);
 
 	void GPU_ContentManager::Resource_Finalizations() {
 		//Create Global Buffer Descriptors etc
 		{
+			std::unique_lock<std::mutex> GlobalBufferLocker;
+			GLOBALBUFFERs.PauseAllOperations(GlobalBufferLocker);
+
 			//Descriptor Set Layout creation
 			unsigned int UNIFORMBUFFER_COUNT = 0, STORAGEBUFFER_COUNT = 0;
 			{
 				vector<VkDescriptorSetLayoutBinding> bindings;
-				std::unique_lock<std::mutex> GlobalBufferLocker;
-				GLOBALBUFFERs.PauseAllOperations(GlobalBufferLocker);
-				for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThisThreadIndex(); ThreadID++) {
+				for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
 					for (unsigned int i = 0; i < GLOBALBUFFERs.size(ThreadID); i++) {
 						VK_GlobalBuffer* globbuf = GLOBALBUFFERs.get(ThreadID, i);
 						bindings.push_back(VkDescriptorSetLayoutBinding());
@@ -226,34 +269,36 @@ namespace Vulkan {
 						}
 					}
 				}
-				GlobalBufferLocker.unlock();
 				
-				VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
-				DescSetLayout_ci.flags = 0;
-				DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-				DescSetLayout_ci.pNext = nullptr;
-				DescSetLayout_ci.bindingCount = bindings.size();
-				DescSetLayout_ci.pBindings = bindings.data();
-				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &DescSetLayout_ci, nullptr, &GlobalBuffers_DescSetLayout) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
-					return;
+				if (bindings.size()) {
+					VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
+					DescSetLayout_ci.flags = 0;
+					DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+					DescSetLayout_ci.pNext = nullptr;
+					DescSetLayout_ci.bindingCount = bindings.size();
+					DescSetLayout_ci.pBindings = bindings.data();
+					if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &DescSetLayout_ci, nullptr, &GlobalBuffers_DescSetLayout) != VK_SUCCESS) {
+						LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
+						return;
+					}
 				}
 			}
+
 			//Descriptor Pool and Descriptor Set creation
 			vector<VkDescriptorPoolSize> poolsizes;
-			{
-				if (UNIFORMBUFFER_COUNT > 0) {
-					VkDescriptorPoolSize UDescCount;
-					UDescCount.descriptorCount = UNIFORMBUFFER_COUNT;
-					UDescCount.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-					poolsizes.push_back(UDescCount);
-				}
-				if (STORAGEBUFFER_COUNT > 0) {
-					VkDescriptorPoolSize SDescCount;
-					SDescCount.descriptorCount = STORAGEBUFFER_COUNT;
-					SDescCount.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-					poolsizes.push_back(SDescCount);
-				}
+			if (UNIFORMBUFFER_COUNT > 0) {
+				VkDescriptorPoolSize UDescCount;
+				UDescCount.descriptorCount = UNIFORMBUFFER_COUNT;
+				UDescCount.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				poolsizes.push_back(UDescCount);
+			}
+			if (STORAGEBUFFER_COUNT > 0) {
+				VkDescriptorPoolSize SDescCount;
+				SDescCount.descriptorCount = STORAGEBUFFER_COUNT;
+				SDescCount.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				poolsizes.push_back(SDescCount);
+			} 
+			if (poolsizes.size()) {
 				VkDescriptorPoolCreateInfo descpool_ci = {};
 				descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 				descpool_ci.maxSets = 1;
@@ -279,13 +324,51 @@ namespace Vulkan {
 					}
 				}
 			}
+
+			//Update Descriptor Set
+			{
+				vector<VkWriteDescriptorSet> UpdateInfos;
+				vector<VkDescriptorBufferInfo*> DeleteList;
+				for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+					for (unsigned int i = 0; i < GLOBALBUFFERs.size(ThreadID); i++) {
+						VK_GlobalBuffer* buf = GLOBALBUFFERs.get(ThreadID, i);
+						VkWriteDescriptorSet info = {};
+						info.descriptorCount = 1;
+						if (buf->isUniform) {
+							info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+						}
+						else {
+							info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+						}
+						info.dstArrayElement = 0;
+						info.dstBinding = buf->BINDINGPOINT;
+						info.dstSet = GlobalBuffers_DescSet;
+						VkDescriptorBufferInfo* descbufinfo = new VkDescriptorBufferInfo;
+						VkBuffer nonobj; VkDeviceSize nonoffset;
+						descbufinfo->buffer = GetMEMORYALLOCATIONHANDLE(buf->Block.Type)->Buffer;
+						descbufinfo->offset = buf->Block.Offset;
+						descbufinfo->range = static_cast<VkDeviceSize>(buf->DATA_SIZE);
+						info.pBufferInfo = descbufinfo;
+						info.pNext = nullptr;
+						info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+						DeleteList.push_back(descbufinfo);
+						UpdateInfos.push_back(info);
+					}
+				}
+
+				vkUpdateDescriptorSets(VKGPU->Logical_Device, UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
+
+				for (unsigned int DeleteIndex = 0; DeleteIndex < DeleteList.size(); DeleteIndex++) {
+					delete DeleteList[DeleteIndex];
+				}
+			}
 		}
 	}
 
-	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset) {
+	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset, VkDeviceSize& RequiredSize, bool ShouldBind) {
 		VkMemoryRequirements bufferreq;
 		vkGetBufferMemoryRequirements(VKGPU->Logical_Device, BUFFER, &bufferreq);
-		VkDeviceSize size = bufferreq.size;
+		RequiredSize = bufferreq.size;
 
 		VkDeviceSize Offset = 0;
 		bool Found_Offset = false;
@@ -315,9 +398,9 @@ namespace Vulkan {
 		if (MEMALLOC->Allocated_Blocks.size() == 0) {
 			VK_MemoryBlock FirstBlock;
 			FirstBlock.isEmpty = false;
-			FirstBlock.Size = size;
+			FirstBlock.Size = RequiredSize;
 			FirstBlock.Offset = 0;
-			if (!(MEMALLOC->UnusedSize - size)) {
+			if (!(MEMALLOC->UnusedSize - RequiredSize)) {
 				LOG_CRASHING_TAPI("LimitedSubtract_weak() has failed in Suballocate_Buffer(), returning TAPI_FAIL!");
 				return TAPI_FAIL;
 			}
@@ -328,7 +411,7 @@ namespace Vulkan {
 		}
 		for (unsigned int i = 0; i < MEMALLOC->Allocated_Blocks.size() && !Found_Offset; i++) {
 			VK_MemoryBlock& Block = MEMALLOC->Allocated_Blocks[i];
-			if (Block.isEmpty && size < Block.Size && size > Block.Size / 5 * 3) {
+			if (Block.isEmpty && RequiredSize < Block.Size && RequiredSize > Block.Size / 5 * 3) {
 				Block.isEmpty = false;
 				Offset = Block.Offset;
 				Found_Offset = true;
@@ -337,13 +420,13 @@ namespace Vulkan {
 			}
 		}
 		//There is no empty block, so create new one!
-		if (MEMALLOC->UnusedSize > size && !Found_Offset) {
+		if (MEMALLOC->UnusedSize > RequiredSize && !Found_Offset) {
 			VK_MemoryBlock& LastBlock = MEMALLOC->Allocated_Blocks[MEMALLOC->Allocated_Blocks.size() - 1];
 			VK_MemoryBlock NewBlock;
 			NewBlock.isEmpty = false;
-			NewBlock.Size = size;
+			NewBlock.Size = RequiredSize;
 			NewBlock.Offset = LastBlock.Offset + LastBlock.Size;
-			MEMALLOC->UnusedSize -= size;
+			MEMALLOC->UnusedSize -= RequiredSize;
 			MEMALLOC->Allocated_Blocks.push_back(NewBlock);
 			Offset = NewBlock.Offset;
 			Found_Offset = true;
@@ -354,18 +437,22 @@ namespace Vulkan {
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed because there is no way you can create a buffer at this size!");
 			return TAPI_FAIL;
 		}
-		
-		if (vkBindBufferMemory(VKGPU->Logical_Device, BUFFER, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
-			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed at vkBindBufferMemory()!");
-			return TAPI_FAIL;
+		if (ShouldBind) {
+			Offset = (Offset % bufferreq.alignment) ? (Offset) : (((Offset / bufferreq.alignment) + 1) * bufferreq.alignment);
+
+			if (vkBindBufferMemory(VKGPU->Logical_Device, BUFFER, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed at vkBindBufferMemory()!");
+				return TAPI_FAIL;
+			}
 		}
+
 		MemoryOffset = Offset;
 		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::Suballocate_Image(VK_Texture& Texture) {
 		VkMemoryRequirements req;
 		vkGetImageMemoryRequirements(VKGPU->Logical_Device, Texture.Image, &req);
-		VkDeviceSize size = req.size; 
+		VkDeviceSize size = req.size;
 
 		VkDeviceSize Offset = 0;
 		bool Found_Offset = false;
@@ -431,6 +518,7 @@ namespace Vulkan {
 			Found_Offset = true;
 			MEMALLOC->Locker.unlock();
 		}
+		Offset = (Offset % req.alignment) ? (((Offset / req.alignment) + 1) * req.alignment) : (Offset);
 
 		if (!Found_Offset) {
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed becuse there is no way you can create a suballocate at this size!");
@@ -465,89 +553,19 @@ namespace Vulkan {
 		return TAPI_SUCCESS;
 	}
 
-
-	void NaiveCreate_DescPool(VkDescriptorPool* Pool, unsigned int DataTypeCount, VkDescriptorPoolSize* DataCounts_PerType) {
-		VkDescriptorPoolCreateInfo ci = {};
-		ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		ci.flags = 0;
-		ci.pNext = nullptr;
-		ci.maxSets = MAXDESCSETCOUNT_PERPOOL;
-		ci.poolSizeCount = DataTypeCount;
-		ci.pPoolSizes = DataCounts_PerType;
-		if (vkCreateDescriptorPool(VKGPU->Logical_Device, &ci, nullptr, Pool) != VK_SUCCESS) {
-			LOG_ERROR_TAPI("Create_Descs() has failed at vkCreateDescriptorPool()!");
-		}
-	}
-	void NaiveCreate_DescSets(VkDescriptorPool Pool, const VkDescriptorSetLayout* layout, unsigned int size, VkDescriptorSet* Set) {
-		VkDescriptorSetAllocateInfo ai = {};
-		ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		ai.descriptorSetCount = size;
-		ai.pSetLayouts = layout;
-		ai.descriptorPool = Pool;
-		ai.pNext = nullptr;
-		if (vkAllocateDescriptorSets(VKGPU->Logical_Device, &ai, Set) != VK_SUCCESS) {
-			LOG_ERROR_TAPI("Create_DescSet() has failed at vkAllocateDescriptorSets()");
-		}
-	}
-	bool GPU_ContentManager::Create_DescSets(const VK_DescSetLayout& Layout, VkDescriptorSet* DescSets, unsigned int SetCount) {
-		//Allocate sets in available pools
-		unsigned int REMAININGALLOCATESETCOUNT = SetCount;
-		for (unsigned int i = 0; i < MaterialData_DescPools.size() && REMAININGALLOCATESETCOUNT; i++) {
-			VK_DescPool VKP = MaterialData_DescPools[i];
-			if (VKP.REMAINING_IMAGE > Layout.IMAGEDESCCOUNT && VKP.REMAINING_SAMPLER > Layout.SAMPLERDESCCOUNT &&
-				VKP.REMAINING_SBUFFER > Layout.SBUFFERDESCCOUNT && VKP.REMAINING_UBUFFER > Layout.UBUFFERDESCCOUNT && VKP.REMAINING_SET > 0) {
-				unsigned int allocatecount = (VKP.REMAINING_SET > REMAININGALLOCATESETCOUNT) ? (REMAININGALLOCATESETCOUNT) : (VKP.REMAINING_SET);
-
-				NaiveCreate_DescSets(VKP.pool, &Layout.Layout, allocatecount, DescSets + (SetCount - REMAININGALLOCATESETCOUNT));
-
-				REMAININGALLOCATESETCOUNT -= allocatecount;
-				if (!REMAININGALLOCATESETCOUNT) {	//Allocated all sets!
-					return true;
-				}
-			}
-		}
-		
-		//Previous pools wasn't big enough, allocate overflowing sets in new pools!
-		while (REMAININGALLOCATESETCOUNT) {
-			//Create pool first!
-			{
-				VkDescriptorPool vkpool;
-				VkDescriptorPoolSize DescTypePoolSizes[4];
-				{
-					DescTypePoolSizes[0].descriptorCount = MAXSAMPLERCOUNT_PERPOOL;
-					DescTypePoolSizes[0].type = VK_DESCRIPTOR_TYPE_SAMPLER;
-					DescTypePoolSizes[1].descriptorCount = MAXIMAGECOUNT_PERPOOL;
-					DescTypePoolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-					DescTypePoolSizes[2].descriptorCount = MAXUBUFFERCOUNT_PERPOOL;
-					DescTypePoolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-					DescTypePoolSizes[3].descriptorCount = MAXSBUFFERCOUNT_PERPOOL;
-					DescTypePoolSizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				}
-				NaiveCreate_DescPool(&vkpool, 4, DescTypePoolSizes);
-				VK_DescPool NEWPOOL;
-				NEWPOOL.pool = vkpool;
-				NEWPOOL.REMAINING_IMAGE = MAXIMAGECOUNT_PERPOOL;
-				NEWPOOL.REMAINING_SAMPLER = MAXSAMPLERCOUNT_PERPOOL;
-				NEWPOOL.REMAINING_SBUFFER = MAXSBUFFERCOUNT_PERPOOL;
-				NEWPOOL.REMAINING_UBUFFER = MAXUBUFFERCOUNT_PERPOOL;
-				NEWPOOL.REMAINING_SET = MAXDESCSETCOUNT_PERPOOL;
-				MaterialData_DescPools.push_back(NEWPOOL);
-			}
-			VK_DescPool& VKP = MaterialData_DescPools[MaterialData_DescPools.size() - 1];
-			{
-				unsigned int allocatecount = (VKP.REMAINING_SET > REMAININGALLOCATESETCOUNT) ? (REMAININGALLOCATESETCOUNT) : (VKP.REMAINING_SET);
-
-				NaiveCreate_DescSets(VKP.pool, &Layout.Layout, allocatecount, DescSets + (SetCount - REMAININGALLOCATESETCOUNT));
-
-				REMAININGALLOCATESETCOUNT -= allocatecount;
-				if (!REMAININGALLOCATESETCOUNT) {	//Allocated all sets!
-					return true;
-				}
-			}
+	
+	bool GPU_ContentManager::Create_DescSet(VK_DescSet* Set) {
+		if(!MaterialRelated_DescPool.REMAINING_IMAGE.LimitedSubtract_weak(Set->DescImagesCount, 0) ||
+			!MaterialRelated_DescPool.REMAINING_SAMPLER.LimitedSubtract_weak(Set->DescSamplersCount, 0) ||
+			!MaterialRelated_DescPool.REMAINING_SBUFFER.LimitedSubtract_weak(Set->DescSBuffersCount, 0) ||
+			!MaterialRelated_DescPool.REMAINING_UBUFFER.LimitedSubtract_weak(Set->DescUBuffersCount, 0) ||
+			!MaterialRelated_DescPool.REMAINING_SET.LimitedSubtract_weak(1, 0)) {
+			LOG_ERROR_TAPI("Create_DescSets() has failed because descriptor pool doesn't have enough space!");
+			return false;
 		}
 
-		LOG_CRASHING_TAPI("Create_DescSets() has failed at the end which isn't supposed to happen, there is some crazy shit going on here!");
-		return false;
+		DescSets_toCreate.push_back(GFX->JobSys->GetThisThreadIndex(), Set);
+		return true;
 	}
 
 
@@ -648,8 +666,8 @@ namespace Vulkan {
 			return TAPI_FAIL;
 		}
 		
-		VkDeviceSize Offset = 0;
-		if (Suballocate_Buffer(Bufferobj, MemoryRegion, Offset) != VK_SUCCESS) {
+		VkDeviceSize Offset = 0, RequiredSize = 0;
+		if (Suballocate_Buffer(Bufferobj, MemoryRegion, Offset, RequiredSize, false) != VK_SUCCESS) {
 			LOG_ERROR_TAPI("Suballocation has failed, so staging buffer creation too!");
 			return TAPI_FAIL;
 		}
@@ -733,8 +751,8 @@ namespace Vulkan {
 		VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
 		VkBuffer Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
-		VkDeviceSize offset = 0;
-		if (Suballocate_Buffer(Buffer, MemoryType, offset) != TAPI_SUCCESS) {
+		VkDeviceSize offset = 0, RequiredSize = 0;
+		if (Suballocate_Buffer(Buffer, MemoryType, offset, RequiredSize, false) != TAPI_SUCCESS) {
 			LOG_ERROR_TAPI("There is no memory left in specified memory region, please try again later!");
 			return TAPI_FAIL;
 		}
@@ -863,13 +881,37 @@ namespace Vulkan {
 	}
 
 
-	TAPIResult GPU_ContentManager::Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, 
-		GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) {
-		LOG_NOTCODED_TAPI("GFXContentManager->Create_GlobalBuffer() isn't coded!", true);
-		if (!VKRENDERER->Is_ConstructingRenderGraph()) {
-			LOG_ERROR_TAPI("GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)!");
+	TAPIResult GPU_ContentManager::Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform, 
+		GFX_API::SHADERSTAGEs_FLAG AccessableStages, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) {
+		if (VKRENDERER->Is_ConstructingRenderGraph() || VKRENDERER->FrameGraphs->BranchCount) {
+			LOG_ERROR_TAPI("GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)! Please create your global buffers before render graph construction.");
 			return TAPI_WRONGTIMING;
 		}
+		
+		VkBuffer obj;
+		if (isUniform) {
+			obj = Create_VkBuffer(DATA_SIZE, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+		}
+		else {
+			obj = Create_VkBuffer(DATA_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+		}
+		
+		VkDeviceSize offset = 0, RequiredSize = 0;
+		if (Suballocate_Buffer(obj, MemoryType, offset, RequiredSize, false) != TAPI_SUCCESS) {
+			LOG_ERROR_TAPI("Create_GlobalBuffer has failed at suballocation!");
+			return TAPI_FAIL;
+		}
+		
+		VK_GlobalBuffer* GB = new VK_GlobalBuffer;
+		GB->ACCESSED_STAGEs = AccessableStages;
+		GB->BINDINGPOINT = BINDINDEX;
+		GB->Block.Offset = offset;
+		GB->Block.Type = MemoryType;
+		GB->DATA_SIZE = RequiredSize;
+		GB->isUniform = isUniform;
+
+		GlobalBufferHandle = GB;
+		GLOBALBUFFERs.push_back(GFX->JobSys->GetThisThreadIndex(), GB);
 		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int TARGETOFFSET) {
@@ -1048,44 +1090,101 @@ namespace Vulkan {
 			//General DescriptorSet Layout Creation
 			{
 				vector<VkDescriptorSetLayoutBinding> bindings;
+				vector<VK_DescImage> DescImages, DescSamplers;
+				vector<VK_DescBuffer> DescUBuffers, DescSBuffers;
 				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
 					const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-					if (gfxdesc.BINDINGPOINT) {
-						if (gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_G ||
-							gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G ||
-							gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_G ||
-							gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_G) {
-							continue;
-						}
+					if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_G ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_G ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_G)) {
+						continue;
+					}
 
-						unsigned int BP = *(unsigned int*)gfxdesc.BINDINGPOINT;
-						for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
-							if (BP == bindings[bpsearchindex].binding) {
-								LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
-								return TAPI_FAIL;
-							}
-						}
-
-						VkDescriptorSetLayoutBinding bn = {};
-						bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
-						bn.pImmutableSamplers = VK_NULL_HANDLE;
-						bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
-						bn.descriptorCount = 1;		//I don't support array descriptors for now!
-						bn.binding = BP;
-						bindings.push_back(bn);
-
-						switch (gfxdesc.TYPE) {
-						case GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_G:
-							VKPipeline->General_DescSetLayout.IMAGEDESCCOUNT++;		break;
-						case GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G:
-							VKPipeline->General_DescSetLayout.SAMPLERDESCCOUNT++;	break;
-						case GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_G:
-							VKPipeline->General_DescSetLayout.UBUFFERDESCCOUNT++;	break;
-						case GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_G:
-							VKPipeline->General_DescSetLayout.SBUFFERDESCCOUNT++;	break;
+					unsigned int BP = gfxdesc.BINDINGPOINT;
+					for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
+						if (BP == bindings[bpsearchindex].binding) {
+							LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
+							return TAPI_FAIL;
 						}
 					}
+
+					VkDescriptorSetLayoutBinding bn = {};
+					bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
+					bn.pImmutableSamplers = VK_NULL_HANDLE;
+					bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
+					bn.descriptorCount = 1;		//I don't support array descriptors for now!
+					bn.binding = BP;
+					bindings.push_back(bn);
+
+					switch (gfxdesc.TYPE) {
+					case GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_G:
+					{
+						VK_DescImage descimage;
+						descimage.BindingIndex = BP;
+						descimage.info.imageView = VK_NULL_HANDLE;
+						descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+						descimage.info.sampler = VK_NULL_HANDLE;
+						DescImages.push_back(descimage);
+					}
+					break;
+					case GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G:
+					{
+						VK_DescImage descimage;
+						descimage.BindingIndex = BP;
+						descimage.info.imageView = VK_NULL_HANDLE;
+						descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+						descimage.info.sampler = VK_NULL_HANDLE;
+						DescSamplers.push_back(descimage);
+					}
+						break;
+					case GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_G:
+					{
+						VK_DescBuffer descbuffer;
+						descbuffer.BindingIndex = BP;
+						descbuffer.Info.range = gfxdesc.DATA_SIZE;
+						descbuffer.IsUpdated.store(0);
+						descbuffer.Info.buffer = VK_NULL_HANDLE;
+						descbuffer.Info.offset = 0;
+						DescUBuffers.push_back(descbuffer);
+					}
+						break;
+					case GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_G:
+					{
+						VK_DescBuffer descbuffer;
+						descbuffer.BindingIndex = BP;
+						descbuffer.Info.range = gfxdesc.DATA_SIZE;
+						descbuffer.IsUpdated.store(0);
+						descbuffer.Info.buffer = VK_NULL_HANDLE;
+						descbuffer.Info.offset = 0;
+						DescSBuffers.push_back(descbuffer);
+					}
+						break;
+					}
 				}
+
+				VKPipeline->General_DescSet.DescImagesCount = DescImages.size();
+				VKPipeline->General_DescSet.DescSamplersCount = DescSamplers.size();
+				VKPipeline->General_DescSet.DescSBuffersCount = DescSBuffers.size();
+				VKPipeline->General_DescSet.DescUBuffersCount = DescUBuffers.size();
+				if (DescImages.size()) {
+					VKPipeline->General_DescSet.DescImages = new VK_DescImage[DescImages.size()];
+					memcpy(VKPipeline->General_DescSet.DescImages, DescImages.data(), DescImages.size() * sizeof(VK_DescImage));
+				}
+				if (DescSamplers.size()) {
+					VKPipeline->General_DescSet.DescSamplers = new VK_DescImage[DescSamplers.size()];
+					memcpy(VKPipeline->General_DescSet.DescSamplers, DescSamplers.data(), DescSamplers.size() * sizeof(VK_DescImage));
+				}
+				if (DescUBuffers.size()) {
+					VKPipeline->General_DescSet.DescUBuffers = new VK_DescBuffer[DescUBuffers.size()];
+					memcpy(VKPipeline->General_DescSet.DescUBuffers, DescUBuffers.data(), DescUBuffers.size() * sizeof(VK_DescBuffer));
+				}
+				if (DescSBuffers.size()) {
+					VKPipeline->General_DescSet.DescSBuffers = new VK_DescBuffer[DescSBuffers.size()];
+					memcpy(VKPipeline->General_DescSet.DescSBuffers, DescSBuffers.data(), DescSBuffers.size() * sizeof(VK_DescBuffer));
+				}
+				VKPipeline->General_DescSet.ShouldRecreate.store(0);
+
 				
 				VkDescriptorSetLayoutCreateInfo ci = {};
 				ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1094,7 +1193,7 @@ namespace Vulkan {
 				ci.bindingCount = bindings.size();
 				ci.pBindings = bindings.data();
 
-				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &VKPipeline->General_DescSetLayout.Layout) != VK_SUCCESS) {
+				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &VKPipeline->General_DescSet.Layout) != VK_SUCCESS) {
 					LOG_ERROR_TAPI("Link_MaterialType() has failed at General DescriptorSetLayout Creation vkCreateDescriptorSetLayout()");
 					return TAPI_FAIL;
 				}
@@ -1103,57 +1202,123 @@ namespace Vulkan {
 			//Instance DescriptorSet Layout Creation
 			{
 				vector<VkDescriptorSetLayoutBinding> bindings;
+				vector<VK_DescImage> DescImages, DescSamplers;
+				vector<VK_DescBuffer> DescUBuffers, DescSBuffers;
 				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
 					const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-					if (gfxdesc.BINDINGPOINT) {
-						if (gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI ||
-							gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI ||
-							gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_PI ||
-							gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_PI) {
-							continue;
+					if (!gfxdesc.BINDINGPOINT) {
+						continue;
+					}
+
+					if (gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI ||
+						gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI ||
+						gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_PI ||
+						gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_PI) {
+						continue;
+					}
+					unsigned int BP = *(unsigned int*)gfxdesc.BINDINGPOINT;
+					for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
+						if (BP == bindings[bpsearchindex].binding) {
+							LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
+							return TAPI_FAIL;
 						}
-						unsigned int BP = *(unsigned int*)gfxdesc.BINDINGPOINT;
-						for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
-							if (BP == bindings[bpsearchindex].binding) {
-								LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
-								return TAPI_FAIL;
-							}
-						}
-						VkDescriptorSetLayoutBinding bn = {};
-						bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
-						bn.pImmutableSamplers = VK_NULL_HANDLE;
-						bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
-						bn.descriptorCount = 1;		//I don't support array descriptors for now!
-						bn.binding = BP;
-						bindings.push_back(bn);
-						switch (gfxdesc.TYPE) {
-						case GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI:
-							VKPipeline->Instance_DescSetLayout.IMAGEDESCCOUNT++;	break;
-						case GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI:
-							VKPipeline->Instance_DescSetLayout.SAMPLERDESCCOUNT++;	break;
-						case GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_PI:
-							VKPipeline->Instance_DescSetLayout.UBUFFERDESCCOUNT++;	break;
-						case GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_PI:
-							VKPipeline->Instance_DescSetLayout.SBUFFERDESCCOUNT++;	break;
-						}
+					}
+					VkDescriptorSetLayoutBinding bn = {};
+					bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
+					bn.pImmutableSamplers = VK_NULL_HANDLE;
+					bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
+					bn.descriptorCount = 1;		//I don't support array descriptors for now!
+					bn.binding = BP;
+					bindings.push_back(bn);
+					switch (gfxdesc.TYPE) {
+					case GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI:
+					{
+						VK_DescImage descimage;
+						descimage.BindingIndex = BP;
+						descimage.info.imageView = VK_NULL_HANDLE;
+						descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+						descimage.info.sampler = VK_NULL_HANDLE;
+						DescImages.push_back(descimage);
+					}
+						break;
+					case GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI:
+					{
+						VK_DescImage descimage;
+						descimage.BindingIndex = BP;
+						descimage.info.imageView = VK_NULL_HANDLE;
+						descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+						descimage.info.sampler = VK_NULL_HANDLE;
+						DescSamplers.push_back(descimage);
+					}
+						break;
+					case GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_PI:
+					{
+						VK_DescBuffer descbuffer;
+						descbuffer.BindingIndex = BP;
+						descbuffer.Info.range = gfxdesc.DATA_SIZE;
+						descbuffer.IsUpdated.store(0);
+						descbuffer.Info.buffer = VK_NULL_HANDLE;
+						descbuffer.Info.offset = 0;
+						DescUBuffers.push_back(descbuffer);
+					}
+						break;
+					case GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_PI:
+					{
+						VK_DescBuffer descbuffer;
+						descbuffer.BindingIndex = BP;
+						descbuffer.Info.range = gfxdesc.DATA_SIZE;
+						descbuffer.IsUpdated.store(0);
+						descbuffer.Info.buffer = VK_NULL_HANDLE;
+						descbuffer.Info.offset = 0;
+						DescSBuffers.push_back(descbuffer);
+					}
+						break;
 					}
 				}
 
-				VkDescriptorSetLayoutCreateInfo ci = {};
-				ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-				ci.pNext = nullptr;
-				ci.flags = 0;
-				ci.bindingCount = bindings.size();
-				ci.pBindings = bindings.data();
 
-				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &VKPipeline->Instance_DescSetLayout.Layout) != VK_SUCCESS) {
-					LOG_ERROR_TAPI("Link_MaterialType() has failed at Instance DesciptorSetLayout Creation vkCreateDescriptorSetLayout()");
-					return TAPI_FAIL;
+				VKPipeline->Instance_DescSet.DescUBuffersCount = DescUBuffers.size();
+				VKPipeline->Instance_DescSet.DescSBuffersCount = DescSBuffers.size();
+				VKPipeline->Instance_DescSet.DescImagesCount = DescImages.size();
+				VKPipeline->Instance_DescSet.DescSamplersCount = DescSamplers.size();
+				if (DescSamplers.size()) {
+					VKPipeline->Instance_DescSet.DescSamplers = new VK_DescImage[DescSamplers.size()];
+					memcpy(VKPipeline->Instance_DescSet.DescSamplers, DescSamplers.data(), DescSamplers.size() * sizeof(VK_DescImage));
+				}
+				if (DescImages.size()) {
+					VKPipeline->Instance_DescSet.DescImages = new VK_DescImage[DescImages.size()];
+					memcpy(VKPipeline->Instance_DescSet.DescImages, DescImages.data(), DescImages.size() * sizeof(VK_DescImage));
+				}
+				if (DescSBuffers.size()) {
+					VKPipeline->Instance_DescSet.DescSBuffers = new VK_DescBuffer[DescSBuffers.size()];
+					memcpy(VKPipeline->Instance_DescSet.DescSBuffers, DescSBuffers.data(), DescSBuffers.size() * sizeof(VK_DescBuffer));
+				}
+				if (DescUBuffers.size()) {
+					VKPipeline->Instance_DescSet.DescUBuffers = new VK_DescBuffer[DescUBuffers.size()];
+					memcpy(VKPipeline->Instance_DescSet.DescUBuffers, DescUBuffers.data(), DescUBuffers.size() * sizeof(VK_DescBuffer));
+				}
+
+
+				if (bindings.size()) {
+					VkDescriptorSetLayoutCreateInfo ci = {};
+					ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+					ci.pNext = nullptr;
+					ci.flags = 0;
+					ci.bindingCount = bindings.size();
+					ci.pBindings = bindings.data();
+
+					if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &VKPipeline->Instance_DescSet.Layout) != VK_SUCCESS) {
+						LOG_ERROR_TAPI("Link_MaterialType() has failed at Instance DesciptorSetLayout Creation vkCreateDescriptorSetLayout()");
+						return TAPI_FAIL;
+					}
 				}
 			}
-
+			
 			//General DescriptorSet Creation
-			Create_DescSets(VKPipeline->General_DescSetLayout, &VKPipeline->General_DescSet, 1);
+			if (!Create_DescSet(&VKPipeline->General_DescSet)) {
+				LOG_ERROR_TAPI("Descriptor pool is full, that means you should expand its size!");
+				return TAPI_FAIL;
+			}
 
 			//Pipeline Layout Creation
 			{
@@ -1161,8 +1326,14 @@ namespace Vulkan {
 				pl_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 				pl_ci.pNext = nullptr;
 				pl_ci.flags = 0;
-				pl_ci.setLayoutCount = 3;
-				VkDescriptorSetLayout descsetlays[3] = { GlobalBuffers_DescSetLayout, VKPipeline->General_DescSetLayout.Layout, VKPipeline->Instance_DescSetLayout.Layout };
+				VkDescriptorSetLayout descsetlays[3] = { GlobalBuffers_DescSetLayout, VKPipeline->General_DescSet.Layout, VK_NULL_HANDLE };
+				if (VKPipeline->Instance_DescSet.Layout != VK_NULL_HANDLE) {
+					descsetlays[2] = VKPipeline->Instance_DescSet.Layout;
+					pl_ci.setLayoutCount = 3;
+				}
+				else {
+					pl_ci.setLayoutCount = 2;
+				}
 				pl_ci.pSetLayouts = descsetlays;
 				//Don't support for now!
 				pl_ci.pushConstantRangeCount = 0;
@@ -1206,11 +1377,6 @@ namespace Vulkan {
 		}
 
 		VKPipeline->GFX_Subpass = Subpass;
-		VKPipeline->DESCCOUNT = MATTYPE_ASSET.MATERIALTYPEDATA.size();
-		VKPipeline->DATADESCs = new GFX_API::MaterialDataDescriptor[MATTYPE_ASSET.MATERIALTYPEDATA.size()];
-		for (unsigned int i = 0; i < VKPipeline->DESCCOUNT; i++) {
-			VKPipeline->DATADESCs[i] = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-		}
 		SHADERPROGRAMs.push_back(GFX->JobSys->GetThisThreadIndex(), VKPipeline);
 
 
@@ -1221,8 +1387,8 @@ namespace Vulkan {
 	void GPU_ContentManager::Delete_MaterialType(GFX_API::GFXHandle Asset_ID){
 		LOG_NOTCODED_TAPI("VK::Unload_GlobalBuffer isn't coded!", true);
 	}
-	TAPIResult GPU_ContentManager::Create_MaterialInst(const GFX_API::Material_Instance& MATINST_ASSET, GFX_API::GFXHandle& MaterialInstHandle) {
-		VK_GraphicsPipeline* VKPSO = (VK_GraphicsPipeline*)MATINST_ASSET.Material_Type;
+	TAPIResult GPU_ContentManager::Create_MaterialInst(GFX_API::GFXHandle MaterialType, GFX_API::GFXHandle& MaterialInstHandle) {
+		VK_GraphicsPipeline* VKPSO = GFXHandleConverter(VK_GraphicsPipeline*, MaterialType);
 		if (!VKPSO) {
 			LOG_ERROR_TAPI("Create_MaterialInst() has failed because Material Type isn't found!");
 			return TAPI_INVALIDARGUMENT;
@@ -1231,72 +1397,34 @@ namespace Vulkan {
 		//Descriptor Set Creation
 		VK_PipelineInstance* VKPInstance = new VK_PipelineInstance;
 
-		Create_DescSets(VKPSO->Instance_DescSetLayout, &VKPInstance->DescSet, 1);
-
-		//Check MaterialData's incompatiblity then write Descriptor Updates!
-		vector<VkWriteDescriptorSet> DescriptorSetUpdates;
-		if (VKPSO->DESCCOUNT != MATINST_ASSET.MATERIALDATAs.size()) {
-			LOG_CRASHING_TAPI("Link_MaterialType() has failed because Material Instance's DATAINSTANCEs size should match with Material Type's!");
-			return TAPI_FAIL;
+		VKPInstance->DescSet.Layout = VKPSO->Instance_DescSet.Layout;
+		VKPInstance->DescSet.ShouldRecreate.store(0);
+		VKPInstance->DescSet.DescImagesCount = VKPSO->Instance_DescSet.DescImagesCount;
+		VKPInstance->DescSet.DescSamplersCount = VKPSO->Instance_DescSet.DescSamplersCount;
+		VKPInstance->DescSet.DescSBuffersCount = VKPSO->Instance_DescSet.DescSBuffersCount;
+		VKPInstance->DescSet.DescUBuffersCount = VKPSO->Instance_DescSet.DescUBuffersCount;
+		if (VKPInstance->DescSet.DescImagesCount) {
+			VKPInstance->DescSet.DescImages = new VK_DescImage[VKPInstance->DescSet.DescImagesCount];
+			memcpy(VKPInstance->DescSet.DescUBuffers, VKPSO->Instance_DescSet.DescUBuffers, VKPInstance->DescSet.DescUBuffersCount * sizeof(VK_DescBuffer));
 		}
-		for (unsigned int i = 0; i < MATINST_ASSET.MATERIALDATAs.size(); i++) {
-			const GFX_API::MaterialInstanceData& instance_data = MATINST_ASSET.MATERIALDATAs[i];
-			const GFX_API::MaterialDataDescriptor* datadesc = nullptr;
-
-			//Search for matching data
-			for (unsigned int bindingsearchindex = 0; bindingsearchindex < VKPSO->DESCCOUNT; bindingsearchindex++) {
-				if (VKPSO->DATADESCs[bindingsearchindex].BINDINGPOINT == instance_data.BINDINGPOINT) {
-					if (datadesc) {
-						LOG_ERROR_TAPI("Link_MaterialType() has failed because one of the GENERALDATA matches with multiple type general data descriptor!");
-						return TAPI_FAIL;
-					}
-					datadesc = &VKPSO->DATADESCs[bindingsearchindex];
-				}
-			}
-			if (!datadesc) {
-				LOG_ERROR_TAPI("Link_MaterialType() has failed because one of the GENERALDATA doesn't match with any type general data descriptor!");
-				return TAPI_FAIL;
-			}
-
-			DescriptorSetUpdates.push_back(VkWriteDescriptorSet());
-			VkWriteDescriptorSet& descwrite = DescriptorSetUpdates[DescriptorSetUpdates.size() - 1];
-			descwrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descwrite.pNext = nullptr;
-			descwrite.pTexelBufferView = nullptr;
-
-			descwrite.descriptorCount = 1;
-			descwrite.descriptorType = Find_VkDescType_byMATDATATYPE(datadesc->TYPE);
-			descwrite.dstArrayElement = 0;
-			descwrite.dstBinding = *(unsigned int*)datadesc->BINDINGPOINT;
-			descwrite.dstSet = VKPInstance->DescSet;
-			if (datadesc->TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_PI || datadesc->TYPE == GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_PI) {
-				LOG_CRASHING_TAPI("Create_MaterialInst() has failed because constant buffer creation isn't coded yet, so you can't specify it in a descriptor set!");
-				/*
-				VK_MemoryBlock* DATABUFFER = Find_GlobalBuffer_byID(instance_data.DATA_GFXID);
-				VkDescriptorBufferInfo info = {};
-				info.buffer = GPULOCAL_BUFFERALLOC.Base_Buffer;
-				info.offset = DATABUFFER->Offset;
-				info.range = DATABUFFER->Size;
-				descwrite.pBufferInfo = &info;
-				descwrite.pImageInfo = nullptr;*/
-			}
-			else if (datadesc->TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI || datadesc->TYPE == GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI) {
-				VK_Texture* VKTEXTURE = (VK_Texture*)instance_data.DATA_GFXID;
-				VkDescriptorImageInfo info = {};
-				info.imageView = VKTEXTURE->ImageView;
-				if (datadesc->TYPE == GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_G) {
-					info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-				}
-				else if (datadesc->TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G) {
-					info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				}
-				info.sampler = DefaultSampler;
-				descwrite.pBufferInfo = nullptr;
-				descwrite.pImageInfo = &info;
-			}
+		if (VKPInstance->DescSet.DescSamplersCount) {
+			VKPInstance->DescSet.DescSamplers = new VK_DescImage[VKPInstance->DescSet.DescSamplersCount];
+			memcpy(VKPInstance->DescSet.DescSBuffers, VKPSO->Instance_DescSet.DescSBuffers, VKPInstance->DescSet.DescSBuffersCount * sizeof(VK_DescBuffer));
 		}
-
-		vkUpdateDescriptorSets(VKGPU->Logical_Device, DescriptorSetUpdates.size(), DescriptorSetUpdates.data(), 0, nullptr);
+		if (VKPInstance->DescSet.DescSBuffersCount) {
+			VKPInstance->DescSet.DescSBuffers = new VK_DescBuffer[VKPInstance->DescSet.DescSBuffersCount];
+			memcpy(VKPInstance->DescSet.DescSamplers, VKPSO->Instance_DescSet.DescSamplers, VKPInstance->DescSet.DescSamplersCount * sizeof(VK_DescImage));
+		}
+		if (VKPInstance->DescSet.DescUBuffersCount) {
+			VKPInstance->DescSet.DescUBuffers = new VK_DescBuffer[VKPInstance->DescSet.DescUBuffersCount];
+			memcpy(VKPInstance->DescSet.DescImages, VKPSO->Instance_DescSet.DescImages, VKPInstance->DescSet.DescImagesCount * sizeof(VK_DescImage));
+		}
+		if (VKPInstance->DescSet.DescImagesCount ||
+			VKPInstance->DescSet.DescSamplersCount ||
+			VKPInstance->DescSet.DescSBuffersCount ||
+			VKPInstance->DescSet.DescUBuffersCount) {
+			Create_DescSet(&VKPInstance->DescSet);
+		}
 
 
 		VKPInstance->PROGRAM = VKPSO;
@@ -1306,6 +1434,75 @@ namespace Vulkan {
 	}
 	void GPU_ContentManager::Delete_MaterialInst(GFX_API::GFXHandle Asset_ID) {
 		LOG_CRASHING_TAPI("Delete_MaterialInst() isn't coded yet!");
+	}
+	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
+	void GPU_ContentManager::SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
+		GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) {
+		VK_DescBuffer* UB = nullptr;
+		VK_DescSet* Set = nullptr;
+		unsigned int UBIndex = 0;
+		if (isMaterialType) {
+			VK_GraphicsPipeline* PSO = GFXHandleConverter(VK_GraphicsPipeline*, MaterialType_orInstance);
+			for (unsigned int Index = 0; Index < PSO->General_DescSet.DescUBuffersCount; Index++) {
+				VK_DescBuffer& UniformBuffer = PSO->General_DescSet.DescUBuffers[Index];
+				if (UniformBuffer.BindingIndex != BINDINDEX) {
+					continue;
+				}
+				UB = &PSO->General_DescSet.DescUBuffers[Index];
+				Set = &PSO->General_DescSet;
+				UBIndex = Index;
+				break;
+			}
+		}
+		else {
+			VK_PipelineInstance* PSO = GFXHandleConverter(VK_PipelineInstance*, MaterialType_orInstance);
+			for (unsigned int Index = 0; Index < PSO->DescSet.DescUBuffersCount; Index++) {
+				VK_DescBuffer& UniformBuffer = PSO->DescSet.DescUBuffers[Index];
+				if (UniformBuffer.BindingIndex != BINDINDEX) {
+					continue;
+				}
+				UB = &PSO->DescSet.DescUBuffers[Index];
+				Set = &PSO->DescSet;
+				UBIndex = Index;
+				break;
+			}
+		}
+		if (!UB) {
+			LOG_ERROR_TAPI("Specified uniform buffer isn't found!");
+			return;
+		}
+
+
+		bool x = 0, y = 1;
+		if (!UB->IsUpdated.compare_exchange_strong(x, y)) {
+			LOG_ERROR_TAPI("You already set the uniform buffer, you can't change it at the same frame!");
+			return;
+		}
+		VkDeviceSize FinalOffset = static_cast<VkDeviceSize>(TargetOffset);
+		switch (BufferType) {
+		case GFX_API::BUFFER_TYPE::STAGING:
+		{
+			MemoryBlock* StagingBuf = GFXHandleConverter(MemoryBlock*, TargetBufferHandle);
+			FindBufferOBJ_byBufType(TargetBufferHandle, BufferType, UB->Info.buffer, FinalOffset);
+		}
+		break;
+		default:
+			LOG_NOTCODED_TAPI("SetMaterial_UniformBuffer() doesn't support this type of target buffers right now!", true);
+			return;
+		}
+		UB->Info.offset = FinalOffset;
+		UB->IsUpdated.store(1);
+		VK_DescSetUpdateCall call;
+		call.Set = Set;
+		call.ArrayIndex = UBIndex;
+		call.Type = DescType::UBUFFER;
+		if (isUsedRecently) {
+			call.Set->ShouldRecreate.store(1);
+			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		else {
+			DescSets_toJustUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
 	}
 
 	TAPIResult GPU_ContentManager::Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) {

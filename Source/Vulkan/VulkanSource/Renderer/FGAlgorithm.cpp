@@ -1333,7 +1333,7 @@ namespace Vulkan {
 
 
 		FindRGBranches_dependentSubmits(Current_FrameGraph, LastFrameGraph, Submitless_RGBs, NumberOfSubmitless_RGBs);
-		//PrintSubmits(Current_FrameGraph);
+		PrintSubmits(Current_FrameGraph);
 
 		//Give a Signal Semaphore and Command Buffer to each Submit
 		for (unsigned char SubmitIndex = 0; SubmitIndex < Current_FrameGraph->CurrentFrameSubmits.size(); SubmitIndex++) {
@@ -1477,15 +1477,17 @@ namespace Vulkan {
 					Scissor.offset.y = DrawPass->RenderRegion.HeightOffset;
 					vkCmdSetScissor(CB, 0, 1, &Scissor);
 
-					vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatInst->PipelineObject);
+					vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatInst->PROGRAM->PipelineObject);
+					VkDescriptorSet Sets[2] = {VKContentManager->GlobalBuffers_DescSet, DrawCall.MatInst->PROGRAM->General_DescSet.Set };
+					vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatInst->PROGRAM->PipelineLayout, 0, 2, Sets, 0, nullptr);
 					VkDeviceSize Offsets[] = { 0 };
 					VkBuffer TargetBuffer;
 					FindBufferOBJ_byBufType(DrawCall.VB, GFX_API::BUFFER_TYPE::VERTEX, TargetBuffer, Offsets[0]);
 					vkCmdBindVertexBuffers(CB, 0, 1, &TargetBuffer, Offsets);
 					vkCmdDraw(CB, DrawCall.VB->VERTEX_COUNT, 1, 0, 0);
 				}
-				SP.DrawCalls.clear(ThreadIndex);
 			}
+			SP.DrawCalls.clear(0);
 			if (SubPassIndex < DrawPass->Subpass_Count - 1) {
 				vkCmdNextSubpass(CB, VK_SUBPASS_CONTENTS_INLINE);
 			}

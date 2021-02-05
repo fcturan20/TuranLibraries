@@ -18,6 +18,11 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		GFX_API::Texture_Properties SwapchainProperties;
 		WindowHandle = GFX->CreateWindow(WindowDesc, SwapchainTextures, SwapchainProperties);
 	}
+	
+	//Create Global Buffers before the RenderGraph Construction
+	GFX_API::GFXHandle FirstGlobalBuffer;
+	GFXContentManager->Create_GlobalBuffer("FirstGlobalBuffer", 16, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
+		GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, FirstGlobalBuffer);
 
 
 	//Useful rendergraph handles to use later
@@ -64,7 +69,9 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			COLORRT.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
 			COLORRT.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_1MIP;
 			COLORRT.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
-			GFXContentManager->Create_Texture(COLORRT, GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, FIRSTRT);
+			if (GFXContentManager->Create_Texture(COLORRT, GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, FIRSTRT) != TAPI_SUCCESS) {
+				LOG_CRASHING_TAPI("First RT creation has failed!");
+			}
 
 
 			GFX_API::RTSLOT_Description SWPCHNSLOT;
@@ -170,7 +177,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			LOG_CRASHING_TAPI("Uploading vertex buffer to staging buffer has failed!");
 		}
 	}
-
+	
 	
 	//Create and Link first material type
 	GFX_API::GFXHandle FIRSTMATINST_ID;
@@ -192,27 +199,33 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		MATTYPE.FRAGMENTSOURCE_ID = FS_ID;
 		MATTYPE.SubDrawPass_ID = SubpassID;
 		MATTYPE.MATERIALTYPEDATA.clear();
+		
 		{
 			GFX_API::MaterialDataDescriptor first_desc;
 			first_desc.BINDINGPOINT = 0;
-			first_desc.DATA_SIZE = 192;
-			first_desc.NAME = "FirstMeshTranformations";
+			first_desc.DATA_SIZE = 16;
+			first_desc.NAME = "FirstUniformInput";
 			first_desc.SHADERSTAGEs.VERTEXSHADER = true;
 			first_desc.TYPE = GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_G;
 			MATTYPE.MATERIALTYPEDATA.push_back(first_desc);
 		}
 		MATTYPE.ATTRIBUTELAYOUT_ID = VAL_ID;
 		GFX_API::GFXHandle MATTYPE_ID;
-		GFXContentManager->Link_MaterialType(MATTYPE, MATTYPE_ID);
-		GFX_API::Material_Instance MATINST;
-		MATINST.MATERIALDATAs.clear();		//There is no buffer or texture access for now!
-		MATINST.Material_Type = MATTYPE_ID;
-		GFXContentManager->Create_MaterialInst(MATINST, FIRSTMATINST_ID);
+		if (GFXContentManager->Link_MaterialType(MATTYPE, MATTYPE_ID) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Link MaterialType has failed!");
+		}
+		GFXContentManager->SetMaterial_UniformBuffer(MATTYPE_ID, true, false, 0, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, 60);
+		vec3 FragColor(1.0f, 0.0f, 0.0f);
+		if (GFXContentManager->Uploadto_StagingBuffer(StagingBuffer, &FragColor, 12, 60) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading vertex color to staging buffer has failed!");
+		}
+		GFXContentManager->Create_MaterialInst(MATTYPE_ID, FIRSTMATINST_ID);
 	}
 
 	GFXRENDERER->ImageBarrier(FIRSTRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, 60);
+	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, FirstGlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, 60, 0, 12);
 	GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, nullptr, FIRSTMATINST_ID, SubpassID);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[0], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, FinalBarrierTP_ID);
 	GFXRENDERER->SwapBuffers(WindowHandle, WP_ID);

@@ -18,6 +18,8 @@ namespace Vulkan {
 	void Create_VkSubmits(VK_FrameGraph* CurrentFramegraph, VK_FrameGraph* LastFrameGraph, vector<VK_Semaphore>& Semaphores);
 
 	void Renderer::Start_RenderGraphConstruction() {
+		VKContentManager->Resource_Finalizations();
+
 		if (Record_RenderGraphConstruction) {
 			LOG_CRASHING_TAPI("GFXRENDERER->Start_RenderGraphCreation() has failed because you called it before!");
 			return;
@@ -249,9 +251,6 @@ namespace Vulkan {
 			return;
 		}
 		Record_RenderGraphConstruction = false;
-
-
-		VKContentManager->Resource_Finalizations();
 
 		{
 			TURAN_PROFILE_SCOPE_MCS("Checking Wait Handles of RenderNodes");
@@ -1032,6 +1031,23 @@ namespace Vulkan {
 			vkEndCommandBuffer(Submit->Run_Queue->CommandPools[FrameIndex].CBs[Submit->CBIndex].CB);
 		}
 	}
+	void CopyDescriptorSets(VK_DescSet& Set, vector<VkCopyDescriptorSet>& CopyVector, vector<VkDescriptorSet*>& CopyTargetSets) {
+		for (unsigned int ImageIndex = 0; ImageIndex < Set.DescImagesCount; ImageIndex++) {
+			VK_DescImage& DescImage = Set.DescImages[ImageIndex];
+			VkCopyDescriptorSet info;
+			info.descriptorCount = 1;
+			info.dstArrayElement = 0;
+			info.dstBinding = DescImage.BindingIndex;
+			info.dstSet = VK_NULL_HANDLE;
+			info.pNext = nullptr;
+			info.srcArrayElement = 0;
+			info.srcBinding = DescImage.BindingIndex;
+			info.srcSet = Set.Set;
+			info.sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
+			CopyVector.push_back(info);
+			CopyTargetSets.push_back(&Set.Set);
+		}
+	}
 	void Renderer::Run() {
 		//Maybe the rendering of the last frame took less than V-Sync, this is to handle this case
 		//Because that means the swapchain texture we will render to in above command buffers is being displayed
@@ -1043,9 +1059,204 @@ namespace Vulkan {
 				Semaphores[VKWINDOW->PresentationWaitSemaphoreIndexes[2]].SPHandle, VK_NULL_HANDLE, &SwapchainImage_Index);
 			if (SwapchainImage_Index != FrameIndex) {
 				std::cout << "Current SwapchainImage_Index: " << SwapchainImage_Index << std::endl;
-				std::cout << "Current FrameCount: " << FrameIndex << std::endl;
+				std::cout << "Current FrameCount: " << unsigned int(FrameIndex) << std::endl;
 				LOG_CRASHING_TAPI("Renderer's FrameCount and Vulkan's SwapchainIndex don't match, there is something missing!");
 			}
+		}
+
+		//Handle Descriptor Sets
+
+		//Clear 2 frames before's unbound descriptor set list
+		if (VKContentManager->UnboundDescSetList[FrameIndex].size()) {
+			VK_DescPool& DP = VKContentManager->MaterialRelated_DescPool;
+			vkFreeDescriptorSets(VKGPU->Logical_Device, DP.pool, VKContentManager->UnboundDescSetList[FrameIndex].size(),
+				VKContentManager->UnboundDescSetList[FrameIndex].data());
+			DP.REMAINING_SET.DirectAdd(VKContentManager->UnboundDescSetList[FrameIndex].size());
+
+			DP.REMAINING_IMAGE.DirectAdd(VKContentManager->UnboundDescSetImageCount[FrameIndex]);
+			VKContentManager->UnboundDescSetImageCount[FrameIndex] = 0;
+			DP.REMAINING_SAMPLER.DirectAdd(VKContentManager->UnboundDescSetSamplerCount[FrameIndex]);
+			VKContentManager->UnboundDescSetSamplerCount[FrameIndex] = 0;
+			DP.REMAINING_SBUFFER.DirectAdd(VKContentManager->UnboundDescSetSBufferCount[FrameIndex]);
+			VKContentManager->UnboundDescSetSBufferCount[FrameIndex] = 0;
+			DP.REMAINING_UBUFFER.DirectAdd(VKContentManager->UnboundDescSetUBufferCount[FrameIndex]);
+			VKContentManager->UnboundDescSetUBufferCount[FrameIndex] = 0;
+			VKContentManager->UnboundDescSetList[FrameIndex].clear();
+		}
+		//Create Descriptor Sets for material types/instances that are created this frame
+		{
+			vector<VkDescriptorSet> Sets;
+			vector<VkDescriptorSet*> SetPTRs;
+			vector<VkDescriptorSetLayout> SetLayouts;
+			std::unique_lock<std::mutex> Locker;
+			VKContentManager->DescSets_toCreate.PauseAllOperations(Locker);
+			for (unsigned int ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+				for (unsigned int SetIndex = 0; SetIndex < VKContentManager->DescSets_toCreate.size(ThreadIndex); SetIndex++) {
+					VK_DescSet* Set = VKContentManager->DescSets_toCreate.get(ThreadIndex, SetIndex);
+					Sets.push_back(VkDescriptorSet());
+					SetLayouts.push_back(Set->Layout);
+					SetPTRs.push_back(&Set->Set);
+					VKContentManager->UnboundDescSetImageCount[FrameIndex] += Set->DescImagesCount;
+					VKContentManager->UnboundDescSetSamplerCount[FrameIndex] += Set->DescSamplersCount;
+					VKContentManager->UnboundDescSetSBufferCount[FrameIndex] += Set->DescSBuffersCount;
+					VKContentManager->UnboundDescSetUBufferCount[FrameIndex] += Set->DescUBuffersCount;
+				}
+				VKContentManager->DescSets_toCreate.clear(ThreadIndex);
+			}
+			Locker.unlock();
+
+			VkDescriptorSetAllocateInfo al_in = {};
+			al_in.descriptorPool = VKContentManager->MaterialRelated_DescPool.pool;
+			al_in.descriptorSetCount = Sets.size();
+			al_in.pNext = nullptr;
+			al_in.pSetLayouts = SetLayouts.data();
+			al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			vkAllocateDescriptorSets(VKGPU->Logical_Device, &al_in, Sets.data());
+			for (unsigned int SetIndex = 0; SetIndex < Sets.size(); SetIndex++) {
+				*SetPTRs[SetIndex] = Sets[SetIndex];
+			}
+		}
+		//Create Descriptor Sets for material types/instances that are created before and used recently (last 2 frames), to update their descriptor sets
+		{
+			vector<VkDescriptorSet> NewSets;
+			vector<VkDescriptorSet*> SetPTRs;
+			vector<VkDescriptorSetLayout> SetLayouts;
+
+			//Copy descriptor sets exactly, then update with this frame's SetMaterial_xxx calls
+			vector<VkCopyDescriptorSet> CopySetInfos;
+			vector<VkDescriptorSet*> CopyTargetSets;
+
+
+			std::unique_lock<std::mutex> Locker;
+			VKContentManager->DescSets_toCreateUpdate.PauseAllOperations(Locker);
+			for (unsigned int ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+				for (unsigned int SetIndex = 0; SetIndex < VKContentManager->DescSets_toCreateUpdate.size(ThreadIndex); SetIndex++) {
+					VK_DescSetUpdateCall& Call = VKContentManager->DescSets_toCreateUpdate.get(ThreadIndex, SetIndex);
+					VK_DescSet* Set = Call.Set;
+					bool SetStatus = Set->ShouldRecreate.load();
+					switch (SetStatus) {
+					case 0:
+						continue;
+					case 1:
+						NewSets.push_back(VkDescriptorSet());
+						SetPTRs.push_back(&Set->Set);
+						SetLayouts.push_back(Set->Layout);
+						VKContentManager->UnboundDescSetImageCount[FrameIndex] += Set->DescImagesCount;
+						VKContentManager->UnboundDescSetSamplerCount[FrameIndex] += Set->DescSamplersCount;
+						VKContentManager->UnboundDescSetSBufferCount[FrameIndex] += Set->DescSBuffersCount;
+						VKContentManager->UnboundDescSetUBufferCount[FrameIndex] += Set->DescUBuffersCount;
+						VKContentManager->UnboundDescSetList[FrameIndex].push_back(Set->Set);
+
+						CopyDescriptorSets(*Set, CopySetInfos, CopyTargetSets);
+						Set->ShouldRecreate.store(0);
+						break;
+					default:
+						LOG_NOTCODED_TAPI("Descriptor Set atomic_uchar isn't supposed to have a value that's 2+! Please check 'Handle Descriptor Sets' in Vulkan Renderer->Run()", true);
+						break;
+					}
+				}
+			}
+
+
+			VkDescriptorSetAllocateInfo al_in = {};
+			al_in.descriptorPool = VKContentManager->MaterialRelated_DescPool.pool;
+			al_in.descriptorSetCount = NewSets.size();
+			al_in.pNext = nullptr;
+			al_in.pSetLayouts = SetLayouts.data();
+			al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			vkAllocateDescriptorSets(VKGPU->Logical_Device, &al_in, NewSets.data());
+			for (unsigned int SetIndex = 0; SetIndex < NewSets.size(); SetIndex++) {
+				*SetPTRs[SetIndex] = NewSets[SetIndex];
+			}
+
+			for (unsigned int CopyIndex = 0; CopyIndex < CopySetInfos.size(); CopyIndex++) {
+				CopySetInfos[CopyIndex].dstSet = *CopyTargetSets[CopyIndex];
+			}
+			vkUpdateDescriptorSets(VKGPU->Logical_Device, 0, nullptr, CopySetInfos.size(), CopySetInfos.data());
+		}
+		//Update descriptor sets
+		{
+			vector<VkWriteDescriptorSet> UpdateInfos;
+			std::unique_lock<std::mutex> Locker1;
+			VKContentManager->DescSets_toCreateUpdate.PauseAllOperations(Locker1);
+			for (unsigned int ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+				for (unsigned int CallIndex = 0; CallIndex < VKContentManager->DescSets_toCreateUpdate.size(ThreadIndex); CallIndex++) {
+					VK_DescSetUpdateCall& Call = VKContentManager->DescSets_toCreateUpdate.get(ThreadIndex, CallIndex);
+					VkWriteDescriptorSet info = {};
+					info.descriptorCount = 1;
+					switch (Call.Type) {
+					case DescType::IMAGE:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
+						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
+						break;
+					case DescType::SAMPLER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+						info.dstBinding = Call.Set->DescSamplers[Call.ArrayIndex].BindingIndex;
+						info.pImageInfo = &Call.Set->DescSamplers[Call.ArrayIndex].info;
+						break;
+					case DescType::UBUFFER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+						info.dstBinding = Call.Set->DescUBuffers[Call.ArrayIndex].BindingIndex;
+						info.pBufferInfo = &Call.Set->DescUBuffers[Call.ArrayIndex].Info;
+						break;
+					case DescType::SBUFFER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+						info.dstBinding = Call.Set->DescSBuffers[Call.ArrayIndex].BindingIndex;
+						info.pBufferInfo = &Call.Set->DescSBuffers[Call.ArrayIndex].Info;
+						break;
+					}
+					info.dstSet = Call.Set->Set;
+					info.pNext = nullptr;
+					info.pTexelBufferView = nullptr;
+					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					UpdateInfos.push_back(info);
+				}
+				VKContentManager->DescSets_toCreateUpdate.clear(ThreadIndex);
+			}
+			Locker1.unlock();
+
+
+			std::unique_lock<std::mutex> Locker2;
+			VKContentManager->DescSets_toJustUpdate.PauseAllOperations(Locker2);
+			for (unsigned int ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+				for (unsigned int CallIndex = 0; CallIndex < VKContentManager->DescSets_toJustUpdate.size(ThreadIndex); CallIndex++) {
+					VK_DescSetUpdateCall& Call = VKContentManager->DescSets_toJustUpdate.get(ThreadIndex, CallIndex);
+					VkWriteDescriptorSet info = {};
+					info.descriptorCount = 1;
+					switch (Call.Type) {
+					case DescType::IMAGE:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
+						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
+						break;
+					case DescType::SAMPLER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+						info.dstBinding = Call.Set->DescSamplers[Call.ArrayIndex].BindingIndex;
+						info.pImageInfo = &Call.Set->DescSamplers[Call.ArrayIndex].info;
+						break;
+					case DescType::UBUFFER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+						info.dstBinding = Call.Set->DescUBuffers[Call.ArrayIndex].BindingIndex;
+						info.pBufferInfo = &Call.Set->DescUBuffers[Call.ArrayIndex].Info;
+						break;
+					case DescType::SBUFFER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+						info.dstBinding = Call.Set->DescSBuffers[Call.ArrayIndex].BindingIndex;
+						info.pBufferInfo = &Call.Set->DescSBuffers[Call.ArrayIndex].Info;
+						break;
+					}
+					info.dstSet = Call.Set->Set;
+					info.pNext = nullptr;
+					info.pTexelBufferView = nullptr;
+					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					UpdateInfos.push_back(info);
+				}
+				VKContentManager->DescSets_toJustUpdate.clear(ThreadIndex);
+			}
+			Locker2.unlock();
+
+			vkUpdateDescriptorSets(VKGPU->Logical_Device, UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
 		}
 
 
@@ -1078,7 +1289,6 @@ namespace Vulkan {
 
 
 
-
 		//Record command buffers
 		Record_CurrentFramegraph();
 		//Send rendercommand buffers
@@ -1101,7 +1311,7 @@ namespace Vulkan {
 				for (unsigned char WaitIndex = 0; WaitIndex < Submit->WaitSemaphoreIndexes.size(); WaitIndex++) {
 					WaitSemaphoreList->push_back(Semaphores[Submit->WaitSemaphoreIndexes[WaitIndex]].SPHandle);
 				}
-
+				
 				submitinfo.pWaitSemaphores = WaitSemaphoreList->data();
 				submitinfo.pWaitDstStageMask = Submit->WaitSemaphoreStages.data();
 				submitinfo.waitSemaphoreCount = Submit->WaitSemaphoreIndexes.size();
@@ -1120,7 +1330,6 @@ namespace Vulkan {
 			}
 			VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].is_Used = true;
 		}
-
 
 		//Send displays
 		for (unsigned char WindowPassIndex = 0; WindowPassIndex < WindowPasses.size(); WindowPassIndex++) {
@@ -1176,7 +1385,8 @@ namespace Vulkan {
 				return;
 			}
 		}
-		
+
+
 
 		//Shift all WindowCall buffers of all Window Passes!
 		//Also shift all of the window semaphores
@@ -1201,7 +1411,7 @@ namespace Vulkan {
 		LOG_NOTCODED_TAPI("Index buffer creation is not coded, so rendering it is not coded either!", false);
 		VK_SubDrawPass* SP = GFXHandleConverter(VK_SubDrawPass*, SubDrawPass_ID);
 		VK_DrawCall call;
-		call.MatInst = GFXHandleConverter(VK_PipelineInstance*, MaterialInstance_ID)->PROGRAM;
+		call.MatInst = GFXHandleConverter(VK_PipelineInstance*, MaterialInstance_ID);
 		call.VB = GFXHandleConverter(VK_VertexBuffer*, VertexBuffer_ID);
 		SP->DrawCalls.push_back(GFX->JobSys->GetThisThreadIndex(), call);
 	}
@@ -1226,6 +1436,13 @@ namespace Vulkan {
 	}
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
 		switch (TYPE) {
+		case GFX_API::BUFFER_TYPE::GLOBAL:
+			{
+				VK_GlobalBuffer* buf = GFXHandleConverter(VK_GlobalBuffer*, Handle);
+				TargetBuffer = GetMEMORYALLOCATIONHANDLE(buf->Block.Type)->Buffer;
+				TargetOffset += buf->Block.Offset;
+			}
+			break;
 		case GFX_API::BUFFER_TYPE::VERTEX:
 			{
 				VK_VertexBuffer* buf = GFXHandleConverter(VK_VertexBuffer*, Handle);

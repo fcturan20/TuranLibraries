@@ -32,10 +32,10 @@ namespace Vulkan {
 		GPU* VKGPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
 		VK_States.GPU_TO_RENDER = VKGPU; 
 
-		VKGPU->GPULOCAL_ALLOC.FullSize = DeviceLocal_AllocSize;
-		VKGPU->HOSTVISIBLE_ALLOC.FullSize = HostVisible_AllocSize;
-		VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize = FastHostVisible_AllocSize;
-		VKGPU->READBACK_ALLOC.FullSize = Readback_AllocSize;
+		VKGPU->GPULOCAL_ALLOC.FullSize.DirectStore(DeviceLocal_AllocSize);
+		VKGPU->HOSTVISIBLE_ALLOC.FullSize.DirectStore(HostVisible_AllocSize);
+		VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize.DirectStore(FastHostVisible_AllocSize);
+		VKGPU->READBACK_ALLOC.FullSize.DirectStore(Readback_AllocSize);
 
 		Setup_LogicalDevice();
 

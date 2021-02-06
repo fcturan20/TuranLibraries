@@ -59,8 +59,9 @@ namespace GFX_API {
 		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) = 0;
 		virtual void Delete_VertexAttributeLayout(GFXHandle Layout_ID) = 0;
 
+		virtual TAPIResult Upload_toBuffer(GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) = 0;
+
 		virtual TAPIResult Create_StagingBuffer(unsigned int DATASIZE, const GFX_API::SUBALLOCATEBUFFERTYPEs& MemoryRegion, GFX_API::GFXHandle& Handle) = 0;
-		virtual TAPIResult Uploadto_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) = 0;
 		virtual void Delete_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle) = 0;
 		/*
 		* You should sort your vertex data according to attribute layout, don't forget that
@@ -68,13 +69,9 @@ namespace GFX_API {
 		*/
 		virtual TAPIResult Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, unsigned int VertexCount, 
 			GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& VertexBufferHandle) = 0;
-		virtual TAPIResult Upload_VertexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
-			unsigned int DataSize, unsigned int TargetOffset) = 0;
 		virtual void Unload_VertexBuffer(GFX_API::GFXHandle BufferHandle) = 0;
 
 		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& IndexBufferHandle) = 0;
-		virtual TAPIResult Upload_IndexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
-			unsigned int DataSize, unsigned int TargetOffset) = 0;
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) = 0;
 		
 
@@ -86,8 +83,6 @@ namespace GFX_API {
 
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
 			GFX_API::SHADERSTAGEs_FLAG AccessableStages, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
-		virtual TAPIResult Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
-			unsigned int DataSize, unsigned int TargetOffset) = 0;
 		virtual void Unload_GlobalBuffer(GFXHandle BUFFER_ID) = 0;
 
 
@@ -104,7 +99,7 @@ namespace GFX_API {
 		virtual TAPIResult Create_MaterialInst(GFX_API::GFXHandle MaterialType, GFX_API::GFXHandle& MaterialInstHandle) = 0;
 		virtual void Delete_MaterialInst(GFXHandle ID) = 0;
 		//If isMaterialType is false, MaterialType_orInstance input will be proccessed as MaterialInstance handle
-		virtual void SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
+		virtual TAPIResult SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
 			GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) = 0;
 
 

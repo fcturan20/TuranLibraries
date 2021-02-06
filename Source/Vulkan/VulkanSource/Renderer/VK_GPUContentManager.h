@@ -19,7 +19,7 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_RTSLOTSET*> RT_SLOTSETs;
 
 		//Suballocate and bind memory to VkBuffer object
-		TAPIResult				Suballocate_Buffer(VkBuffer BUFFER, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset, VkDeviceSize& RequiredSize, bool ShouldBind);
+		TAPIResult				Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset, VkDeviceSize& RequiredSize);
 		//Suballocate and bind memory to VkImage object
 		TAPIResult				Suballocate_Image(VK_Texture& Texture);
 
@@ -62,20 +62,18 @@ namespace Vulkan {
 		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) override;
 		virtual void Delete_VertexAttributeLayout(GFX_API::GFXHandle Layout_ID) override;
 
+		virtual TAPIResult Upload_toBuffer(GFX_API::GFXHandle BufferHandle, GFX_API::BUFFER_TYPE BufferType, const void* DATA, unsigned int DATA_SIZE,
+			unsigned int OFFSET) override;
+
 		virtual TAPIResult Create_StagingBuffer(unsigned int DATASIZE, const GFX_API::SUBALLOCATEBUFFERTYPEs& MemoryRegion, GFX_API::GFXHandle& Handle) override;
-		virtual TAPIResult Uploadto_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) override;
 		virtual void Delete_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle) override;
 
 		virtual TAPIResult Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, unsigned int VertexCount, 
 			GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& VertexBufferHandle) override;
-		virtual TAPIResult Upload_VertexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, 
-			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_VertexBuffer(GFX_API::GFXHandle BufferHandle) override;
 
 
 		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& IndexBufferHandle) override;
-		virtual TAPIResult Upload_IndexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
-			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) override;
 
 
@@ -87,8 +85,6 @@ namespace Vulkan {
 
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
 			GFX_API::SHADERSTAGEs_FLAG AccessableStages, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) override;
-		virtual TAPIResult Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData,
-			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) override;
 
 
@@ -100,7 +96,7 @@ namespace Vulkan {
 		virtual void Delete_MaterialType(GFX_API::GFXHandle Asset_ID) override;
 		virtual TAPIResult Create_MaterialInst(GFX_API::GFXHandle MaterialType, GFX_API::GFXHandle& MaterialInstHandle) override;
 		virtual void Delete_MaterialInst(GFX_API::GFXHandle Asset_ID) override;
-		virtual void SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
+		virtual TAPIResult SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
 			GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) override;
 
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) override;

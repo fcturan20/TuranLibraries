@@ -56,6 +56,14 @@ namespace Vulkan {
 	VK_QUEUE::VK_QUEUE() {
 
 	}
+	VK_MemoryBlock::VK_MemoryBlock() {
+
+	}
+	VK_MemoryBlock::VK_MemoryBlock(const VK_MemoryBlock& copyblock) {
+		isEmpty.store(copyblock.isEmpty.load());
+		Size = copyblock.Size;
+		Offset = copyblock.Offset;
+	}
 
 	Vulkan_States::Vulkan_States()  {
 		
@@ -130,7 +138,7 @@ namespace Vulkan {
 		}
 		LOG_STATUS_TAPI("Checked Required Device Extensions for the GPU!");
 	}
-	VK_MemoryAllocation::VK_MemoryAllocation() {
+	VK_MemoryAllocation::VK_MemoryAllocation() : Allocated_Blocks(*GFX->JobSys) {
 
 	}
 

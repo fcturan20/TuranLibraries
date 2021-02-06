@@ -1,6 +1,7 @@
 #include "VK_GPUContentManager.h"
 #include "Vulkan_Renderer_Core.h"
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
+#include <numeric>
 #define VKRENDERER ((Vulkan::Renderer*)GFXRENDERER)
 #define VKGPU (((Vulkan::Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
 
@@ -37,10 +38,11 @@ namespace Vulkan {
 		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys){
 
 		//GPU Local Memory Allocation
-		if (VKGPU->GPULOCAL_ALLOC.FullSize) {
+		if (VKGPU->GPULOCAL_ALLOC.FullSize.DirectLoad()) {
 			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-			uint64_t AllocSize = VKGPU->GPULOCAL_ALLOC.FullSize;
+			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			uint64_t AllocSize = VKGPU->GPULOCAL_ALLOC.FullSize.DirectLoad();
 			VkBuffer GPULOCAL_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
 			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, GPULOCAL_buf, &memrequirements);
 			if (!(memrequirements.memoryTypeBits & (1 << VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex))) {
@@ -56,7 +58,7 @@ namespace Vulkan {
 				LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
 			}
 			VKGPU->GPULOCAL_ALLOC.Allocated_Memory = allocated_memory;
-			VKGPU->GPULOCAL_ALLOC.UnusedSize = AllocSize;
+			VKGPU->GPULOCAL_ALLOC.UnusedSize.DirectStore(AllocSize);
 			VKGPU->GPULOCAL_ALLOC.MappedMemory = nullptr;
 			VKGPU->GPULOCAL_ALLOC.Buffer = GPULOCAL_buf;
 			if (vkBindBufferMemory(VKGPU->Logical_Device, GPULOCAL_buf, allocated_memory, 0) != VK_SUCCESS) {
@@ -64,11 +66,11 @@ namespace Vulkan {
 			}
 		}
 		//Host Visible Memory Allocation
-		if (VKGPU->HOSTVISIBLE_ALLOC.FullSize) {
+		if (VKGPU->HOSTVISIBLE_ALLOC.FullSize.DirectLoad()) {
 			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
 				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-			uint64_t AllocSize = VKGPU->HOSTVISIBLE_ALLOC.FullSize;
+			uint64_t AllocSize = VKGPU->HOSTVISIBLE_ALLOC.FullSize.DirectLoad();
 			VkBuffer stagingbuffer = Create_VkBuffer(AllocSize, USAGEFLAGs);
 			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, stagingbuffer, &memrequirements);
 			if (!(memrequirements.memoryTypeBits & (1u << VKGPU->HOSTVISIBLE_ALLOC.MemoryTypeIndex))) {
@@ -85,7 +87,7 @@ namespace Vulkan {
 				LOG_CRASHING_TAPI("GPU_ContentManager has failed because vkAllocateMemory has failed!");
 			}
 			VKGPU->HOSTVISIBLE_ALLOC.Allocated_Memory = allocated_memory;
-			VKGPU->HOSTVISIBLE_ALLOC.UnusedSize = AllocSize;
+			VKGPU->HOSTVISIBLE_ALLOC.UnusedSize.DirectStore(AllocSize);
 			VKGPU->HOSTVISIBLE_ALLOC.Buffer = stagingbuffer;
 			if (vkBindBufferMemory(VKGPU->Logical_Device, stagingbuffer, allocated_memory, 0) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
@@ -96,10 +98,11 @@ namespace Vulkan {
 			}
 		}
 		//Fast Host Visible Memory Allocation
-		if (VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize) {
+		if (VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize.DirectLoad()) {
 			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-			uint64_t AllocSize = VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize;
+			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			uint64_t AllocSize = VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize.DirectLoad();
 			VkBuffer stagingbuffer = Create_VkBuffer(AllocSize, USAGEFLAGs);
 			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, stagingbuffer, &memrequirements);
 			if (!(memrequirements.memoryTypeBits & (1u << VKGPU->FASTHOSTVISIBLE_ALLOC.MemoryTypeIndex))) {
@@ -116,7 +119,7 @@ namespace Vulkan {
 				LOG_CRASHING_TAPI("GPU_ContentManager has failed because vkAllocateMemory has failed!");
 			}
 			VKGPU->FASTHOSTVISIBLE_ALLOC.Allocated_Memory = allocated_memory;
-			VKGPU->FASTHOSTVISIBLE_ALLOC.UnusedSize = AllocSize;
+			VKGPU->FASTHOSTVISIBLE_ALLOC.UnusedSize.DirectStore(AllocSize);
 			VKGPU->FASTHOSTVISIBLE_ALLOC.Buffer = stagingbuffer;
 			if (vkBindBufferMemory(VKGPU->Logical_Device, stagingbuffer, allocated_memory, 0) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
@@ -127,10 +130,11 @@ namespace Vulkan {
 			}
 		}
 		//Readback Memory Allocation
-		if (VKGPU->READBACK_ALLOC.FullSize) {
+		if (VKGPU->READBACK_ALLOC.FullSize.DirectLoad()) {
 			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-			uint64_t AllocSize = VKGPU->READBACK_ALLOC.FullSize;
+			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			uint64_t AllocSize = VKGPU->READBACK_ALLOC.FullSize.DirectLoad();
 			VkBuffer READBACK_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
 			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, READBACK_buf, &memrequirements);
 			if (!(memrequirements.memoryTypeBits & (1u << VKGPU->READBACK_ALLOC.MemoryTypeIndex))) {
@@ -146,7 +150,7 @@ namespace Vulkan {
 				LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
 			}
 			VKGPU->READBACK_ALLOC.Allocated_Memory = allocated_memory;
-			VKGPU->READBACK_ALLOC.UnusedSize = AllocSize;
+			VKGPU->READBACK_ALLOC.UnusedSize.DirectStore(AllocSize);
 			VKGPU->READBACK_ALLOC.Buffer = READBACK_buf;
 			if (vkBindBufferMemory(VKGPU->Logical_Device, READBACK_buf, allocated_memory, 0) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
@@ -364,13 +368,66 @@ namespace Vulkan {
 			}
 		}
 	}
+	
+	//Don't use this functions outside of the FindAvailableOffset
+	VkDeviceSize CalculateOffset(VkDeviceSize baseoffset, VkDeviceSize AlignmentOffset, VkDeviceSize ReqAlignment) {
+		VkDeviceSize FinalOffset = 0;
+		VkDeviceSize LCM = std::lcm(AlignmentOffset, ReqAlignment);
+		FinalOffset = (baseoffset % LCM) ? (((baseoffset / LCM) + 1) * LCM) : baseoffset;
+		return FinalOffset;
+	}
+	//Use this function in Suballocate_Buffer and Suballocate_Image after you're sure that you have enough memory in the allocation
+	VkDeviceSize FindAvailableOffset(VK_MemoryAllocation* MEMALLOC, VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
+		VkDeviceSize FurthestOffset = 0;
+		if (AlignmentOffset && !RequiredAlignment) {
+			RequiredAlignment = AlignmentOffset;
+		}
+		else if (!AlignmentOffset && RequiredAlignment) {
+			AlignmentOffset = RequiredAlignment;
+		}
+		else if(!AlignmentOffset && !RequiredAlignment){
+			AlignmentOffset = 1;
+			RequiredAlignment = 1;
+		}
+		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+			for (unsigned int i = 0; i < MEMALLOC->Allocated_Blocks.size(ThreadID); i++) {
+				VK_MemoryBlock& Block = MEMALLOC->Allocated_Blocks.get(ThreadID, i);
+				if (FurthestOffset <= Block.Offset) {
+					FurthestOffset = Block.Offset + Block.Size;
+				}
+				if (!Block.isEmpty.load()) {
+					continue;
+				}
 
-	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset, VkDeviceSize& RequiredSize, bool ShouldBind) {
+				VkDeviceSize Offset = CalculateOffset(Block.Offset, AlignmentOffset, RequiredAlignment);
+
+				if (Offset + RequiredSize - Block.Offset > Block.Size || 
+					Offset + RequiredSize - Block.Offset < (Block.Size / 5) * 3) {
+					continue;
+				}
+				bool x = true, y = false;
+				//Try to get the block first (Concurrent usages are prevented that way)
+				if (!Block.isEmpty.compare_exchange_strong(x, y)) {
+					continue;
+				}
+				//Don't change the block's own offset, because that'd probably cause shifting offset the memory block after free-reuse-free-reuse sequences
+				return Offset;
+			}
+		}
+
+		//None of the current blocks is suitable, so create a new block in this thread's local memoryblocks list
+		VK_MemoryBlock newblock;
+		newblock.isEmpty.store(false);
+		newblock.Offset = CalculateOffset(FurthestOffset, AlignmentOffset, RequiredAlignment);
+		newblock.Size = RequiredSize + newblock.Offset - FurthestOffset;
+		MEMALLOC->Allocated_Blocks.push_back(GFX->JobSys->GetThisThreadIndex(), newblock);
+		return newblock.Offset;
+	}
+	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset, VkDeviceSize& RequiredSize) {
 		VkMemoryRequirements bufferreq;
 		vkGetBufferMemoryRequirements(VKGPU->Logical_Device, BUFFER, &bufferreq);
 		RequiredSize = bufferreq.size;
 
-		VkDeviceSize Offset = 0;
 		bool Found_Offset = false;
 		VK_MemoryAllocation* MEMALLOC = nullptr;
 		switch (GPUregion) {
@@ -394,59 +451,22 @@ namespace Vulkan {
 			LOG_ERROR_TAPI("Intended buffer doesn't support to be stored in specified memory region!");
 			return TAPI_FAIL;
 		}
-		MEMALLOC->Locker.lock();
-		if (MEMALLOC->Allocated_Blocks.size() == 0) {
-			VK_MemoryBlock FirstBlock;
-			FirstBlock.isEmpty = false;
-			FirstBlock.Size = RequiredSize;
-			FirstBlock.Offset = 0;
-			if (!(MEMALLOC->UnusedSize - RequiredSize)) {
-				LOG_CRASHING_TAPI("LimitedSubtract_weak() has failed in Suballocate_Buffer(), returning TAPI_FAIL!");
-				return TAPI_FAIL;
-			}
-			MEMALLOC->Allocated_Blocks.push_back(FirstBlock);
-			Offset = FirstBlock.Offset;
-			Found_Offset = true;
-			MEMALLOC->Locker.unlock();
-		}
-		for (unsigned int i = 0; i < MEMALLOC->Allocated_Blocks.size() && !Found_Offset; i++) {
-			VK_MemoryBlock& Block = MEMALLOC->Allocated_Blocks[i];
-			if (Block.isEmpty && RequiredSize < Block.Size && RequiredSize > Block.Size / 5 * 3) {
-				Block.isEmpty = false;
-				Offset = Block.Offset;
-				Found_Offset = true;
-				MEMALLOC->Locker.unlock();
-				break;
-			}
-		}
-		//There is no empty block, so create new one!
-		if (MEMALLOC->UnusedSize > RequiredSize && !Found_Offset) {
-			VK_MemoryBlock& LastBlock = MEMALLOC->Allocated_Blocks[MEMALLOC->Allocated_Blocks.size() - 1];
-			VK_MemoryBlock NewBlock;
-			NewBlock.isEmpty = false;
-			NewBlock.Size = RequiredSize;
-			NewBlock.Offset = LastBlock.Offset + LastBlock.Size;
-			MEMALLOC->UnusedSize -= RequiredSize;
-			MEMALLOC->Allocated_Blocks.push_back(NewBlock);
-			Offset = NewBlock.Offset;
-			Found_Offset = true;
-			MEMALLOC->Locker.unlock();
-		}
 
-		if (!Found_Offset) {
-			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed because there is no way you can create a buffer at this size!");
+		VkDeviceSize AlignmentOffset_ofGPU = 0;
+		if (UsageFlags & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) {
+			AlignmentOffset_ofGPU = VKGPU->Device_Properties.limits.minStorageBufferOffsetAlignment;
+		}
+		if (UsageFlags & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) {
+			AlignmentOffset_ofGPU = VKGPU->Device_Properties.limits.minUniformBufferOffsetAlignment;
+		}
+		if (!MEMALLOC->UnusedSize.LimitedSubtract_weak(bufferreq.size + AlignmentOffset_ofGPU, 0)) {
+			LOG_ERROR_TAPI("Buffer doesn't fit the remaining memory allocation! SuballocateBuffer has failed.");
 			return TAPI_FAIL;
 		}
-		if (ShouldBind) {
-			Offset = (Offset % bufferreq.alignment) ? (Offset) : (((Offset / bufferreq.alignment) + 1) * bufferreq.alignment);
 
-			if (vkBindBufferMemory(VKGPU->Logical_Device, BUFFER, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("VKContentManager->Suballocate_Buffer() has failed at vkBindBufferMemory()!");
-				return TAPI_FAIL;
-			}
-		}
 
-		MemoryOffset = Offset;
+
+		MemoryOffset = FindAvailableOffset(MEMALLOC, bufferreq.size, AlignmentOffset_ofGPU, bufferreq.alignment);
 		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::Suballocate_Image(VK_Texture& Texture) {
@@ -478,52 +498,11 @@ namespace Vulkan {
 			LOG_ERROR_TAPI("Intended texture doesn't support to be stored in the specified memory region!");
 			return TAPI_FAIL;
 		}
-		MEMALLOC->Locker.lock();
-		if (MEMALLOC->Allocated_Blocks.size() == 0) {
-			if (MEMALLOC->UnusedSize < req.size) {
-				LOG_ERROR_TAPI("Intended texture is bigger than memory allocation itself!");
-				return TAPI_FAIL;
-			}
-			VK_MemoryBlock FirstBlock;
-			FirstBlock.isEmpty = false;
-			FirstBlock.Size = size;
-			FirstBlock.Offset = 0;
-			MEMALLOC->UnusedSize -= size;
-			MEMALLOC->Allocated_Blocks.push_back(FirstBlock);
-
-			Offset = FirstBlock.Offset;
-			Found_Offset = true;
-			MEMALLOC->Locker.unlock();
+		if (!MEMALLOC->UnusedSize.LimitedSubtract_weak(req.size, 0)) {
+			LOG_ERROR_TAPI("Buffer doesn't fit the remaining memory allocation! SuballocateBuffer has failed.");
+			return TAPI_FAIL;
 		}
-		for (unsigned int i = 0; i < MEMALLOC->Allocated_Blocks.size() && !Found_Offset; i++) {
-			VK_MemoryBlock& Block = MEMALLOC->Allocated_Blocks[i];
-			if (Block.isEmpty && size < Block.Size && size > Block.Size / 5 * 3) {
-				Block.isEmpty = false;
-				Offset = Block.Offset;
-				Found_Offset = true;
-				MEMALLOC->Locker.unlock();
-				break;
-			}
-		}
-		//There is no empty block, so create new one!
-		if (MEMALLOC->UnusedSize > size && !Found_Offset) {
-			VK_MemoryBlock& LastBlock = MEMALLOC->Allocated_Blocks[MEMALLOC->Allocated_Blocks.size() - 1];
-			VK_MemoryBlock NewBlock;
-			NewBlock.isEmpty = false;
-			NewBlock.Size = size;
-			NewBlock.Offset = LastBlock.Offset + LastBlock.Size;
-			MEMALLOC->UnusedSize -= size;
-			MEMALLOC->Allocated_Blocks.push_back(NewBlock);
-			Offset = NewBlock.Offset;
-			Found_Offset = true;
-			MEMALLOC->Locker.unlock();
-		}
-		Offset = (Offset % req.alignment) ? (((Offset / req.alignment) + 1) * req.alignment) : (Offset);
-
-		if (!Found_Offset) {
-			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed becuse there is no way you can create a suballocate at this size!");
-			return TAPI_INVALIDARGUMENT;
-		}
+		Offset = FindAvailableOffset(MEMALLOC, req.size, 0, req.alignment);
 
 		if (vkBindImageMemory(VKGPU->Logical_Device, Texture.Image, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed at VkBindImageMemory()!");
@@ -667,7 +646,7 @@ namespace Vulkan {
 		}
 		
 		VkDeviceSize Offset = 0, RequiredSize = 0;
-		if (Suballocate_Buffer(Bufferobj, MemoryRegion, Offset, RequiredSize, false) != VK_SUCCESS) {
+		if (Suballocate_Buffer(Bufferobj, psuedo_ci.usage, MemoryRegion, Offset, RequiredSize) != VK_SUCCESS) {
 			LOG_ERROR_TAPI("Suballocation has failed, so staging buffer creation too!");
 			return TAPI_FAIL;
 		}
@@ -678,10 +657,29 @@ namespace Vulkan {
 		Handle = StagingBuffer;
 		return TAPI_SUCCESS;
 	}
-	TAPIResult GPU_ContentManager::Uploadto_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) {
-		MemoryBlock* SB = GFXHandleConverter(MemoryBlock*, StagingBufferHandle);
+	TAPIResult GPU_ContentManager::Upload_toBuffer(GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) {
+		VkDeviceSize UploadOFFSET = static_cast<VkDeviceSize>(OFFSET);
+		GFX_API::SUBALLOCATEBUFFERTYPEs SUBALLOCATEREGION = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
+		switch (Type) {
+		case GFX_API::BUFFER_TYPE::GLOBAL:
+			SUBALLOCATEREGION = GFXHandleConverter(VK_GlobalBuffer*, Handle)->Block.Type;
+			UploadOFFSET += GFXHandleConverter(VK_GlobalBuffer*, Handle)->Block.Offset;
+			break;
+		case GFX_API::BUFFER_TYPE::STAGING:
+			SUBALLOCATEREGION = GFXHandleConverter(MemoryBlock*, Handle)->Type;
+			UploadOFFSET += GFXHandleConverter(MemoryBlock*, Handle)->Offset;
+			break;
+		case GFX_API::BUFFER_TYPE::VERTEX:
+			SUBALLOCATEREGION = GFXHandleConverter(VK_VertexBuffer*, Handle)->Block.Type;
+			UploadOFFSET += GFXHandleConverter(VK_VertexBuffer*, Handle)->Block.Offset;
+			break;
+		default:
+			LOG_NOTCODED_TAPI("Upload_toBuffer() doesn't support this type of buffer for now!", true);
+			return TAPI_NOTCODED;
+		}
+
 		void* MappedMemory = nullptr;
-		switch (SB->Type) {
+		switch (SUBALLOCATEREGION) {
 		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
 			MappedMemory = VKGPU->FASTHOSTVISIBLE_ALLOC.MappedMemory;
 			break;
@@ -695,11 +693,12 @@ namespace Vulkan {
 			LOG_NOTCODED_TAPI("This type of memory block isn't supported for a staging buffer! Uploadto_StagingBuffer() has failed!", true);
 			return TAPI_NOTCODED;
 		}
-		VkDeviceSize UploadOFFSET = static_cast<VkDeviceSize>(OFFSET);
-		memcpy(((char*)MappedMemory) + SB->Offset + UploadOFFSET, DATA, DATA_SIZE);
+		memcpy(((char*)MappedMemory) + UploadOFFSET, DATA, DATA_SIZE);
 		return TAPI_SUCCESS;
 	}
 	void GPU_ContentManager::Delete_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle) {
+		LOG_NOTCODED_TAPI("Delete_StagingBuffer() is not coded!", true);
+		/*
 		MemoryBlock* SB = GFXHandleConverter(MemoryBlock*, StagingBufferHandle);
 		std::vector<VK_MemoryBlock>* MemoryBlockList = nullptr;
 		std::mutex* MutexPTR = nullptr;
@@ -729,7 +728,7 @@ namespace Vulkan {
 			}
 		}
 		MutexPTR->unlock();
-		LOG_ERROR_TAPI("Delete_StagingBuffer() didn't delete any memory!");
+		LOG_ERROR_TAPI("Delete_StagingBuffer() didn't delete any memory!");*/
 	}
 
 	TAPIResult GPU_ContentManager::Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, unsigned int VertexCount, 
@@ -752,7 +751,7 @@ namespace Vulkan {
 
 		VkBuffer Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
 		VkDeviceSize offset = 0, RequiredSize = 0;
-		if (Suballocate_Buffer(Buffer, MemoryType, offset, RequiredSize, false) != TAPI_SUCCESS) {
+		if (Suballocate_Buffer(Buffer, BufferUsageFlag, MemoryType, offset, RequiredSize) != TAPI_SUCCESS) {
 			LOG_ERROR_TAPI("There is no memory left in specified memory region, please try again later!");
 			return TAPI_FAIL;
 		}
@@ -766,16 +765,6 @@ namespace Vulkan {
 		VertexBufferHandle = VKMesh;
 		return TAPI_SUCCESS;
 	}
-	TAPIResult GPU_ContentManager::Upload_VertexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset) {
-		VK_VertexBuffer* MESH = GFXHandleConverter(VK_VertexBuffer*, BufferHandle);
-		if (!(MESH->Block.Type == GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE || MESH->Block.Type == GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE)) {
-			LOG_ERROR_TAPI("You can upload a vertex buffer to a buffer that's in either HOSTVISIBLE or FASTHOSTVISIBLE memory region!");
-			return TAPI_FAIL;
-		}
-
-		LOG_NOTCODED_TAPI("Upload_VertexBuffer() isn't coded yet!", true);
-		return TAPI_NOTCODED;
-	}
 	//When you call this function, Draw Calls that uses this ID may draw another Mesh or crash
 	//Also if you have any Point Buffer that uses first vertex attribute of that Mesh Buffer, it may crash or draw any other buffer
 	void GPU_ContentManager::Unload_VertexBuffer(GFX_API::GFXHandle MeshBuffer_ID) {
@@ -786,10 +775,6 @@ namespace Vulkan {
 
 	TAPIResult GPU_ContentManager::Create_IndexBuffer(unsigned int DataSize, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& IndexBufferHandle) {
 		LOG_NOTCODED_TAPI("Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!", true);
-		return TAPI_NOTCODED;
-	}
-	TAPIResult GPU_ContentManager::Upload_IndexBuffer(GFX_API::GFXHandle BufferHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset) {
-		LOG_NOTCODED_TAPI("Upload_IndexBuffer() isn't coded yet!", true);
 		return TAPI_NOTCODED;
 	}
 	void GPU_ContentManager::Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) {
@@ -889,15 +874,17 @@ namespace Vulkan {
 		}
 		
 		VkBuffer obj;
+		VkBufferUsageFlags flags = 0;
 		if (isUniform) {
-			obj = Create_VkBuffer(DATA_SIZE, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+			flags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 		}
 		else {
-			obj = Create_VkBuffer(DATA_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+			flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 		}
+		obj = Create_VkBuffer(DATA_SIZE, flags);
 		
 		VkDeviceSize offset = 0, RequiredSize = 0;
-		if (Suballocate_Buffer(obj, MemoryType, offset, RequiredSize, false) != TAPI_SUCCESS) {
+		if (Suballocate_Buffer(obj, flags, MemoryType, offset, RequiredSize) != TAPI_SUCCESS) {
 			LOG_ERROR_TAPI("Create_GlobalBuffer has failed at suballocation!");
 			return TAPI_FAIL;
 		}
@@ -913,10 +900,6 @@ namespace Vulkan {
 		GlobalBufferHandle = GB;
 		GLOBALBUFFERs.push_back(GFX->JobSys->GetThisThreadIndex(), GB);
 		return TAPI_SUCCESS;
-	}
-	TAPIResult GPU_ContentManager::Upload_GlobalBuffer(GFX_API::GFXHandle BufferHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int TARGETOFFSET) {
-		LOG_NOTCODED_TAPI("Upload_GlobalBuffer() isn't coded yet!", true);
-		return TAPI_NOTCODED;
 	}
 	void GPU_ContentManager::Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Unload_GlobalBuffer() isn't coded!", true);
@@ -1436,7 +1419,7 @@ namespace Vulkan {
 		LOG_CRASHING_TAPI("Delete_MaterialInst() isn't coded yet!");
 	}
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
-	void GPU_ContentManager::SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
+	TAPIResult GPU_ContentManager::SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
 		GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) {
 		VK_DescBuffer* UB = nullptr;
 		VK_DescSet* Set = nullptr;
@@ -1469,14 +1452,15 @@ namespace Vulkan {
 		}
 		if (!UB) {
 			LOG_ERROR_TAPI("Specified uniform buffer isn't found!");
-			return;
+			return TAPI_FAIL;
 		}
-
-
+		if (TargetOffset % VKGPU->Device_Properties.limits.minUniformBufferOffsetAlignment) {
+			LOG_WARNING_TAPI("This TargetOffset in SetMaterial_UniformBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + to_string(VKGPU->Device_Properties.limits.minUniformBufferOffsetAlignment));
+		}
 		bool x = 0, y = 1;
 		if (!UB->IsUpdated.compare_exchange_strong(x, y)) {
 			LOG_ERROR_TAPI("You already set the uniform buffer, you can't change it at the same frame!");
-			return;
+			return TAPI_WRONGTIMING;
 		}
 		VkDeviceSize FinalOffset = static_cast<VkDeviceSize>(TargetOffset);
 		switch (BufferType) {
@@ -1488,7 +1472,7 @@ namespace Vulkan {
 		break;
 		default:
 			LOG_NOTCODED_TAPI("SetMaterial_UniformBuffer() doesn't support this type of target buffers right now!", true);
-			return;
+			return TAPI_NOTCODED;
 		}
 		UB->Info.offset = FinalOffset;
 		UB->IsUpdated.store(1);
@@ -1503,6 +1487,7 @@ namespace Vulkan {
 		else {
 			DescSets_toJustUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
 		}
+		return TAPI_SUCCESS;
 	}
 
 	TAPIResult GPU_ContentManager::Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) {

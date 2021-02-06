@@ -1105,15 +1105,17 @@ namespace Vulkan {
 			}
 			Locker.unlock();
 
-			VkDescriptorSetAllocateInfo al_in = {};
-			al_in.descriptorPool = VKContentManager->MaterialRelated_DescPool.pool;
-			al_in.descriptorSetCount = Sets.size();
-			al_in.pNext = nullptr;
-			al_in.pSetLayouts = SetLayouts.data();
-			al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			vkAllocateDescriptorSets(VKGPU->Logical_Device, &al_in, Sets.data());
-			for (unsigned int SetIndex = 0; SetIndex < Sets.size(); SetIndex++) {
-				*SetPTRs[SetIndex] = Sets[SetIndex];
+			if (Sets.size()) {
+				VkDescriptorSetAllocateInfo al_in = {};
+				al_in.descriptorPool = VKContentManager->MaterialRelated_DescPool.pool;
+				al_in.descriptorSetCount = Sets.size();
+				al_in.pNext = nullptr;
+				al_in.pSetLayouts = SetLayouts.data();
+				al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				vkAllocateDescriptorSets(VKGPU->Logical_Device, &al_in, Sets.data());
+				for (unsigned int SetIndex = 0; SetIndex < Sets.size(); SetIndex++) {
+					*SetPTRs[SetIndex] = Sets[SetIndex];
+				}
 			}
 		}
 		//Create Descriptor Sets for material types/instances that are created before and used recently (last 2 frames), to update their descriptor sets
@@ -1157,22 +1159,23 @@ namespace Vulkan {
 				}
 			}
 
+			if (NewSets.size()) {
+				VkDescriptorSetAllocateInfo al_in = {};
+				al_in.descriptorPool = VKContentManager->MaterialRelated_DescPool.pool;
+				al_in.descriptorSetCount = NewSets.size();
+				al_in.pNext = nullptr;
+				al_in.pSetLayouts = SetLayouts.data();
+				al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				vkAllocateDescriptorSets(VKGPU->Logical_Device, &al_in, NewSets.data());
+				for (unsigned int SetIndex = 0; SetIndex < NewSets.size(); SetIndex++) {
+					*SetPTRs[SetIndex] = NewSets[SetIndex];
+				}
 
-			VkDescriptorSetAllocateInfo al_in = {};
-			al_in.descriptorPool = VKContentManager->MaterialRelated_DescPool.pool;
-			al_in.descriptorSetCount = NewSets.size();
-			al_in.pNext = nullptr;
-			al_in.pSetLayouts = SetLayouts.data();
-			al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			vkAllocateDescriptorSets(VKGPU->Logical_Device, &al_in, NewSets.data());
-			for (unsigned int SetIndex = 0; SetIndex < NewSets.size(); SetIndex++) {
-				*SetPTRs[SetIndex] = NewSets[SetIndex];
+				for (unsigned int CopyIndex = 0; CopyIndex < CopySetInfos.size(); CopyIndex++) {
+					CopySetInfos[CopyIndex].dstSet = *CopyTargetSets[CopyIndex];
+				}
+				vkUpdateDescriptorSets(VKGPU->Logical_Device, 0, nullptr, CopySetInfos.size(), CopySetInfos.data());
 			}
-
-			for (unsigned int CopyIndex = 0; CopyIndex < CopySetInfos.size(); CopyIndex++) {
-				CopySetInfos[CopyIndex].dstSet = *CopyTargetSets[CopyIndex];
-			}
-			vkUpdateDescriptorSets(VKGPU->Logical_Device, 0, nullptr, CopySetInfos.size(), CopySetInfos.data());
 		}
 		//Update descriptor sets
 		{

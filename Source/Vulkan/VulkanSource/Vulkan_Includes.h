@@ -52,17 +52,19 @@ namespace Vulkan {
 
 	struct VK_API VK_MemoryBlock {
 		VkDeviceSize Size = 0, Offset = 0;
-		bool isEmpty = true;
+		std::atomic_bool isEmpty = true;
+		VK_MemoryBlock();
+		VK_MemoryBlock(const VK_MemoryBlock& copyblock);
 	};
 
 	struct VK_API VK_MemoryAllocation {
-		uint32_t FullSize, UnusedSize, MemoryTypeIndex;
+		TuranAPI::Threading::AtomicUINT FullSize = 0, UnusedSize = 0;
+		uint32_t MemoryTypeIndex = 0;
 		void* MappedMemory;
 
 		VkDeviceMemory Allocated_Memory;
 		VkBuffer Buffer;
-		std::mutex Locker;
-		std::vector<VK_MemoryBlock> Allocated_Blocks;
+		TuranAPI::Threading::TLVector<VK_MemoryBlock> Allocated_Blocks;
 		VK_MemoryAllocation();
 	};
 

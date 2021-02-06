@@ -205,8 +205,10 @@ namespace TuranAPI {
 				) {
 				return false;
 			}
-
-			return data.compare_exchange_strong(x, x + add);
+			if (!data.compare_exchange_strong(x, x + add)) {
+				return LimitedSubtract_weak(add, maxlimit);
+			}
+			return true;
 		}
 		void AtomicUINT::LimitedAdd_strong(const uint64_t& add, const uint64_t& maxlimit) {
 			while (true) {
@@ -223,8 +225,10 @@ namespace TuranAPI {
 				) {
 				return false;
 			}
-
-			return data.compare_exchange_strong(x, x - subtract);
+			if (!data.compare_exchange_strong(x, x - subtract)) {
+				return LimitedSubtract_weak(subtract, minlimit);
+			}
+			return true;
 		}
 		void AtomicUINT::LimitedSubtract_strong(const uint64_t& subtract, const uint64_t& minlimit) {
 			while (true) {

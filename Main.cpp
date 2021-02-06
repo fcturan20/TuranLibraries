@@ -173,7 +173,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		}
 
 		
-		if (GFXContentManager->Uploadto_StagingBuffer(StagingBuffer, VertexData, 60, 0) != TAPI_SUCCESS) {
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VertexData, 60, 0) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading vertex buffer to staging buffer has failed!");
 		}
 	}
@@ -214,9 +214,9 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		if (GFXContentManager->Link_MaterialType(MATTYPE, MATTYPE_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Link MaterialType has failed!");
 		}
-		GFXContentManager->SetMaterial_UniformBuffer(MATTYPE_ID, true, false, 0, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, 60);
+		GFXContentManager->SetMaterial_UniformBuffer(MATTYPE_ID, true, false, 0, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, 64);
 		vec3 FragColor(1.0f, 0.0f, 0.0f);
-		if (GFXContentManager->Uploadto_StagingBuffer(StagingBuffer, &FragColor, 12, 60) != TAPI_SUCCESS) {
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, &FragColor, 12, 64) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading vertex color to staging buffer has failed!");
 		}
 		GFXContentManager->Create_MaterialInst(MATTYPE_ID, FIRSTMATINST_ID);

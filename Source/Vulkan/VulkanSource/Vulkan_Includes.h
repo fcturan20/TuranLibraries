@@ -50,22 +50,24 @@ namespace Vulkan {
 		VK_QUEUE();
 	};
 
-	struct VK_API VK_MemoryBlock {
+	struct VK_API VK_SubAllocation {
 		VkDeviceSize Size = 0, Offset = 0;
 		std::atomic_bool isEmpty = true;
-		VK_MemoryBlock();
-		VK_MemoryBlock(const VK_MemoryBlock& copyblock);
+		VK_SubAllocation();
+		VK_SubAllocation(const VK_SubAllocation& copyblock);
 	};
 
 	struct VK_API VK_MemoryAllocation {
-		TuranAPI::Threading::AtomicUINT FullSize = 0, UnusedSize = 0;
-		uint32_t MemoryTypeIndex = 0;
+		TuranAPI::Threading::AtomicUINT UnusedSize = 0;
+		uint32_t MemoryTypeIndex = 0, FullSize = 0;
 		void* MappedMemory;
+		GFX_API::SUBALLOCATEBUFFERTYPEs TYPE;
 
 		VkDeviceMemory Allocated_Memory;
 		VkBuffer Buffer;
-		TuranAPI::Threading::TLVector<VK_MemoryBlock> Allocated_Blocks;
+		TuranAPI::Threading::TLVector<VK_SubAllocation> Allocated_Blocks;
 		VK_MemoryAllocation();
+		VK_MemoryAllocation(const VK_MemoryAllocation& copyALLOC);
 	};
 
 	struct VK_API GPU {
@@ -80,8 +82,7 @@ namespace Vulkan {
 		vector<VkExtensionProperties> Supported_DeviceExtensions;
 		vector<const char*>* Required_DeviceExtensionNames;
 
-
-		VK_MemoryAllocation		GPULOCAL_ALLOC, HOSTVISIBLE_ALLOC, FASTHOSTVISIBLE_ALLOC, READBACK_ALLOC;
+		vector<VK_MemoryAllocation> ALLOCs;
 		uint32_t* AllQueueFamilies;
 		//This function searches the best queue that has least specs but needed specs
 		//For example: Queue 1->Graphics,Transfer,Compute - Queue 2->Transfer, Compute - Queue 3->Transfer
@@ -155,9 +156,11 @@ namespace Vulkan {
 
 	VK_API VkFormat Find_VkFormat_byDataType(GFX_API::DATA_TYPE datatype);
 	VK_API VkFormat Find_VkFormat_byTEXTURECHANNELs(GFX_API::TEXTURE_CHANNELs channels);
-	VK_API VkAttachmentLoadOp Find_VkLoadOp_byAttachmentReadState(GFX_API::DRAWPASS_LOAD readstate);
 	VK_API VkShaderStageFlags Find_VkShaderStages(GFX_API::SHADERSTAGEs_FLAG flag);
 	VkPipelineStageFlags Find_VkPipelineStages(GFX_API::SHADERSTAGEs_FLAG flag);
 	VK_API VkDescriptorType Find_VkDescType_byMATDATATYPE(GFX_API::MATERIALDATA_TYPE TYPE);
+	VK_API VkSamplerAddressMode Find_AddressMode_byWRAPPING(GFX_API::TEXTURE_WRAPPING Wrapping);
+	VK_API VkFilter Find_VkFilter_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter);
+	VK_API VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter);
 
 }

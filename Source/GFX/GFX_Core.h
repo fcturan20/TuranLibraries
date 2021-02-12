@@ -28,6 +28,9 @@ namespace GFX_API {
 		IMGUI_Core* IMGUI_o;
 		TuranAPI::Threading::JobSystem* JobSys;
 
+		virtual bool GetTextureTypeLimits(const GFX_API::Texture_Properties& Properties, GFX_API::TEXTUREUSAGEFLAG UsageFlag, unsigned int GPUIndex,
+			unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) = 0;
+		virtual void GetSupportedAllocations_ofTexture(const GFX_API::Texture_Description& TEXTURE_desc, unsigned int GPUIndex, unsigned int& SupportedMemoryTypesBitset) = 0;
 		//Window Operations
 
 		//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.

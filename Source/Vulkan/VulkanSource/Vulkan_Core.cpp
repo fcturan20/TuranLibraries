@@ -24,7 +24,7 @@ namespace Vulkan {
 		Check_Computer_Specs(GPUs);
 	}
 
-	TAPIResult Vulkan_Core::Start_SecondStage(unsigned char GPUIndex, unsigned int DeviceLocal_AllocSize, unsigned int HostVisible_AllocSize, unsigned int FastHostVisible_AllocSize, unsigned int Readback_AllocSize){
+	TAPIResult Vulkan_Core::Start_SecondStage(unsigned char GPUIndex, const vector<GFX_API::MemoryType>& MEMORYTYPEs){
 		GPU_TO_RENDER = DEVICE_GPUs[GPUIndex];
 		//Some basic algorithms accesses some of the GPU's datas
 		//Because GFX API doesn't support multi-GPU, just give the GPU Handle to VK_States
@@ -32,12 +32,10 @@ namespace Vulkan {
 		GPU* VKGPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
 		VK_States.GPU_TO_RENDER = VKGPU; 
 
-		VKGPU->GPULOCAL_ALLOC.FullSize.DirectStore(DeviceLocal_AllocSize);
-		VKGPU->HOSTVISIBLE_ALLOC.FullSize.DirectStore(HostVisible_AllocSize);
-		VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize.DirectStore(FastHostVisible_AllocSize);
-		VKGPU->READBACK_ALLOC.FullSize.DirectStore(Readback_AllocSize);
-
-		Setup_LogicalDevice();
+		for (unsigned int MemTypeIndex = 0; MemTypeIndex < MEMORYTYPEs.size(); MemTypeIndex++) {
+			const GFX_API::MemoryType& MemType = MEMORYTYPEs[MemTypeIndex];
+			VKGPU->ALLOCs[MemType.MemoryTypeIndex].FullSize = MemType.AllocationSize;
+		}
 
 	
 		GFXRENDERER = new Vulkan::Renderer;
@@ -101,7 +99,7 @@ namespace Vulkan {
 		vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, SupportedExtensions.data());
 		for (unsigned int i = 0; i < extension_count; i++) {
 			VK_States.Supported_InstanceExtensionList.push_back(SupportedExtensions[i]);
-			std::cout << "Supported Extension: " << SupportedExtensions[i].extensionName << " is added to the Vector!\n";
+			std::cout << "Supported Extension: " << SupportedExtensions[i].extensionName << std::endl;
 		}
 		std::cout << "Supported Extension Count: " << extension_count << std::endl;
 		VK_States.Is_RequiredInstanceExtensions_Supported();
@@ -205,7 +203,7 @@ namespace Vulkan {
 				break;
 			default:
 				//const char* CrashingError = Text_Add("Vulkan_Core::Check_Computer_Specs failed to find GPU's Type (Only Discrete and Integrated GPUs supported!), Type is:",
-					//std::to_string(Vulkan_GPU->Device_Properties.deviceType).c_str());
+					//std::to_string(VKGPU->Device_Properties.deviceType).c_str());
 				LOG_CRASHING_TAPI("There is an error about GPU!");
 				break;
 			}
@@ -290,86 +288,107 @@ namespace Vulkan {
 				if (GPUdesc.GPU_TYPE != GFX_API::GPU_TYPEs::DISCRETE_GPU) {
 					continue;
 				}
+				if (!isDeviceLocal && !isHostVisible && !isHostCoherent && !isHostCached) {
+					continue;
+				}
 				if (isDeviceLocal) {
 					if (isHostVisible && isHostCoherent) {
+						GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE, GPUdesc.MEMTYPEs.size());
+						GPUdesc.MEMTYPEs.push_back(MEMTYPE);
+						VK_MemoryAllocation alloc;
+						alloc.MemoryTypeIndex = MemoryTypeIndex;
+						alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE;
+						VKGPU->ALLOCs.push_back(alloc);
 						GPUdesc.FASTHOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-						VKGPU->FASTHOSTVISIBLE_ALLOC.MemoryTypeIndex = MemoryTypeIndex;
 						LOG_STATUS_TAPI("Found FAST HOST VISIBLE BIT! Size: " + to_string(GPUdesc.FASTHOSTVISIBLE_MaxMemorySize));
 					}
 					else {
+						GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, GPUdesc.MEMTYPEs.size());
+						GPUdesc.MEMTYPEs.push_back(MEMTYPE);
+						VK_MemoryAllocation alloc;
+						alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
+						alloc.MemoryTypeIndex = MemoryTypeIndex;
+						VKGPU->ALLOCs.push_back(alloc);
 						GPUdesc.DEVICELOCAL_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-						VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex = MemoryTypeIndex;
 						LOG_STATUS_TAPI("Found DEVICE LOCAL BIT! Size: " + to_string(GPUdesc.DEVICELOCAL_MaxMemorySize));
 					}
 				}
 				else if (isHostVisible && isHostCoherent) {
 					if (isHostCached) {
+						GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK, GPUdesc.MEMTYPEs.size());
+						GPUdesc.MEMTYPEs.push_back(MEMTYPE);
+						VK_MemoryAllocation alloc;
+						alloc.MemoryTypeIndex = MemoryTypeIndex;
+						alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK;
+						VKGPU->ALLOCs.push_back(alloc);
 						GPUdesc.READBACK_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-						VKGPU->READBACK_ALLOC.MemoryTypeIndex = MemoryTypeIndex;
 						LOG_STATUS_TAPI("Found READBACK BIT! Size: " + to_string(GPUdesc.READBACK_MaxMemorySize));
 					}
 					else {
+						GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE, GPUdesc.MEMTYPEs.size());
+						GPUdesc.MEMTYPEs.push_back(MEMTYPE);
+						VK_MemoryAllocation alloc;
+						alloc.MemoryTypeIndex = MemoryTypeIndex;
+						alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE;
+						VKGPU->ALLOCs.push_back(alloc);
 						GPUdesc.HOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-						VKGPU->HOSTVISIBLE_ALLOC.MemoryTypeIndex = MemoryTypeIndex;
 						LOG_STATUS_TAPI("Found HOST VISIBLE BIT! Size: " + to_string(GPUdesc.HOSTVISIBLE_MaxMemorySize));
 					}
 				}
 			}
+
+
+			LOG_STATUS_TAPI("Starting to setup logical device");
+
+			//We don't need for now, so leave it empty. But GPU has its own feature list already
+			VkPhysicalDeviceFeatures Features = {};
+
+			vector<VkDeviceQueueCreateInfo> QueueCreationInfos;
+			//Queue Creation Processes
+			float QueuePriority = 1.0f;
+			for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+				VK_QUEUE& QUEUE = VKGPU->QUEUEs[QueueIndex];
+				VkDeviceQueueCreateInfo QueueInfo = {};
+				QueueInfo.flags = 0;
+				QueueInfo.pNext = nullptr;
+				QueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+				QueueInfo.queueFamilyIndex = QUEUE.QueueFamilyIndex;
+				QueueInfo.pQueuePriorities = &QueuePriority;
+				QueueInfo.queueCount = 1;
+				QueueCreationInfos.push_back(QueueInfo);
+			}
+
+			VkDeviceCreateInfo Logical_Device_CreationInfo{};
+			Logical_Device_CreationInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+			Logical_Device_CreationInfo.flags = 0;
+			Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
+			Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
+			Logical_Device_CreationInfo.pEnabledFeatures = &Features;
+			VK_States.Is_RequiredDeviceExtensions_Supported(VKGPU);
+
+
+			Logical_Device_CreationInfo.enabledExtensionCount = VKGPU->Required_DeviceExtensionNames->size();
+			Logical_Device_CreationInfo.ppEnabledExtensionNames = VKGPU->Required_DeviceExtensionNames->data();
+
+			Logical_Device_CreationInfo.enabledLayerCount = 0;
+
+			if (vkCreateDevice(VKGPU->Physical_Device, &Logical_Device_CreationInfo, nullptr, &VKGPU->Logical_Device) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Vulkan failed to create a Logical Device!");
+				return;
+			}
+
+			VKGPU->AllQueueFamilies = new uint32_t[VKGPU->QUEUEs.size()];
+			for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+				vkGetDeviceQueue(VKGPU->Logical_Device, VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &VKGPU->QUEUEs[QueueIndex].Queue);
+				VKGPU->AllQueueFamilies[QueueIndex] = VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex;
+			}
+			LOG_STATUS_TAPI("Vulkan created a Logical Device!");
 
 			GPUdescs.push_back(GPUdesc);
 			DEVICE_GPUs.push_back(VKGPU);
 		}
 
 		LOG_STATUS_TAPI("Finished checking Computer Specifications!");
-	}
-	void Vulkan_Core::Setup_LogicalDevice() {
-		LOG_STATUS_TAPI("Starting to setup logical device");
-		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
-		//We don't need for now, so leave it empty. But GPU has its own feature list already
-		VkPhysicalDeviceFeatures Features = {};
-
-		vector<VkDeviceQueueCreateInfo> QueueCreationInfos;
-		//Queue Creation Processes
-		float QueuePriority = 1.0f;
-		for (unsigned int QueueIndex = 0; QueueIndex < Vulkan_GPU->QUEUEs.size(); QueueIndex++) {
-			VK_QUEUE& QUEUE = Vulkan_GPU->QUEUEs[QueueIndex];
-			VkDeviceQueueCreateInfo QueueInfo = {};
-			QueueInfo.flags = 0;
-			QueueInfo.pNext = nullptr;
-			QueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-			QueueInfo.queueFamilyIndex = QUEUE.QueueFamilyIndex;
-			QueueInfo.pQueuePriorities = &QueuePriority;
-			QueueInfo.queueCount = 1;
-			QueueCreationInfos.push_back(QueueInfo);
-		}
-
-		VkDeviceCreateInfo Logical_Device_CreationInfo{};
-		Logical_Device_CreationInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		Logical_Device_CreationInfo.flags = 0;
-		Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
-		Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
-		Logical_Device_CreationInfo.pEnabledFeatures = &Features;
-		VK_States.Is_RequiredDeviceExtensions_Supported(Vulkan_GPU);
-
-
-		Logical_Device_CreationInfo.enabledExtensionCount = Vulkan_GPU->Required_DeviceExtensionNames->size();
-		Logical_Device_CreationInfo.ppEnabledExtensionNames = Vulkan_GPU->Required_DeviceExtensionNames->data();
-
-		Logical_Device_CreationInfo.enabledLayerCount = 0;
-
-		if (vkCreateDevice(Vulkan_GPU->Physical_Device, &Logical_Device_CreationInfo, nullptr, &Vulkan_GPU->Logical_Device) != VK_SUCCESS) {
-			LOG_CRASHING_TAPI("Vulkan failed to create a Logical Device!");
-			return;
-		}
-		LOG_STATUS_TAPI("Vulkan created a Logical Device!");
-
-		Vulkan_GPU->AllQueueFamilies = new uint32_t[Vulkan_GPU->QUEUEs.size()];
-		for (unsigned int QueueIndex = 0; QueueIndex < Vulkan_GPU->QUEUEs.size(); QueueIndex++) {
-			vkGetDeviceQueue(Vulkan_GPU->Logical_Device, Vulkan_GPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &Vulkan_GPU->QUEUEs[QueueIndex].Queue);
-			Vulkan_GPU->AllQueueFamilies[QueueIndex] = Vulkan_GPU->QUEUEs[QueueIndex].QueueFamilyIndex;
-		}
-
-		LOG_STATUS_TAPI("VulkanCore: Created logical device succesfully!");
 	}
 
 	GFX_API::GFXHandle Vulkan_Core::CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) {
@@ -606,6 +625,74 @@ namespace Vulkan {
 	}
 	vector<GFX_API::GFXHandle>& Vulkan_Core::Get_WindowHandles() {
 		return WINDOWs;
+	}
+	bool Vulkan_Core::GetTextureTypeLimits(const GFX_API::Texture_Properties& Properties, GFX_API::TEXTUREUSAGEFLAG UsageFlag, unsigned int GPUIndex,
+		unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) {
+		GPU* VKGPU = GFXHandleConverter(GPU*, DEVICE_GPUs[GPUIndex]);
+
+		VkImageFormatProperties props;
+		if (vkGetPhysicalDeviceImageFormatProperties(VKGPU->Physical_Device, Find_VkFormat_byTEXTURECHANNELs(Properties.CHANNEL_TYPE), 
+			Find_VkImageType(Properties.DIMENSION), Find_VkTiling(Properties.DATAORDER), Find_VKImageUsage_forGFXTextureDesc(UsageFlag, Properties.CHANNEL_TYPE), 
+			0, &props) != VK_SUCCESS) {
+			LOG_ERROR_TAPI("GFX->GetTextureTypeLimits() has failed!");
+			return false;
+		}
+		MAXWIDTH = props.maxExtent.width;
+		MAXHEIGHT = props.maxExtent.height;
+		MAXDEPTH = props.maxExtent.depth;
+		MAXMIPLEVEL = props.maxMipLevels;
+		return true;
+	}
+	void Vulkan_Core::GetSupportedAllocations_ofTexture(const GFX_API::Texture_Description& TEXTURE, unsigned int GPUIndex, unsigned int& SupportedMemoryTypesBitset) {
+		GPU* VKGPU = GFXHandleConverter(GPU*, DEVICE_GPUs[GPUIndex]);
+
+		VkImageCreateInfo im_ci = {};
+		im_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		im_ci.arrayLayers = 1;
+		im_ci.extent.width = TEXTURE.WIDTH;
+		im_ci.extent.height = TEXTURE.HEIGHT;
+		im_ci.extent.depth = 1;
+		im_ci.flags = 0;
+		im_ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE.Properties.CHANNEL_TYPE);
+		im_ci.imageType = Find_VkImageType(TEXTURE.Properties.DIMENSION);
+		im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		im_ci.mipLevels = 1;
+		im_ci.pNext = nullptr;
+
+		
+		if (VKGPU->QUEUEs.size() > 1) {
+			im_ci.sharingMode = VK_SHARING_MODE_CONCURRENT;
+		}
+		else {
+			im_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		}
+		im_ci.pQueueFamilyIndices = VKGPU->AllQueueFamilies;
+		im_ci.queueFamilyIndexCount = VKGPU->QUEUEs.size();
+		im_ci.tiling = Find_VkTiling(TEXTURE.Properties.DATAORDER);
+		im_ci.usage = Find_VKImageUsage_forGFXTextureDesc(TEXTURE.USAGE, TEXTURE.Properties.CHANNEL_TYPE);
+		im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+
+
+		VkImage Imageobj;
+		if (vkCreateImage(VKGPU->Logical_Device, &im_ci, nullptr, &Imageobj) != VK_SUCCESS) {
+			LOG_ERROR_TAPI("GFX->IsTextureSupported() has failed in vkCreateImage()!");
+			return;
+		}
+
+		VkMemoryRequirements req;
+		vkGetImageMemoryRequirements(VKGPU->Logical_Device, Imageobj, &req);
+		vkDestroyImage(VKGPU->Logical_Device, Imageobj, nullptr);
+		bool isFound = false;
+		for (unsigned int GFXMemoryTypeIndex = 0; GFXMemoryTypeIndex < VKGPU->ALLOCs.size(); GFXMemoryTypeIndex++) {
+			VK_MemoryAllocation& ALLOC = VKGPU->ALLOCs[GFXMemoryTypeIndex];
+			if (req.memoryTypeBits & (1u << ALLOC.MemoryTypeIndex)) {
+				SupportedMemoryTypesBitset |= (1u << GFXMemoryTypeIndex);
+				isFound = true;
+			}
+		}
+		if (!isFound) {
+			LOG_CRASHING_TAPI("Your image is supported by a memory allocation that GFX API doesn't support to allocate, please report this issue!");
+		}
 	}
 
 	//Destroy Operations

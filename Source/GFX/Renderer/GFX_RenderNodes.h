@@ -1,6 +1,5 @@
 #pragma once
 #include "GFX/GFX_Includes.h"
-#include "GFX/GFX_FileSystem/Resource_Type/Texture_Resource.h"
 
 /*
 	SubDrawPass, DrawPass and ComputePass are all RenderNodes

@@ -5,7 +5,7 @@
 namespace Vulkan {
 	//This structure defines offset of the suballocation in the big memory allocation that happens at initialization
 	struct MemoryBlock {
-		GFX_API::SUBALLOCATEBUFFERTYPEs Type;
+		unsigned int MemAllocIndex;
 		VkDeviceSize Offset;
 	};
 	struct VK_API VK_Semaphore {
@@ -24,7 +24,10 @@ namespace Vulkan {
 		MemoryBlock Block;
 	};
 	VK_API VkImageUsageFlags Find_VKImageUsage_forVKTexture(VK_Texture& TEXTURE);
+	VK_API VkImageUsageFlags Find_VKImageUsage_forGFXTextureDesc(GFX_API::TEXTUREUSAGEFLAG USAGEFLAG, GFX_API::TEXTURE_CHANNELs channels);
 	VK_API void Find_AccessPattern_byIMAGEACCESS(const GFX_API::IMAGE_ACCESS& Access, VkAccessFlags& TargetAccessFlag, VkImageLayout& TargetImageLayout);
+	VK_API VkImageTiling Find_VkTiling(GFX_API::TEXTURE_ORDER order);
+	VK_API VkImageType Find_VkImageType(GFX_API::TEXTURE_DIMENSIONs dimensions);
 
 	struct VK_API VK_COLORRTSLOT {
 		VK_Texture* RT;
@@ -149,6 +152,7 @@ namespace Vulkan {
 		VK_DescSet DescSet;
 	};
 	struct VK_API VK_Sampler {
+		VkSampler Sampler;
 	};
 
 
@@ -162,13 +166,6 @@ namespace Vulkan {
 		TP = 2,
 		CP = 3,
 		WP = 4,
-	};
-
-	struct VK_ImCopyInfo {
-		VK_Texture* SOURCE_IM, DESTINATION_IM;
-		GFX_API::IMAGEUSAGE SOURCE_PREVIOUSUSAGE, SOURCE_LATERUSAGE;
-		GFX_API::IMAGEUSAGE DESTINATION_PREVIOUSUSAGE, DESTINATION_LATERUSAGE;
-		//Add copy region, mipmap etc info here later!
 	};
 	struct VK_ImDownloadInfo {
 		VK_Texture* IMAGE;

@@ -22,7 +22,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	//Create Global Buffers before the RenderGraph Construction
 	GFX_API::GFXHandle FirstGlobalBuffer;
 	GFXContentManager->Create_GlobalBuffer("FirstGlobalBuffer", 16, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
-		GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, FirstGlobalBuffer);
+		0, FirstGlobalBuffer);
 
 
 	//Useful rendergraph handles to use later
@@ -57,7 +57,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		vector<GFX_API::RTSLOT_Description> RTSlots;
 		//Create RT, Base RTSlotSet and the inherited one!
 		{
-			GFX_API::Texture_Resource COLORRT;
+			GFX_API::Texture_Description COLORRT;
 			COLORRT.WIDTH = 1280;
 			COLORRT.HEIGHT = 720;
 			COLORRT.USAGE.isCopiableFrom = true;
@@ -69,7 +69,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			COLORRT.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
 			COLORRT.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_1MIP;
 			COLORRT.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
-			if (GFXContentManager->Create_Texture(COLORRT, GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, FIRSTRT) != TAPI_SUCCESS) {
+			if (GFXContentManager->Create_Texture(COLORRT, 0, FIRSTRT) != TAPI_SUCCESS) {
 				LOG_CRASHING_TAPI("First RT creation has failed!");
 			}
 
@@ -146,38 +146,57 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 
 
 	GFX_API::GFXHandle StagingBuffer;
-	if (GFXContentManager->Create_StagingBuffer(1024 * 1024 * 10, GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE, StagingBuffer) != TAPI_SUCCESS) {
+	if (GFXContentManager->Create_StagingBuffer(1024 * 1024 * 10, 3, StagingBuffer) != TAPI_SUCCESS) {
 		LOG_CRASHING_TAPI("Staging buffer creation has failed, fix it!");
 	}
 	
 	//Create first attribute layout and mesh buffer for first triangle
 	GFX_API::GFXHandle VERTEXBUFFER_ID = 0, VAL_ID = 0;
+	struct Vertex {
+		vec2 Pos;
+		vec2 TextCoord;
+	};
 	{
-		struct Vertex {
-			vec2 Pos;
-			vec3 Color;
-		};
 		Vertex VertexData[3]{
-			{vec2(-0.5f, 0.5f), vec3(1,0,0)},
-			{vec2(0.5f, 0.5f), vec3(0,0,1)},
-			{vec2(0.0f, -0.5f), vec3(0,1,0)}
+			{vec2(-0.5f, 0.5f), vec2(0.0f,0.0f)},
+			{vec2(0.5f, 0.5f), vec2(1.0f, 1.0f)},
+			{vec2(0.0f, -0.5f), vec2(0.0f, 1.0f)}
 		};
 
 		GFX_API::GFXHandle PositionVA_ID, ColorVA_ID;
 		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC2, true, PositionVA_ID);
-		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC3, true, ColorVA_ID);
+		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC2, true, ColorVA_ID);
 		vector<GFX_API::GFXHandle> VAs{ PositionVA_ID, ColorVA_ID };
 		GFXContentManager->Create_VertexAttributeLayout(VAs, VAL_ID);
-		if (GFXContentManager->Create_VertexBuffer(VAL_ID, 3, GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, VERTEXBUFFER_ID) != TAPI_SUCCESS) {
+		if (GFXContentManager->Create_VertexBuffer(VAL_ID, 3, 0, VERTEXBUFFER_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("First Vertex Buffer creation has failed!");
 		}
 
 		
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VertexData, 60, 0) != TAPI_SUCCESS) {
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VertexData, sizeof(Vertex) * 3, 0) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading vertex buffer to staging buffer has failed!");
 		}
 	}
-	
+
+	//Create and upload first sampled texture in host visible memory
+	GFX_API::GFXHandle FirstSampledTexture;
+	unsigned int TEXTURESIZE = 0;
+	{
+		GFX_API::Texture_Description im_desc;
+		void* DATA = nullptr;
+		if (TuranEditor::Texture_Loader::Import_Texture("C:/Users/furka/Pictures/Wallpapers/Thumbnail.png", im_desc, DATA) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Texture import has failed!");
+		}
+
+		if (GFXContentManager->Create_Texture(im_desc, 0, FirstSampledTexture) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Sampled texture creation has failed!");
+		}
+		TEXTURESIZE = im_desc.WIDTH * im_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(im_desc.Properties.CHANNEL_TYPE);
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, DATA, TEXTURESIZE, 80) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading the texture has failed!");
+		}
+		delete DATA;
+	}
 	
 	//Create and Link first material type
 	GFX_API::GFXHandle FIRSTMATINST_ID;
@@ -208,13 +227,28 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			first_desc.SHADERSTAGEs.VERTEXSHADER = true;
 			first_desc.TYPE = GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_G;
 			MATTYPE.MATERIALTYPEDATA.push_back(first_desc);
+
+			GFX_API::MaterialDataDescriptor second_desc;
+			second_desc.BINDINGPOINT = 1;
+			second_desc.DATA_SIZE = 0;
+			second_desc.NAME = "FirstSampledTexture";
+			second_desc.SHADERSTAGEs.FRAGMENTSHADER = true;
+			second_desc.TYPE = GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G;
+			MATTYPE.MATERIALTYPEDATA.push_back(second_desc);
 		}
 		MATTYPE.ATTRIBUTELAYOUT_ID = VAL_ID;
 		GFX_API::GFXHandle MATTYPE_ID;
 		if (GFXContentManager->Link_MaterialType(MATTYPE, MATTYPE_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Link MaterialType has failed!");
 		}
+		GFX_API::GFXHandle SamplingTypeHandle;
+		if (GFXContentManager->Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D, 0, 0, GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP,
+			GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT,
+			GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, SamplingTypeHandle) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Creation of sampling type has failed, so application has!");
+		}
 		GFXContentManager->SetMaterial_UniformBuffer(MATTYPE_ID, true, false, 0, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, 64);
+		GFXContentManager->SetMaterial_SampledTexture(MATTYPE_ID, true, false, 1, FirstSampledTexture, SamplingTypeHandle, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
 		vec3 FragColor(1.0f, 0.0f, 0.0f);
 		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, &FragColor, 12, 64) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading vertex color to staging buffer has failed!");
@@ -222,18 +256,22 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		GFXContentManager->Create_MaterialInst(MATTYPE_ID, FIRSTMATINST_ID);
 	}
 
+	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 3);
+	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, FirstGlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, sizeof(Vertex) * 3, 0, 12);
 	GFXRENDERER->ImageBarrier(FIRSTRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
-	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, 60);
-	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, FirstGlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, 60, 0, 12);
+	GFXRENDERER->ImageBarrier(FirstSampledTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, FirstBarrierTP_ID);
 	GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, nullptr, FIRSTMATINST_ID, SubpassID);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[0], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, FinalBarrierTP_ID);
+	GFXRENDERER->ImageBarrier(FirstSampledTexture, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, FinalBarrierTP_ID);
 	GFXRENDERER->SwapBuffers(WindowHandle, WP_ID);
 	GFXRENDERER->Run();
 	Editor_System::Take_Inputs();
 
 
+	GFXRENDERER->CopyBuffer_toImage(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, FirstSampledTexture, 80, 0, 0, 0, 0, 0, 0);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
+	GFXRENDERER->ImageBarrier(FirstSampledTexture, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, FirstBarrierTP_ID);
 	GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, nullptr, FIRSTMATINST_ID, SubpassID);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[1], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, FinalBarrierTP_ID);
 	GFXRENDERER->SwapBuffers(WindowHandle, WP_ID);

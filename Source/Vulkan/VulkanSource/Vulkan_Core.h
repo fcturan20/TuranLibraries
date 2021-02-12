@@ -18,6 +18,10 @@ namespace Vulkan {
 		void Save_Monitors(vector<GFX_API::MonitorDescription>& Monitors);
 
 		virtual void Check_Errors() override;
+		virtual bool GetTextureTypeLimits(const GFX_API::Texture_Properties& Properties, GFX_API::TEXTUREUSAGEFLAG UsageFlag, unsigned int GPUIndex,
+			unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) override;
+		virtual void GetSupportedAllocations_ofTexture(const GFX_API::Texture_Description& TEXTURE_desc, unsigned int GPUIndex, 
+			unsigned int& SupportedMemoryTypesBitset) override;
 		//Window Operations
 
 		virtual GFX_API::GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) override;
@@ -31,11 +35,8 @@ namespace Vulkan {
 		static void GFX_Error_Callback(int error_code, const char* description);
 		static void Window_ResizeCallback(GLFWwindow* window, int WIDTH, int HEIGHT);
 
-		//Validation Layers are actived if TURAN_DEBUGGING is defined
 		void Create_Instance();
-		//Initialization calls this function if TURAN_DEBUGGING is defined
 		void Setup_Debugging();
-		void Setup_LogicalDevice();
 
 
 		//Destroy Operations
@@ -43,7 +44,7 @@ namespace Vulkan {
 
 		Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSystem);
 		//All of the sizes should be in bytes
-		TAPIResult Start_SecondStage(unsigned char GPUIndex, unsigned int DeviceLocal_AllocSize, unsigned int HostVisible_AllocSize, unsigned int FastHostVisible_AllocSize, unsigned int Readback_AllocSize);
+		TAPIResult Start_SecondStage(unsigned char GPUIndex, const vector<GFX_API::MemoryType>& Allocations);
 		virtual ~Vulkan_Core();
 	};
 

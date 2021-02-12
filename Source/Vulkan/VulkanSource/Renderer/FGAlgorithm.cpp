@@ -1478,7 +1478,7 @@ namespace Vulkan {
 					vkCmdSetScissor(CB, 0, 1, &Scissor);
 
 					vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatInst->PROGRAM->PipelineObject);
-					VkDescriptorSet Sets[2] = {VKContentManager->GlobalBuffers_DescSet, DrawCall.MatInst->PROGRAM->General_DescSet.Set };
+					VkDescriptorSet Sets[2] = { VKContentManager->GlobalBuffers_DescSet, DrawCall.MatInst->PROGRAM->General_DescSet.Set };
 					vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatInst->PROGRAM->PipelineLayout, 0, 2, Sets, 0, nullptr);
 					VkDeviceSize Offsets[] = { 0 };
 					VkBuffer TargetBuffer;

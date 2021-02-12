@@ -26,6 +26,30 @@ namespace Vulkan {
 		}
 		return FLAG;
 	}
+	VkImageUsageFlags Find_VKImageUsage_forGFXTextureDesc(GFX_API::TEXTUREUSAGEFLAG USAGEFLAG, GFX_API::TEXTURE_CHANNELs channels) {
+		VkImageUsageFlags FLAG = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		if (USAGEFLAG.isRandomlyWrittenTo) {
+			FLAG = FLAG | VK_IMAGE_USAGE_STORAGE_BIT;
+		}
+		if (USAGEFLAG.isCopiableFrom) {
+			FLAG = FLAG | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		}
+		if (USAGEFLAG.isCopiableTo) {
+			FLAG = FLAG | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		}
+		if (USAGEFLAG.isRenderableTo) {
+			if (channels == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8 || channels == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
+				FLAG = FLAG | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+			}
+			else {
+				FLAG = FLAG | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+			}
+		}
+		if (USAGEFLAG.isSampledReadOnly) {
+			FLAG = FLAG | VK_IMAGE_USAGE_SAMPLED_BIT;
+		}
+		return FLAG;
+	}
 	VK_API void Find_AccessPattern_byIMAGEACCESS(const GFX_API::IMAGE_ACCESS& Access, VkAccessFlags& TargetAccessFlag, VkImageLayout& TargetImageLayout) {
 		switch (Access)
 		{
@@ -86,6 +110,30 @@ namespace Vulkan {
 			return;
 		}
 	}
+
+	VK_API VkImageTiling Find_VkTiling(GFX_API::TEXTURE_ORDER order) {
+		switch (order) {
+		case GFX_API::TEXTURE_ORDER::SWIZZLE:
+			return VK_IMAGE_TILING_OPTIMAL;
+		case GFX_API::TEXTURE_ORDER::LINEAR:
+			return VK_IMAGE_TILING_LINEAR;
+		default:
+			LOG_NOTCODED_TAPI("Find_VkTiling() doesn't support this order!", true);
+			return VkImageTiling::VK_IMAGE_TILING_MAX_ENUM;
+		}
+	}
+	VK_API VkImageType Find_VkImageType(GFX_API::TEXTURE_DIMENSIONs dimensions) {
+		switch (dimensions) {
+		case GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D:
+			return VK_IMAGE_TYPE_2D;
+		case GFX_API::TEXTURE_DIMENSIONs::TEXTURE_3D:
+			return VK_IMAGE_TYPE_3D;
+		default:
+			LOG_NOTCODED_TAPI("Find_VkImageType() doesn't support this dimension!", true);
+			return VkImageType::VK_IMAGE_TYPE_MAX_ENUM;
+		}
+	}
+
 
 	VK_TPCopyDatas::VK_TPCopyDatas() : BUFBUFCopies(*GFX->JobSys), BUFIMCopies(*GFX->JobSys), IMIMCopies(*GFX->JobSys) {
 

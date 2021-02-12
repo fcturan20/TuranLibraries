@@ -35,132 +35,50 @@ namespace Vulkan {
 	}
 	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
 		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBUTEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys),
-		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys){
+		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys){
 
-		//GPU Local Memory Allocation
-		if (VKGPU->GPULOCAL_ALLOC.FullSize.DirectLoad()) {
+		for (unsigned int allocindex = 0; allocindex < VKGPU->ALLOCs.size(); allocindex++) {
+			VK_MemoryAllocation& ALLOC = VKGPU->ALLOCs[allocindex];
+			if (!ALLOC.FullSize) {
+				continue;
+			}
+
 			VkMemoryRequirements memrequirements;
 			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
 				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-			uint64_t AllocSize = VKGPU->GPULOCAL_ALLOC.FullSize.DirectLoad();
+			uint64_t AllocSize = ALLOC.FullSize;
 			VkBuffer GPULOCAL_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
 			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, GPULOCAL_buf, &memrequirements);
-			if (!(memrequirements.memoryTypeBits & (1 << VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex))) {
+			if (!(memrequirements.memoryTypeBits & (1 << ALLOC.MemoryTypeIndex))) {
 				LOG_CRASHING_TAPI("GPU Local Memory Allocation doesn't support the MemoryType!");
 				return;
 			}
 			VkMemoryAllocateInfo ci{};
 			ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 			ci.allocationSize = memrequirements.size;
-			ci.memoryTypeIndex = VKGPU->GPULOCAL_ALLOC.MemoryTypeIndex;
+			ci.memoryTypeIndex = ALLOC.MemoryTypeIndex;
 			VkDeviceMemory allocated_memory;
 			if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
 			}
-			VKGPU->GPULOCAL_ALLOC.Allocated_Memory = allocated_memory;
-			VKGPU->GPULOCAL_ALLOC.UnusedSize.DirectStore(AllocSize);
-			VKGPU->GPULOCAL_ALLOC.MappedMemory = nullptr;
-			VKGPU->GPULOCAL_ALLOC.Buffer = GPULOCAL_buf;
+			ALLOC.Allocated_Memory = allocated_memory;
+			ALLOC.UnusedSize.DirectStore(AllocSize);
+			ALLOC.MappedMemory = nullptr;
+			ALLOC.Buffer = GPULOCAL_buf;
 			if (vkBindBufferMemory(VKGPU->Logical_Device, GPULOCAL_buf, allocated_memory, 0) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
 			}
-		}
-		//Host Visible Memory Allocation
-		if (VKGPU->HOSTVISIBLE_ALLOC.FullSize.DirectLoad()) {
-			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-			uint64_t AllocSize = VKGPU->HOSTVISIBLE_ALLOC.FullSize.DirectLoad();
-			VkBuffer stagingbuffer = Create_VkBuffer(AllocSize, USAGEFLAGs);
-			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, stagingbuffer, &memrequirements);
-			if (!(memrequirements.memoryTypeBits & (1u << VKGPU->HOSTVISIBLE_ALLOC.MemoryTypeIndex))) {
-				LOG_CRASHING_TAPI("Host Visible Memory Allocation doesn't support the related MemoryType!");
-				return;
+
+			//If allocation is device local, it is not mappable. So continue.
+			if (ALLOC.TYPE == GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL) {
+				continue;
 			}
 
-			VkMemoryAllocateInfo ci{};
-			ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			ci.allocationSize = memrequirements.size;
-			ci.memoryTypeIndex = VKGPU->HOSTVISIBLE_ALLOC.MemoryTypeIndex;
-			VkDeviceMemory allocated_memory;
-			if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("GPU_ContentManager has failed because vkAllocateMemory has failed!");
-			}
-			VKGPU->HOSTVISIBLE_ALLOC.Allocated_Memory = allocated_memory;
-			VKGPU->HOSTVISIBLE_ALLOC.UnusedSize.DirectStore(AllocSize);
-			VKGPU->HOSTVISIBLE_ALLOC.Buffer = stagingbuffer;
-			if (vkBindBufferMemory(VKGPU->Logical_Device, stagingbuffer, allocated_memory, 0) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
-			}
-			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &VKGPU->HOSTVISIBLE_ALLOC.MappedMemory) != VK_SUCCESS) {
+			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &ALLOC.MappedMemory) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Mapping the HOSTVISIBLE memory has failed!");
 				return;
 			}
 		}
-		//Fast Host Visible Memory Allocation
-		if (VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize.DirectLoad()) {
-			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-			uint64_t AllocSize = VKGPU->FASTHOSTVISIBLE_ALLOC.FullSize.DirectLoad();
-			VkBuffer stagingbuffer = Create_VkBuffer(AllocSize, USAGEFLAGs);
-			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, stagingbuffer, &memrequirements);
-			if (!(memrequirements.memoryTypeBits & (1u << VKGPU->FASTHOSTVISIBLE_ALLOC.MemoryTypeIndex))) {
-				LOG_CRASHING_TAPI("Fast Host Visible Memory Allocation doesn't support the related MemoryType!");
-				return;
-			}
-
-			VkMemoryAllocateInfo ci{};
-			ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			ci.allocationSize = memrequirements.size;
-			ci.memoryTypeIndex = VKGPU->FASTHOSTVISIBLE_ALLOC.MemoryTypeIndex;
-			VkDeviceMemory allocated_memory;
-			if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("GPU_ContentManager has failed because vkAllocateMemory has failed!");
-			}
-			VKGPU->FASTHOSTVISIBLE_ALLOC.Allocated_Memory = allocated_memory;
-			VKGPU->FASTHOSTVISIBLE_ALLOC.UnusedSize.DirectStore(AllocSize);
-			VKGPU->FASTHOSTVISIBLE_ALLOC.Buffer = stagingbuffer;
-			if (vkBindBufferMemory(VKGPU->Logical_Device, stagingbuffer, allocated_memory, 0) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
-			}
-			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &VKGPU->FASTHOSTVISIBLE_ALLOC.MappedMemory) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("Mapping the FASTHOSTVISIBLE memory has failed!");
-				return;
-			}
-		}
-		//Readback Memory Allocation
-		if (VKGPU->READBACK_ALLOC.FullSize.DirectLoad()) {
-			VkMemoryRequirements memrequirements;
-			VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-			uint64_t AllocSize = VKGPU->READBACK_ALLOC.FullSize.DirectLoad();
-			VkBuffer READBACK_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
-			vkGetBufferMemoryRequirements(VKGPU->Logical_Device, READBACK_buf, &memrequirements);
-			if (!(memrequirements.memoryTypeBits & (1u << VKGPU->READBACK_ALLOC.MemoryTypeIndex))) {
-				LOG_CRASHING_TAPI("GPU Local Memory Allocation doesn't support the related MemoryType!");
-				return;
-			}
-			VkMemoryAllocateInfo ci{};
-			ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			ci.allocationSize = memrequirements.size;
-			ci.memoryTypeIndex = VKGPU->READBACK_ALLOC.MemoryTypeIndex;
-			VkDeviceMemory allocated_memory;
-			if (vkAllocateMemory(VKGPU->Logical_Device, &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
-			}
-			VKGPU->READBACK_ALLOC.Allocated_Memory = allocated_memory;
-			VKGPU->READBACK_ALLOC.UnusedSize.DirectStore(AllocSize);
-			VKGPU->READBACK_ALLOC.Buffer = READBACK_buf;
-			if (vkBindBufferMemory(VKGPU->Logical_Device, READBACK_buf, allocated_memory, 0) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("Binding buffer to the allocated memory has failed!");
-			}
-			if (vkMapMemory(VKGPU->Logical_Device, allocated_memory, 0, memrequirements.size, 0, &VKGPU->READBACK_ALLOC.MappedMemory) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("Mapping the READBACK memory has failed!");
-				return;
-			}
-		}
-
 		UnboundDescSetImageCount[0] = 0;
 		UnboundDescSetImageCount[1] = 0;
 		UnboundDescSetSamplerCount[0] = 0;
@@ -177,17 +95,15 @@ namespace Vulkan {
 			dp_ci.maxSets = MAXDESCSETCOUNT_PERPOOL;
 			dp_ci.pNext = nullptr;
 			dp_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			VkDescriptorPoolSize SIZEs[4];
-			SIZEs[0].descriptorCount = MAXIMAGECOUNT_PERPOOL;
-			SIZEs[0].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-			SIZEs[1].descriptorCount = MAXSAMPLERCOUNT_PERPOOL;
-			SIZEs[1].type = VK_DESCRIPTOR_TYPE_SAMPLER;
-			SIZEs[2].descriptorCount = MAXSBUFFERCOUNT_PERPOOL;
-			SIZEs[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-			SIZEs[3].descriptorCount = MAXUBUFFERCOUNT_PERPOOL;
-			SIZEs[3].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			VkDescriptorPoolSize SIZEs[3];
+			SIZEs[0].descriptorCount = MAXIMAGECOUNT_PERPOOL * 2;
+			SIZEs[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			SIZEs[1].descriptorCount = MAXSBUFFERCOUNT_PERPOOL;
+			SIZEs[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			SIZEs[2].descriptorCount = MAXUBUFFERCOUNT_PERPOOL;
+			SIZEs[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 
-			dp_ci.poolSizeCount = 4;
+			dp_ci.poolSizeCount = 3;
 			dp_ci.pPoolSizes = SIZEs;
 			if (vkCreateDescriptorPool(VKGPU->Logical_Device, &dp_ci, nullptr, &MaterialRelated_DescPool.pool) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Material Related Descriptor Pool Creation has failed! So GFXContentManager system initialization has failed!");
@@ -200,32 +116,6 @@ namespace Vulkan {
 			MaterialRelated_DescPool.REMAINING_UBUFFER.DirectStore(MAXUBUFFERCOUNT_PERPOOL);
 			MaterialRelated_DescPool.REMAINING_SET.DirectStore(MAXDESCSETCOUNT_PERPOOL);
 		}
-
-		//Default Sampler Creation
-		{
-			VkSamplerCreateInfo ci = {};
-			ci.addressModeU = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			ci.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			ci.anisotropyEnable = false;
-			ci.borderColor = VkBorderColor::VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-			ci.compareEnable = false;
-			ci.compareOp = VkCompareOp::VK_COMPARE_OP_ALWAYS;
-			ci.flags = 0;
-			ci.magFilter = VkFilter::VK_FILTER_LINEAR;
-			ci.minFilter = VkFilter::VK_FILTER_LINEAR;
-			ci.maxAnisotropy = 1.0f;
-			ci.maxLod = 0.0f;
-			ci.minLod = 0.0f;
-			ci.mipLodBias = 0.0f;
-			ci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-			ci.pNext = nullptr;
-			ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-			ci.unnormalizedCoordinates = VK_FALSE;
-			if (vkCreateSampler(VKGPU->Logical_Device, &ci, nullptr, &DefaultSampler) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("GPU_ContentManager initialization has failed because vkCreateSampler has failed!");
-			}
-		}
 	}
 	GPU_ContentManager::~GPU_ContentManager() {
 
@@ -233,7 +123,6 @@ namespace Vulkan {
 	void GPU_ContentManager::Unload_AllResources() {
 
 	}
-	VK_MemoryAllocation* GetMEMORYALLOCATIONHANDLE(const GFX_API::SUBALLOCATEBUFFERTYPEs& TYPE);
 
 	void GPU_ContentManager::Resource_Finalizations() {
 		//Create Global Buffer Descriptors etc
@@ -349,7 +238,7 @@ namespace Vulkan {
 						info.dstSet = GlobalBuffers_DescSet;
 						VkDescriptorBufferInfo* descbufinfo = new VkDescriptorBufferInfo;
 						VkBuffer nonobj; VkDeviceSize nonoffset;
-						descbufinfo->buffer = GetMEMORYALLOCATIONHANDLE(buf->Block.Type)->Buffer;
+						descbufinfo->buffer = VKGPU->ALLOCs[buf->Block.MemAllocIndex].Buffer;
 						descbufinfo->offset = buf->Block.Offset;
 						descbufinfo->range = static_cast<VkDeviceSize>(buf->DATA_SIZE);
 						info.pBufferInfo = descbufinfo;
@@ -391,7 +280,7 @@ namespace Vulkan {
 		}
 		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
 			for (unsigned int i = 0; i < MEMALLOC->Allocated_Blocks.size(ThreadID); i++) {
-				VK_MemoryBlock& Block = MEMALLOC->Allocated_Blocks.get(ThreadID, i);
+				VK_SubAllocation& Block = MEMALLOC->Allocated_Blocks.get(ThreadID, i);
 				if (FurthestOffset <= Block.Offset) {
 					FurthestOffset = Block.Offset + Block.Size;
 				}
@@ -416,37 +305,19 @@ namespace Vulkan {
 		}
 
 		//None of the current blocks is suitable, so create a new block in this thread's local memoryblocks list
-		VK_MemoryBlock newblock;
+		VK_SubAllocation newblock;
 		newblock.isEmpty.store(false);
 		newblock.Offset = CalculateOffset(FurthestOffset, AlignmentOffset, RequiredAlignment);
 		newblock.Size = RequiredSize + newblock.Offset - FurthestOffset;
 		MEMALLOC->Allocated_Blocks.push_back(GFX->JobSys->GetThisThreadIndex(), newblock);
 		return newblock.Offset;
 	}
-	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset, VkDeviceSize& RequiredSize) {
+	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, MemoryBlock& Block) {
 		VkMemoryRequirements bufferreq;
 		vkGetBufferMemoryRequirements(VKGPU->Logical_Device, BUFFER, &bufferreq);
-		RequiredSize = bufferreq.size;
 
-		bool Found_Offset = false;
-		VK_MemoryAllocation* MEMALLOC = nullptr;
-		switch (GPUregion) {
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL:
-			MEMALLOC = &VKGPU->GPULOCAL_ALLOC;
-			break;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
-			MEMALLOC = &VKGPU->HOSTVISIBLE_ALLOC;
-			break;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
-			MEMALLOC = &VKGPU->FASTHOSTVISIBLE_ALLOC;
-			break;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
-			MEMALLOC = &VKGPU->READBACK_ALLOC;
-			break;
-		default:
-			LOG_CRASHING_TAPI("Suballocate_Buffer() has failed because SUBALLOCATEBUFFERTYPE isn't supported!");
-			return TAPI_NOTCODED;
-		}
+		VK_MemoryAllocation* MEMALLOC = &VKGPU->ALLOCs[Block.MemAllocIndex];
+		
 		if (!(bufferreq.memoryTypeBits & (1u << MEMALLOC->MemoryTypeIndex))) {
 			LOG_ERROR_TAPI("Intended buffer doesn't support to be stored in specified memory region!");
 			return TAPI_FAIL;
@@ -465,9 +336,23 @@ namespace Vulkan {
 		}
 
 
-
-		MemoryOffset = FindAvailableOffset(MEMALLOC, bufferreq.size, AlignmentOffset_ofGPU, bufferreq.alignment);
+		Block.Offset = FindAvailableOffset(MEMALLOC, bufferreq.size, AlignmentOffset_ofGPU, bufferreq.alignment);
 		return TAPI_SUCCESS;
+	}
+	VkMemoryPropertyFlags ConvertGFXMemoryType_toVulkan(GFX_API::SUBALLOCATEBUFFERTYPEs type) {
+		switch (type) {
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL:
+			return VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
+			return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
+			return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
+			return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+		default:
+			LOG_NOTCODED_TAPI("ConvertGFXMemoryType_toVulkan() doesn't support this type!", true);
+			return 0;
+		}
 	}
 	TAPIResult GPU_ContentManager::Suballocate_Image(VK_Texture& Texture) {
 		VkMemoryRequirements req;
@@ -476,24 +361,7 @@ namespace Vulkan {
 
 		VkDeviceSize Offset = 0;
 		bool Found_Offset = false;
-		VK_MemoryAllocation* MEMALLOC = nullptr;
-		switch (Texture.Block.Type) {
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
-			MEMALLOC = &VKGPU->HOSTVISIBLE_ALLOC;
-			break;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL:
-			MEMALLOC = &VKGPU->GPULOCAL_ALLOC;
-			break;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
-			MEMALLOC = &VKGPU->FASTHOSTVISIBLE_ALLOC;
-			break;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
-			MEMALLOC = &VKGPU->READBACK_ALLOC;
-			break;
-		default:
-			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed because SUBALLOCATEBUFFERTYPE isn't supported!");
-			return TAPI_NOTCODED;
-		}
+		VK_MemoryAllocation* MEMALLOC = &VKGPU->ALLOCs[Texture.Block.MemAllocIndex];
 		if (!(req.memoryTypeBits & (1u << MEMALLOC->MemoryTypeIndex))) {
 			LOG_ERROR_TAPI("Intended texture doesn't support to be stored in the specified memory region!");
 			return TAPI_FAIL;
@@ -532,6 +400,36 @@ namespace Vulkan {
 		return TAPI_SUCCESS;
 	}
 
+	TAPIResult GPU_ContentManager::Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
+		GFX_API::TEXTURE_MIPMAPFILTER MINFILTER, GFX_API::TEXTURE_MIPMAPFILTER MAGFILTER, GFX_API::TEXTURE_WRAPPING WRAPPING_WIDTH,
+		GFX_API::TEXTURE_WRAPPING WRAPPING_HEIGHT, GFX_API::TEXTURE_WRAPPING WRAPPING_DEPTH, GFX_API::GFXHandle& SamplingTypeHandle) {
+		VkSamplerCreateInfo s_ci = {};
+		s_ci.addressModeU = Find_AddressMode_byWRAPPING(WRAPPING_WIDTH);
+		s_ci.addressModeV = Find_AddressMode_byWRAPPING(WRAPPING_HEIGHT);
+		s_ci.addressModeW = Find_AddressMode_byWRAPPING(WRAPPING_DEPTH);
+		s_ci.anisotropyEnable = VK_FALSE;
+		s_ci.borderColor = VkBorderColor::VK_BORDER_COLOR_MAX_ENUM;
+		s_ci.compareEnable = VK_FALSE;
+		s_ci.flags = 0;
+		s_ci.magFilter = Find_VkFilter_byGFXFilter(MAGFILTER);
+		s_ci.minFilter = Find_VkFilter_byGFXFilter(MINFILTER);
+		s_ci.maxLod = static_cast<float>(MaximumMipLevel);
+		s_ci.minLod = static_cast<float>(MinimumMipLevel);
+		s_ci.mipLodBias = 0.0f;
+		s_ci.mipmapMode = Find_MipmapMode_byGFXFilter(MINFILTER);
+		s_ci.pNext = nullptr;
+		s_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		s_ci.unnormalizedCoordinates = VK_FALSE;
+
+		VK_Sampler* SAMPLER = new VK_Sampler;
+		if (vkCreateSampler(VKGPU->Logical_Device, &s_ci, nullptr, &SAMPLER->Sampler) != VK_SUCCESS) {
+			delete SAMPLER;
+			LOG_ERROR_TAPI("GFXContentManager->Create_SamplingType() has failed at vkCreateSampler!");
+			return TAPI_FAIL;
+		}
+		SamplingTypeHandle = SAMPLER;
+		return TAPI_SUCCESS;
+	}
 	
 	bool GPU_ContentManager::Create_DescSet(VK_DescSet* Set) {
 		if(!MaterialRelated_DescPool.REMAINING_IMAGE.LimitedSubtract_weak(Set->DescImagesCount, 0) ||
@@ -615,12 +513,12 @@ namespace Vulkan {
 	}
 
 
-	TAPIResult GPU_ContentManager::Create_StagingBuffer(unsigned int DATASIZE, const GFX_API::SUBALLOCATEBUFFERTYPEs& MemoryRegion, GFX_API::GFXHandle& Handle) {
+	TAPIResult GPU_ContentManager::Create_StagingBuffer(unsigned int DATASIZE, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& Handle) {
 		if (!DATASIZE) {
 			LOG_ERROR_TAPI("Staging Buffer DATASIZE is zero!");
 			return TAPI_INVALIDARGUMENT;
 		}
-		if (MemoryRegion == GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL) {
+		if (VKGPU->ALLOCs[MemoryTypeIndex].TYPE == GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL) {
 			LOG_ERROR_TAPI("You can't create a staging buffer in DEVICELOCAL memory!");
 			return TAPI_INVALIDARGUMENT;
 		}
@@ -645,32 +543,32 @@ namespace Vulkan {
 			return TAPI_FAIL;
 		}
 		
-		VkDeviceSize Offset = 0, RequiredSize = 0;
-		if (Suballocate_Buffer(Bufferobj, psuedo_ci.usage, MemoryRegion, Offset, RequiredSize) != VK_SUCCESS) {
+
+		MemoryBlock* StagingBuffer = new MemoryBlock;
+		StagingBuffer->MemAllocIndex = MemoryTypeIndex;
+		if (Suballocate_Buffer(Bufferobj, psuedo_ci.usage, *StagingBuffer) != VK_SUCCESS) {
+			delete StagingBuffer;
 			LOG_ERROR_TAPI("Suballocation has failed, so staging buffer creation too!");
 			return TAPI_FAIL;
 		}
-		MemoryBlock* StagingBuffer = new MemoryBlock;
-		StagingBuffer->Offset = Offset;
-		StagingBuffer->Type = MemoryRegion;
 		vkDestroyBuffer(VKGPU->Logical_Device, Bufferobj, nullptr);
 		Handle = StagingBuffer;
 		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::Upload_toBuffer(GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) {
 		VkDeviceSize UploadOFFSET = static_cast<VkDeviceSize>(OFFSET);
-		GFX_API::SUBALLOCATEBUFFERTYPEs SUBALLOCATEREGION = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
+		unsigned int MEMALLOCINDEX = UINT32_MAX;
 		switch (Type) {
 		case GFX_API::BUFFER_TYPE::GLOBAL:
-			SUBALLOCATEREGION = GFXHandleConverter(VK_GlobalBuffer*, Handle)->Block.Type;
+			MEMALLOCINDEX = GFXHandleConverter(VK_GlobalBuffer*, Handle)->Block.MemAllocIndex;
 			UploadOFFSET += GFXHandleConverter(VK_GlobalBuffer*, Handle)->Block.Offset;
 			break;
 		case GFX_API::BUFFER_TYPE::STAGING:
-			SUBALLOCATEREGION = GFXHandleConverter(MemoryBlock*, Handle)->Type;
+			MEMALLOCINDEX = GFXHandleConverter(MemoryBlock*, Handle)->MemAllocIndex;
 			UploadOFFSET += GFXHandleConverter(MemoryBlock*, Handle)->Offset;
 			break;
 		case GFX_API::BUFFER_TYPE::VERTEX:
-			SUBALLOCATEREGION = GFXHandleConverter(VK_VertexBuffer*, Handle)->Block.Type;
+			MEMALLOCINDEX = GFXHandleConverter(VK_VertexBuffer*, Handle)->Block.MemAllocIndex;
 			UploadOFFSET += GFXHandleConverter(VK_VertexBuffer*, Handle)->Block.Offset;
 			break;
 		default:
@@ -678,20 +576,10 @@ namespace Vulkan {
 			return TAPI_NOTCODED;
 		}
 
-		void* MappedMemory = nullptr;
-		switch (SUBALLOCATEREGION) {
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
-			MappedMemory = VKGPU->FASTHOSTVISIBLE_ALLOC.MappedMemory;
-			break;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
-			MappedMemory = VKGPU->HOSTVISIBLE_ALLOC.MappedMemory;
-			break;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
-			MappedMemory = VKGPU->READBACK_ALLOC.MappedMemory;
-			break;
-		default:
-			LOG_NOTCODED_TAPI("This type of memory block isn't supported for a staging buffer! Uploadto_StagingBuffer() has failed!", true);
-			return TAPI_NOTCODED;
+		void* MappedMemory = VKGPU->ALLOCs[MEMALLOCINDEX].MappedMemory;
+		if (!MappedMemory) {
+			LOG_ERROR_TAPI("Memory is not mapped, so you are either trying to upload to an GPU Local buffer or MemoryTypeIndex is not allocated memory type's index!");
+			return TAPI_FAIL;
 		}
 		memcpy(((char*)MappedMemory) + UploadOFFSET, DATA, DATA_SIZE);
 		return TAPI_SUCCESS;
@@ -732,7 +620,7 @@ namespace Vulkan {
 	}
 
 	TAPIResult GPU_ContentManager::Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, unsigned int VertexCount, 
-		GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& VertexBufferHandle) {
+		unsigned int MemoryTypeIndex, GFX_API::GFXHandle& VertexBufferHandle) {
 		if (!VertexCount) {
 			LOG_ERROR_TAPI("GFXContentManager->Create_MeshBuffer() has failed because vertex_count is zero!");
 			return TAPI_INVALIDARGUMENT;
@@ -750,15 +638,14 @@ namespace Vulkan {
 		VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
 		VkBuffer Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
-		VkDeviceSize offset = 0, RequiredSize = 0;
-		if (Suballocate_Buffer(Buffer, BufferUsageFlag, MemoryType, offset, RequiredSize) != TAPI_SUCCESS) {
+
+		VKMesh->Block.MemAllocIndex = MemoryTypeIndex;
+		if (Suballocate_Buffer(Buffer, BufferUsageFlag, VKMesh->Block) != TAPI_SUCCESS) {
 			LOG_ERROR_TAPI("There is no memory left in specified memory region, please try again later!");
 			return TAPI_FAIL;
 		}
 		vkDestroyBuffer(VKGPU->Logical_Device, Buffer, nullptr);
 
-		VKMesh->Block.Offset = offset;
-		VKMesh->Block.Type = MemoryType;
 		VKMesh->Layout = Layout;
 		VKMesh->VERTEX_COUNT = VertexCount;
 		MESHBUFFERs.push_back(GFX->JobSys->GetThisThreadIndex(), VKMesh);
@@ -773,7 +660,7 @@ namespace Vulkan {
 
 
 
-	TAPIResult GPU_ContentManager::Create_IndexBuffer(unsigned int DataSize, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& IndexBufferHandle) {
+	TAPIResult GPU_ContentManager::Create_IndexBuffer(unsigned int DataSize, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& IndexBufferHandle) {
 		LOG_NOTCODED_TAPI("Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!", true);
 		return TAPI_NOTCODED;
 	}
@@ -782,7 +669,7 @@ namespace Vulkan {
 	}
 
 
-	TAPIResult GPU_ContentManager::Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& TextureHandle) {
+	TAPIResult GPU_ContentManager::Create_Texture(const GFX_API::Texture_Description& TEXTURE_ASSET, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& TextureHandle) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Create_Texture() should support mipmaps!", false);
 		VK_Texture* TEXTURE = new VK_Texture;
 		TEXTURE->CHANNELs = TEXTURE_ASSET.Properties.CHANNEL_TYPE;
@@ -790,7 +677,8 @@ namespace Vulkan {
 		TEXTURE->WIDTH = TEXTURE_ASSET.WIDTH;
 		TEXTURE->DATA_SIZE = TEXTURE_ASSET.WIDTH * TEXTURE_ASSET.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(TEXTURE_ASSET.Properties.CHANNEL_TYPE);
 		TEXTURE->USAGE = TEXTURE_ASSET.USAGE;
-		TEXTURE->Block.Type = MemoryType;
+		TEXTURE->Block.MemAllocIndex = MemoryTypeIndex;
+
 
 		//Create VkImage
 		{
@@ -802,7 +690,7 @@ namespace Vulkan {
 			im_ci.extent.depth = 1;
 			im_ci.flags = 0;
 			im_ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE->CHANNELs);
-			im_ci.imageType = VK_IMAGE_TYPE_2D;
+			im_ci.imageType = Find_VkImageType(TEXTURE_ASSET.Properties.DIMENSION);
 			im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			im_ci.mipLevels = 1;
 			im_ci.pNext = nullptr;
@@ -814,7 +702,7 @@ namespace Vulkan {
 			}
 			im_ci.pQueueFamilyIndices = VKGPU->AllQueueFamilies;
 			im_ci.queueFamilyIndexCount = VKGPU->QUEUEs.size();
-			im_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
+			im_ci.tiling = Find_VkTiling(TEXTURE_ASSET.Properties.DATAORDER);
 			im_ci.usage = Find_VKImageUsage_forVKTexture(*TEXTURE);
 			im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
@@ -852,7 +740,7 @@ namespace Vulkan {
 				return TAPI_FAIL;
 			}
 		}
-		
+
 		TEXTUREs.push_back(GFX->JobSys->GetThisThreadIndex(), TEXTURE);
 		TextureHandle = TEXTURE;
 		return TAPI_SUCCESS;
@@ -867,7 +755,7 @@ namespace Vulkan {
 
 
 	TAPIResult GPU_ContentManager::Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform, 
-		GFX_API::SHADERSTAGEs_FLAG AccessableStages, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) {
+		GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) {
 		if (VKRENDERER->Is_ConstructingRenderGraph() || VKRENDERER->FrameGraphs->BranchCount) {
 			LOG_ERROR_TAPI("GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)! Please create your global buffers before render graph construction.");
 			return TAPI_WRONGTIMING;
@@ -883,18 +771,17 @@ namespace Vulkan {
 		}
 		obj = Create_VkBuffer(DATA_SIZE, flags);
 		
-		VkDeviceSize offset = 0, RequiredSize = 0;
-		if (Suballocate_Buffer(obj, flags, MemoryType, offset, RequiredSize) != TAPI_SUCCESS) {
+
+		VK_GlobalBuffer* GB = new VK_GlobalBuffer;
+		GB->Block.MemAllocIndex = MemoryTypeIndex;
+		if (Suballocate_Buffer(obj, flags, GB->Block) != TAPI_SUCCESS) {
 			LOG_ERROR_TAPI("Create_GlobalBuffer has failed at suballocation!");
 			return TAPI_FAIL;
 		}
 		
-		VK_GlobalBuffer* GB = new VK_GlobalBuffer;
 		GB->ACCESSED_STAGEs = AccessableStages;
 		GB->BINDINGPOINT = BINDINDEX;
-		GB->Block.Offset = offset;
-		GB->Block.Type = MemoryType;
-		GB->DATA_SIZE = RequiredSize;
+		GB->DATA_SIZE = DATA_SIZE;
 		GB->isUniform = isUniform;
 
 		GlobalBufferHandle = GB;
@@ -976,7 +863,7 @@ namespace Vulkan {
 
 		GPU* Vulkan_GPU = (GPU*)VKGPU;
 
-		VkPipelineVertexInputStateCreateInfo VertexInputState_ci = {};
+		VkPipelineVertexInputStateCreateInfo VertexInputState_ci = {};	//VERTEX ATTRIBUTE LAYOUT DEPENDENT, NO MATERIAL TYPE
 		{
 			VertexInputState_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 			VertexInputState_ci.pVertexBindingDescriptions = &LAYOUT->BindingDesc;
@@ -986,7 +873,7 @@ namespace Vulkan {
 			VertexInputState_ci.flags = 0;
 			VertexInputState_ci.pNext = nullptr;
 		}
-		VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
+		VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};	//VERTEX ATTRIBUTE LAYOUT DEPENDENT, NO MATERIAL TYPE
 		{
 			InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 			InputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -1004,7 +891,7 @@ namespace Vulkan {
 			RenderViewportState.pNext = nullptr;
 			RenderViewportState.flags = 0;
 		}
-		VkPipelineRasterizationStateCreateInfo RasterizationState = {};
+		VkPipelineRasterizationStateCreateInfo RasterizationState = {};	//CULL MODE, FILL MODE, LINEWIDTH
 		{
 			RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 			RasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
@@ -1019,7 +906,7 @@ namespace Vulkan {
 			RasterizationState.depthBiasConstantFactor = 0.0f;
 			RasterizationState.depthBiasSlopeFactor = 0.0f;
 		}
-		VkPipelineMultisampleStateCreateInfo MSAAState = {};
+		VkPipelineMultisampleStateCreateInfo MSAAState = {};	//RENDER PASS DEPENDENT, NO MATERIAL TYPE
 		{
 			MSAAState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 			MSAAState.sampleShadingEnable = VK_FALSE;
@@ -1032,7 +919,7 @@ namespace Vulkan {
 
 		vector<VkPipelineColorBlendAttachmentState> States;
 		VkPipelineColorBlendAttachmentState Attachment_ColorBlendState = {};
-		VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
+		VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};	//ALL BLEND DATA
 		{
 			//Non-blend settings
 			Attachment_ColorBlendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -1058,7 +945,7 @@ namespace Vulkan {
 		}
 
 		VkPipelineDynamicStateCreateInfo Dynamic_States = {};
-		vector<VkDynamicState> DynamicStatesList;
+		vector<VkDynamicState> DynamicStatesList;	//NO MATERIAL TYPE
 		{
 			DynamicStatesList.push_back(VK_DYNAMIC_STATE_VIEWPORT);
 			DynamicStatesList.push_back(VK_DYNAMIC_STATE_SCISSOR);
@@ -1480,6 +1367,70 @@ namespace Vulkan {
 		call.Set = Set;
 		call.ArrayIndex = UBIndex;
 		call.Type = DescType::UBUFFER;
+		if (isUsedRecently) {
+			call.Set->ShouldRecreate.store(1);
+			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		else {
+			DescSets_toJustUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		return TAPI_SUCCESS;
+	}
+	TAPIResult GPU_ContentManager::SetMaterial_SampledTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+		GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
+		VK_DescSet* Set = nullptr;
+		VK_DescImage* Image = nullptr;
+		unsigned int SamplerIndex = UINT32_MAX;
+		if (isMaterialType) {
+			VK_GraphicsPipeline* PSO = GFXHandleConverter(VK_GraphicsPipeline*, MaterialType_orInstance);
+			for (unsigned int Index = 0; Index < PSO->General_DescSet.DescSamplersCount; Index++) {
+				VK_DescImage& DescImage = PSO->General_DescSet.DescSamplers[Index];
+				if (DescImage.BindingIndex != BINDINDEX) {
+					continue;
+				}
+				Image = &PSO->General_DescSet.DescSamplers[Index];
+				Set = &PSO->General_DescSet;
+				SamplerIndex = Index;
+				break;
+			}
+			if (!Set) {
+				LOG_ERROR_TAPI("Intended sampled texture shader input isn't found!");
+				return TAPI_FAIL;
+			}
+		}
+		else {
+			VK_PipelineInstance* PSO = GFXHandleConverter(VK_PipelineInstance*, MaterialType_orInstance);
+			for (unsigned int Index = 0; Index < PSO->DescSet.DescSamplersCount; Index++) {
+				VK_DescImage& DescImage = PSO->DescSet.DescSamplers[Index];
+				if (DescImage.BindingIndex != BINDINDEX) {
+					continue;
+				}
+				Image = &PSO->DescSet.DescSamplers[Index];
+				Set = &PSO->DescSet;
+				SamplerIndex = Index;
+				break;
+			}
+			if (!Set) {
+				LOG_ERROR_TAPI("Intended sampled texture shader input isn't found!");
+				return TAPI_FAIL;
+			}
+		}
+
+		VK_Sampler* Sampler = GFXHandleConverter(VK_Sampler*, SamplingType);
+		bool x = false, y = true;
+		if (!Image->IsUpdated.compare_exchange_strong(x, y)) {
+			return TAPI_WRONGTIMING;
+		}
+		VkAccessFlags unused;
+		Find_AccessPattern_byIMAGEACCESS(usage, unused, Image->info.imageLayout);
+		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
+		Image->info.imageView = TEXTURE->ImageView;
+		Image->info.sampler = Sampler->Sampler;
+
+		VK_DescSetUpdateCall call;
+		call.Set = Set;
+		call.ArrayIndex = SamplerIndex;
+		call.Type = DescType::SAMPLER;
 		if (isUsedRecently) {
 			call.Set->ShouldRecreate.store(1);
 			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);

@@ -61,6 +61,7 @@ namespace GFX_API {
 		virtual void SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle) = 0;
 		virtual void CopyBuffer_toBuffer(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE, 
 			GFX_API::GFXHandle TargetBuffer_Handle, GFX_API::BUFFER_TYPE TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) = 0;
+		//If TargetTexture_CopyXXX is 0, it's converted to size of the texture in that dimension
 		virtual void CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
 			GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, unsigned int TargetTexture_OffsetWidth, unsigned int TargetTexture_OffsetHeight,
 			unsigned int TargetTexture_OffsetDepth, unsigned int TargetTexture_CopyWidth, unsigned int TargetTexture_CopyHeight, unsigned int TargetTexture_CopyDepth) = 0;

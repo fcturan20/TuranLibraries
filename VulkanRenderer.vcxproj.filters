@@ -48,9 +48,6 @@
     <ClCompile Include="Source\GFX\GFX_FileSystem\Resource_Type\Material_Type_Resource.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\GFX\GFX_FileSystem\Resource_Type\Texture_Resource.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Source\GFX\IMGUI\Includes\imgui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -121,6 +118,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\Vulkan\VulkanSource\Vulkan_Includes.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\MaterialInstance_Import.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\Texture_Loader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -951,9 +954,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\GFX\GFX_FileSystem\Resource_Type\Material_Type_Resource.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\GFX\GFX_FileSystem\Resource_Type\Texture_Resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\GFX\IMGUI\Includes\imconfig.h">

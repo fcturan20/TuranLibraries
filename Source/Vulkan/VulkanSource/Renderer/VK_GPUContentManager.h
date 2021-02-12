@@ -14,12 +14,13 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_ShaderSource*> SHADERSOURCEs;
 		TuranAPI::Threading::TLVector<VK_GraphicsPipeline*> SHADERPROGRAMs;
 		TuranAPI::Threading::TLVector<VK_PipelineInstance*> SHADERPINSTANCEs;
+		TuranAPI::Threading::TLVector<VK_Sampler*> SAMPLERs;
 		TuranAPI::Threading::TLVector<VK_VertexAttribute*> VERTEXATTRIBUTEs;
 		TuranAPI::Threading::TLVector<VK_VertexAttribLayout*> VERTEXATTRIBLAYOUTs;
 		TuranAPI::Threading::TLVector<VK_RTSLOTSET*> RT_SLOTSETs;
 
 		//Suballocate and bind memory to VkBuffer object
-		TAPIResult				Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, GFX_API::SUBALLOCATEBUFFERTYPEs GPUregion, VkDeviceSize& MemoryOffset, VkDeviceSize& RequiredSize);
+		TAPIResult				Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, MemoryBlock& Block);
 		//Suballocate and bind memory to VkImage object
 		TAPIResult				Suballocate_Image(VK_Texture& Texture);
 
@@ -42,9 +43,6 @@ namespace Vulkan {
 		//Create Global descriptor sets
 		void Resource_Finalizations();
 
-		VkSampler DefaultSampler;
-
-
 
 
 
@@ -58,6 +56,10 @@ namespace Vulkan {
 		virtual TAPIResult Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, const bool& is_perVertex, GFX_API::GFXHandle& Handle) override;
 		virtual bool Delete_VertexAttribute(GFX_API::GFXHandle Attribute_ID) override;
 
+		virtual TAPIResult Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel, 
+			GFX_API::TEXTURE_MIPMAPFILTER MINFILTER, GFX_API::TEXTURE_MIPMAPFILTER MAGFILTER, GFX_API::TEXTURE_WRAPPING WRAPPING_WIDTH, 
+			GFX_API::TEXTURE_WRAPPING WRAPPING_HEIGHT, GFX_API::TEXTURE_WRAPPING WRAPPING_DEPTH, GFX_API::GFXHandle& SamplingTypeHandle) override;
+
 		unsigned int Calculate_sizeofVertexLayout(const VK_VertexAttribute* const* ATTRIBUTEs, unsigned int Count);
 		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) override;
 		virtual void Delete_VertexAttributeLayout(GFX_API::GFXHandle Layout_ID) override;
@@ -65,26 +67,26 @@ namespace Vulkan {
 		virtual TAPIResult Upload_toBuffer(GFX_API::GFXHandle BufferHandle, GFX_API::BUFFER_TYPE BufferType, const void* DATA, unsigned int DATA_SIZE,
 			unsigned int OFFSET) override;
 
-		virtual TAPIResult Create_StagingBuffer(unsigned int DATASIZE, const GFX_API::SUBALLOCATEBUFFERTYPEs& MemoryRegion, GFX_API::GFXHandle& Handle) override;
+		virtual TAPIResult Create_StagingBuffer(unsigned int DATASIZE, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& Handle) override;
 		virtual void Delete_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle) override;
 
 		virtual TAPIResult Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, unsigned int VertexCount, 
-			GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& VertexBufferHandle) override;
+			unsigned int MemoryTypeIndex, GFX_API::GFXHandle& VertexBufferHandle) override;
 		virtual void Unload_VertexBuffer(GFX_API::GFXHandle BufferHandle) override;
 
 
-		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& IndexBufferHandle) override;
+		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& IndexBufferHandle) override;
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) override;
 
 
-		virtual TAPIResult Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& TextureHandle) override;
+		virtual TAPIResult Create_Texture(const GFX_API::Texture_Description& TEXTURE_ASSET, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& TextureHandle) override;
 		virtual TAPIResult Upload_Texture(GFX_API::GFXHandle BufferHandle, const void* InputData,
 			unsigned int DataSize, unsigned int TargetOffset) override;
 		virtual void Unload_Texture(GFX_API::GFXHandle TEXTUREHANDLE) override;
 
 
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
-			GFX_API::SHADERSTAGEs_FLAG AccessableStages, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) override;
+			GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) override;
 		virtual void Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) override;
 
 
@@ -98,6 +100,8 @@ namespace Vulkan {
 		virtual void Delete_MaterialInst(GFX_API::GFXHandle Asset_ID) override;
 		virtual TAPIResult SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
 			GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) override;
+		virtual TAPIResult SetMaterial_SampledTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+			GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) override;
 
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) override;
 		virtual TAPIResult Inherite_RTSlotSet(const vector<GFX_API::RTSLOTUSAGE_Description>& Descriptions, GFX_API::GFXHandle RTSlotSetHandle, GFX_API::GFXHandle& InheritedSlotSetHandle) override;

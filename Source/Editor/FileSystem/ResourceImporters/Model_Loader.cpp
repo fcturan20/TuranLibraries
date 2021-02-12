@@ -11,7 +11,6 @@
 #include "Editor/FileSystem/ResourceTypes/ResourceTYPEs.h"
 #include "GFX/GFX_Core.h"
 #include "Editor/FileSystem/ResourceImporters/Texture_Loader.h"
-#include "Editor/RenderContext/Editor_DataManager.h"
 
 using namespace TuranAPI;
 
@@ -130,7 +129,7 @@ namespace TuranEditor {
 				}
 			}
 			else {
-				TuranAPI::LOG_NOTCODED("While loading a model, you have to use Surface Material Type for now!", true);
+				LOG_NOTCODED_TAPI("While loading a model, you have to use Surface Material Type for now!", true);
 				return 0;
 			}
 		}
@@ -193,7 +192,7 @@ namespace TuranEditor {
 		//And give the user which attributes the imported asset has.
 		MESH->Material_Index = data->mMaterialIndex;
 		if (data->mNumVertices == 4563) {
-			TuranAPI::LOG_CRASHING("This is it!");
+			LOG_CRASHING_TAPI("This is it!");
 		}
 		MESH->VERTEX_NUMBER = data->mNumVertices;
 
@@ -225,7 +224,7 @@ namespace TuranEditor {
 					break;
 				default:
 					TextCoordAttribute.DATATYPE = GFX_API::DATA_TYPE::VAR_VEC2;
-					TuranAPI::LOG_WARNING("One of the meshes has unsupported number of channels in its Texture Coordinates!");
+					LOG_WARNING_TAPI("One of the meshes has unsupported number of channels in its Texture Coordinates!");
 				}
 				MESH->DataLayout.Attributes.push_back(TextCoordAttribute);
 				NextAttribute_Index++;
@@ -290,7 +289,7 @@ namespace TuranEditor {
 		MESH->VERTEXDATA_SIZE = MESH->DataLayout.size_pervertex * MESH->VERTEX_NUMBER;
 		MESH->VERTEX_DATA = new unsigned char[MESH->VERTEXDATA_SIZE];
 		if (!MESH->VERTEX_DATA) {
-			TuranAPI::LOG_CRASHING("Allocator failed to create a buffer for mesh's data!");
+			LOG_CRASHING_TAPI("Allocator failed to create a buffer for mesh's data!");
 			return;
 		}
 

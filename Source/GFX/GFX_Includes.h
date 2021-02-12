@@ -95,6 +95,11 @@ namespace GFX_API {
 		API_TEXTURE_LINEAR_FROM_2MIP
 	};
 
+	enum class TEXTURE_ORDER : unsigned char {
+		SWIZZLE = 0,
+		LINEAR = 1
+	};
+
 	enum class TEXTURE_WRAPPING : unsigned char {
 		API_TEXTURE_REPEAT,
 		API_TEXTURE_MIRRORED_REPEAT,
@@ -198,18 +203,6 @@ namespace GFX_API {
 		TEXTUREUSAGEFLAG();
 	};
 
-
-	enum class IMAGEUSAGE : unsigned char {
-		READONLY_RTATTACHMENT = 0,				//That means you are only reading the attachment (Attachment Type will be found by GFX API)
-		READWRITE_RTATTACHMENT = 1,				//That means you have both read and write access to the attachment (Attachment Type will be found by GFX API)
-		SHADERTEXTURESAMPLING,					//That means you are reading texture in shader as uniform (most performant way)
-		SHADERIMAGELOADING,						//That means you have both random "read and write" access in shaders to the texture (But not as RT)
-		DATATRANSFER_SRC,						//That means you are reading from this texture with GPU or CPU copy operations
-		DATATRANSFER_DST,						//That means you are writing to this texture with GPU or CPU copy operations
-		SWAPCHAIN_DISPLAY,
-		UNUSED									//That means you are using it for the first time (PREVIOUS_IMUSAGE) or not using it again (LATER_IMUSAGE) which may improve performance
-	};
-
 	enum class BARRIERPLACE : unsigned char {
 		ONLYSTART = 0,			//Barrier is used only at the start of the pass
 		BEFORE_EVERYCALL = 1,	//Barrier is used before everycall (So, at the start of the pass too)
@@ -267,8 +260,41 @@ namespace GFX_API {
 		unsigned int Width, Height, Depth, WidthOffset, HeightOffset, DepthOffset;
 	};
 
-	struct GFXAPI GPUMemoryDescription {
-		unsigned int MaxSize_inBytes, TotalAllocationSize_inBytes; 
+	struct GFXAPI Texture_Properties {
+		TEXTURE_DIMENSIONs DIMENSION = TEXTURE_DIMENSIONs::TEXTURE_2D;
+		TEXTURE_MIPMAPFILTER MIPMAP_FILTERING = TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_1MIP;
+		TEXTURE_WRAPPING WRAPPING = TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
+		TEXTURE_CHANNELs CHANNEL_TYPE = TEXTURE_CHANNELs::API_TEXTURE_RGB8UB;
+		TEXTURE_ORDER DATAORDER = TEXTURE_ORDER::SWIZZLE;
+		Texture_Properties();
+		Texture_Properties(TEXTURE_DIMENSIONs dimension, TEXTURE_MIPMAPFILTER mipmap_filtering = TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_1MIP,
+			TEXTURE_WRAPPING wrapping = TEXTURE_WRAPPING::API_TEXTURE_REPEAT, TEXTURE_CHANNELs channel_type = TEXTURE_CHANNELs::API_TEXTURE_RGB8UB, TEXTURE_ORDER = TEXTURE_ORDER::SWIZZLE);
+	};
+
+	/*
+		Texture Resource Specifications:
+			1) You can use textures to just read on GPU (probably for object material rendering), read-write on GPU (using compute shader to write an image), render target (framebuffer attachment)
+			2) Modern APIs let you use a texture in anyway, it's left for your care.
+			But OpenGL doesn't let this situation, you are defining your texture's type in creation proccess
+			So for now, GFXAPI uses Modern APIs' way and you can use a texture in anyway you want
+			But you should use UsageBarrier for this kind of usage and specify it in RenderGraph
+			3) You can't use Staging Buffers to store and access textures, they are just for transfer operations
+	*/
+	struct GFXAPI Texture_Description {
+	public:
+		Texture_Properties Properties;
+		unsigned int WIDTH, HEIGHT;
+		TEXTUREUSAGEFLAG USAGE;
+	};
+
+
+
+
+	struct GFXAPI MemoryType {
+		const SUBALLOCATEBUFFERTYPEs HEAPTYPE;
+		const unsigned int MemoryTypeIndex;
+		unsigned int AllocationSize = 0;
+		MemoryType(SUBALLOCATEBUFFERTYPEs HEAP, unsigned int MemoryTypeIndex);
 	};
 
 	struct GFXAPI MonitorDescription {
@@ -286,7 +312,8 @@ namespace GFX_API {
 		uint32_t DRIVER_VERSION;
 		GPU_TYPEs GPU_TYPE;
 		bool is_GraphicOperations_Supported = false, is_ComputeOperations_Supported = false, is_TransferOperations_Supported = false;
-		unsigned int DEVICELOCAL_MaxMemorySize, HOSTVISIBLE_MaxMemorySize, FASTHOSTVISIBLE_MaxMemorySize, READBACK_MaxMemorySize;
+		vector<MemoryType> MEMTYPEs;
+		uint64_t DEVICELOCAL_MaxMemorySize, HOSTVISIBLE_MaxMemorySize, FASTHOSTVISIBLE_MaxMemorySize, READBACK_MaxMemorySize;
 	};
 
 	struct GFXAPI WindowDescription {

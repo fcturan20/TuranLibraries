@@ -6,7 +6,7 @@
 #include "Editor/FileSystem/EditorFileSystem_Core.h"
 #include "TuranAPI/ThreadedJobCore.h"
 
-#include "Editor/FileSystem/ResourceImporters/Model_Loader.h"
+#include "Editor/FileSystem/ResourceImporters/Texture_Loader.h"
 #include "TuranAPI/Profiler_Core.h"
 
 //These functions are defined in Editor_System.cpp in Editor folder

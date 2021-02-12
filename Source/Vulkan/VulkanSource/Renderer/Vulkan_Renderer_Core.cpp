@@ -1189,12 +1189,12 @@ namespace Vulkan {
 					info.descriptorCount = 1;
 					switch (Call.Type) {
 					case DescType::IMAGE:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
 						break;
 					case DescType::SAMPLER:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 						info.dstBinding = Call.Set->DescSamplers[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescSamplers[Call.ArrayIndex].info;
 						break;
@@ -1229,12 +1229,12 @@ namespace Vulkan {
 					info.descriptorCount = 1;
 					switch (Call.Type) {
 					case DescType::IMAGE:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
 						break;
 					case DescType::SAMPLER:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ;
 						info.dstBinding = Call.Set->DescSamplers[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescSamplers[Call.ArrayIndex].info;
 						break;
@@ -1425,38 +1425,26 @@ namespace Vulkan {
 		WC.Window = Window;
 		WP->WindowCalls[2].push_back(WC);
 	}
-	VK_MemoryAllocation* GetMEMORYALLOCATIONHANDLE(const GFX_API::SUBALLOCATEBUFFERTYPEs& TYPE) {
-		switch (TYPE) {
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL:
-			return &VKGPU->GPULOCAL_ALLOC;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE:
-			return &VKGPU->HOSTVISIBLE_ALLOC;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE:
-			return &VKGPU->FASTHOSTVISIBLE_ALLOC;
-		case GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK:
-			return &VKGPU->READBACK_ALLOC;
-		}
-	}
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
 		switch (TYPE) {
 		case GFX_API::BUFFER_TYPE::GLOBAL:
 			{
 				VK_GlobalBuffer* buf = GFXHandleConverter(VK_GlobalBuffer*, Handle);
-				TargetBuffer = GetMEMORYALLOCATIONHANDLE(buf->Block.Type)->Buffer;
+				TargetBuffer = VKGPU->ALLOCs[buf->Block.MemAllocIndex].Buffer;
 				TargetOffset += buf->Block.Offset;
 			}
 			break;
 		case GFX_API::BUFFER_TYPE::VERTEX:
 			{
 				VK_VertexBuffer* buf = GFXHandleConverter(VK_VertexBuffer*, Handle);
-				TargetBuffer = GetMEMORYALLOCATIONHANDLE(buf->Block.Type)->Buffer;
+				TargetBuffer = VKGPU->ALLOCs[buf->Block.MemAllocIndex].Buffer;
 				TargetOffset += buf->Block.Offset;
 			}
 			break;
 		case GFX_API::BUFFER_TYPE::STAGING:
 			{
 				MemoryBlock* Staging = GFXHandleConverter(MemoryBlock*, Handle);
-				TargetBuffer = GetMEMORYALLOCATIONHANDLE(Staging->Type)->Buffer;
+				TargetBuffer = VKGPU->ALLOCs[Staging->MemAllocIndex].Buffer;
 				TargetOffset += Staging->Offset;
 			}
 			break;
@@ -1489,9 +1477,24 @@ namespace Vulkan {
 		VK_BUFtoIMinfo x;
 		x.BufferImageCopy.bufferImageHeight = 0;
 		x.BufferImageCopy.bufferRowLength = 0;
-		x.BufferImageCopy.imageExtent.depth = TargetTexture_CopyDepth;
-		x.BufferImageCopy.imageExtent.height = TargetTexture_CopyHeight;
-		x.BufferImageCopy.imageExtent.width = TargetTexture_CopyWidth;
+		if (TargetTexture_CopyDepth) {
+			x.BufferImageCopy.imageExtent.depth = TargetTexture_CopyDepth;
+		}
+		else {
+			x.BufferImageCopy.imageExtent.depth = 1;
+		}
+		if (TargetTexture_CopyHeight) {
+			x.BufferImageCopy.imageExtent.height = TargetTexture_CopyHeight;
+		}
+		else {
+			x.BufferImageCopy.imageExtent.height = TEXTURE->HEIGHT;
+		}
+		if (TargetTexture_CopyWidth) {
+			x.BufferImageCopy.imageExtent.width = TargetTexture_CopyWidth;
+		}
+		else {
+			x.BufferImageCopy.imageExtent.width = TEXTURE->WIDTH;
+		}
 		x.BufferImageCopy.imageOffset.x = TargetTexture_OffsetWidth;
 		x.BufferImageCopy.imageOffset.y = TargetTexture_OffsetHeight;
 		x.BufferImageCopy.imageOffset.z = TargetTexture_OffsetDepth;

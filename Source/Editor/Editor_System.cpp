@@ -5,7 +5,31 @@ namespace TuranEditor {
 	Editor_System::Editor_System(TuranAPI::Threading::JobSystem* JobSystem) : LOGGING("C:/dev/VulkanRenderer") {
 		std::cout << "Editor System Constructor is started!\n";
 		Vulkan::Vulkan_Core* VK = new Vulkan::Vulkan_Core(Monitors, GPUs, JobSystem);
-		VK->Start_SecondStage(0, 1024 * 1024 * 20, 1024 * 1024 * 20, 0, 0);
+
+		unsigned int ALLOCSIZE = 1024 * 1024 * 30;
+		//Search for RGBA8UB supported memory type that's device local
+		{
+			GFX_API::Texture_Description RGBA8UB_IM;
+			RGBA8UB_IM.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
+			RGBA8UB_IM.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP;
+			RGBA8UB_IM.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
+			RGBA8UB_IM.Properties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA8UB;
+			RGBA8UB_IM.WIDTH = 1920;
+			RGBA8UB_IM.HEIGHT = 1080;
+			RGBA8UB_IM.USAGE.isRenderableTo = true;
+
+			unsigned int MAXWIDTH = 0, MAXHEIGHT = 0, MAXDEPTH = 0, MAXMIPLEVEL = 0, BitSet = 0;
+			if (GFX->GetTextureTypeLimits(RGBA8UB_IM.Properties, RGBA8UB_IM.USAGE, 0, MAXWIDTH, MAXHEIGHT, MAXDEPTH, MAXMIPLEVEL)) {
+				GFX->GetSupportedAllocations_ofTexture(RGBA8UB_IM, 0, BitSet);
+			}
+			std::cout << BitSet;
+		}
+		GPUs[0].MEMTYPEs[0].AllocationSize = ALLOCSIZE;
+		GPUs[0].MEMTYPEs[3].AllocationSize = ALLOCSIZE;
+
+
+
+		VK->Start_SecondStage(0, GPUs[0].MEMTYPEs);
 	}
 	Editor_System::~Editor_System() {
 		delete GFX;

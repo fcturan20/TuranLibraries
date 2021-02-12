@@ -103,12 +103,13 @@
     <ClCompile Include="Source\Editor\Editor_Includes.cpp" />
     <ClCompile Include="Source\Editor\Editor_System.cpp" />
     <ClCompile Include="Source\Editor\FileSystem\EditorFileSystem_Core.cpp" />
+    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\MaterialInstance_Import.cpp" />
+    <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\Texture_Loader.cpp" />
     <ClCompile Include="Source\Editor\FileSystem\ResourceTypes\Model_Resource.cpp" />
     <ClCompile Include="Source\Editor\FileSystem\ResourceTypes\Resource_Identifier.cpp" />
     <ClCompile Include="Source\Editor\FileSystem\ResourceTypes\Scene_Resource.cpp" />
     <ClCompile Include="Source\GFX\GFX_Core.cpp" />
     <ClCompile Include="Source\GFX\GFX_FileSystem\Resource_Type\Material_Type_Resource.cpp" />
-    <ClCompile Include="Source\GFX\GFX_FileSystem\Resource_Type\Texture_Resource.cpp" />
     <ClCompile Include="Source\GFX\GFX_Includes.cpp" />
     <ClCompile Include="Source\GFX\IMGUI\IMGUI_Core.cpp" />
     <ClCompile Include="Source\GFX\IMGUI\IMGUI_WINDOW.cpp" />
@@ -411,7 +412,6 @@
     <ClInclude Include="Source\Editor\FileSystem\ResourceTypes\Scene_Resource.h" />
     <ClInclude Include="Source\GFX\GFX_Core.h" />
     <ClInclude Include="Source\GFX\GFX_FileSystem\Resource_Type\Material_Type_Resource.h" />
-    <ClInclude Include="Source\GFX\GFX_FileSystem\Resource_Type\Texture_Resource.h" />
     <ClInclude Include="Source\GFX\GFX_Includes.h" />
     <ClInclude Include="Source\GFX\IMGUI\IMGUI_Core.h" />
     <ClInclude Include="Source\GFX\IMGUI\IMGUI_GFX.h" />

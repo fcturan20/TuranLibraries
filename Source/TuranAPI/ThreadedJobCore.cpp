@@ -195,7 +195,7 @@ namespace TuranAPI {
 		void AtomicUINT::DirectStore(const uint64_t& Store) {
 			data.store(Store);
 		}
-		uint64_t AtomicUINT::DirectLoad() {
+		uint64_t AtomicUINT::DirectLoad() const {
 			return data.load();
 		}
 		bool AtomicUINT::LimitedAdd_weak(const uint64_t& add, const uint64_t& maxlimit) {

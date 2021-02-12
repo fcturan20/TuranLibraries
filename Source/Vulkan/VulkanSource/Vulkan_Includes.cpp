@@ -56,10 +56,10 @@ namespace Vulkan {
 	VK_QUEUE::VK_QUEUE() {
 
 	}
-	VK_MemoryBlock::VK_MemoryBlock() {
+	VK_SubAllocation::VK_SubAllocation() {
 
 	}
-	VK_MemoryBlock::VK_MemoryBlock(const VK_MemoryBlock& copyblock) {
+	VK_SubAllocation::VK_SubAllocation(const VK_SubAllocation& copyblock) {
 		isEmpty.store(copyblock.isEmpty.load());
 		Size = copyblock.Size;
 		Offset = copyblock.Offset;
@@ -86,9 +86,13 @@ namespace Vulkan {
 			Required_InstanceExtensionNames.push_back(glfwExtensions[i]);
 			std::cout << glfwExtensions[i] << " GLFW extension is required!\n";
 		}
-
+		
 		#ifdef VULKAN_DEBUGGING
 			Required_InstanceExtensionNames.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+			Required_InstanceExtensionNames.push_back(VK_KHR_GET_DISPLAY_PROPERTIES_2_EXTENSION_NAME);
+			Required_InstanceExtensionNames.push_back(VK_KHR_DISPLAY_EXTENSION_NAME);
+			Required_InstanceExtensionNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+			Required_InstanceExtensionNames.push_back(VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
 		#endif
 
 		//CHECK IF ALL OF THE REQUIRED EXTENSIONS SUPPORTED
@@ -115,10 +119,8 @@ namespace Vulkan {
 		Vulkan_GPU->Supported_DeviceExtensions.resize(extensionCount);
 		vkEnumerateDeviceExtensionProperties(Vulkan_GPU->Physical_Device, nullptr, &extensionCount, Vulkan_GPU->Supported_DeviceExtensions.data());
 
-
-		//CODE REQUIRED DEVICE EXTENSIONS
 		Vulkan_GPU->Required_DeviceExtensionNames->push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-
+		Vulkan_GPU->Required_DeviceExtensionNames->push_back(VK_KHR_STORAGE_BUFFER_STORAGE_CLASS_EXTENSION_NAME);
 
 		LOG_STATUS_TAPI("Required Extensions for Vulkan API is set!");
 
@@ -139,6 +141,11 @@ namespace Vulkan {
 		LOG_STATUS_TAPI("Checked Required Device Extensions for the GPU!");
 	}
 	VK_MemoryAllocation::VK_MemoryAllocation() : Allocated_Blocks(*GFX->JobSys) {
+
+	}
+	VK_MemoryAllocation::VK_MemoryAllocation(const VK_MemoryAllocation& copyALLOC) : UnusedSize(copyALLOC.UnusedSize.DirectLoad()),
+		Allocated_Blocks(*GFX->JobSys), Buffer(copyALLOC.Buffer), Allocated_Memory(copyALLOC.Allocated_Memory), TYPE(copyALLOC.TYPE),
+		MappedMemory(copyALLOC.MappedMemory), MemoryTypeIndex(copyALLOC.MemoryTypeIndex), FullSize(copyALLOC.FullSize) {
 
 	}
 
@@ -243,6 +250,8 @@ namespace Vulkan {
 			return VK_FORMAT_R8G8B8A8_SINT;
 		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA32F:
 			return VK_FORMAT_R32G32B32A32_SFLOAT;
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGB8UB:
+			return VK_FORMAT_R8G8B8_UINT;
 		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32:
 			return VK_FORMAT_D32_SFLOAT;
 		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8:
@@ -303,10 +312,8 @@ namespace Vulkan {
 			return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 		case GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G:
 		case GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI:
-			return VK_DESCRIPTOR_TYPE_SAMPLER;
 		case GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_G:
 		case GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI:
-			LOG_ERROR_TAPI("MATERIALDATA_TYPE = CONSTIMAGE_G which I don't want to support for now, this return COMBINED_IMAGE_SAMPLER anyway!");
 			return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		case GFX_API::MATERIALDATA_TYPE::UNDEFINED:
 			LOG_CRASHING_TAPI("Find_VkDescType_byMATDATATYPE() has failed because MATERIALDATA_TYPE = UNDEFINED!");
@@ -316,5 +323,42 @@ namespace Vulkan {
 		return VK_DESCRIPTOR_TYPE_MAX_ENUM;
 	}
 
+	VkSamplerAddressMode Find_AddressMode_byWRAPPING(GFX_API::TEXTURE_WRAPPING Wrapping) {
+		switch(Wrapping) {
+		case GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT:
+			return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		case GFX_API::TEXTURE_WRAPPING::API_TEXTURE_MIRRORED_REPEAT:
+			return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+		case GFX_API::TEXTURE_WRAPPING::API_TEXTURE_CLAMP_TO_EDGE:
+			return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		default:
+			LOG_NOTCODED_TAPI("Find_AddressMode_byWRAPPING() doesn't support this wrapping type!", true);
+			return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
+		}
+	}
+
+	VkFilter Find_VkFilter_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter) {
+		switch (filter) {
+		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_1MIP:
+		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_2MIP:
+			return VK_FILTER_LINEAR;
+		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP:
+		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_2MIP:
+			return VK_FILTER_NEAREST;
+		default:
+			LOG_NOTCODED_TAPI("Find_VkFilter_byGFXFilter() doesn't support this filter type!", true);
+			return VK_FILTER_MAX_ENUM;
+		}
+	}
+	VK_API VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter) {
+		switch (filter) {
+		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_2MIP:
+		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_2MIP:
+			return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_1MIP:
+		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP:
+			return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		}
+	}
 
 }

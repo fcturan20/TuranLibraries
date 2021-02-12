@@ -216,4 +216,21 @@ namespace GFX_API {
 		x.VERTEXSHADER = vs;
 		return x;
 	}
+
+
+
+	TEXTUREUSAGEFLAG::TEXTUREUSAGEFLAG() {
+		isCopiableFrom = false;
+		isCopiableTo = false;
+		isRandomlyWrittenTo = false;
+		isRenderableTo = false;
+		isSampledReadOnly = false;
+	}
+
+
+	Texture_Properties::Texture_Properties() {}
+	Texture_Properties::Texture_Properties(TEXTURE_DIMENSIONs dimension, TEXTURE_MIPMAPFILTER mipmap_filtering, TEXTURE_WRAPPING wrapping, TEXTURE_CHANNELs channel_type, TEXTURE_ORDER dataorder)
+		: DIMENSION(dimension), MIPMAP_FILTERING(mipmap_filtering), WRAPPING(wrapping), CHANNEL_TYPE(channel_type), DATAORDER(dataorder){}
+
+	MemoryType::MemoryType(SUBALLOCATEBUFFERTYPEs HEAP, unsigned int MTIndex) : HEAPTYPE(HEAP), MemoryTypeIndex(MTIndex){}
 }

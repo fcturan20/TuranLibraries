@@ -109,7 +109,7 @@ namespace TuranAPI {
 			//Returns the old value
 			uint64_t DirectSubtract(const uint64_t& sub);
 			void DirectStore(const uint64_t& Store);
-			uint64_t DirectLoad();
+			uint64_t DirectLoad() const;
 
 			//Deep Sleeping: The thread won't be available soon enough and application will fail at some point (or be buggy)
 			//because condition's not gonna be met soon enough. By the way, it keeps yielding at that time.

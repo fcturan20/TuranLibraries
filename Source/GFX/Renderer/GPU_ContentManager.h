@@ -1,6 +1,5 @@
 #pragma once
 #include "GFX/GFX_Includes.h"
-#include "GFX/GFX_FileSystem/Resource_Type/Texture_Resource.h"
 #include "GFX/GFX_FileSystem/Resource_Type/Material_Type_Resource.h"
 #include "GFX_RenderNodes.h"
 
@@ -10,13 +9,13 @@ namespace GFX_API {
 	/*			GFX Content Manager:
 	* This system manages all of the GFX asset and GPU memory management proccesses
 	* Create_xxx (Texture, Buffer etc) functions will suballocate memory from the specified MemoryType
-	* If you want to upload data to the GPU local memory, you should create a buffer to use as a staging memory in either HOSTVISIBLE or FASTHOSTVISIBLE memory
+	* If you want to upload data to the GPU local memory, you should create Staging Buffer in either HOSTVISIBLE or FASTHOSTVISIBLE memory
 	* Create_xxx and Delete_xxx functions are implicitly synchronized, means you don't have to worry about concurrency
 
 	How to Upload Vertex Buffers:
 	1) You should define a Vertex Attribute Layout (which is a collection of Vertex Attributes, so first Vertex Attributes).
-	2) GFX API copies VertexAttributeLayout.perVertexSize() * vertex_count amount of data to the Staging Buffer
-	3) Then while executing the RenderGraph, Staging->GPU Local copy will be executed 
+	2) If you specify HOSTVISIBLE or FASTHOSTVISIBLE while creating the vertex buffer, you can use Upload_toBuffer() function to upload data
+	3) If you specify DEVICELOCAL or READBACK, you can only upload data to some other buffer and copy from it to the vertex buffer while executing RenderGraph
 
 
 	Why is Vertex Attribute Layout system that much complicated?
@@ -24,6 +23,7 @@ namespace GFX_API {
 	2) So Turan Engine's Vertex Attribute Layout capabilities will be limited to interleaved rendering.
 	3) I want some matching all over the vertex attribute layouts because vertex attributes always has meanings (Position, Vertex Normal, Texture Coordinates etc)
 	and their order is less meaningful than their existence. That's why you should create a VertexAttribute object, it has a meaning.
+
 
 	What does mean these RTSlot and RTSlotSet things?
 	1) Draw Pass is to render something on a texture called Render Target (RT). But each SubDrawPass should define which Draw Pass' RTs it uses.
@@ -39,6 +39,16 @@ namespace GFX_API {
 	2) Because global buffers are accessed by all shaders. A Shader needs re-compiling if global buffers list changes.
 		
 
+	How does Material System works?
+	1) All of the shader inputs is divided into 3 categories: Global, Material Type (General), Material Instance (Per Instance)
+	2) Array of the shader inputs aren't supported for now
+	3) General and Per Instance shader inputs should be set with SetMaterial_XXX() functions
+	4) Related SetMaterial_XXX() function of a shader input can only be called once per frame, second one (or concurrent one) will fail
+	5) That means you can change 2 different shader inputs in the same frame, but you can't change the same shader inputs twice in a frame
+	6) Globals are only uniform and storage buffers for now (Set = 0 in SPIR-V shaders) and can be accessible from all materials
+	7) Material Type (General) ones are only accessible by material instances that are instantiated by the same Material Type (Set = 1 in SPIR-V shaders)
+	8) Material Instance ones are material instance specific (Set = 2 in SPIR-V shaders)
+
 	*/
 	class GFXAPI GPU_ContentManager {
 	protected:
@@ -52,6 +62,12 @@ namespace GFX_API {
 		virtual TAPIResult Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, const bool& is_perVertex, GFX_API::GFXHandle& Handle) = 0;
 		//Returns true if operation is successful
 		virtual bool Delete_VertexAttribute(GFXHandle Attribute_ID) = 0;
+
+
+		virtual TAPIResult Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
+			GFX_API::TEXTURE_MIPMAPFILTER MINFILTER, GFX_API::TEXTURE_MIPMAPFILTER MAGFILTER, GFX_API::TEXTURE_WRAPPING WRAPPING_WIDTH,
+			GFX_API::TEXTURE_WRAPPING WRAPPING_HEIGHT, GFX_API::TEXTURE_WRAPPING WRAPPING_DEPTH, GFX_API::GFXHandle& SamplingTypeHandle) = 0;
+
 		/*Attributes are ordered as the same order of input vector
 		* For example: Same attribute ID may have different location/order in another attribute layout
 		* So you should gather your vertex buffer data according to that
@@ -61,28 +77,27 @@ namespace GFX_API {
 
 		virtual TAPIResult Upload_toBuffer(GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) = 0;
 
-		virtual TAPIResult Create_StagingBuffer(unsigned int DATASIZE, const GFX_API::SUBALLOCATEBUFFERTYPEs& MemoryRegion, GFX_API::GFXHandle& Handle) = 0;
+		virtual TAPIResult Create_StagingBuffer(unsigned int DATASIZE, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& Handle) = 0;
 		virtual void Delete_StagingBuffer(GFX_API::GFXHandle StagingBufferHandle) = 0;
 		/*
 		* You should sort your vertex data according to attribute layout, don't forget that
 		* VertexCount shouldn't be 0
 		*/
 		virtual TAPIResult Create_VertexBuffer(GFX_API::GFXHandle AttributeLayout, unsigned int VertexCount, 
-			GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& VertexBufferHandle) = 0;
+			unsigned int MemoryTypeIndex, GFX_API::GFXHandle& VertexBufferHandle) = 0;
 		virtual void Unload_VertexBuffer(GFX_API::GFXHandle BufferHandle) = 0;
 
-		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& IndexBufferHandle) = 0;
+		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& IndexBufferHandle) = 0;
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) = 0;
 		
-
-		virtual TAPIResult Create_Texture(const GFX_API::Texture_Resource& TEXTURE_ASSET, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& TextureHandle) = 0;
+		virtual TAPIResult Create_Texture(const GFX_API::Texture_Description& TEXTURE_ASSET, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& TextureHandle) = 0;
 		virtual TAPIResult Upload_Texture(GFX_API::GFXHandle BufferHandle, const void* InputData,
 			unsigned int DataSize, unsigned int TargetOffset) = 0;
 		//TARGET OFFSET is the offset in the texture's buffer to copy to
 		virtual void Unload_Texture(GFXHandle TEXTUREHANDLE) = 0;
 
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
-			GFX_API::SHADERSTAGEs_FLAG AccessableStages, GFX_API::SUBALLOCATEBUFFERTYPEs MemoryType, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
+			GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
 		virtual void Unload_GlobalBuffer(GFXHandle BUFFER_ID) = 0;
 
 
@@ -99,8 +114,11 @@ namespace GFX_API {
 		virtual TAPIResult Create_MaterialInst(GFX_API::GFXHandle MaterialType, GFX_API::GFXHandle& MaterialInstHandle) = 0;
 		virtual void Delete_MaterialInst(GFXHandle ID) = 0;
 		//If isMaterialType is false, MaterialType_orInstance input will be proccessed as MaterialInstance handle
-		virtual TAPIResult SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
-			GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) = 0;
+		//IsUsedRecently means is the material type/instance used in last two frames. This is necessary for Vulkan synchronization process.
+		virtual TAPIResult SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+			GFX_API::GFXHandle TargetBufferHandle, GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) = 0;
+		virtual TAPIResult SetMaterial_SampledTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+			GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) = 0;
 
 
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) = 0;

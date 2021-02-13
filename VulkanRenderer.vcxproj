@@ -127,6 +127,7 @@
     <ClCompile Include="Source\TuranAPI\Logger_Core.cpp" />
     <ClCompile Include="Source\TuranAPI\Profiler_Core.cpp" />
     <ClCompile Include="Source\TuranAPI\ThreadedJobCore.cpp" />
+    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\CommandBufferRecording.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\FGAlgorithm.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\VK_GPUContentManager.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Renderer_Core.cpp" />

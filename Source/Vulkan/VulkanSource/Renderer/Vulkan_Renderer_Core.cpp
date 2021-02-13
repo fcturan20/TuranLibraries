@@ -699,178 +699,6 @@ namespace Vulkan {
 	}
 
 
-	/*
-	void Renderer::Create_VulkanCalls() {
-		LOG_NOTCODED_TAPI("Create_VulkanCalls() isn't coded!", true);
-
-		VkSubmitInfo CB_si = {};
-		CB_si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		CB_si.pNext = nullptr;
-		VkSemaphore SwapchainAvailabilitySemaphore[] = { Waitfor_PresentingSwapchain };
-		VkPipelineStageFlags WaitStages[] = { VK_PIPELINE_STAGE_ALL_COMMANDS_BIT };
-		CB_si.waitSemaphoreCount = 1;
-		CB_si.pWaitSemaphores = SwapchainAvailabilitySemaphore;
-		CB_si.pWaitDstStageMask = WaitStages;
-		CB_si.commandBufferCount = 1;
-		CB_si.pCommandBuffers = &PerFrame_CommandBuffers[SwapchainIndex];
-
-		VkSemaphore RenderCBFinishSemaphore[] = { Waitfor_SwapchainRenderGraphIdle };
-		CB_si.signalSemaphoreCount = 1;
-		CB_si.pSignalSemaphores = RenderCBFinishSemaphore;
-		if (vkQueueSubmit(VKGPU->GRAPHICSQueue.Queue, 1, &CB_si, RenderGraph_RunFences[FrameIndex]) != VK_SUCCESS) {
-			LOG_CRASHING_TAPI("Command Buffer submit has failed!");
-		}
-	}
-	void Renderer::Run_RenderGraph() {
-		//Begin Command Buffer
-		{
-			VkCommandBufferBeginInfo bi = {};
-			bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			bi.flags = 0;
-			bi.pInheritanceInfo = nullptr;
-			bi.pNext = nullptr;
-			if (vkBeginCommandBuffer(PerFrame_CommandBuffers[SwapchainIndex], &bi) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("Renderer::Run_RenderGraph() has failed at vkBeginCommandBuffer()!");
-			}
-		}
-		//Begin Render Pass
-		{
-			VK_DrawPass* VKDP = DrawPasses[0];
-			VkRenderPassBeginInfo bi = {};
-			bi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-			bi.renderPass = VKDP->RenderPassObject;
-			//All RT_SLOTs should be in the same size and I checked it while creating the draw pass, so there is no problem using 0!
-			bi.renderArea.extent.width = VKDP->SLOTSET[0].COLOR_SLOTs[0]->RT->WIDTH;
-			bi.renderArea.extent.height = VKDP->SLOTSET[0].COLOR_SLOTs[0]->RT->HEIGHT;
-			bi.renderArea.offset.x = 0; bi.renderArea.offset.y = 0;
-			bi.pNext = nullptr;
-
-			vec4 colorvalue = VKDP->SLOTSET->COLOR_SLOTs[0]->CLEAR_COLOR;
-			VkClearValue Clear = { colorvalue.x, colorvalue.y, colorvalue.z, colorvalue.w };
-			bi.clearValueCount = 1;
-			bi.pClearValues = &Clear;
-			bi.framebuffer = VKDP->FramebufferObjects[0];
-			vkCmdBeginRenderPass(PerFrame_CommandBuffers[SwapchainIndex], &bi, VK_SUBPASS_CONTENTS_INLINE);
-		}
-		VK_SubDrawPass& FirstSubpass = DrawPasses[0]->Subpasses[0];
-		VkViewport Viewport;
-		Viewport.width = VKWINDOW->Get_Window_Mode().x;
-		Viewport.height = VKWINDOW->Get_Window_Mode().y;
-		Viewport.x = 0;	Viewport.y = 0;
-		Viewport.minDepth = 0.0f;
-		Viewport.maxDepth = 1.0f;
-		VkRect2D Scissor;
-		Scissor.extent.width = VKWINDOW->Get_Window_Mode().x;
-		Scissor.extent.height = VKWINDOW->Get_Window_Mode().y;
-		Scissor.offset.x = 0; Scissor.offset.y = 0;
-		for (unsigned int i = 0; i < FirstSubpass.DrawCalls.size(); i++) {
-			vkCmdSetViewport(PerFrame_CommandBuffers[SwapchainIndex], 0, 1, &Viewport);
-			vkCmdSetScissor(PerFrame_CommandBuffers[SwapchainIndex], 0, 1, &Scissor);
-			GFX_API::DrawCall_Description* DrawCall = &FirstSubpass.DrawCalls[i];
-			VK_PipelineInstance* VKInstance = GFXHandleConverter(VK_PipelineInstance*, DrawCall->ShaderInstance_ID);
-			VK_GraphicsPipeline* VKType = VKInstance->PROGRAM;
-			vkCmdBindPipeline(PerFrame_CommandBuffers[SwapchainIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, VKType->PipelineObject);
-			VkDescriptorSet SETs[3] = { VKContentManager->GlobalBuffers_DescSet, VKType->General_DescSet, VKInstance->DescSet };
-			vkCmdBindDescriptorSets(PerFrame_CommandBuffers[SwapchainIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, VKType->PipelineLayout, 0, 3, SETs, 0, nullptr);
-			VK_Mesh* MESH = GFXHandleConverter(VK_Mesh*, DrawCall->MeshBuffer_ID);
-			VkDeviceSize offset = 0;
-			vkCmdBindVertexBuffers(PerFrame_CommandBuffers[SwapchainIndex], 0, 1, &MESH->Buffer, &offset);
-			vkCmdDraw(PerFrame_CommandBuffers[SwapchainIndex], MESH->VERTEX_COUNT, 1, 0, 0);
-		}
-		FirstSubpass.DrawCalls.clear();
-		vkCmdEndRenderPass(PerFrame_CommandBuffers[SwapchainIndex]);
-		VkImageMemoryBarrier Barriers[2];
-		VK_Texture* VKTEXTURE = FinalColorTexture;
-		{
-			//Barrier 0 is for Source Image
-			Barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			Barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			Barriers[0].image = VKTEXTURE->Image;
-			Barriers[0].oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			Barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			Barriers[0].pNext = nullptr;
-			Barriers[0].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-			Barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			Barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			Barriers[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			Barriers[0].subresourceRange.baseArrayLayer = 0;
-			Barriers[0].subresourceRange.baseMipLevel = 0;
-			Barriers[0].subresourceRange.layerCount = 1;
-			Barriers[0].subresourceRange.levelCount = 1;
-
-
-			Barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			Barriers[1].image = VKWINDOW->SwapChain_Images[SwapchainIndex];
-			Barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			Barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			Barriers[1].pNext = nullptr;
-			Barriers[1].srcAccessMask = 0;
-			Barriers[1].oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-			Barriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			Barriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			Barriers[1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			Barriers[1].subresourceRange.baseArrayLayer = 0;
-			Barriers[1].subresourceRange.baseMipLevel = 0;
-			Barriers[1].subresourceRange.layerCount = 1;
-			Barriers[1].subresourceRange.levelCount = 1;
-		}
-		vkCmdPipelineBarrier(PerFrame_CommandBuffers[SwapchainIndex], VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT
-			, VkDependencyFlagBits::VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 2, Barriers);
-		VkImageCopy copyregion = {};
-		{
-			copyregion.dstOffset.x = 0; copyregion.dstOffset.y = 0; copyregion.dstOffset.z = 0;
-			copyregion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			copyregion.dstSubresource.baseArrayLayer = 0;
-			copyregion.dstSubresource.layerCount = 1;
-			copyregion.dstSubresource.mipLevel = 0;
-			copyregion.extent.depth = 1; copyregion.extent.width = FinalColorTexture->WIDTH; copyregion.extent.height = FinalColorTexture->HEIGHT;
-			copyregion.srcOffset.x = 0; copyregion.srcOffset.y = 0; copyregion.srcOffset.z = 0;
-			copyregion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			copyregion.srcSubresource.baseArrayLayer = 0;
-			copyregion.srcSubresource.layerCount = 1;
-			copyregion.srcSubresource.mipLevel = 0;
-		}
-
-		vkCmdCopyImage(PerFrame_CommandBuffers[SwapchainIndex], VKTEXTURE->Image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-			, VKWINDOW->SwapChain_Images[SwapchainIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyregion);
-		VkImageMemoryBarrier LastBarriers[2];
-		{
-			//0 is Swapchain image, 1 is FinalColor_Texture
-			LastBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			LastBarriers[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-			LastBarriers[0].image = VKWINDOW->SwapChain_Images[SwapchainIndex];
-			LastBarriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			LastBarriers[0].newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-			LastBarriers[0].pNext = nullptr;
-			LastBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			LastBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			LastBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			LastBarriers[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			LastBarriers[0].subresourceRange.baseArrayLayer = 0;
-			LastBarriers[0].subresourceRange.baseMipLevel = 0;
-			LastBarriers[0].subresourceRange.layerCount = 1;
-			LastBarriers[0].subresourceRange.levelCount = 1;
-
-			LastBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			LastBarriers[1].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-			LastBarriers[1].image = VKTEXTURE->Image;
-			LastBarriers[1].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			LastBarriers[1].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			LastBarriers[1].pNext = nullptr;
-			LastBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			LastBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			LastBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			LastBarriers[1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			LastBarriers[1].subresourceRange.baseArrayLayer = 0;
-			LastBarriers[1].subresourceRange.baseMipLevel = 0;
-			LastBarriers[1].subresourceRange.layerCount = 1;
-			LastBarriers[1].subresourceRange.levelCount = 1;
-		}
-		vkCmdPipelineBarrier(PerFrame_CommandBuffers[SwapchainIndex], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
-			, VkDependencyFlagBits::VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 2, LastBarriers);
-		vkEndCommandBuffer(PerFrame_CommandBuffers[SwapchainIndex]);
-	}*/
-
 	void RecordRGBranchCalls(VK_RGBranch& Branch, VkCommandBuffer CB);
 	void Renderer::Record_CurrentFramegraph() {
 		//TURAN_PROFILE_SCOPE_MCS("Run_CurrentFramegraph()");
@@ -1206,21 +1034,25 @@ namespace Vulkan {
 						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
+						Call.Set->DescImages[Call.ArrayIndex].IsUpdated.store(0);
 						break;
 					case DescType::SAMPLER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 						info.dstBinding = Call.Set->DescSamplers[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescSamplers[Call.ArrayIndex].info;
+						Call.Set->DescSamplers[Call.ArrayIndex].IsUpdated.store(0);
 						break;
 					case DescType::UBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 						info.dstBinding = Call.Set->DescUBuffers[Call.ArrayIndex].BindingIndex;
 						info.pBufferInfo = &Call.Set->DescUBuffers[Call.ArrayIndex].Info;
+						Call.Set->DescUBuffers[Call.ArrayIndex].IsUpdated.store(0);
 						break;
 					case DescType::SBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 						info.dstBinding = Call.Set->DescSBuffers[Call.ArrayIndex].BindingIndex;
 						info.pBufferInfo = &Call.Set->DescSBuffers[Call.ArrayIndex].Info;
+						Call.Set->DescSBuffers[Call.ArrayIndex].IsUpdated.store(0);
 						break;
 					}
 					info.dstSet = Call.Set->Set;
@@ -1246,21 +1078,25 @@ namespace Vulkan {
 						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
+						Call.Set->DescImages[Call.ArrayIndex].IsUpdated.store(0);
 						break;
 					case DescType::SAMPLER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ;
 						info.dstBinding = Call.Set->DescSamplers[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescSamplers[Call.ArrayIndex].info;
+						Call.Set->DescSamplers[Call.ArrayIndex].IsUpdated.store(0);
 						break;
 					case DescType::UBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 						info.dstBinding = Call.Set->DescUBuffers[Call.ArrayIndex].BindingIndex;
 						info.pBufferInfo = &Call.Set->DescUBuffers[Call.ArrayIndex].Info;
+						Call.Set->DescUBuffers[Call.ArrayIndex].IsUpdated.store(0);
 						break;
 					case DescType::SBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 						info.dstBinding = Call.Set->DescSBuffers[Call.ArrayIndex].BindingIndex;
 						info.pBufferInfo = &Call.Set->DescSBuffers[Call.ArrayIndex].Info;
+						Call.Set->DescSBuffers[Call.ArrayIndex].IsUpdated.store(0);
 						break;
 					}
 					info.dstSet = Call.Set->Set;

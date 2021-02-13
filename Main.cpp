@@ -190,10 +190,10 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	};
 	{
 		Vertex VertexData[4]{
-			{vec2(-0.5f, 0.5f), vec2(0.0f,0.0f)},
-			{vec2(-0.5f, -0.5f), vec2(0.0f, 1.0f)},
-			{vec2(0.5f, 0.5f), vec2(1.0f, 0.0f)},
-			{vec2(0.5f, -0.5f), vec2(1.0f, 1.0f)}
+			{vec2(-1.0f, 1.0f), vec2(0.0f,0.0f)},
+			{vec2(-1.0f, -1.0f), vec2(0.0f, 1.0f)},
+			{vec2(1.0f, 1.0f), vec2(1.0f, 0.0f)},
+			{vec2(1.0f, -1.0f), vec2(1.0f, 1.0f)}
 		};
 		unsigned int IndexData[6]{ 0, 1, 2, 1, 3, 2 };
 
@@ -220,8 +220,8 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	}
 
 	//Create and upload first sampled texture in host visible memory
-	GFX_API::GFXHandle FirstSampledTexture;
-	unsigned int TEXTURESIZE = 0;
+	GFX_API::GFXHandle AlitaTexture, GokuBlackTexture;
+	unsigned int AlitaSize = 0, AlitaOffset = 0, GokuBlackOffset = 0, GokuBlackSize;
 	{
 		GFX_API::Texture_Description im_desc;
 		void* DATA = nullptr;
@@ -229,18 +229,34 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			LOG_CRASHING_TAPI("Texture import has failed!");
 		}
 
-		if (GFXContentManager->Create_Texture(im_desc, 0, FirstSampledTexture) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Sampled texture creation has failed!");
+		if (GFXContentManager->Create_Texture(im_desc, 0, AlitaTexture) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Alita texture creation has failed!");
 		}
-		TEXTURESIZE = im_desc.WIDTH * im_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(im_desc.Properties.CHANNEL_TYPE);
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, DATA, TEXTURESIZE, 104) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Uploading the texture has failed!");
+		AlitaSize = im_desc.WIDTH * im_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(im_desc.Properties.CHANNEL_TYPE);
+		AlitaOffset = 104;
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, DATA, AlitaSize, AlitaOffset) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading the Alita texture has failed!");
+		}
+		delete DATA;
+		DATA = nullptr;
+
+		if (TuranEditor::Texture_Loader::Import_Texture("C:/Users/furka/Pictures/Wallpapers/Goku Black SSRose.jpg", im_desc, DATA) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Texture import has failed!");
+		}
+
+		if (GFXContentManager->Create_Texture(im_desc, 0, GokuBlackTexture) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Goku Black texture creation has failed!");
+		}
+		GokuBlackSize = im_desc.WIDTH * im_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(im_desc.Properties.CHANNEL_TYPE);
+		GokuBlackOffset = AlitaOffset + AlitaSize;
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, DATA, GokuBlackSize, GokuBlackOffset) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading the Goku Black texture has failed!");
 		}
 		delete DATA;
 	}
 	
 	//Create and Link first material type
-	GFX_API::GFXHandle FIRSTMATINST_ID;
+	GFX_API::GFXHandle FIRSTMATINST_ID, FIRSTMATTYPE_ID, FIRSTSAMPLINGTYPE_ID;
 	{
 		GFX_API::ShaderSource_Resource VS, FS;
 		unsigned int VS_CODESIZE = 0, FS_CODESIZE = 0;
@@ -282,23 +298,21 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		MATTYPE.polygon = GFX_API::POLYGON_MODE::FILL;
 		MATTYPE.depthtest = GFX_API::DEPTH_TESTs::DEPTH_TEST_ALWAYS;
 		MATTYPE.depthmode = GFX_API::DEPTH_MODEs::DEPTH_READ_WRITE;
-		GFX_API::GFXHandle MATTYPE_ID;
-		if (GFXContentManager->Link_MaterialType(MATTYPE, MATTYPE_ID) != TAPI_SUCCESS) {
+		if (GFXContentManager->Link_MaterialType(MATTYPE, FIRSTMATTYPE_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Link MaterialType has failed!");
 		}
-		GFX_API::GFXHandle SamplingTypeHandle;
 		if (GFXContentManager->Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D, 0, 0, GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP,
 			GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT,
-			GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, SamplingTypeHandle) != TAPI_SUCCESS) {
+			GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, FIRSTSAMPLINGTYPE_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Creation of sampling type has failed, so application has!");
 		}
-		GFXContentManager->SetMaterial_UniformBuffer(MATTYPE_ID, true, false, 0, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, 88);
-		GFXContentManager->SetMaterial_SampledTexture(MATTYPE_ID, true, false, 1, FirstSampledTexture, SamplingTypeHandle, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
+		GFXContentManager->SetMaterial_UniformBuffer(FIRSTMATTYPE_ID, true, false, 0, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, 88);
+		GFXContentManager->SetMaterial_SampledTexture(FIRSTMATTYPE_ID, true, false, 1, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
 		vec3 FragColor(1.0f, 0.0f, 0.0f);
 		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, &FragColor, 12, 88) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading vertex color to staging buffer has failed!");
 		}
-		GFXContentManager->Create_MaterialInst(MATTYPE_ID, FIRSTMATINST_ID);
+		GFXContentManager->Create_MaterialInst(FIRSTMATTYPE_ID, FIRSTMATINST_ID);
 	}
 
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 4);
@@ -307,18 +321,22 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	GFXRENDERER->ImageBarrier(DEPTHRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::DEPTHSTENCIL_READWRITE, FirstBarrierTP_ID);
 	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
-	GFXRENDERER->ImageBarrier(FirstSampledTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, FirstBarrierTP_ID);
+	GFXRENDERER->ImageBarrier(GokuBlackTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, FirstBarrierTP_ID);
+	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, FirstBarrierTP_ID);
 	GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, INDEXBUFFER_ID, FIRSTMATINST_ID, SubpassID);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[0], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, FinalBarrierTP_ID);
-	GFXRENDERER->ImageBarrier(FirstSampledTexture, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, FinalBarrierTP_ID);
+	GFXRENDERER->ImageBarrier(GokuBlackTexture, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, FinalBarrierTP_ID);
+	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, FinalBarrierTP_ID);
 	GFXRENDERER->SwapBuffers(WindowHandle, WP_ID);
 	GFXRENDERER->Run();
 	Editor_System::Take_Inputs();
 
 
-	GFXRENDERER->CopyBuffer_toImage(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, FirstSampledTexture, 112, 0, 0, 0, 0, 0, 0);
+	GFXRENDERER->CopyBuffer_toImage(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, GokuBlackTexture, GokuBlackOffset, 0, 0, 0, 0, 0, 0);
+	GFXRENDERER->CopyBuffer_toImage(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, AlitaTexture, AlitaOffset, 0, 0, 0, 0, 0, 0);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
-	GFXRENDERER->ImageBarrier(FirstSampledTexture, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, FirstBarrierTP_ID);
+	GFXRENDERER->ImageBarrier(GokuBlackTexture, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, FirstBarrierTP_ID);
+	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, FirstBarrierTP_ID);
 	GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, INDEXBUFFER_ID, FIRSTMATINST_ID, SubpassID);
 	GFXRENDERER->ImageBarrier(SwapchainTextures[1], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, FinalBarrierTP_ID);
 	GFXRENDERER->SwapBuffers(WindowHandle, WP_ID);
@@ -330,6 +348,12 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	while (true) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 
+		if (i % 2) {
+			GFXContentManager->SetMaterial_SampledTexture(FIRSTMATTYPE_ID, true, true, 1, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
+		}
+		else {
+			GFXContentManager->SetMaterial_SampledTexture(FIRSTMATTYPE_ID, true, true, 1, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
+		}
 		GFXRENDERER->ImageBarrier(SwapchainTextures[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, FirstBarrierTP_ID);
 		GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, INDEXBUFFER_ID, FIRSTMATINST_ID, SubpassID);
 		GFXRENDERER->ImageBarrier(SwapchainTextures[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, FinalBarrierTP_ID);

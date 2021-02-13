@@ -1,15 +1,6 @@
 TuranAPI: Logging Started!
-Validation Warning: [ UNASSIGNED-CoreValidation-Shader-InputNotProduced ] Object 0: handle = 0x686f310000000034, type = VK_OBJECT_TYPE_SHADER_MODULE; | MessageID = 0x23e43bb7 | Attachment 1 not written by fragment shader; undefined values will be written to attachment
+Validation Warning: [ UNASSIGNED-CoreValidation-Shader-InputNotProduced ] Object 0: handle = 0x4703730000000036, type = VK_OBJECT_TYPE_SHADER_MODULE; | MessageID = 0x23e43bb7 | Attachment 1 not written by fragment shader; undefined values will be written to attachment
 This TargetOffset in SetMaterial_UniformBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of 64
-
-
-
-
-
-
-
-
-
 
 
 

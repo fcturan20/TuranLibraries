@@ -91,7 +91,7 @@ namespace Vulkan {
 		//Material Related Descriptor Pool Creation
 		{
 			VkDescriptorPoolCreateInfo dp_ci = {};
-			dp_ci.flags = 0;
+			dp_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 			dp_ci.maxSets = MAXDESCSETCOUNT_PERPOOL;
 			dp_ci.pNext = nullptr;
 			dp_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;

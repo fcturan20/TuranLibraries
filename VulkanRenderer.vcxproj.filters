@@ -126,6 +126,9 @@
     <ClCompile Include="Source\Editor\FileSystem\ResourceImporters\Texture_Loader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\CommandBufferRecording.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="3rdPartyLibraries\Includes\assimp\Compiler\poppack1.h">

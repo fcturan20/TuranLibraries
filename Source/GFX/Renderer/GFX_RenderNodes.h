@@ -27,12 +27,14 @@ namespace GFX_API {
 	2) OPTYPE defines how you want to use the RT, you can use all of the OPERATION_TYPE except "UNUSED".
 	3) LOAPOP defines what do to do with RT before starting the Draw Pass.
 	4) CLEAR_VALUE is ignored if LOADOP isn't CLEAR. 
+	5) Some hardware implements additional cache for RTs. If you won't use the written data later, it's better to set isUSEDLATER false.
 	*/
 	struct GFXAPI RTSLOT_Description {
 		GFX_API::GFXHandle TextureHandles[2];
 		GFX_API::OPERATION_TYPE OPTYPE;
 		GFX_API::DRAWPASS_LOAD LOADOP;
 		vec4 CLEAR_VALUE; 
+		bool isUSEDLATER;
 		unsigned char SLOTINDEX;
 	};
 	//If IS_DEPTH is true, SLOTINDEX is ignored because there can be only one depth buffer at a time

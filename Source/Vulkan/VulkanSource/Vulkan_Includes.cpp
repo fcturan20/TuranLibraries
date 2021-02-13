@@ -350,7 +350,7 @@ namespace Vulkan {
 			return VK_FILTER_MAX_ENUM;
 		}
 	}
-	VK_API VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter) {
+	VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter) {
 		switch (filter) {
 		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_2MIP:
 		case GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_2MIP:
@@ -361,4 +361,116 @@ namespace Vulkan {
 		}
 	}
 
+	VkCullModeFlags Find_CullMode_byGFXCullMode(GFX_API::CULL_MODE mode) {
+		switch (mode)
+		{
+		case GFX_API::CULL_MODE::CULL_OFF:
+			return VK_CULL_MODE_NONE;
+			break;
+		case GFX_API::CULL_MODE::CULL_BACK:
+			return VK_CULL_MODE_BACK_BIT;
+			break;
+		case GFX_API::CULL_MODE::CULL_FRONT:
+			return VK_CULL_MODE_FRONT_BIT;
+			break;
+		default:
+			LOG_NOTCODED_TAPI("This culling type isn't supported by Find_CullMode_byGFXCullMode()!", true);
+			return VK_CULL_MODE_NONE;
+			break;
+		}
+	}
+	VkPolygonMode Find_PolygonMode_byGFXPolygonMode(GFX_API::POLYGON_MODE mode) {
+		switch (mode)
+		{
+		case GFX_API::POLYGON_MODE::FILL:
+			return VK_POLYGON_MODE_FILL;
+			break;
+		case GFX_API::POLYGON_MODE::LINE:
+			return VK_POLYGON_MODE_LINE;
+			break;
+		case GFX_API::POLYGON_MODE::POINT:
+			return VK_POLYGON_MODE_POINT;
+			break;
+		default:
+			LOG_NOTCODED_TAPI("This polygon mode isn't support by Find_PolygonMode_byGFXPolygonMode()", true);
+			break;
+		}
+	}
+	VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(GFX_API::VERTEXLIST_TYPEs vertexlist) {
+		switch (vertexlist)
+		{
+		case GFX_API::VERTEXLIST_TYPEs::TRIANGLELIST:
+			return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		default:
+			LOG_NOTCODED_TAPI("This type of vertex list is not supported by Find_PrimitiveTopology_byGFXVertexListType()", true);
+			return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
+			break;
+		}
+	}
+	VkIndexType Find_IndexType_byGFXDATATYPE(GFX_API::DATA_TYPE datatype) {
+		switch (datatype)
+		{
+		case GFX_API::DATA_TYPE::VAR_UINT32:
+			return VK_INDEX_TYPE_UINT32;
+		case GFX_API::DATA_TYPE::VAR_UINT16:
+			return VK_INDEX_TYPE_UINT16;
+		default:
+			LOG_NOTCODED_TAPI("This type of data isn't supported by Find_IndexType_byGFXDATATYPE()", true);
+			return VK_INDEX_TYPE_MAX_ENUM;
+		}
+	}
+	VkCompareOp Find_CompareOp_byGFXDepthTest(GFX_API::DEPTH_TESTs test) {
+		switch (test) {
+		case GFX_API::DEPTH_TESTs::DEPTH_TEST_NEVER:
+			return VK_COMPARE_OP_NEVER;
+		case GFX_API::DEPTH_TESTs::DEPTH_TEST_ALWAYS:
+			return VK_COMPARE_OP_ALWAYS;
+		case GFX_API::DEPTH_TESTs::DEPTH_TEST_GEQUAL:
+			return VK_COMPARE_OP_GREATER_OR_EQUAL;
+		case GFX_API::DEPTH_TESTs::DEPTH_TEST_GREATER:
+			return VK_COMPARE_OP_GREATER;
+		case GFX_API::DEPTH_TESTs::DEPTH_TEST_LEQUAL:
+			return VK_COMPARE_OP_LESS_OR_EQUAL;
+		case GFX_API::DEPTH_TESTs::DEPTH_TEST_LESS:
+			return VK_COMPARE_OP_LESS;
+		default:
+			LOG_NOTCODED_TAPI("Find_CompareOp_byGFXDepthTest() doesn't support this type of test!", true);
+			return VK_COMPARE_OP_MAX_ENUM;
+		}
+	}
+
+	void Find_DepthMode_byGFXDepthMode(GFX_API::DEPTH_MODEs mode, VkBool32& ShouldTest, VkBool32& ShouldWrite) {
+		switch (mode)
+		{
+		case GFX_API::DEPTH_MODEs::DEPTH_READ_WRITE:
+			ShouldTest = VK_TRUE;
+			ShouldWrite = VK_TRUE;
+			break;
+		case GFX_API::DEPTH_MODEs::DEPTH_READ_ONLY:
+			ShouldTest = VK_TRUE;
+			ShouldWrite = VK_FALSE;
+			break;
+		case GFX_API::DEPTH_MODEs::DEPTH_OFF:
+			ShouldTest = VK_FALSE;
+			ShouldWrite = VK_FALSE;
+			break;
+		default:
+			LOG_NOTCODED_TAPI("Find_DepthMode_byGFXDepthMode() doesn't support this type of depth mode!", true);
+			break;
+		}
+	}
+
+	VK_API VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(GFX_API::DRAWPASS_LOAD load) {
+		switch (load) {
+		case GFX_API::DRAWPASS_LOAD::CLEAR:
+			return VK_ATTACHMENT_LOAD_OP_CLEAR;
+		case GFX_API::DRAWPASS_LOAD::FULL_OVERWRITE:
+			return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		case GFX_API::DRAWPASS_LOAD::LOAD:
+			return VK_ATTACHMENT_LOAD_OP_LOAD;
+		default:
+			LOG_NOTCODED_TAPI("Find_LoadOp_byGFXLoadOp() doesn't support this type of load!", true);
+			return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
+		}
+	}
 }

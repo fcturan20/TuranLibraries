@@ -27,7 +27,7 @@ namespace GFX_API {
 
 	//Variable Types!
 	enum class DATA_TYPE : unsigned char {
-		VAR_UBYTE8 = 0, VAR_BYTE8, VAR_UINT32, VAR_INT32, VAR_FLOAT32,
+		VAR_UBYTE8 = 0, VAR_BYTE8, VAR_UINT16, VAR_INT16, VAR_UINT32, VAR_INT32, VAR_FLOAT32,
 		VAR_VEC2, VAR_VEC3, VAR_VEC4, VAR_MAT4x4
 	};
 	GFXAPI unsigned int Get_UNIFORMTYPEs_SIZEinbytes(DATA_TYPE uniform);
@@ -75,6 +75,20 @@ namespace GFX_API {
 		CULL_OFF,
 		CULL_BACK,
 		CULL_FRONT
+	};
+
+	enum class POLYGON_MODE : unsigned char {
+		FILL,
+		LINE,
+		POINT
+	};
+
+	enum class VERTEXLIST_TYPEs : unsigned char {
+		TRIANGLELIST,
+		TRIANGLESTRIP,
+		LINELIST,
+		LINESTRIP,
+		POINTLIST
 	};
 
 	enum class RENDERNODE_TYPEs {

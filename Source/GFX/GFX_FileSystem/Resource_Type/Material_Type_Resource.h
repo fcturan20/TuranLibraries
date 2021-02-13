@@ -57,6 +57,11 @@ namespace GFX_API {
 
 		GFXHandle VERTEXSOURCE_ID, FRAGMENTSOURCE_ID, ATTRIBUTELAYOUT_ID, SubDrawPass_ID;
 		vector<MaterialDataDescriptor> MATERIALTYPEDATA;
+		CULL_MODE culling;
+		POLYGON_MODE polygon;
+		DEPTH_TESTs depthtest;
+		DEPTH_MODEs depthmode;
+		float LINEWIDTH = 1.0f;
 	};
 
 	

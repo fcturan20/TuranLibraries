@@ -33,7 +33,7 @@ namespace Vulkan {
 		}
 		return buffer;
 	}
-	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
+	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), INDEXBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
 		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBUTEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys),
 		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys){
 
@@ -475,7 +475,7 @@ namespace Vulkan {
 		}
 		return true;
 	}
-	TAPIResult GPU_ContentManager::Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) {
+	TAPIResult GPU_ContentManager::Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) {
 		VK_VertexAttribLayout* Layout = new VK_VertexAttribLayout;
 		Layout->Attribute_Number = Attributes.size();
 		Layout->Attributes = new VK_VertexAttribute * [Attributes.size()];
@@ -493,6 +493,7 @@ namespace Vulkan {
 		Layout->BindingDesc.binding = 0;
 		Layout->BindingDesc.stride = size_pervertex;
 		Layout->BindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+		Layout->PrimitiveTopology = Find_PrimitiveTopology_byGFXVertexListType(listtype);
 
 		Layout->AttribDescs = new VkVertexInputAttributeDescription[Attributes.size()];
 		Layout->AttribDesc_Count = Attributes.size();
@@ -571,6 +572,9 @@ namespace Vulkan {
 			MEMALLOCINDEX = GFXHandleConverter(VK_VertexBuffer*, Handle)->Block.MemAllocIndex;
 			UploadOFFSET += GFXHandleConverter(VK_VertexBuffer*, Handle)->Block.Offset;
 			break;
+		case GFX_API::BUFFER_TYPE::INDEX:
+			MEMALLOCINDEX = GFXHandleConverter(VK_IndexBuffer*, Handle)->Block.MemAllocIndex;
+			UploadOFFSET += GFXHandleConverter(VK_IndexBuffer*, Handle)->Block.Offset;
 		default:
 			LOG_NOTCODED_TAPI("Upload_toBuffer() doesn't support this type of buffer for now!", true);
 			return TAPI_NOTCODED;
@@ -635,19 +639,21 @@ namespace Vulkan {
 		unsigned int TOTALDATA_SIZE = Layout->size_perVertex * VertexCount;
 
 		VK_VertexBuffer* VKMesh = new VK_VertexBuffer;
-		VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-
-		VkBuffer Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
-
 		VKMesh->Block.MemAllocIndex = MemoryTypeIndex;
+		VKMesh->Layout = Layout;
+		VKMesh->VERTEX_COUNT = VertexCount;
+
+		VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		VkBuffer Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
 		if (Suballocate_Buffer(Buffer, BufferUsageFlag, VKMesh->Block) != TAPI_SUCCESS) {
-			LOG_ERROR_TAPI("There is no memory left in specified memory region, please try again later!");
+			delete VKMesh;
+			LOG_ERROR_TAPI("There is no memory left in specified memory region!");
+			vkDestroyBuffer(VKGPU->Logical_Device, Buffer, nullptr);
 			return TAPI_FAIL;
 		}
 		vkDestroyBuffer(VKGPU->Logical_Device, Buffer, nullptr);
 
-		VKMesh->Layout = Layout;
-		VKMesh->VERTEX_COUNT = VertexCount;
+
 		MESHBUFFERs.push_back(GFX->JobSys->GetThisThreadIndex(), VKMesh);
 		VertexBufferHandle = VKMesh;
 		return TAPI_SUCCESS;
@@ -660,9 +666,38 @@ namespace Vulkan {
 
 
 
-	TAPIResult GPU_ContentManager::Create_IndexBuffer(unsigned int DataSize, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& IndexBufferHandle) {
-		LOG_NOTCODED_TAPI("Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!", true);
-		return TAPI_NOTCODED;
+	TAPIResult GPU_ContentManager::Create_IndexBuffer(GFX_API::DATA_TYPE DataType, unsigned int IndexCount, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& IndexBufferHandle) {
+		VkIndexType IndexType = Find_IndexType_byGFXDATATYPE(DataType);
+		if (IndexType == VK_INDEX_TYPE_MAX_ENUM) {
+			LOG_ERROR_TAPI("GFXContentManager->Create_IndexBuffer() has failed because DataType isn't supported!");
+			return TAPI_INVALIDARGUMENT;
+		}
+		if (!IndexCount) {
+			LOG_ERROR_TAPI("GFXContentManager->Create_IndexBuffer() has failed because IndexCount is zero!");
+			return TAPI_INVALIDARGUMENT;
+		}
+		if (MemoryTypeIndex >= VKGPU->ALLOCs.size()) {
+			LOG_ERROR_TAPI("GFXContentManager->Create_IndexBuffer() has failed because MemoryTypeIndex is invalid!");
+			return TAPI_INVALIDARGUMENT;
+		}
+		VK_IndexBuffer* IB = new VK_IndexBuffer;
+		IB->DATATYPE = IndexType;
+
+		VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+		VkBuffer Buffer = Create_VkBuffer(GFX_API::Get_UNIFORMTYPEs_SIZEinbytes(DataType) * IndexCount, BufferUsageFlag);
+		IB->Block.MemAllocIndex = MemoryTypeIndex;
+		IB->IndexCount = static_cast<VkDeviceSize>(IndexCount);
+		if (Suballocate_Buffer(Buffer, BufferUsageFlag, IB->Block) != TAPI_SUCCESS) {
+			delete IB;
+			LOG_ERROR_TAPI("There is no memory left in specified memory region!");
+			vkDestroyBuffer(VKGPU->Logical_Device, Buffer, nullptr);
+			return TAPI_FAIL;
+		}
+		vkDestroyBuffer(VKGPU->Logical_Device, Buffer, nullptr);
+		
+		IndexBufferHandle = IB;
+		INDEXBUFFERs.push_back(GFX->JobSys->GetThisThreadIndex(), IB);
+		return TAPI_SUCCESS;
 	}
 	void GPU_ContentManager::Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) {
 		LOG_NOTCODED_TAPI("Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!", true);
@@ -729,7 +764,13 @@ namespace Vulkan {
 			ci.image = TEXTURE->Image;
 			ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
 			ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE->CHANNELs);
-			ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			if (TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32 ||
+				TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
+				ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+			}
+			else {
+				ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			}
 			ci.subresourceRange.baseArrayLayer = 0;
 			ci.subresourceRange.layerCount = 1;
 			ci.subresourceRange.baseMipLevel = 0;
@@ -863,7 +904,7 @@ namespace Vulkan {
 
 		GPU* Vulkan_GPU = (GPU*)VKGPU;
 
-		VkPipelineVertexInputStateCreateInfo VertexInputState_ci = {};	//VERTEX ATTRIBUTE LAYOUT DEPENDENT, NO MATERIAL TYPE
+		VkPipelineVertexInputStateCreateInfo VertexInputState_ci = {};
 		{
 			VertexInputState_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 			VertexInputState_ci.pVertexBindingDescriptions = &LAYOUT->BindingDesc;
@@ -873,10 +914,10 @@ namespace Vulkan {
 			VertexInputState_ci.flags = 0;
 			VertexInputState_ci.pNext = nullptr;
 		}
-		VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};	//VERTEX ATTRIBUTE LAYOUT DEPENDENT, NO MATERIAL TYPE
+		VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
 		{
 			InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-			InputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			InputAssemblyState.topology = LAYOUT->PrimitiveTopology;
 			InputAssemblyState.primitiveRestartEnable = false;
 			InputAssemblyState.flags = 0;
 			InputAssemblyState.pNext = nullptr;
@@ -891,13 +932,13 @@ namespace Vulkan {
 			RenderViewportState.pNext = nullptr;
 			RenderViewportState.flags = 0;
 		}
-		VkPipelineRasterizationStateCreateInfo RasterizationState = {};	//CULL MODE, FILL MODE, LINEWIDTH
+		VkPipelineRasterizationStateCreateInfo RasterizationState = {};
 		{
 			RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-			RasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
-			RasterizationState.cullMode = VK_CULL_MODE_NONE;
-			RasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
-			RasterizationState.lineWidth = 1.0f;
+			RasterizationState.polygonMode = Find_PolygonMode_byGFXPolygonMode(MATTYPE_ASSET.polygon);
+			RasterizationState.cullMode = Find_CullMode_byGFXCullMode(MATTYPE_ASSET.culling);
+			RasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+			RasterizationState.lineWidth = MATTYPE_ASSET.LINEWIDTH;
 			RasterizationState.depthClampEnable = VK_FALSE;
 			RasterizationState.rasterizerDiscardEnable = VK_FALSE;
 
@@ -906,7 +947,8 @@ namespace Vulkan {
 			RasterizationState.depthBiasConstantFactor = 0.0f;
 			RasterizationState.depthBiasSlopeFactor = 0.0f;
 		}
-		VkPipelineMultisampleStateCreateInfo MSAAState = {};	//RENDER PASS DEPENDENT, NO MATERIAL TYPE
+		//Draw pass dependent data but draw passes doesn't support MSAA right now
+		VkPipelineMultisampleStateCreateInfo MSAAState = {};										
 		{
 			MSAAState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 			MSAAState.sampleShadingEnable = VK_FALSE;
@@ -917,19 +959,22 @@ namespace Vulkan {
 			MSAAState.alphaToOneEnable = VK_FALSE;
 		}
 
+		//Blending is not supported right now, because it should be complicated
+		//Blend settings should be per RT slot
+		//Per RT Slot means it's better to handle it according to the drawpass
 		vector<VkPipelineColorBlendAttachmentState> States;
 		VkPipelineColorBlendAttachmentState Attachment_ColorBlendState = {};
-		VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};	//ALL BLEND DATA
+		VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
 		{
 			//Non-blend settings
 			Attachment_ColorBlendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 			Attachment_ColorBlendState.blendEnable = VK_FALSE;
-			Attachment_ColorBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-			Attachment_ColorBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-			Attachment_ColorBlendState.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-			Attachment_ColorBlendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-			Attachment_ColorBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-			Attachment_ColorBlendState.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+			Attachment_ColorBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			Attachment_ColorBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+			Attachment_ColorBlendState.colorBlendOp = VK_BLEND_OP_ADD;
+			Attachment_ColorBlendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			Attachment_ColorBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			Attachment_ColorBlendState.alphaBlendOp = VK_BLEND_OP_ADD;
 
 			States.resize(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT, Attachment_ColorBlendState);
 
@@ -945,7 +990,7 @@ namespace Vulkan {
 		}
 
 		VkPipelineDynamicStateCreateInfo Dynamic_States = {};
-		vector<VkDynamicState> DynamicStatesList;	//NO MATERIAL TYPE
+		vector<VkDynamicState> DynamicStatesList;
 		{
 			DynamicStatesList.push_back(VK_DYNAMIC_STATE_VIEWPORT);
 			DynamicStatesList.push_back(VK_DYNAMIC_STATE_SCISSOR);
@@ -1216,13 +1261,27 @@ namespace Vulkan {
 			}
 		}
 
+		VkPipelineDepthStencilStateCreateInfo depth_state = {};
+		if (Subpass->SLOTSET->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
+			depth_state.depthBoundsTestEnable = VK_FALSE;
+			depth_state.depthCompareOp = Find_CompareOp_byGFXDepthTest(MATTYPE_ASSET.depthtest);
+			Find_DepthMode_byGFXDepthMode(MATTYPE_ASSET.depthmode, depth_state.depthTestEnable, depth_state.depthWriteEnable);
+			depth_state.flags = 0;
+			depth_state.pNext = nullptr;
+			depth_state.stencilTestEnable = VK_FALSE;
+			depth_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		}
 
 		VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfo = {};
 		{
 			GraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 			GraphicsPipelineCreateInfo.pColorBlendState = &Pipeline_ColorBlendState;
-			//There is no Depth-Stencil, so it will be nullptr
-			GraphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+			if (Subpass->SLOTSET->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
+				GraphicsPipelineCreateInfo.pDepthStencilState = &depth_state;
+			}
+			else {
+				GraphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+			}
 			GraphicsPipelineCreateInfo.pDynamicState = &Dynamic_States;
 			GraphicsPipelineCreateInfo.pInputAssemblyState = &InputAssemblyState;
 			GraphicsPipelineCreateInfo.pMultisampleState = &MSAAState;
@@ -1463,7 +1522,7 @@ namespace Vulkan {
 				return TAPI_INVALIDARGUMENT;
 			}
 		}
-		unsigned int DEPTHSLOT_VECTORINDEX = Descriptions.size();
+		unsigned int DEPTHSLOT_VECTORINDEX = UINT32_MAX;
 		//Validate the list and find Depth Slot if there is any
 		for (unsigned int SlotIndex = 0; SlotIndex < Descriptions.size(); SlotIndex++) {
 			const GFX_API::RTSLOT_Description& desc = Descriptions[SlotIndex];
@@ -1478,8 +1537,8 @@ namespace Vulkan {
 					return TAPI_INVALIDARGUMENT;
 				}
 				if (RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8 || RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
-					if (DEPTHSLOT_VECTORINDEX != Descriptions.size()) {
-						LOG_ERROR_TAPI("Create_RTSlotSet() has failed because you can't use two depth buffers at the same slotset (If you're trying to use D24S8 or D32 for color textures, that's not allowed!)");
+					if (DEPTHSLOT_VECTORINDEX != UINT32_MAX && DEPTHSLOT_VECTORINDEX != SlotIndex) {
+						LOG_ERROR_TAPI("Create_RTSlotSet() has failed because you can't use two depth buffers at the same slot set!");
 						return TAPI_INVALIDARGUMENT;
 					}
 					DEPTHSLOT_VECTORINDEX = SlotIndex;
@@ -1491,7 +1550,7 @@ namespace Vulkan {
 				}
 			}
 		}
-		unsigned char COLORRT_COUNT = (DEPTHSLOT_VECTORINDEX != Descriptions.size()) ? Descriptions.size() - 1 : Descriptions.size();
+		unsigned char COLORRT_COUNT = (DEPTHSLOT_VECTORINDEX != UINT32_MAX) ? Descriptions.size() - 1 : Descriptions.size();
 
 		unsigned int i = 0;
 		unsigned int j = 0;
@@ -1525,6 +1584,8 @@ namespace Vulkan {
 				slot->DEPTH_OPTYPE = DEPTHDESC.OPTYPE;
 				slot->RT = GFXHandleConverter(VK_Texture*, DEPTHDESC.TextureHandles[SlotSetIndex]);
 				slot->STENCIL_OPTYPE = GFX_API::OPERATION_TYPE::UNUSED;
+				slot->IS_USED_LATER = DEPTHDESC.isUSEDLATER;
+				slot->LOADSTATE = DEPTHDESC.LOADOP;
 				LOG_NOTCODED_TAPI("Create_RTSlotSet() sets STENCIL_OPTYPE as UNUSED hard-coded for now, fix it in future!", false);
 			}
 			for (unsigned int i = 0; i < COLORRT_COUNT; i++) {
@@ -1534,6 +1595,7 @@ namespace Vulkan {
 				SLOT.RT_OPERATIONTYPE = desc.OPTYPE;
 				SLOT.LOADSTATE = desc.LOADOP;
 				SLOT.RT = RT;
+				SLOT.IS_USED_LATER = desc.isUSEDLATER;
 				SLOT.CLEAR_COLOR = desc.CLEAR_VALUE;
 				PF_SLOTSET.COLOR_SLOTs[desc.SLOTINDEX] = SLOT;
 			}

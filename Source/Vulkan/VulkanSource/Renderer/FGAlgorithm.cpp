@@ -1438,7 +1438,7 @@ namespace Vulkan {
 		rp_bi.renderArea.offset.y = DrawPass->RenderRegion.HeightOffset;
 		rp_bi.pNext = nullptr;
 		rp_bi.pClearValues = nullptr;
-		vector<VkClearValue> CLEARVALUEs(CF_SLOTs.COLORSLOTs_COUNT);
+		vector<VkClearValue> CLEARVALUEs(CF_SLOTs.COLORSLOTs_COUNT + (CF_SLOTs.DEPTHSTENCIL_SLOT ? 1 : 0));
 		if (CF_SLOTs.COLORSLOTs_COUNT) {
 			for (unsigned char COLORRTIndex = 0; COLORRTIndex < CF_SLOTs.COLORSLOTs_COUNT; COLORRTIndex++) {
 				CLEARVALUEs[COLORRTIndex] = { CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.x,
@@ -1446,6 +1446,11 @@ namespace Vulkan {
 				CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.z,
 				CF_SLOTs.COLOR_SLOTs[COLORRTIndex].CLEAR_COLOR.w };
 			}
+			rp_bi.pClearValues = CLEARVALUEs.data();
+		}
+		if (CF_SLOTs.DEPTHSTENCIL_SLOT) {
+			CLEARVALUEs[CF_SLOTs.COLORSLOTs_COUNT] = { CF_SLOTs.DEPTHSTENCIL_SLOT->CLEAR_COLOR.x,
+				CF_SLOTs.DEPTHSTENCIL_SLOT->CLEAR_COLOR.y, 0.0f, 0.0f };
 			rp_bi.pClearValues = CLEARVALUEs.data();
 		}
 		rp_bi.clearValueCount = CLEARVALUEs.size();
@@ -1457,37 +1462,71 @@ namespace Vulkan {
 			if (SP.Binding_Index != SubPassIndex) {
 				LOG_NOTCODED_TAPI("Subpass Binding Index and the SubDrawPass' element index doesn't match, handle this case!", true);
 			}
-			std::unique_lock<std::mutex> DrawCallLocker;
-			SP.DrawCalls.PauseAllOperations(DrawCallLocker);
-			for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
-				for (unsigned char DrawCallIndex = 0; DrawCallIndex < SP.DrawCalls.size(ThreadIndex); DrawCallIndex++) {
-					VK_DrawCall& DrawCall = SP.DrawCalls.get(ThreadIndex, DrawCallIndex);
-					VkViewport DefaultViewport = {};
-					DefaultViewport.height = (float)DrawPass->RenderRegion.Height;
-					DefaultViewport.maxDepth = 1.0f;
-					DefaultViewport.minDepth = 0.0f;
-					DefaultViewport.width = (float)DrawPass->RenderRegion.Width;
-					DefaultViewport.x = (float)DrawPass->RenderRegion.WidthOffset;
-					DefaultViewport.y = (float)DrawPass->RenderRegion.HeightOffset;
-					vkCmdSetViewport(CB, 0, 1, &DefaultViewport);
-					VkRect2D Scissor;
-					Scissor.extent.height = DrawPass->RenderRegion.Height;
-					Scissor.extent.width = DrawPass->RenderRegion.Width;
-					Scissor.offset.x = DrawPass->RenderRegion.WidthOffset;
-					Scissor.offset.y = DrawPass->RenderRegion.HeightOffset;
-					vkCmdSetScissor(CB, 0, 1, &Scissor);
+			//NonIndexed Draw Calls
+			{
+				std::unique_lock<std::mutex> DrawCallLocker;
+				SP.NonIndexedDrawCalls.PauseAllOperations(DrawCallLocker);
+				for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+					for (unsigned char DrawCallIndex = 0; DrawCallIndex < SP.NonIndexedDrawCalls.size(ThreadIndex); DrawCallIndex++) {
+						VK_NonIndexedDrawCall& DrawCall = SP.NonIndexedDrawCalls.get(ThreadIndex, DrawCallIndex);
+						VkViewport DefaultViewport = {};
+						DefaultViewport.height = (float)DrawPass->RenderRegion.Height;
+						DefaultViewport.maxDepth = 1.0f;
+						DefaultViewport.minDepth = 0.0f;
+						DefaultViewport.width = (float)DrawPass->RenderRegion.Width;
+						DefaultViewport.x = (float)DrawPass->RenderRegion.WidthOffset;
+						DefaultViewport.y = (float)DrawPass->RenderRegion.HeightOffset;
+						vkCmdSetViewport(CB, 0, 1, &DefaultViewport);
+						VkRect2D Scissor;
+						Scissor.extent.height = DrawPass->RenderRegion.Height;
+						Scissor.extent.width = DrawPass->RenderRegion.Width;
+						Scissor.offset.x = DrawPass->RenderRegion.WidthOffset;
+						Scissor.offset.y = DrawPass->RenderRegion.HeightOffset;
+						vkCmdSetScissor(CB, 0, 1, &Scissor);
 
-					vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatInst->PROGRAM->PipelineObject);
-					VkDescriptorSet Sets[2] = { VKContentManager->GlobalBuffers_DescSet, DrawCall.MatInst->PROGRAM->General_DescSet.Set };
-					vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatInst->PROGRAM->PipelineLayout, 0, 2, Sets, 0, nullptr);
-					VkDeviceSize Offsets[] = { 0 };
-					VkBuffer TargetBuffer;
-					FindBufferOBJ_byBufType(DrawCall.VB, GFX_API::BUFFER_TYPE::VERTEX, TargetBuffer, Offsets[0]);
-					vkCmdBindVertexBuffers(CB, 0, 1, &TargetBuffer, Offsets);
-					vkCmdDraw(CB, DrawCall.VB->VERTEX_COUNT, 1, 0, 0);
+
+						vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeObj);
+						VkDescriptorSet Sets[2] = { VKContentManager->GlobalBuffers_DescSet, *DrawCall.GeneralSet };
+						vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 2, Sets, 0, nullptr);
+						vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VOffset);
+						vkCmdDraw(CB, DrawCall.VertexCount, 1, 0, 0);
+					}
+					SP.NonIndexedDrawCalls.clear(GFX->JobSys->GetThisThreadIndex());
 				}
 			}
-			SP.DrawCalls.clear(0);
+			//Indexed Draw Calls
+			{
+				std::unique_lock<std::mutex> DrawCallLocker;
+				SP.IndexedDrawCalls.PauseAllOperations(DrawCallLocker);
+				for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+					for (unsigned char DrawCallIndex = 0; DrawCallIndex < SP.IndexedDrawCalls.size(ThreadIndex); DrawCallIndex++) {
+						VK_IndexedDrawCall& DrawCall = SP.IndexedDrawCalls.get(ThreadIndex, DrawCallIndex);
+						VkViewport DefaultViewport = {};
+						DefaultViewport.height = (float)DrawPass->RenderRegion.Height;
+						DefaultViewport.maxDepth = 1.0f;
+						DefaultViewport.minDepth = 0.0f;
+						DefaultViewport.width = (float)DrawPass->RenderRegion.Width;
+						DefaultViewport.x = (float)DrawPass->RenderRegion.WidthOffset;
+						DefaultViewport.y = (float)DrawPass->RenderRegion.HeightOffset;
+						vkCmdSetViewport(CB, 0, 1, &DefaultViewport);
+						VkRect2D Scissor;
+						Scissor.extent.height = DrawPass->RenderRegion.Height;
+						Scissor.extent.width = DrawPass->RenderRegion.Width;
+						Scissor.offset.x = DrawPass->RenderRegion.WidthOffset;
+						Scissor.offset.y = DrawPass->RenderRegion.HeightOffset;
+						vkCmdSetScissor(CB, 0, 1, &Scissor);
+
+						vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeObj);
+						VkDescriptorSet Sets[2] = { VKContentManager->GlobalBuffers_DescSet, *DrawCall.GeneralSet};
+						vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 2, Sets, 0, nullptr);
+						vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VOffset);
+						vkCmdBindIndexBuffer(CB, DrawCall.IBuffer, DrawCall.IOffset, DrawCall.IType);
+						vkCmdDrawIndexed(CB, DrawCall.IndexCount, 1, 0, 0, 0);
+					}
+					SP.IndexedDrawCalls.clear(GFX->JobSys->GetThisThreadIndex());
+				}
+			}
+
 			if (SubPassIndex < DrawPass->Subpass_Count - 1) {
 				vkCmdNextSubpass(CB, VK_SUBPASS_CONTENTS_INLINE);
 			}
@@ -1582,7 +1621,7 @@ namespace Vulkan {
 				if (info.LASTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT || info.LASTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT ||
 					info.NEXTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT || info.NEXTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
 				{
-					Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+					Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 				}
 				else {
 					Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

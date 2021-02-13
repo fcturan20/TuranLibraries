@@ -55,7 +55,7 @@ namespace Vulkan {
 		{
 		case GFX_API::IMAGE_ACCESS::DEPTHSTENCIL_READONLY:
 			TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-			TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+			TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			return;
 		case GFX_API::IMAGE_ACCESS::DEPTHSTENCIL_READWRITE:
 			TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
@@ -142,7 +142,7 @@ namespace Vulkan {
 	VK_TPBarrierDatas::VK_TPBarrierDatas() : BufferBarriers(*GFX->JobSys), TextureBarriers(*GFX->JobSys) {
 
 	}
-	VK_SubDrawPass::VK_SubDrawPass() : DrawCalls(*GFX->JobSys) {
+	VK_SubDrawPass::VK_SubDrawPass() : NonIndexedDrawCalls(*GFX->JobSys), IndexedDrawCalls(*GFX->JobSys) {
 
 	}
 

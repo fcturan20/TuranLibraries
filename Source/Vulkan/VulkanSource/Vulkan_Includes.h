@@ -162,5 +162,11 @@ namespace Vulkan {
 	VK_API VkSamplerAddressMode Find_AddressMode_byWRAPPING(GFX_API::TEXTURE_WRAPPING Wrapping);
 	VK_API VkFilter Find_VkFilter_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter);
 	VK_API VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter);
-
+	VK_API VkCullModeFlags Find_CullMode_byGFXCullMode(GFX_API::CULL_MODE mode);
+	VK_API VkPolygonMode Find_PolygonMode_byGFXPolygonMode(GFX_API::POLYGON_MODE mode);
+	VK_API VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(GFX_API::VERTEXLIST_TYPEs type);
+	VK_API VkIndexType Find_IndexType_byGFXDATATYPE(GFX_API::DATA_TYPE datatype);
+	VK_API VkCompareOp Find_CompareOp_byGFXDepthTest(GFX_API::DEPTH_TESTs test);
+	VK_API void Find_DepthMode_byGFXDepthMode(GFX_API::DEPTH_MODEs mode, VkBool32& ShouldTest, VkBool32& ShouldWrite);
+	VK_API VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(GFX_API::DRAWPASS_LOAD load);
 }

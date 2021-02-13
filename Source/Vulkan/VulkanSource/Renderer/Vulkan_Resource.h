@@ -38,6 +38,8 @@ namespace Vulkan {
 	};
 	struct VK_API VK_DEPTHSTENCILSLOT {
 		VK_Texture* RT;
+		GFX_API::DRAWPASS_LOAD LOADSTATE;
+		bool IS_USED_LATER;
 		GFX_API::OPERATION_TYPE DEPTH_OPTYPE;
 		GFX_API::OPERATION_TYPE STENCIL_OPTYPE;
 		vec2 CLEAR_COLOR;
@@ -77,11 +79,17 @@ namespace Vulkan {
 
 		VkVertexInputBindingDescription BindingDesc;	//Currently, only one binding is supported because I didn't understand bindings properly.
 		VkVertexInputAttributeDescription* AttribDescs;
+		VkPrimitiveTopology PrimitiveTopology;
 		unsigned char AttribDesc_Count;
 	};
 	struct VK_API VK_VertexBuffer {
 		unsigned int VERTEX_COUNT;
 		VK_VertexAttribLayout* Layout;
+		MemoryBlock Block;
+	};
+	struct VK_API VK_IndexBuffer {
+		VkIndexType DATATYPE;
+		VkDeviceSize IndexCount = 0;
 		MemoryBlock Block;
 	};
 
@@ -212,15 +220,29 @@ namespace Vulkan {
 		string NAME;
 	};
 
-	struct VK_DrawCall {
-		VK_VertexBuffer* VB;
-		VK_PipelineInstance* MatInst;
+	struct VK_NonIndexedDrawCall {
+		VkBuffer VBuffer;
+		VkDeviceSize VOffset = 0, VertexCount = 0;
+
+		VkPipeline MatTypeObj;
+		VkPipelineLayout MatTypeLayout;
+		VkDescriptorSet *GeneralSet, *PerInstanceSet;
+	};
+	struct VK_IndexedDrawCall {
+		VkBuffer VBuffer, IBuffer;
+		VkDeviceSize VOffset = 0, IOffset = 0, IndexCount = 0;
+		VkIndexType IType;
+
+		VkPipeline MatTypeObj;
+		VkPipelineLayout MatTypeLayout;
+		VkDescriptorSet *GeneralSet, *PerInstanceSet;
 	};
 	struct VK_API VK_SubDrawPass {
 		unsigned char Binding_Index;
 		VK_IRTSLOTSET* SLOTSET;
 		GFX_API::GFXHandle DrawPass;
-		TuranAPI::Threading::TLVector<VK_DrawCall> DrawCalls;
+		TuranAPI::Threading::TLVector<VK_NonIndexedDrawCall> NonIndexedDrawCalls;
+		TuranAPI::Threading::TLVector<VK_IndexedDrawCall> IndexedDrawCalls;
 		VK_SubDrawPass();
 	};
 	struct VK_API VK_DrawPass {

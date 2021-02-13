@@ -72,7 +72,7 @@ namespace GFX_API {
 		* For example: Same attribute ID may have different location/order in another attribute layout
 		* So you should gather your vertex buffer data according to that
 		*/
-		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) = 0;
+		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) = 0;
 		virtual void Delete_VertexAttributeLayout(GFXHandle Layout_ID) = 0;
 
 		virtual TAPIResult Upload_toBuffer(GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) = 0;
@@ -87,7 +87,7 @@ namespace GFX_API {
 			unsigned int MemoryTypeIndex, GFX_API::GFXHandle& VertexBufferHandle) = 0;
 		virtual void Unload_VertexBuffer(GFX_API::GFXHandle BufferHandle) = 0;
 
-		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& IndexBufferHandle) = 0;
+		virtual TAPIResult Create_IndexBuffer(GFX_API::DATA_TYPE DataType, unsigned int IndexCount, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& IndexBufferHandle) = 0;
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) = 0;
 		
 		virtual TAPIResult Create_Texture(const GFX_API::Texture_Description& TEXTURE_ASSET, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& TextureHandle) = 0;

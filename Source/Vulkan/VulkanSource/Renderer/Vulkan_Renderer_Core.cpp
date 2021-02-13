@@ -374,20 +374,12 @@ namespace Vulkan {
 		Desc = {};
 		Desc.format = Find_VkFormat_byTEXTURECHANNELs(Attachment->RT->CHANNELs);
 		Desc.samples = VK_SAMPLE_COUNT_1_BIT;
-		switch (Attachment->LOADSTATE) {
-		case GFX_API::DRAWPASS_LOAD::CLEAR:
-			Desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-			break;
-		case GFX_API::DRAWPASS_LOAD::FULL_OVERWRITE:
-			Desc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			break;
-		case GFX_API::DRAWPASS_LOAD::LOAD:
-			Desc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-			break;
-		}
+		Desc.flags = 0;
+		Desc.loadOp = Find_LoadOp_byGFXLoadOp(Attachment->LOADSTATE);
+		Desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		if (Attachment->IS_USED_LATER) {
 			Desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-			Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+			Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		}
 		else {
 			Desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -417,6 +409,25 @@ namespace Vulkan {
 		Desc.flags = 0;
 	}
 	void Fill_DepthVkAttachmentDescription(VkAttachmentDescription& Desc, const VK_DEPTHSTENCILSLOT* Attachment) {
+		Desc = {};
+		Desc.format = Find_VkFormat_byTEXTURECHANNELs(Attachment->RT->CHANNELs);
+		Desc.samples = VK_SAMPLE_COUNT_1_BIT;
+		Desc.flags = 0;
+		Desc.loadOp = Find_LoadOp_byGFXLoadOp(Attachment->LOADSTATE);
+		Desc.stencilLoadOp = Find_LoadOp_byGFXLoadOp(Attachment->LOADSTATE);
+		Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+		if (Attachment->IS_USED_LATER) {
+			Desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		}
+		else {
+			Desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		}
+		Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		/*	This is possible only if VkSeperateDepthLayouts feature is active
+		* Current state of GFX API doesn't support features, so ignore these for now!
 		if (Attachment->RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
 			if (Attachment->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
 				Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
@@ -442,7 +453,7 @@ namespace Vulkan {
 					Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
 				}
 			}
-		}
+		}*/
 	}
 	void Fill_SubpassStructs(VK_IRTSLOTSET* slotset, VkSubpassDescription& descs, VkSubpassDependency& dependencies) {
 		VkAttachmentReference* COLOR_ATTACHMENTs = new VkAttachmentReference[slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT];
@@ -465,15 +476,13 @@ namespace Vulkan {
 		//Depth Stencil Attachment
 		if(slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
 			DS_Attach = new VkAttachmentReference;
-			DS_Attach->attachment = 0;
+			DS_Attach->attachment = slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT;
 			if (slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
 				switch (slotset->DEPTH_OPTYPE) {
 				case GFX_API::OPERATION_TYPE::READ_ONLY:
-					DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-					break;
 				case GFX_API::OPERATION_TYPE::READ_AND_WRITE:
 				case GFX_API::OPERATION_TYPE::WRITE_ONLY:
-					DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+					DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 					break;
 				case GFX_API::OPERATION_TYPE::UNUSED:
 					DS_Attach->attachment = VK_ATTACHMENT_UNUSED;
@@ -551,8 +560,8 @@ namespace Vulkan {
 			}
 		}
 		if (SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
-			if (SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::UNUSED || SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->STENCIL_OPTYPE == GFX_API::OPERATION_TYPE::UNUSED) {
-				LOG_ERROR_TAPI("Create_DrawPass() has failed because you can't give a unused Depth or Stencil RT Slot to the Draw Pass! You either don't give it, or use it");
+			if (SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::UNUSED) {
+				LOG_ERROR_TAPI("Create_DrawPass() has failed because you can't give a unused Depth RT Slot to the Draw Pass! You either don't give it, or use it");
 				return TAPI_INVALIDARGUMENT;
 			}
 		}
@@ -619,6 +628,11 @@ namespace Vulkan {
 				VkAttachmentDescription Attachmentdesc = {};
 				Fill_ColorVkAttachmentDescription(Attachmentdesc, &VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[i]);
 				AttachmentDescs.push_back(Attachmentdesc);
+			}
+			if (VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
+				VkAttachmentDescription DepthDesc;
+				Fill_DepthVkAttachmentDescription(DepthDesc, VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT);
+				AttachmentDescs.push_back(DepthDesc);
 			}
 
 
@@ -1410,13 +1424,34 @@ namespace Vulkan {
 		//Current frame has finished, so every call after this call affects to the next frame
 		Set_NextFrameIndex();
 	}
+	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
 	void Renderer::Render_DrawCall(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) {
 		LOG_NOTCODED_TAPI("Index buffer creation is not coded, so rendering it is not coded either!", false);
 		VK_SubDrawPass* SP = GFXHandleConverter(VK_SubDrawPass*, SubDrawPass_ID);
-		VK_DrawCall call;
-		call.MatInst = GFXHandleConverter(VK_PipelineInstance*, MaterialInstance_ID);
-		call.VB = GFXHandleConverter(VK_VertexBuffer*, VertexBuffer_ID);
-		SP->DrawCalls.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		if (IndexBuffer_ID) {
+			VK_IndexedDrawCall call;
+			FindBufferOBJ_byBufType(VertexBuffer_ID, GFX_API::BUFFER_TYPE::VERTEX, call.VBuffer, call.VOffset);
+			FindBufferOBJ_byBufType(IndexBuffer_ID, GFX_API::BUFFER_TYPE::INDEX, call.IBuffer, call.IOffset);
+			call.IType = GFXHandleConverter(VK_IndexBuffer*, IndexBuffer_ID)->DATATYPE;
+			call.IndexCount = GFXHandleConverter(VK_IndexBuffer*, IndexBuffer_ID)->IndexCount;
+			VK_PipelineInstance* PI = GFXHandleConverter(VK_PipelineInstance*, MaterialInstance_ID);
+			call.MatTypeObj = PI->PROGRAM->PipelineObject;
+			call.MatTypeLayout = PI->PROGRAM->PipelineLayout;
+			call.GeneralSet = &PI->PROGRAM->General_DescSet.Set;
+			call.PerInstanceSet = &PI->DescSet.Set;
+			SP->IndexedDrawCalls.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		else {
+			VK_NonIndexedDrawCall call;
+			FindBufferOBJ_byBufType(VertexBuffer_ID, GFX_API::BUFFER_TYPE::VERTEX, call.VBuffer, call.VOffset);
+			call.VertexCount = static_cast<VkDeviceSize>(GFXHandleConverter(VK_VertexBuffer*, VertexBuffer_ID)->VERTEX_COUNT);
+			VK_PipelineInstance* PI = GFXHandleConverter(VK_PipelineInstance*, MaterialInstance_ID);
+			call.MatTypeObj = PI->PROGRAM->PipelineObject;
+			call.MatTypeLayout = PI->PROGRAM->PipelineLayout;
+			call.GeneralSet = &PI->PROGRAM->General_DescSet.Set;
+			call.PerInstanceSet = &PI->DescSet.Set;
+			SP->NonIndexedDrawCalls.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
 	}
 	void Renderer::SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle) {
 		VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, WindowPassHandle);
@@ -1446,6 +1481,13 @@ namespace Vulkan {
 				MemoryBlock* Staging = GFXHandleConverter(MemoryBlock*, Handle);
 				TargetBuffer = VKGPU->ALLOCs[Staging->MemAllocIndex].Buffer;
 				TargetOffset += Staging->Offset;
+			}
+			break;
+		case GFX_API::BUFFER_TYPE::INDEX:
+			{
+				VK_IndexBuffer* IB = GFXHandleConverter(VK_IndexBuffer*, Handle);
+				TargetBuffer = VKGPU->ALLOCs[IB->Block.MemAllocIndex].Buffer;
+				TargetOffset += IB->Block.Offset;
 			}
 			break;
 		default:

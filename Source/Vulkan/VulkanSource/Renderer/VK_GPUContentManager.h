@@ -9,6 +9,7 @@ namespace Vulkan {
 	class VK_API GPU_ContentManager : public GFX_API::GPU_ContentManager {
 	public:
 		TuranAPI::Threading::TLVector<VK_VertexBuffer*> MESHBUFFERs;
+		TuranAPI::Threading::TLVector<VK_IndexBuffer*> INDEXBUFFERs;
 		TuranAPI::Threading::TLVector<VK_Texture*> TEXTUREs;
 		TuranAPI::Threading::TLVector<VK_GlobalBuffer*> GLOBALBUFFERs;
 		TuranAPI::Threading::TLVector<VK_ShaderSource*> SHADERSOURCEs;
@@ -61,7 +62,7 @@ namespace Vulkan {
 			GFX_API::TEXTURE_WRAPPING WRAPPING_HEIGHT, GFX_API::TEXTURE_WRAPPING WRAPPING_DEPTH, GFX_API::GFXHandle& SamplingTypeHandle) override;
 
 		unsigned int Calculate_sizeofVertexLayout(const VK_VertexAttribute* const* ATTRIBUTEs, unsigned int Count);
-		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::GFXHandle& Handle) override;
+		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) override;
 		virtual void Delete_VertexAttributeLayout(GFX_API::GFXHandle Layout_ID) override;
 
 		virtual TAPIResult Upload_toBuffer(GFX_API::GFXHandle BufferHandle, GFX_API::BUFFER_TYPE BufferType, const void* DATA, unsigned int DATA_SIZE,
@@ -75,7 +76,7 @@ namespace Vulkan {
 		virtual void Unload_VertexBuffer(GFX_API::GFXHandle BufferHandle) override;
 
 
-		virtual TAPIResult Create_IndexBuffer(unsigned int DataSize, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& IndexBufferHandle) override;
+		virtual TAPIResult Create_IndexBuffer(GFX_API::DATA_TYPE DataType, unsigned int IndexCount, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& IndexBufferHandle) override;
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) override;
 
 

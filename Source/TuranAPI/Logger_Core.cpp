@@ -10,22 +10,15 @@ Logger::Logger(const char* LogFolder) : MainLogFile_Path(string(LogFolder) + "/l
 ErrorLogFile_Path(string(LogFolder) + "/errors.txt"), NotCodedLogFile_Path(string(LogFolder) + "/notcodedpaths.txt")
 {
 #ifdef TURAN_DEBUGGING
-	std::cout << "Logger constructor started!\n";
 	SELF = this;
 	TuranAPI::FileSystem::Write_TextFile("TuranAPI: Logging Started!", MainLogFile_Path.c_str(), false);
 	TuranAPI::FileSystem::Write_TextFile("TuranAPI: Logging Started!", WarningLogFile_Path.c_str(), false);
 	TuranAPI::FileSystem::Write_TextFile("TuranAPI: Logging Started!", ErrorLogFile_Path.c_str(), false);
 	TuranAPI::FileSystem::Write_TextFile("TuranAPI: Logging Started!", NotCodedLogFile_Path.c_str(), false);
-	std::cout << "Logger constructor finished!\n";
 #else
 #endif
 }
 Logger::~Logger() {
-#ifdef TURAN_DEBUGGING
-	std::cout << "Logger destructor has started!\n";
-	std::cout << "Logger destructor has finished!\n";
-#else
-#endif
 }
 
 

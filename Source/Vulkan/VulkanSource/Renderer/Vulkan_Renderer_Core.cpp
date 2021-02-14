@@ -408,53 +408,6 @@ namespace Vulkan {
 		}
 		Desc.flags = 0;
 	}
-	void Fill_DepthVkAttachmentDescription(VkAttachmentDescription& Desc, const VK_DEPTHSTENCILSLOT* Attachment) {
-		Desc = {};
-		Desc.format = Find_VkFormat_byTEXTURECHANNELs(Attachment->RT->CHANNELs);
-		Desc.samples = VK_SAMPLE_COUNT_1_BIT;
-		Desc.flags = 0;
-		Desc.loadOp = Find_LoadOp_byGFXLoadOp(Attachment->LOADSTATE);
-		Desc.stencilLoadOp = Find_LoadOp_byGFXLoadOp(Attachment->LOADSTATE);
-		Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		if (Attachment->IS_USED_LATER) {
-			Desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-			Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		}
-		else {
-			Desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		}
-		Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		/*	This is possible only if VkSeperateDepthLayouts feature is active
-		* Current state of GFX API doesn't support features, so ignore these for now!
-		if (Attachment->RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
-			if (Attachment->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
-				Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-			}
-			else {
-				Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-			}
-		}
-		else if (Attachment->RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
-			if (Attachment->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
-				if (Attachment->STENCIL_OPTYPE != GFX_API::OPERATION_TYPE::READ_ONLY) {
-					Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
-				}
-				else {
-					Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-				}
-			}
-			else{
-				if (Attachment->STENCIL_OPTYPE != GFX_API::OPERATION_TYPE::READ_ONLY) {
-					Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-				}
-				else {
-					Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-				}
-			}
-		}*/
-	}
 	void Fill_SubpassStructs(VK_IRTSLOTSET* slotset, VkSubpassDescription& descs, VkSubpassDependency& dependencies) {
 		VkAttachmentReference* COLOR_ATTACHMENTs = new VkAttachmentReference[slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT];
 		VkAttachmentReference* DS_Attach = nullptr;
@@ -475,58 +428,10 @@ namespace Vulkan {
 
 		//Depth Stencil Attachment
 		if(slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
+			VK_DEPTHSTENCILSLOT* depthslot = slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT;
 			DS_Attach = new VkAttachmentReference;
-			DS_Attach->attachment = slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT;
-			if (slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
-				switch (slotset->DEPTH_OPTYPE) {
-				case GFX_API::OPERATION_TYPE::READ_ONLY:
-				case GFX_API::OPERATION_TYPE::READ_AND_WRITE:
-				case GFX_API::OPERATION_TYPE::WRITE_ONLY:
-					DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-					break;
-				case GFX_API::OPERATION_TYPE::UNUSED:
-					DS_Attach->attachment = VK_ATTACHMENT_UNUSED;
-					DS_Attach->layout = VK_IMAGE_LAYOUT_UNDEFINED;
-					break;
-				default:
-					LOG_NOTCODED_TAPI("VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthBuffer!", true);
-				}
-			}
-			else if(slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
-				switch (slotset->STENCIL_OPTYPE) {
-				case GFX_API::OPERATION_TYPE::READ_ONLY:
-					if (slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::UNUSED || slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
-						DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-					}
-					else if (slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_AND_WRITE || slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::WRITE_ONLY) {
-						DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-					}
-					break;
-				case GFX_API::OPERATION_TYPE::READ_AND_WRITE:
-				case GFX_API::OPERATION_TYPE::WRITE_ONLY:
-					if (slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::UNUSED || slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
-						DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
-					}
-					else if (slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_AND_WRITE || slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::WRITE_ONLY) {
-						DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-					}
-					break;
-				case GFX_API::OPERATION_TYPE::UNUSED:
-					if (slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::UNUSED) {
-						DS_Attach->attachment = VK_ATTACHMENT_UNUSED;
-						DS_Attach->layout = VK_IMAGE_LAYOUT_UNDEFINED;
-					}
-					else if (slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_AND_WRITE || slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::WRITE_ONLY) {
-						DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-					}
-					else if(slotset->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY){
-						DS_Attach->layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-					}
-					break;
-				default:
-					LOG_NOTCODED_TAPI("VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthSTENCILBuffer!", true);
-				}
-			}
+			VKGPU->Fill_DepthAttachmentReference(*DS_Attach, slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT, 
+				depthslot->RT->CHANNELs, slotset->DEPTH_OPTYPE, slotset->STENCIL_OPTYPE);
 		}
 
 		descs = {};
@@ -631,7 +536,7 @@ namespace Vulkan {
 			}
 			if (VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
 				VkAttachmentDescription DepthDesc;
-				Fill_DepthVkAttachmentDescription(DepthDesc, VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT);
+				VKGPU->Fill_DepthAttachmentDescription(DepthDesc, VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT);
 				AttachmentDescs.push_back(DepthDesc);
 			}
 

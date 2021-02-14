@@ -87,7 +87,7 @@ namespace Vulkan {
 		App_Info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 		App_Info.pEngineName = "GFX API";
 		App_Info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		App_Info.apiVersion = VK_API_VERSION_1_0;
+		App_Info.apiVersion = VK_API_VERSION_1_2;
 		VK_States.Application_Info = App_Info;
 
 		//CHECK SUPPORTED EXTENSIONs
@@ -99,18 +99,13 @@ namespace Vulkan {
 		vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, SupportedExtensions.data());
 		for (unsigned int i = 0; i < extension_count; i++) {
 			VK_States.Supported_InstanceExtensionList.push_back(SupportedExtensions[i]);
-			std::cout << "Supported Extension: " << SupportedExtensions[i].extensionName << std::endl;
 		}
-		std::cout << "Supported Extension Count: " << extension_count << std::endl;
-		VK_States.Is_RequiredInstanceExtensions_Supported();
+		VK_States.Chech_InstanceExtensions();
 
 		//CHECK SUPPORTED LAYERS
 		vkEnumerateInstanceLayerProperties(&VK_States.Supported_LayerNumber, nullptr);
 		VK_States.Supported_LayerList = new VkLayerProperties[VK_States.Supported_LayerNumber];
 		vkEnumerateInstanceLayerProperties(&VK_States.Supported_LayerNumber, VK_States.Supported_LayerList);
-		for (unsigned int i = 0; i < VK_States.Supported_LayerNumber; i++) {
-			std::cout << VK_States.Supported_LayerList[i].layerName << " layer is supported!\n";
-		}
 
 		//INSTANCE CREATION INFO
 		VkInstanceCreateInfo InstCreation_Info = {};
@@ -118,13 +113,8 @@ namespace Vulkan {
 		InstCreation_Info.pApplicationInfo = &App_Info;
 
 		//Extensions
-		InstCreation_Info.enabledExtensionCount = VK_States.Required_InstanceExtensionNames.size();
-		vector<const char*> ExtensionNames;
-		for (unsigned int i = 0; i < VK_States.Required_InstanceExtensionNames.size(); i++) {
-			ExtensionNames.push_back(VK_States.Required_InstanceExtensionNames[i]);
-			std::cout << "Added an Extension: " << VK_States.Required_InstanceExtensionNames[i] << std::endl;
-		}
-		InstCreation_Info.ppEnabledExtensionNames = ExtensionNames.data();
+		InstCreation_Info.enabledExtensionCount = VK_States.Active_InstanceExtensionNames.size();
+		InstCreation_Info.ppEnabledExtensionNames = VK_States.Active_InstanceExtensionNames.data();
 
 		//Validation Layers
 #ifdef VULKAN_DEBUGGING
@@ -364,11 +354,11 @@ namespace Vulkan {
 			Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
 			Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
 			Logical_Device_CreationInfo.pEnabledFeatures = &Features;
-			VK_States.Is_RequiredDeviceExtensions_Supported(VKGPU);
+			VK_States.Check_DeviceExtensions(VKGPU);
 
 
-			Logical_Device_CreationInfo.enabledExtensionCount = VKGPU->Required_DeviceExtensionNames->size();
-			Logical_Device_CreationInfo.ppEnabledExtensionNames = VKGPU->Required_DeviceExtensionNames->data();
+			Logical_Device_CreationInfo.enabledExtensionCount = VKGPU->Active_DeviceExtensions.size();
+			Logical_Device_CreationInfo.ppEnabledExtensionNames = VKGPU->Active_DeviceExtensions.data();
 
 			Logical_Device_CreationInfo.enabledLayerCount = 0;
 

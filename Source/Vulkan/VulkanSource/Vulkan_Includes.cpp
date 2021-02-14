@@ -1,4 +1,5 @@
 #include "Vulkan_Includes.h"
+#include "Renderer/Vulkan_Resource.h"
 #define VKGPU ((Vulkan::GPU*)GFX->GPU_TO_RENDER)
 
 namespace Vulkan {
@@ -75,70 +76,209 @@ namespace Vulkan {
 		}
 		return NameList;
 	}
+
+
+	void GPU::Fill_DepthAttachmentReference(VkAttachmentReference& Ref, unsigned int index, GFX_API::TEXTURE_CHANNELs channels, GFX_API::OPERATION_TYPE DEPTHOPTYPE, GFX_API::OPERATION_TYPE STENCILOPTYPE) {
+		Ref.attachment = index;
+		if (SeperatedDepthStencilLayouts) {
+			if (channels == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
+				switch (DEPTHOPTYPE) {
+				case GFX_API::OPERATION_TYPE::READ_ONLY:
+					Ref.layout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+				case GFX_API::OPERATION_TYPE::READ_AND_WRITE:
+				case GFX_API::OPERATION_TYPE::WRITE_ONLY:
+					Ref.layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+					break;
+				case GFX_API::OPERATION_TYPE::UNUSED:
+					Ref.attachment = VK_ATTACHMENT_UNUSED;
+					Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+					break;
+				default:
+					LOG_NOTCODED_TAPI("VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthBuffer!", true);
+				}
+			}
+			else if (channels == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
+				switch (STENCILOPTYPE) {
+				case GFX_API::OPERATION_TYPE::READ_ONLY:
+					if (DEPTHOPTYPE == GFX_API::OPERATION_TYPE::UNUSED || DEPTHOPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
+						Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+					}
+					else if (DEPTHOPTYPE == GFX_API::OPERATION_TYPE::READ_AND_WRITE || DEPTHOPTYPE == GFX_API::OPERATION_TYPE::WRITE_ONLY) {
+						Ref.layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
+					}
+					break;
+				case GFX_API::OPERATION_TYPE::READ_AND_WRITE:
+				case GFX_API::OPERATION_TYPE::WRITE_ONLY:
+					if (DEPTHOPTYPE == GFX_API::OPERATION_TYPE::UNUSED || DEPTHOPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
+						Ref.layout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
+					}
+					else if (DEPTHOPTYPE == GFX_API::OPERATION_TYPE::READ_AND_WRITE || DEPTHOPTYPE == GFX_API::OPERATION_TYPE::WRITE_ONLY) {
+						Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+					}
+					break;
+				case GFX_API::OPERATION_TYPE::UNUSED:
+					if (DEPTHOPTYPE == GFX_API::OPERATION_TYPE::UNUSED) {
+						Ref.attachment = VK_ATTACHMENT_UNUSED;
+						Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+					}
+					else if (DEPTHOPTYPE == GFX_API::OPERATION_TYPE::READ_AND_WRITE || DEPTHOPTYPE == GFX_API::OPERATION_TYPE::WRITE_ONLY) {
+						Ref.layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
+					}
+					else if (DEPTHOPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
+						Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+					}
+					break;
+				default:
+					LOG_NOTCODED_TAPI("VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthSTENCILBuffer!", true);
+				}
+			}
+		}
+		else {
+			if (DEPTHOPTYPE == GFX_API::OPERATION_TYPE::UNUSED) {
+				Ref.attachment = VK_ATTACHMENT_UNUSED;
+				Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+			}
+			else {
+				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			}
+		}
+	}
+	void GPU::Fill_DepthAttachmentDescription(VkAttachmentDescription& Desc, VK_DEPTHSTENCILSLOT* DepthSlot) {
+		Desc = {};
+		Desc.format = Find_VkFormat_byTEXTURECHANNELs(DepthSlot->RT->CHANNELs);
+		Desc.samples = VK_SAMPLE_COUNT_1_BIT;
+		Desc.flags = 0;
+		Desc.loadOp = Find_LoadOp_byGFXLoadOp(DepthSlot->LOADSTATE);
+		Desc.stencilLoadOp = Find_LoadOp_byGFXLoadOp(DepthSlot->LOADSTATE);
+		if (DepthSlot->IS_USED_LATER) {
+			Desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+		}
+		else {
+			Desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		}
+
+		if (SeperatedDepthStencilLayouts) {
+			if (DepthSlot->RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
+				if (DepthSlot->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
+					Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+					Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+				}
+				else {
+					Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+					Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+				}
+			}
+			else if (DepthSlot->RT->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
+				if (DepthSlot->DEPTH_OPTYPE == GFX_API::OPERATION_TYPE::READ_ONLY) {
+					if (DepthSlot->STENCIL_OPTYPE != GFX_API::OPERATION_TYPE::READ_ONLY) {
+						Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
+						Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
+					}
+					else {
+						Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+						Desc.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+					}
+				}
+				else {
+					if (DepthSlot->STENCIL_OPTYPE != GFX_API::OPERATION_TYPE::READ_ONLY) {
+						Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+						Desc.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+					}
+					else {
+						Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
+						Desc.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
+					}
+				}
+			}
+		}
+		else {
+			Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		}
+	}
+
 	
-	
-	void Vulkan_States::Is_RequiredInstanceExtensions_Supported() {
-		//DEFINE REQUIRED EXTENSIONS
+	bool IsExtensionSupported(const char* ExtensionName, vector<VkExtensionProperties> SupportedExtensions) {
+		bool Is_Found = false;
+		for (unsigned int supported_extension_index = 0; supported_extension_index < SupportedExtensions.size(); supported_extension_index++) {
+			if (strcmp(ExtensionName, SupportedExtensions[supported_extension_index].extensionName)) {
+				return true;
+			}
+		}
+		LOG_WARNING_TAPI("Extension: " + std::string(ExtensionName) + " is not supported by the GPU!");
+		return false;
+	}
+	void Vulkan_States::Chech_InstanceExtensions() {
 		uint32_t glfwExtensionCount = 0;
 		const char** glfwExtensions;
 		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 		for (unsigned int i = 0; i < glfwExtensionCount; i++) {
-			Required_InstanceExtensionNames.push_back(glfwExtensions[i]);
-			std::cout << glfwExtensions[i] << " GLFW extension is required!\n";
+			if (!IsExtensionSupported(glfwExtensions[i], Supported_InstanceExtensionList)) {
+				LOG_NOTCODED_TAPI("Your vulkan instance doesn't support extensions that're required by GLFW. This situation is not tested, so report your device to the author!", true);
+				return;
+			}
+			Active_InstanceExtensionNames.push_back(glfwExtensions[i]);
 		}
 		
+
+		if (IsExtensionSupported(VK_KHR_SURFACE_EXTENSION_NAME, Supported_InstanceExtensionList)) {
+			isActive_SurfaceKHR = true;
+			Active_InstanceExtensionNames.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+		}
+		else {
+			LOG_WARNING_TAPI("Your Vulkan instance doesn't support to display a window, so you shouldn't use any window related functionality such as: GFXRENDERER->Create_WindowPass, GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
+		}
+		
+
 		#ifdef VULKAN_DEBUGGING
-			Required_InstanceExtensionNames.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-			Required_InstanceExtensionNames.push_back(VK_KHR_GET_DISPLAY_PROPERTIES_2_EXTENSION_NAME);
-			Required_InstanceExtensionNames.push_back(VK_KHR_DISPLAY_EXTENSION_NAME);
-			Required_InstanceExtensionNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-			Required_InstanceExtensionNames.push_back(VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
+		if (IsExtensionSupported(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, Supported_InstanceExtensionList)) {
+			Active_InstanceExtensionNames.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+		}
 		#endif
 
-		//CHECK IF ALL OF THE REQUIRED EXTENSIONS SUPPORTED
-		for (unsigned int i = 0; i < Required_InstanceExtensionNames.size(); i++) {
-			bool Is_Found = false;
-			for (unsigned int supported_extension_index = 0; supported_extension_index < Supported_InstanceExtensionList.size(); supported_extension_index++) {
-				if (strcmp(Required_InstanceExtensionNames[i], Supported_InstanceExtensionList[supported_extension_index].extensionName)) {
-					Is_Found = true;
-					break;
-				}
-			}
-			if (Is_Found == false) {
-				LOG_CRASHING_TAPI("A required extension isn't supported!");
+
+		//Check isActive_GetPhysicalDeviceProperties2KHR
+		if ((Application_Info.apiVersion == VK_API_VERSION_1_0 && 
+			IsExtensionSupported(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, Supported_InstanceExtensionList)
+			) || Application_Info.apiVersion != VK_API_VERSION_1_0){
+			isActive_GetPhysicalDeviceProperties2KHR = true;
+			if (Application_Info.apiVersion == VK_API_VERSION_1_0) {
+				Active_InstanceExtensionNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 			}
 		}
-		LOG_STATUS_TAPI("All of the Vulkan Instance extensions are checked!");
 	}
 
-	void Vulkan_States::Is_RequiredDeviceExtensions_Supported(GPU* Vulkan_GPU) {
-		Vulkan_GPU->Required_DeviceExtensionNames = new vector<const char*>;
+	void Vulkan_States::Check_DeviceExtensions(GPU* Vulkan_GPU) {
 		//GET SUPPORTED DEVICE EXTENSIONS
 		uint32_t extensionCount;
 		vkEnumerateDeviceExtensionProperties(Vulkan_GPU->Physical_Device, nullptr, &extensionCount, nullptr);
 		Vulkan_GPU->Supported_DeviceExtensions.resize(extensionCount);
 		vkEnumerateDeviceExtensionProperties(Vulkan_GPU->Physical_Device, nullptr, &extensionCount, Vulkan_GPU->Supported_DeviceExtensions.data());
 
-		Vulkan_GPU->Required_DeviceExtensionNames->push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-		Vulkan_GPU->Required_DeviceExtensionNames->push_back(VK_KHR_STORAGE_BUFFER_STORAGE_CLASS_EXTENSION_NAME);
-
-		LOG_STATUS_TAPI("Required Extensions for Vulkan API is set!");
-
-		//CHECK IF ALL OF THE REQUIRED EXTENSIONS SUPPORTED
-		for (unsigned int i = 0; i < Vulkan_GPU->Required_DeviceExtensionNames->size(); i++) {
-			bool Is_Found = false;
-			for (unsigned int supported_extension_index = 0; supported_extension_index < Vulkan_GPU->Supported_DeviceExtensions.size(); supported_extension_index++) {
-				//std::cout << "Checking against: " << Vulkan_GPU->Supported_DeviceExtensions[supported_extension_index].extensionName << std::endl;
-				if (strcmp((*Vulkan_GPU->Required_DeviceExtensionNames)[i], Vulkan_GPU->Supported_DeviceExtensions[supported_extension_index].extensionName)) {
-					Is_Found = true;
-					break;
+		//Check Seperate_DepthStencil
+		if (Application_Info.apiVersion == VK_API_VERSION_1_0 || Application_Info.apiVersion == VK_API_VERSION_1_1) {
+			if(IsExtensionSupported(VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME, Vulkan_GPU->Supported_DeviceExtensions)){
+				Vulkan_GPU->SeperatedDepthStencilLayouts = true;
+				Vulkan_GPU->Active_DeviceExtensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+				if (Application_Info.apiVersion == VK_API_VERSION_1_0) {
+					Vulkan_GPU->Active_DeviceExtensions.push_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
+					Vulkan_GPU->Active_DeviceExtensions.push_back(VK_KHR_MAINTENANCE2_EXTENSION_NAME);
 				}
 			}
-			if (Is_Found == false) {
-				LOG_CRASHING_TAPI((*Vulkan_GPU->Required_DeviceExtensionNames)[i]);
-			}
 		}
-		LOG_STATUS_TAPI("Checked Required Device Extensions for the GPU!");
+		else {
+			Vulkan_GPU->SeperatedDepthStencilLayouts = true;
+		}
+
+		if (!IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME, Vulkan_GPU->Supported_DeviceExtensions)) {
+			LOG_WARNING_TAPI("Current GPU doesn't support to display a swapchain, so you shouldn't use any window related functionality such as: GFXRENDERER->Create_WindowPass, GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
+			Vulkan_GPU->SwapchainDisplay = false;
+		}
+		else {
+			Vulkan_GPU->Active_DeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+		}
 	}
 	VK_MemoryAllocation::VK_MemoryAllocation() : Allocated_Blocks(*GFX->JobSys) {
 
@@ -205,6 +345,11 @@ namespace Vulkan {
 			return nullptr;
 		}
 		return func;
+	}
+
+
+	void Fill_DepthAttachmentReference(VkAttachmentReference& Ref, unsigned int index, VK_DEPTHSTENCILSLOT* DepthSlot) {
+
 	}
 	
 

@@ -22,10 +22,11 @@ namespace TuranEditor {
 			if (GFX->GetTextureTypeLimits(RGBA8UB_IM.Properties, RGBA8UB_IM.USAGE, 0, MAXWIDTH, MAXHEIGHT, MAXDEPTH, MAXMIPLEVEL)) {
 				GFX->GetSupportedAllocations_ofTexture(RGBA8UB_IM, 0, BitSet);
 			}
-			std::cout << BitSet;
+
 		}
 		GPUs[0].MEMTYPEs[0].AllocationSize = ALLOCSIZE;
 		GPUs[0].MEMTYPEs[3].AllocationSize = ALLOCSIZE;
+
 
 
 

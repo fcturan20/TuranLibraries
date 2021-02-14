@@ -70,6 +70,8 @@ namespace Vulkan {
 		VK_MemoryAllocation(const VK_MemoryAllocation& copyALLOC);
 	};
 
+	//Forward declarations for struct that will be used in Vulkan Versioning/Extension system
+	struct VK_API VK_DEPTHSTENCILSLOT;
 	struct VK_API GPU {
 		VkPhysicalDevice Physical_Device = {};
 		VkPhysicalDeviceProperties Device_Properties = {};
@@ -80,7 +82,7 @@ namespace Vulkan {
 		unsigned int GRAPHICS_QUEUEIndex = 0;
 		VkDevice Logical_Device = {};
 		vector<VkExtensionProperties> Supported_DeviceExtensions;
-		vector<const char*>* Required_DeviceExtensionNames;
+		vector<const char*> Active_DeviceExtensions;
 
 		vector<VK_MemoryAllocation> ALLOCs;
 		uint32_t* AllQueueFamilies;
@@ -93,6 +95,13 @@ namespace Vulkan {
 		//Also if flag doesn't need anything (probably Barrier TP only), returns nullptr
 		VK_QUEUE* Find_BestQueue(const VK_QUEUEFLAG& Branch);
 		bool DoesQueue_Support(const VK_QUEUE* QUEUE, const VK_QUEUEFLAG& FLAG);
+
+
+		//Extension Related Functions
+		bool SeperatedDepthStencilLayouts = false, SwapchainDisplay = true;
+		void Fill_DepthAttachmentReference(VkAttachmentReference& Ref, unsigned int index, 
+			GFX_API::TEXTURE_CHANNELs channels, GFX_API::OPERATION_TYPE DEPTHOPTYPE, GFX_API::OPERATION_TYPE STENCILOPTYPE);
+		void Fill_DepthAttachmentDescription(VkAttachmentDescription& Desc, VK_DEPTHSTENCILSLOT* DepthSlot);
 	};
 
 	struct VK_API MONITOR {
@@ -124,7 +133,7 @@ namespace Vulkan {
 		VkInstance Vulkan_Instance;
 		VkApplicationInfo Application_Info;
 		vector<VkExtensionProperties> Supported_InstanceExtensionList;
-		vector<const char*> Required_InstanceExtensionNames;
+		vector<const char*> Active_InstanceExtensionNames;
 		GPU* GPU_TO_RENDER;
 
 		VkLayerProperties* Supported_LayerList;
@@ -137,9 +146,9 @@ namespace Vulkan {
 		//Required Extensions are defined here
 		//Check if Required Extension Names are supported!
 		//Returns true if all of the required extensions are supported!
-		void Is_RequiredInstanceExtensions_Supported();
+		void Chech_InstanceExtensions();
 		//Same for Device
-		void Is_RequiredDeviceExtensions_Supported(GPU* Vulkan_GPU);
+		void Check_DeviceExtensions(GPU* Vulkan_GPU);
 
 		static VKAPI_ATTR VkBool32 VKAPI_CALL VK_DebugCallback(
 			VkDebugUtilsMessageSeverityFlagBitsEXT Message_Severity,
@@ -150,6 +159,9 @@ namespace Vulkan {
 
 		PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT();
 		PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT();
+
+		//Instance Extension Related
+		bool isActive_SurfaceKHR = false, isActive_GetPhysicalDeviceProperties2KHR = false;
 	};
 
 #define GFXHandleConverter(ConvertType, Handle) static_cast<ConvertType>((void*)Handle)

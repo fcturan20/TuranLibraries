@@ -77,6 +77,37 @@ namespace GFX_API {
 		CULL_FRONT
 	};
 
+	enum class STENCIL_COMPARE : unsigned char {
+		OFF = 0,
+		NEVER_PASS,
+		LESS_PASS,
+		LESS_OR_EQUAL_PASS,
+		EQUAL_PASS,
+		NOTEQUAL_PASS,
+		GREATER_OR_EQUAL_PASS,
+		GREATER_PASS,
+		ALWAYS_PASS,
+	};
+
+	enum class STENCIL_OP : unsigned char{
+		DONT_CHANGE = 0,
+		SET_ZERO = 1,
+		CHANGE = 2,
+		CLAMPED_INCREMENT,
+		WRAPPED_INCREMENT,
+		CLAMPED_DECREMENT,
+		WRAPPED_DECREMENT,
+		BITWISE_INVERT
+	};
+	//Default initialization is set to disable stencil test
+	//I suggest you to set all variables instead of some of them
+	//Otherwise it may behave like stencil is off
+	struct STENCIL_SETTINGS {
+		STENCIL_COMPARE CompareOperation = STENCIL_COMPARE::OFF;
+		STENCIL_OP StencilFailed = STENCIL_OP::DONT_CHANGE, DepthFailed = STENCIL_OP::DONT_CHANGE, DepthSuccess = STENCIL_OP::DONT_CHANGE;
+		unsigned int STENCILCOMPAREMASK = 0xFF, STENCILWRITEMASK = 0x00, STENCILVALUE = 255;
+	};
+
 	enum class POLYGON_MODE : unsigned char {
 		FILL,
 		LINE,
@@ -309,8 +340,7 @@ namespace GFX_API {
 		unsigned int WIDTH, HEIGHT;
 		TEXTUREUSAGEFLAG USAGE;
 	};
-
-
+	
 
 
 	struct GFXAPI MemoryType {

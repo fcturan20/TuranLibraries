@@ -169,7 +169,7 @@ namespace Vulkan {
 	VK_API VkFormat Find_VkFormat_byDataType(GFX_API::DATA_TYPE datatype);
 	VK_API VkFormat Find_VkFormat_byTEXTURECHANNELs(GFX_API::TEXTURE_CHANNELs channels);
 	VK_API VkShaderStageFlags Find_VkShaderStages(GFX_API::SHADERSTAGEs_FLAG flag);
-	VkPipelineStageFlags Find_VkPipelineStages(GFX_API::SHADERSTAGEs_FLAG flag);
+	VK_API VkPipelineStageFlags Find_VkPipelineStages(GFX_API::SHADERSTAGEs_FLAG flag);
 	VK_API VkDescriptorType Find_VkDescType_byMATDATATYPE(GFX_API::MATERIALDATA_TYPE TYPE);
 	VK_API VkSamplerAddressMode Find_AddressMode_byWRAPPING(GFX_API::TEXTURE_WRAPPING Wrapping);
 	VK_API VkFilter Find_VkFilter_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter);
@@ -181,4 +181,6 @@ namespace Vulkan {
 	VK_API VkCompareOp Find_CompareOp_byGFXDepthTest(GFX_API::DEPTH_TESTs test);
 	VK_API void Find_DepthMode_byGFXDepthMode(GFX_API::DEPTH_MODEs mode, VkBool32& ShouldTest, VkBool32& ShouldWrite);
 	VK_API VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(GFX_API::DRAWPASS_LOAD load);
+	VK_API VkCompareOp Find_CompareOp_byGFXStencilCompare(GFX_API::STENCIL_COMPARE op);
+	VK_API VkStencilOp Find_StencilOp_byGFXStencilOp(GFX_API::STENCIL_OP op);
 }

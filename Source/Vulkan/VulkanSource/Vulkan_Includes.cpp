@@ -605,7 +605,7 @@ namespace Vulkan {
 		}
 	}
 
-	VK_API VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(GFX_API::DRAWPASS_LOAD load) {
+	VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(GFX_API::DRAWPASS_LOAD load) {
 		switch (load) {
 		case GFX_API::DRAWPASS_LOAD::CLEAR:
 			return VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -616,6 +616,57 @@ namespace Vulkan {
 		default:
 			LOG_NOTCODED_TAPI("Find_LoadOp_byGFXLoadOp() doesn't support this type of load!", true);
 			return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
+		}
+	}
+
+	VkCompareOp Find_CompareOp_byGFXStencilCompare(GFX_API::STENCIL_COMPARE op) {
+		switch (op)
+		{
+		case GFX_API::STENCIL_COMPARE::NEVER_PASS:
+			return VK_COMPARE_OP_NEVER;
+		case GFX_API::STENCIL_COMPARE::LESS_PASS:
+			return VK_COMPARE_OP_LESS;
+		case GFX_API::STENCIL_COMPARE::LESS_OR_EQUAL_PASS:
+			return VK_COMPARE_OP_LESS_OR_EQUAL;
+		case GFX_API::STENCIL_COMPARE::EQUAL_PASS:
+			return VK_COMPARE_OP_EQUAL;
+		case GFX_API::STENCIL_COMPARE::NOTEQUAL_PASS:
+			return VK_COMPARE_OP_NOT_EQUAL;
+		case GFX_API::STENCIL_COMPARE::GREATER_OR_EQUAL_PASS:
+			return VK_COMPARE_OP_GREATER_OR_EQUAL;
+		case GFX_API::STENCIL_COMPARE::GREATER_PASS:
+			return VK_COMPARE_OP_GREATER;
+		case GFX_API::STENCIL_COMPARE::OFF:
+		case GFX_API::STENCIL_COMPARE::ALWAYS_PASS:
+			return VK_COMPARE_OP_ALWAYS;
+		default:
+			LOG_NOTCODED_TAPI("Find_CompareOp_byGFXStencilCompare() doesn't support this type of stencil compare!", true);
+			return VK_COMPARE_OP_ALWAYS;
+		}
+	}
+
+	VkStencilOp Find_StencilOp_byGFXStencilOp(GFX_API::STENCIL_OP op) {
+		switch (op)
+		{
+		case GFX_API::STENCIL_OP::DONT_CHANGE:
+			return VK_STENCIL_OP_KEEP;
+		case GFX_API::STENCIL_OP::SET_ZERO:
+			return VK_STENCIL_OP_ZERO;
+		case GFX_API::STENCIL_OP::CHANGE:
+			return VK_STENCIL_OP_REPLACE;
+		case GFX_API::STENCIL_OP::CLAMPED_INCREMENT:
+			return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+		case GFX_API::STENCIL_OP::WRAPPED_INCREMENT:
+			return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+		case GFX_API::STENCIL_OP::CLAMPED_DECREMENT:
+			return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+		case GFX_API::STENCIL_OP::WRAPPED_DECREMENT:
+			return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+		case GFX_API::STENCIL_OP::BITWISE_INVERT:
+			return VK_STENCIL_OP_INVERT;
+		default:
+			LOG_NOTCODED_TAPI("Find_StencilOp_byGFXStencilOp() doesn't support this type of stencil operation!", true);
+			return VK_STENCIL_OP_KEEP;
 		}
 	}
 }

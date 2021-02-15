@@ -1167,7 +1167,6 @@ namespace Vulkan {
 	}
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
 	void Renderer::Render_DrawCall(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) {
-		LOG_NOTCODED_TAPI("Index buffer creation is not coded, so rendering it is not coded either!", false);
 		VK_SubDrawPass* SP = GFXHandleConverter(VK_SubDrawPass*, SubDrawPass_ID);
 		if (IndexBuffer_ID) {
 			VK_IndexedDrawCall call;
@@ -1317,9 +1316,30 @@ namespace Vulkan {
 
 		
 		VK_ImBarrierInfo im_bi;
-		im_bi.Image = Texture->Image;
-		Find_AccessPattern_byIMAGEACCESS(LAST_ACCESS, im_bi.LASTACCESS, im_bi.LASTLAYOUT);
-		Find_AccessPattern_byIMAGEACCESS(NEXT_ACCESS, im_bi.NEXTACCESS, im_bi.NEXTLAYOUT);
+		im_bi.Barrier.image = Texture->Image;
+		Find_AccessPattern_byIMAGEACCESS(LAST_ACCESS, im_bi.Barrier.srcAccessMask, im_bi.Barrier.oldLayout);
+		Find_AccessPattern_byIMAGEACCESS(NEXT_ACCESS, im_bi.Barrier.dstAccessMask, im_bi.Barrier.newLayout);
+		if (Texture->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
+			im_bi.Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+		else if (Texture->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
+			im_bi.Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		}
+		else {
+			im_bi.Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		}
+		//Mipmap settings, but mipmap is not supported right now
+		LOG_NOTCODED_TAPI("Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!", false);
+		im_bi.Barrier.subresourceRange.baseArrayLayer = 0;
+		im_bi.Barrier.subresourceRange.layerCount = 1;
+		im_bi.Barrier.subresourceRange.levelCount = 1;
+		im_bi.Barrier.subresourceRange.baseMipLevel = 0;
+		im_bi.Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		im_bi.Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		im_bi.Barrier.pNext = nullptr;
+		im_bi.Barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+
+
 		TPDatas->TextureBarriers.push_back(GFX->JobSys->GetThisThreadIndex(), im_bi);
 	}
 

@@ -195,28 +195,7 @@ namespace Vulkan {
 			for (unsigned int i = 0; i < DATAs->TextureBarriers.size(ThreadIndex); i++) {
 				VK_ImBarrierInfo& info = DATAs->TextureBarriers.get(ThreadIndex, i);
 				VkImageMemoryBarrier& Barrier = IMBARRIES[LatestIndex];
-				Barrier.dstAccessMask = info.NEXTACCESS;
-				Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				Barrier.image = info.Image;
-				Barrier.newLayout = info.NEXTLAYOUT;
-				Barrier.oldLayout = info.LASTLAYOUT;
-				Barrier.pNext = nullptr;
-				Barrier.srcAccessMask = info.LASTACCESS;
-				Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				Barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-				if (info.LASTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT || info.LASTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT ||
-					info.NEXTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT || info.NEXTACCESS & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
-				{
-					Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-				}
-				else {
-					Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				}
-				LOG_NOTCODED_TAPI("Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!", false);
-				Barrier.subresourceRange.baseArrayLayer = 0;
-				Barrier.subresourceRange.baseMipLevel = 0;
-				Barrier.subresourceRange.layerCount = 1;
-				Barrier.subresourceRange.levelCount = 1;
+				Barrier = info.Barrier;
 				LatestIndex++;
 			}
 			DATAs->TextureBarriers.clear(ThreadIndex);

@@ -199,13 +199,10 @@ namespace Vulkan {
 	};
 
 	struct VK_ImBarrierInfo {
-		VkImage Image;
-		VkAccessFlags LASTACCESS, NEXTACCESS;
-		VkImageLayout LASTLAYOUT, NEXTLAYOUT;
+		VkImageMemoryBarrier Barrier;
 	};
 	struct VK_BufBarrierInfo {
-		GFX_API::GFXHandle BUFFER;
-		GFX_API::SHADERSTAGEs_FLAG WAITSTAGE, SIGNALSTAGE;
+		VkBufferMemoryBarrier Barrier;
 	};
 	struct VK_TPBarrierDatas {
 		TuranAPI::Threading::TLVector<VK_ImBarrierInfo> TextureBarriers;

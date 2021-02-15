@@ -1268,7 +1268,31 @@ namespace Vulkan {
 			Find_DepthMode_byGFXDepthMode(MATTYPE_ASSET.depthmode, depth_state.depthTestEnable, depth_state.depthWriteEnable);
 			depth_state.flags = 0;
 			depth_state.pNext = nullptr;
-			depth_state.stencilTestEnable = VK_FALSE;
+
+			if (MATTYPE_ASSET.backfacedstencil.CompareOperation != GFX_API::STENCIL_COMPARE::OFF ||
+				MATTYPE_ASSET.frontfacedstencil.CompareOperation != GFX_API::STENCIL_COMPARE::OFF) {
+				depth_state.stencilTestEnable = VK_TRUE;
+
+				depth_state.back.compareMask = MATTYPE_ASSET.backfacedstencil.STENCILCOMPAREMASK;
+				depth_state.back.compareOp = Find_CompareOp_byGFXStencilCompare(MATTYPE_ASSET.backfacedstencil.CompareOperation);
+				depth_state.back.depthFailOp = Find_StencilOp_byGFXStencilOp(MATTYPE_ASSET.backfacedstencil.DepthFailed);
+				depth_state.back.failOp = Find_StencilOp_byGFXStencilOp(MATTYPE_ASSET.backfacedstencil.StencilFailed);
+				depth_state.back.passOp = Find_StencilOp_byGFXStencilOp(MATTYPE_ASSET.backfacedstencil.DepthSuccess);
+				depth_state.back.reference = MATTYPE_ASSET.backfacedstencil.STENCILVALUE;
+				depth_state.back.writeMask = MATTYPE_ASSET.backfacedstencil.STENCILWRITEMASK;
+
+				depth_state.front.compareMask = MATTYPE_ASSET.frontfacedstencil.STENCILCOMPAREMASK;
+				depth_state.front.compareOp = Find_CompareOp_byGFXStencilCompare(MATTYPE_ASSET.frontfacedstencil.CompareOperation);
+				depth_state.front.depthFailOp = Find_StencilOp_byGFXStencilOp(MATTYPE_ASSET.frontfacedstencil.DepthFailed);
+				depth_state.front.failOp = Find_StencilOp_byGFXStencilOp(MATTYPE_ASSET.frontfacedstencil.StencilFailed);
+				depth_state.front.passOp = Find_StencilOp_byGFXStencilOp(MATTYPE_ASSET.frontfacedstencil.DepthSuccess);
+				depth_state.front.reference = MATTYPE_ASSET.frontfacedstencil.STENCILVALUE;
+				depth_state.front.writeMask = MATTYPE_ASSET.frontfacedstencil.STENCILWRITEMASK;
+
+			}
+			else {
+				depth_state.stencilTestEnable = VK_FALSE;
+			}
 			depth_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		}
 
@@ -1636,7 +1660,7 @@ namespace Vulkan {
 					return TAPI_INVALIDARGUMENT;
 				}
 				InheritedSet->DEPTH_OPTYPE = DESC.OPTYPE;
-				InheritedSet->STENCIL_OPTYPE = GFX_API::OPERATION_TYPE::UNUSED;
+				InheritedSet->STENCIL_OPTYPE = DESC.OPTYPE;
 			}
 			else {
 				COLORSLOT_COUNT++;

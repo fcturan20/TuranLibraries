@@ -1121,17 +1121,14 @@ namespace Vulkan {
 				vector<VK_DescBuffer> DescUBuffers, DescSBuffers;
 				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
 					const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-					if (!gfxdesc.BINDINGPOINT) {
-						continue;
-					}
 
-					if (gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI ||
-						gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI ||
-						gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_PI ||
-						gfxdesc.TYPE != GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_PI) {
+					if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_PI ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_PI)) {
 						continue;
 					}
-					unsigned int BP = *(unsigned int*)gfxdesc.BINDINGPOINT;
+					unsigned int BP = gfxdesc.BINDINGPOINT;
 					for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
 						if (BP == bindings[bpsearchindex].binding) {
 							LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
@@ -1358,19 +1355,19 @@ namespace Vulkan {
 		VKPInstance->DescSet.DescUBuffersCount = VKPSO->Instance_DescSet.DescUBuffersCount;
 		if (VKPInstance->DescSet.DescImagesCount) {
 			VKPInstance->DescSet.DescImages = new VK_DescImage[VKPInstance->DescSet.DescImagesCount];
-			memcpy(VKPInstance->DescSet.DescUBuffers, VKPSO->Instance_DescSet.DescUBuffers, VKPInstance->DescSet.DescUBuffersCount * sizeof(VK_DescBuffer));
+			memcpy(VKPInstance->DescSet.DescImages, VKPSO->Instance_DescSet.DescImages, VKPInstance->DescSet.DescImagesCount * sizeof(VK_DescImage));
 		}
 		if (VKPInstance->DescSet.DescSamplersCount) {
 			VKPInstance->DescSet.DescSamplers = new VK_DescImage[VKPInstance->DescSet.DescSamplersCount];
-			memcpy(VKPInstance->DescSet.DescSBuffers, VKPSO->Instance_DescSet.DescSBuffers, VKPInstance->DescSet.DescSBuffersCount * sizeof(VK_DescBuffer));
+			memcpy(VKPInstance->DescSet.DescSamplers, VKPSO->Instance_DescSet.DescSamplers, VKPInstance->DescSet.DescSamplersCount * sizeof(VK_DescImage));
 		}
 		if (VKPInstance->DescSet.DescSBuffersCount) {
 			VKPInstance->DescSet.DescSBuffers = new VK_DescBuffer[VKPInstance->DescSet.DescSBuffersCount];
-			memcpy(VKPInstance->DescSet.DescSamplers, VKPSO->Instance_DescSet.DescSamplers, VKPInstance->DescSet.DescSamplersCount * sizeof(VK_DescImage));
+			memcpy(VKPInstance->DescSet.DescSBuffers, VKPSO->Instance_DescSet.DescSBuffers, VKPInstance->DescSet.DescSBuffersCount * sizeof(VK_DescBuffer));
 		}
 		if (VKPInstance->DescSet.DescUBuffersCount) {
 			VKPInstance->DescSet.DescUBuffers = new VK_DescBuffer[VKPInstance->DescSet.DescUBuffersCount];
-			memcpy(VKPInstance->DescSet.DescImages, VKPSO->Instance_DescSet.DescImages, VKPInstance->DescSet.DescImagesCount * sizeof(VK_DescImage));
+			memcpy(VKPInstance->DescSet.DescUBuffers, VKPSO->Instance_DescSet.DescUBuffers, VKPInstance->DescSet.DescUBuffersCount * sizeof(VK_DescBuffer));
 		}
 		if (VKPInstance->DescSet.DescImagesCount ||
 			VKPInstance->DescSet.DescSamplersCount ||

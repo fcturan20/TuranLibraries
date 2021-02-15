@@ -2,7 +2,7 @@
 layout(location = 0) in vec2 TextCoord;
 layout(location = 0) out vec4 outColor;
 
-layout(binding = 1, set = 1) uniform usampler2D FirstSampledTexture;
+layout(binding = 1, set = 2) uniform usampler2D FirstSampledTexture;
 
 void main() {
     uvec4 sampled = texture(FirstSampledTexture, TextCoord);

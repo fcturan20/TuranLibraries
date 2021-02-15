@@ -257,7 +257,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	
 	//Create and Link Goku Black material type/inst
 	GFX_API::GFXHandle VS_ID, FS_ID, FIRSTSAMPLINGTYPE_ID;
-	GFX_API::GFXHandle GOKUBLACK_MATINST, GOKUBLACK_MATTYPE;
+	GFX_API::GFXHandle TEXTUREDISPLAY_MATTYPE, GOKUBLACK_MATINST, ALITA_MATINST;
 	{
 		unsigned int VS_CODESIZE = 0, FS_CODESIZE = 0;
 		char* VS_CODE = (char*)TAPIFILESYSTEM::Read_BinaryFile("C:/dev/VulkanRenderer/Content/FirstVert.spv", VS_CODESIZE);
@@ -290,7 +290,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			second_desc.DATA_SIZE = 0;
 			second_desc.NAME = "FirstSampledTexture";
 			second_desc.SHADERSTAGEs.FRAGMENTSHADER = true;
-			second_desc.TYPE = GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G;
+			second_desc.TYPE = GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI;
 			MATTYPE.MATERIALTYPEDATA.push_back(second_desc);
 		}
 		MATTYPE.ATTRIBUTELAYOUT_ID = VAL_ID;
@@ -298,14 +298,14 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		MATTYPE.polygon = GFX_API::POLYGON_MODE::FILL;
 		MATTYPE.depthtest = GFX_API::DEPTH_TESTs::DEPTH_TEST_ALWAYS;
 		MATTYPE.depthmode = GFX_API::DEPTH_MODEs::DEPTH_READ_WRITE;
-		MATTYPE.frontfacedstencil.CompareOperation = GFX_API::STENCIL_COMPARE::LESS_PASS;
+		MATTYPE.frontfacedstencil.CompareOperation = GFX_API::STENCIL_COMPARE::ALWAYS_PASS;
 		MATTYPE.frontfacedstencil.DepthFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
 		MATTYPE.frontfacedstencil.DepthSuccess = GFX_API::STENCIL_OP::DONT_CHANGE;
 		MATTYPE.frontfacedstencil.STENCILCOMPAREMASK = 0xFF;
 		MATTYPE.frontfacedstencil.StencilFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
 		MATTYPE.frontfacedstencil.STENCILVALUE = 255;
 		MATTYPE.frontfacedstencil.STENCILWRITEMASK = 0xFF;
-		if (GFXContentManager->Link_MaterialType(MATTYPE, GOKUBLACK_MATTYPE) != TAPI_SUCCESS) {
+		if (GFXContentManager->Link_MaterialType(MATTYPE, TEXTUREDISPLAY_MATTYPE) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Link MaterialType has failed!");
 		}
 		if (GFXContentManager->Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D, 0, 0, GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP,
@@ -313,60 +313,23 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, FIRSTSAMPLINGTYPE_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Creation of sampling type has failed, so application has!");
 		}
-		GFXContentManager->SetMaterial_UniformBuffer(GOKUBLACK_MATTYPE, true, false, 0, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, 88);
-		GFXContentManager->SetMaterial_SampledTexture(GOKUBLACK_MATTYPE, true, false, 1, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
+		GFXContentManager->SetMaterial_UniformBuffer(TEXTUREDISPLAY_MATTYPE, true, false, 0, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, 88);
 		vec3 FragColor(1.0f, 0.0f, 0.0f);
 		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, &FragColor, 12, 88) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading vertex color to staging buffer has failed!");
 		}
-		GFXContentManager->Create_MaterialInst(GOKUBLACK_MATTYPE, GOKUBLACK_MATINST);
-	}
 
-	//Create and Link Alita material type/inst
-	GFX_API::GFXHandle ALITA_MATINST, ALITA_MATTYPE;
-	{
-		GFX_API::Material_Type MATTYPE;
-		MATTYPE.VERTEXSOURCE_ID = VS_ID;
-		MATTYPE.FRAGMENTSOURCE_ID = FS_ID;
-		MATTYPE.SubDrawPass_ID = SubpassID;
-		MATTYPE.MATERIALTYPEDATA.clear();
 
-		{
-			GFX_API::MaterialDataDescriptor first_desc;
-			first_desc.BINDINGPOINT = 0;
-			first_desc.DATA_SIZE = 16;
-			first_desc.NAME = "FirstUniformInput";
-			first_desc.SHADERSTAGEs.VERTEXSHADER = true;
-			first_desc.TYPE = GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_G;
-			MATTYPE.MATERIALTYPEDATA.push_back(first_desc);
-
-			GFX_API::MaterialDataDescriptor second_desc;
-			second_desc.BINDINGPOINT = 1;
-			second_desc.DATA_SIZE = 0;
-			second_desc.NAME = "FirstSampledTexture";
-			second_desc.SHADERSTAGEs.FRAGMENTSHADER = true;
-			second_desc.TYPE = GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G;
-			MATTYPE.MATERIALTYPEDATA.push_back(second_desc);
+		if (GFXContentManager->Create_MaterialInst(TEXTUREDISPLAY_MATTYPE, GOKUBLACK_MATINST) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Goku Black Material Instance creation has failed!");
 		}
-		MATTYPE.ATTRIBUTELAYOUT_ID = VAL_ID;
-		MATTYPE.culling = GFX_API::CULL_MODE::CULL_BACK;
-		MATTYPE.polygon = GFX_API::POLYGON_MODE::FILL;
-		MATTYPE.depthtest = GFX_API::DEPTH_TESTs::DEPTH_TEST_ALWAYS;
-		MATTYPE.depthmode = GFX_API::DEPTH_MODEs::DEPTH_READ_WRITE;
-		MATTYPE.frontfacedstencil.CompareOperation = GFX_API::STENCIL_COMPARE::GREATER_PASS;
-		MATTYPE.frontfacedstencil.DepthFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
-		MATTYPE.frontfacedstencil.DepthSuccess = GFX_API::STENCIL_OP::CHANGE;
-		MATTYPE.frontfacedstencil.STENCILCOMPAREMASK = 0xFF;
-		MATTYPE.frontfacedstencil.StencilFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
-		MATTYPE.frontfacedstencil.STENCILVALUE = 254;
-		MATTYPE.frontfacedstencil.STENCILWRITEMASK = 0xFF;
-		if (GFXContentManager->Link_MaterialType(MATTYPE, ALITA_MATTYPE) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Link MaterialType has failed!");
-		}
+		GFXContentManager->SetMaterial_SampledTexture(GOKUBLACK_MATINST, false, false, 1, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
 
-		GFXContentManager->SetMaterial_UniformBuffer(ALITA_MATTYPE, true, false, 0, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, 88);
-		GFXContentManager->SetMaterial_SampledTexture(ALITA_MATTYPE, true, false, 1, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
-		GFXContentManager->Create_MaterialInst(ALITA_MATTYPE, ALITA_MATINST);
+
+		if (GFXContentManager->Create_MaterialInst(TEXTUREDISPLAY_MATTYPE, ALITA_MATINST) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Alita Material Instance creation has failed!");
+		}
+		GFXContentManager->SetMaterial_SampledTexture(ALITA_MATINST, false, false, 1, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
 	}
 
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 4);

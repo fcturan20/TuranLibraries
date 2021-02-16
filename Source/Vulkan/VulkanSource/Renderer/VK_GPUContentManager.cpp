@@ -866,6 +866,52 @@ namespace Vulkan {
 	void GPU_ContentManager::Delete_ComputeShader(GFX_API::GFXHandle ASSET_ID){
 		LOG_NOTCODED_TAPI("VK::Delete_ComputeShader isn't coded!", true);
 	}
+	void Fill_AttachmentBlendState(const GFX_API::ATTACHMENT_BLENDING& info, VkPipelineColorBlendAttachmentState& state) {
+		state.alphaBlendOp = Find_BlendOp_byGFXBlendMode(info.BLENDMODE_ALPHA);
+		state.blendEnable = VK_TRUE;
+		state.colorBlendOp = Find_BlendOp_byGFXBlendMode(info.BLENDMODE_COLOR);
+		state.dstAlphaBlendFactor = Find_BlendFactor_byGFXBlendFactor(info.DISTANCEFACTOR_ALPHA);
+		state.dstColorBlendFactor = Find_BlendFactor_byGFXBlendFactor(info.DISTANCEFACTOR_COLOR);
+		state.srcAlphaBlendFactor = Find_BlendFactor_byGFXBlendFactor(info.SOURCEFACTOR_ALPHA);
+		state.srcColorBlendFactor = Find_BlendFactor_byGFXBlendFactor(info.SOURCEFACTOR_COLOR);
+	}
+	VkColorComponentFlags Find_ColorWriteMask_byChannels(GFX_API::TEXTURE_CHANNELs channels) {
+		switch (channels)
+		{
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_BGRA8UB:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_BGRA8UNORM:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA32F:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA32UI:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA32I:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA8UB:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA8B:
+			return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGB32F:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGB32UI:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGB32I:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGB8UB:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGB8B:
+			return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RA32F:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RA32UI:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RA32I:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RA8UB:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RA8B:
+			return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT;
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_R32F:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_R32UI:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_R32I:
+			return VK_COLOR_COMPONENT_R_BIT;
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_R8UB:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_R8B:
+			return VK_COLOR_COMPONENT_R_BIT;
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32:
+		case GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8:
+		default:
+			LOG_NOTCODED_TAPI("Find_ColorWriteMask_byChannels() doesn't support this type of RTSlot channel!", true);
+			return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
+		}
+	}
 	TAPIResult GPU_ContentManager::Link_MaterialType(const GFX_API::Material_Type& MATTYPE_ASSET, GFX_API::GFXHandle& MaterialHandle) {
 		if (VKRENDERER->Is_ConstructingRenderGraph()) {
 			LOG_ERROR_TAPI("You can't link a Material Type while recording RenderGraph!");
@@ -878,8 +924,7 @@ namespace Vulkan {
 			return TAPI_INVALIDARGUMENT;
 		}
 		VK_SubDrawPass* Subpass = GFXHandleConverter(VK_SubDrawPass*, MATTYPE_ASSET.SubDrawPass_ID);
-		VK_DrawPass* MainPass = nullptr;
-		MainPass = GFXHandleConverter(VK_DrawPass*, Subpass->DrawPass);
+		VK_DrawPass* MainPass = GFXHandleConverter(VK_DrawPass*, Subpass->DrawPass);
 
 		//Subpass attachment should happen here!
 		VK_GraphicsPipeline* VKPipeline = new VK_GraphicsPipeline;
@@ -962,31 +1007,46 @@ namespace Vulkan {
 		//Blending is not supported right now, because it should be complicated
 		//Blend settings should be per RT slot
 		//Per RT Slot means it's better to handle it according to the drawpass
-		vector<VkPipelineColorBlendAttachmentState> States;
-		VkPipelineColorBlendAttachmentState Attachment_ColorBlendState = {};
+		vector<VkPipelineColorBlendAttachmentState> States(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT);
 		VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
 		{
+			VkPipelineColorBlendAttachmentState NonBlendState = {};
 			//Non-blend settings
-			Attachment_ColorBlendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-			Attachment_ColorBlendState.blendEnable = VK_FALSE;
-			Attachment_ColorBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-			Attachment_ColorBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-			Attachment_ColorBlendState.colorBlendOp = VK_BLEND_OP_ADD;
-			Attachment_ColorBlendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-			Attachment_ColorBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-			Attachment_ColorBlendState.alphaBlendOp = VK_BLEND_OP_ADD;
+			NonBlendState.blendEnable = VK_FALSE;
+			NonBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			NonBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+			NonBlendState.colorBlendOp = VkBlendOp::VK_BLEND_OP_ADD;
+			NonBlendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			NonBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			NonBlendState.alphaBlendOp = VK_BLEND_OP_ADD;
 
-			States.resize(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT, Attachment_ColorBlendState);
+			for (unsigned int RTSlotIndex = 0; RTSlotIndex < States.size(); RTSlotIndex++) {
+				bool isFound = false;
+				for (unsigned int BlendingInfoIndex = 0; BlendingInfoIndex < MATTYPE_ASSET.BLENDINGINFOS.size(); BlendingInfoIndex++) {
+					const GFX_API::ATTACHMENT_BLENDING& blendinginfo = MATTYPE_ASSET.BLENDINGINFOS[BlendingInfoIndex];
+					if (blendinginfo.COLORSLOT_INDEX == RTSlotIndex) {
+						Fill_AttachmentBlendState(blendinginfo, States[RTSlotIndex]);
+						States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
+						isFound = true;
+						break;
+					}
+				}
+				if (!isFound) {
+					States[RTSlotIndex] = NonBlendState;
+					States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
+				}
+			}
 
 			Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-			Pipeline_ColorBlendState.logicOpEnable = VK_FALSE;
 			Pipeline_ColorBlendState.attachmentCount = States.size();
 			Pipeline_ColorBlendState.pAttachments = States.data();
-			Pipeline_ColorBlendState.logicOp = VK_LOGIC_OP_COPY; // Optional
-			Pipeline_ColorBlendState.blendConstants[0] = 0.0f; // Optional
-			Pipeline_ColorBlendState.blendConstants[1] = 0.0f; // Optional
-			Pipeline_ColorBlendState.blendConstants[2] = 0.0f; // Optional
-			Pipeline_ColorBlendState.blendConstants[3] = 0.0f; // Optional
+			Pipeline_ColorBlendState.blendConstants[0] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.x;
+			Pipeline_ColorBlendState.blendConstants[1] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.y;
+			Pipeline_ColorBlendState.blendConstants[2] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.z;
+			Pipeline_ColorBlendState.blendConstants[3] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.w;
+			//I won't use logical operations
+			Pipeline_ColorBlendState.logicOpEnable = VK_FALSE;
+			Pipeline_ColorBlendState.logicOp = VK_LOGIC_OP_COPY;
 		}
 
 		VkPipelineDynamicStateCreateInfo Dynamic_States = {};

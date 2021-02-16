@@ -183,4 +183,6 @@ namespace Vulkan {
 	VK_API VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(GFX_API::DRAWPASS_LOAD load);
 	VK_API VkCompareOp Find_CompareOp_byGFXStencilCompare(GFX_API::STENCIL_COMPARE op);
 	VK_API VkStencilOp Find_StencilOp_byGFXStencilOp(GFX_API::STENCIL_OP op);
+	VK_API VkBlendOp Find_BlendOp_byGFXBlendMode(GFX_API::BLEND_MODE mode);
+	VK_API VkBlendFactor Find_BlendFactor_byGFXBlendFactor(GFX_API::BLEND_FACTOR factor);
 }

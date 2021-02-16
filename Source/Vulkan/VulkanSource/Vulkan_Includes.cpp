@@ -669,4 +669,58 @@ namespace Vulkan {
 			return VK_STENCIL_OP_KEEP;
 		}
 	}
+	VK_API VkBlendOp Find_BlendOp_byGFXBlendMode(GFX_API::BLEND_MODE mode) {
+		switch (mode)
+		{
+		case GFX_API::BLEND_MODE::ADDITIVE:
+			return VK_BLEND_OP_ADD;
+		case GFX_API::BLEND_MODE::SUBTRACTIVE:
+			return VK_BLEND_OP_SUBTRACT;
+		case GFX_API::BLEND_MODE::SUBTRACTIVE_SWAPPED:
+			return VK_BLEND_OP_REVERSE_SUBTRACT;
+		case GFX_API::BLEND_MODE::MIN:
+			return VK_BLEND_OP_MIN;
+		case GFX_API::BLEND_MODE::MAX:
+			return VK_BLEND_OP_MAX;
+		default:
+			LOG_NOTCODED_TAPI("Find_BlendOp_byGFXBlendMode() doesn't support this type of blend mode!", true);
+			return VK_BLEND_OP_MAX_ENUM;
+		}
+	}
+	VK_API VkBlendFactor Find_BlendFactor_byGFXBlendFactor(GFX_API::BLEND_FACTOR factor) {
+		switch (factor)
+		{
+		case GFX_API::BLEND_FACTOR::ONE:
+			return VK_BLEND_FACTOR_ONE;
+		case GFX_API::BLEND_FACTOR::ZERO:
+			return VK_BLEND_FACTOR_ZERO;
+		case GFX_API::BLEND_FACTOR::SRC_COLOR:
+			return VkBlendFactor::VK_BLEND_FACTOR_SRC_COLOR;
+		case GFX_API::BLEND_FACTOR::SRC_1MINUSCOLOR:
+			return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+		case GFX_API::BLEND_FACTOR::SRC_ALPHA:
+			return VkBlendFactor::VK_BLEND_FACTOR_SRC_ALPHA;
+		case GFX_API::BLEND_FACTOR::SRC_1MINUSALPHA:
+			return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		case GFX_API::BLEND_FACTOR::DST_COLOR:
+			return VkBlendFactor::VK_BLEND_FACTOR_DST_COLOR;
+		case GFX_API::BLEND_FACTOR::DST_1MINUSCOLOR:
+			return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+		case GFX_API::BLEND_FACTOR::DST_ALPHA:
+			return VkBlendFactor::VK_BLEND_FACTOR_DST_ALPHA;
+		case GFX_API::BLEND_FACTOR::DST_1MINUSALPHA:
+			return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+		case GFX_API::BLEND_FACTOR::CONST_COLOR:
+			return VkBlendFactor::VK_BLEND_FACTOR_CONSTANT_COLOR;
+		case GFX_API::BLEND_FACTOR::CONST_1MINUSCOLOR:
+			return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+		case GFX_API::BLEND_FACTOR::CONST_ALPHA:
+			return VkBlendFactor::VK_BLEND_FACTOR_CONSTANT_ALPHA;
+		case GFX_API::BLEND_FACTOR::CONST_1MINUSALPHA:
+			return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
+		default:
+			LOG_NOTCODED_TAPI("Find_BlendFactor_byGFXBlendFactor() doesn't support this type of blend factor!", true);
+			return VK_BLEND_FACTOR_MAX_ENUM;
+		}
+	}
 }

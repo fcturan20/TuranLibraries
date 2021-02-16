@@ -63,7 +63,11 @@ namespace GFX_API {
 		DEPTH_TESTs depthtest;
 		DEPTH_MODEs depthmode;
 		STENCIL_SETTINGS frontfacedstencil, backfacedstencil;
-		
+		//These infos should be set per slot of the used RTSlotSet
+		//For attachments that aren't in the list below, blending is off
+		//Different constant values for different RTSlots is not supported
+		//Only Element 0's Constant Color in this vector is used
+		vector<ATTACHMENT_BLENDING> BLENDINGINFOS;
 		
 		float LINEWIDTH = 1.0f;
 	};

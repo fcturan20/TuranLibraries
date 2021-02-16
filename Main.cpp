@@ -305,6 +305,20 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		MATTYPE.frontfacedstencil.StencilFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
 		MATTYPE.frontfacedstencil.STENCILVALUE = 255;
 		MATTYPE.frontfacedstencil.STENCILWRITEMASK = 0xFF;
+		//Blending Infos
+		{
+			GFX_API::ATTACHMENT_BLENDING blendinginfo;
+			blendinginfo.BLENDMODE_ALPHA = GFX_API::BLEND_MODE::ADDITIVE;
+			blendinginfo.BLENDMODE_COLOR = GFX_API::BLEND_MODE::ADDITIVE;
+			blendinginfo.CONSTANT.r = 1.0f; blendinginfo.CONSTANT.g = 1.0f;
+			blendinginfo.CONSTANT.b = 0.0f; blendinginfo.CONSTANT.a = 1.0f;
+			blendinginfo.COLORSLOT_INDEX = 0;
+			blendinginfo.DISTANCEFACTOR_ALPHA = GFX_API::BLEND_FACTOR::ZERO;
+			blendinginfo.DISTANCEFACTOR_COLOR = GFX_API::BLEND_FACTOR::CONST_1MINUSCOLOR;
+			blendinginfo.SOURCEFACTOR_ALPHA = GFX_API::BLEND_FACTOR::ONE;
+			blendinginfo.SOURCEFACTOR_COLOR = GFX_API::BLEND_FACTOR::CONST_COLOR;
+			MATTYPE.BLENDINGINFOS.push_back(blendinginfo);
+		}
 		if (GFXContentManager->Link_MaterialType(MATTYPE, TEXTUREDISPLAY_MATTYPE) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Link MaterialType has failed!");
 		}
@@ -366,7 +380,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 
 		if (i % 2) {
-			GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, INDEXBUFFER_ID, GOKUBLACK_MATINST, SubpassID);
+			GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, INDEXBUFFER_ID, ALITA_MATINST, SubpassID);
 		}
 		else {
 			GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, INDEXBUFFER_ID, ALITA_MATINST, SubpassID);

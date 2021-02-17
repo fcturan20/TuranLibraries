@@ -95,15 +95,17 @@ namespace Vulkan {
 			dp_ci.maxSets = MAXDESCSETCOUNT_PERPOOL;
 			dp_ci.pNext = nullptr;
 			dp_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			VkDescriptorPoolSize SIZEs[3];
-			SIZEs[0].descriptorCount = MAXIMAGECOUNT_PERPOOL * 2;
-			SIZEs[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			VkDescriptorPoolSize SIZEs[4];
+			SIZEs[0].descriptorCount = MAXIMAGECOUNT_PERPOOL;
+			SIZEs[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 			SIZEs[1].descriptorCount = MAXSBUFFERCOUNT_PERPOOL;
 			SIZEs[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			SIZEs[2].descriptorCount = MAXUBUFFERCOUNT_PERPOOL;
 			SIZEs[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			SIZEs[3].descriptorCount = MAXSAMPLERCOUNT_PERPOOL;
+			SIZEs[3].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
-			dp_ci.poolSizeCount = 3;
+			dp_ci.poolSizeCount = 4;
 			dp_ci.pPoolSizes = SIZEs;
 			if (vkCreateDescriptorPool(VKGPU->Logical_Device, &dp_ci, nullptr, &MaterialRelated_DescPool.pool) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Material Related Descriptor Pool Creation has failed! So GFXContentManager system initialization has failed!");
@@ -764,17 +766,21 @@ namespace Vulkan {
 			ci.image = TEXTURE->Image;
 			ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
 			ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE->CHANNELs);
-			if (TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32 ||
-				TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
+			if (TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32){
 				ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+			}
+			else if (TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
+				ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 			}
 			else {
 				ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			}
+			
 			ci.subresourceRange.baseArrayLayer = 0;
 			ci.subresourceRange.layerCount = 1;
 			ci.subresourceRange.baseMipLevel = 0;
 			ci.subresourceRange.levelCount = 1;
+			Fill_ComponentMapping_byCHANNELs(TEXTURE->CHANNELs, ci.components);
 
 			if (vkCreateImageView(VKGPU->Logical_Device, &ci, nullptr, &TEXTURE->ImageView) != VK_SUCCESS) {
 				LOG_ERROR_TAPI("GFXContentManager->Upload_Texture() has failed in vkCreateImageView()!");
@@ -1040,10 +1046,18 @@ namespace Vulkan {
 			Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 			Pipeline_ColorBlendState.attachmentCount = States.size();
 			Pipeline_ColorBlendState.pAttachments = States.data();
-			Pipeline_ColorBlendState.blendConstants[0] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.x;
-			Pipeline_ColorBlendState.blendConstants[1] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.y;
-			Pipeline_ColorBlendState.blendConstants[2] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.z;
-			Pipeline_ColorBlendState.blendConstants[3] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.w;
+			if (MATTYPE_ASSET.BLENDINGINFOS.size()) {
+				Pipeline_ColorBlendState.blendConstants[0] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.x;
+				Pipeline_ColorBlendState.blendConstants[1] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.y;
+				Pipeline_ColorBlendState.blendConstants[2] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.z;
+				Pipeline_ColorBlendState.blendConstants[3] = MATTYPE_ASSET.BLENDINGINFOS[0].CONSTANT.w;
+			}
+			else {
+				Pipeline_ColorBlendState.blendConstants[0] = 0.0f;
+				Pipeline_ColorBlendState.blendConstants[1] = 0.0f;
+				Pipeline_ColorBlendState.blendConstants[2] = 0.0f;
+				Pipeline_ColorBlendState.blendConstants[3] = 0.0f;
+			}
 			//I won't use logical operations
 			Pipeline_ColorBlendState.logicOpEnable = VK_FALSE;
 			Pipeline_ColorBlendState.logicOp = VK_LOGIC_OP_COPY;
@@ -1069,73 +1083,73 @@ namespace Vulkan {
 				vector<VK_DescBuffer> DescUBuffers, DescSBuffers;
 				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
 					const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-					if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_G ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_G ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_G)) {
+					if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::IMAGE_G ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SAMPLER_G ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SBUFFER_G ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::UBUFFER_G)) {
 						continue;
 					}
 
-					unsigned int BP = gfxdesc.BINDINGPOINT;
-					for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
-						if (BP == bindings[bpsearchindex].binding) {
-							LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
-							return TAPI_FAIL;
-						}
-					}
+unsigned int BP = gfxdesc.BINDINGPOINT;
+for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
+	if (BP == bindings[bpsearchindex].binding) {
+		LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
+		return TAPI_FAIL;
+	}
+}
 
-					VkDescriptorSetLayoutBinding bn = {};
-					bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
-					bn.pImmutableSamplers = VK_NULL_HANDLE;
-					bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
-					bn.descriptorCount = 1;		//I don't support array descriptors for now!
-					bn.binding = BP;
-					bindings.push_back(bn);
+VkDescriptorSetLayoutBinding bn = {};
+bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
+bn.pImmutableSamplers = VK_NULL_HANDLE;
+bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
+bn.descriptorCount = 1;		//I don't support array descriptors for now!
+bn.binding = BP;
+bindings.push_back(bn);
 
-					switch (gfxdesc.TYPE) {
-					case GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_G:
-					{
-						VK_DescImage descimage;
-						descimage.BindingIndex = BP;
-						descimage.info.imageView = VK_NULL_HANDLE;
-						descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-						descimage.info.sampler = VK_NULL_HANDLE;
-						DescImages.push_back(descimage);
-					}
-					break;
-					case GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_G:
-					{
-						VK_DescImage descimage;
-						descimage.BindingIndex = BP;
-						descimage.info.imageView = VK_NULL_HANDLE;
-						descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-						descimage.info.sampler = VK_NULL_HANDLE;
-						DescSamplers.push_back(descimage);
-					}
-						break;
-					case GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_G:
-					{
-						VK_DescBuffer descbuffer;
-						descbuffer.BindingIndex = BP;
-						descbuffer.Info.range = gfxdesc.DATA_SIZE;
-						descbuffer.IsUpdated.store(0);
-						descbuffer.Info.buffer = VK_NULL_HANDLE;
-						descbuffer.Info.offset = 0;
-						DescUBuffers.push_back(descbuffer);
-					}
-						break;
-					case GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_G:
-					{
-						VK_DescBuffer descbuffer;
-						descbuffer.BindingIndex = BP;
-						descbuffer.Info.range = gfxdesc.DATA_SIZE;
-						descbuffer.IsUpdated.store(0);
-						descbuffer.Info.buffer = VK_NULL_HANDLE;
-						descbuffer.Info.offset = 0;
-						DescSBuffers.push_back(descbuffer);
-					}
-						break;
-					}
+switch (gfxdesc.TYPE) {
+case GFX_API::MATERIALDATA_TYPE::IMAGE_G:
+{
+	VK_DescImage descimage;
+	descimage.BindingIndex = BP;
+	descimage.info.imageView = VK_NULL_HANDLE;
+	descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	descimage.info.sampler = VK_NULL_HANDLE;
+	DescImages.push_back(descimage);
+}
+break;
+case GFX_API::MATERIALDATA_TYPE::SAMPLER_G:
+{
+	VK_DescImage descimage;
+	descimage.BindingIndex = BP;
+	descimage.info.imageView = VK_NULL_HANDLE;
+	descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	descimage.info.sampler = VK_NULL_HANDLE;
+	DescSamplers.push_back(descimage);
+}
+break;
+case GFX_API::MATERIALDATA_TYPE::UBUFFER_G:
+{
+	VK_DescBuffer descbuffer;
+	descbuffer.BindingIndex = BP;
+	descbuffer.Info.range = gfxdesc.DATA_SIZE;
+	descbuffer.IsUpdated.store(0);
+	descbuffer.Info.buffer = VK_NULL_HANDLE;
+	descbuffer.Info.offset = 0;
+	DescUBuffers.push_back(descbuffer);
+}
+break;
+case GFX_API::MATERIALDATA_TYPE::SBUFFER_G:
+{
+	VK_DescBuffer descbuffer;
+	descbuffer.BindingIndex = BP;
+	descbuffer.Info.range = gfxdesc.DATA_SIZE;
+	descbuffer.IsUpdated.store(0);
+	descbuffer.Info.buffer = VK_NULL_HANDLE;
+	descbuffer.Info.offset = 0;
+	DescSBuffers.push_back(descbuffer);
+}
+break;
+}
 				}
 
 				VKPipeline->General_DescSet.DescImagesCount = DescImages.size();
@@ -1160,7 +1174,7 @@ namespace Vulkan {
 				}
 				VKPipeline->General_DescSet.ShouldRecreate.store(0);
 
-				
+
 				VkDescriptorSetLayoutCreateInfo ci = {};
 				ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 				ci.pNext = nullptr;
@@ -1182,10 +1196,10 @@ namespace Vulkan {
 				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
 					const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
 
-					if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_PI ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_PI)) {
+					if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::IMAGE_PI ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SAMPLER_PI ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SBUFFER_PI ||
+						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::UBUFFER_PI)) {
 						continue;
 					}
 					unsigned int BP = gfxdesc.BINDINGPOINT;
@@ -1203,7 +1217,7 @@ namespace Vulkan {
 					bn.binding = BP;
 					bindings.push_back(bn);
 					switch (gfxdesc.TYPE) {
-					case GFX_API::MATERIALDATA_TYPE::CONSTIMAGE_PI:
+					case GFX_API::MATERIALDATA_TYPE::IMAGE_PI:
 					{
 						VK_DescImage descimage;
 						descimage.BindingIndex = BP;
@@ -1212,8 +1226,8 @@ namespace Vulkan {
 						descimage.info.sampler = VK_NULL_HANDLE;
 						DescImages.push_back(descimage);
 					}
-						break;
-					case GFX_API::MATERIALDATA_TYPE::CONSTSAMPLER_PI:
+					break;
+					case GFX_API::MATERIALDATA_TYPE::SAMPLER_PI:
 					{
 						VK_DescImage descimage;
 						descimage.BindingIndex = BP;
@@ -1222,8 +1236,8 @@ namespace Vulkan {
 						descimage.info.sampler = VK_NULL_HANDLE;
 						DescSamplers.push_back(descimage);
 					}
-						break;
-					case GFX_API::MATERIALDATA_TYPE::CONSTUBUFFER_PI:
+					break;
+					case GFX_API::MATERIALDATA_TYPE::UBUFFER_PI:
 					{
 						VK_DescBuffer descbuffer;
 						descbuffer.BindingIndex = BP;
@@ -1233,8 +1247,8 @@ namespace Vulkan {
 						descbuffer.Info.offset = 0;
 						DescUBuffers.push_back(descbuffer);
 					}
-						break;
-					case GFX_API::MATERIALDATA_TYPE::CONSTSBUFFER_PI:
+					break;
+					case GFX_API::MATERIALDATA_TYPE::SBUFFER_PI:
 					{
 						VK_DescBuffer descbuffer;
 						descbuffer.BindingIndex = BP;
@@ -1244,11 +1258,9 @@ namespace Vulkan {
 						descbuffer.Info.offset = 0;
 						DescSBuffers.push_back(descbuffer);
 					}
-						break;
+					break;
 					}
 				}
-
-
 				VKPipeline->Instance_DescSet.DescUBuffersCount = DescUBuffers.size();
 				VKPipeline->Instance_DescSet.DescSBuffersCount = DescSBuffers.size();
 				VKPipeline->Instance_DescSet.DescImagesCount = DescImages.size();
@@ -1580,6 +1592,70 @@ namespace Vulkan {
 		}
 		return TAPI_SUCCESS;
 	}
+	TAPIResult GPU_ContentManager::SetMaterial_ImageTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+		GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
+		VK_DescSet* Set = nullptr;
+		VK_DescImage* Image = nullptr;
+		unsigned int SamplerIndex = UINT32_MAX;
+		if (isMaterialType) {
+			VK_GraphicsPipeline* PSO = GFXHandleConverter(VK_GraphicsPipeline*, MaterialType_orInstance);
+			for (unsigned int Index = 0; Index < PSO->General_DescSet.DescImagesCount; Index++) {
+				VK_DescImage& DescImage = PSO->General_DescSet.DescImages[Index];
+				if (DescImage.BindingIndex != BINDINDEX) {
+					continue;
+				}
+				Image = &PSO->General_DescSet.DescImages[Index];
+				Set = &PSO->General_DescSet;
+				SamplerIndex = Index;
+				break;
+			}
+			if (!Set) {
+				LOG_ERROR_TAPI("Intended sampled texture shader input isn't found!");
+				return TAPI_FAIL;
+			}
+		}
+		else {
+			VK_PipelineInstance* PSO = GFXHandleConverter(VK_PipelineInstance*, MaterialType_orInstance);
+			for (unsigned int Index = 0; Index < PSO->DescSet.DescImagesCount; Index++) {
+				VK_DescImage& DescImage = PSO->DescSet.DescImages[Index];
+				if (DescImage.BindingIndex != BINDINDEX) {
+					continue;
+				}
+				Image = &PSO->DescSet.DescImages[Index];
+				Set = &PSO->DescSet;
+				SamplerIndex = Index;
+				break;
+			}
+			if (!Set) {
+				LOG_ERROR_TAPI("Intended sampled texture shader input isn't found!");
+				return TAPI_FAIL;
+			}
+		}
+
+		VK_Sampler* Sampler = GFXHandleConverter(VK_Sampler*, SamplingType);
+		bool x = false, y = true;
+		if (!Image->IsUpdated.compare_exchange_strong(x, y)) {
+			return TAPI_WRONGTIMING;
+		}
+		VkAccessFlags unused;
+		Find_AccessPattern_byIMAGEACCESS(usage, unused, Image->info.imageLayout);
+		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
+		Image->info.imageView = TEXTURE->ImageView;
+		Image->info.sampler = Sampler->Sampler;
+
+		VK_DescSetUpdateCall call;
+		call.Set = Set;
+		call.ArrayIndex = SamplerIndex;
+		call.Type = DescType::IMAGE;
+		if (isUsedRecently) {
+			call.Set->ShouldRecreate.store(1);
+			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		else {
+			DescSets_toJustUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		return TAPI_SUCCESS;
+	}
 
 	TAPIResult GPU_ContentManager::Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) {
 		if (!VKRENDERER->Is_ConstructingRenderGraph()) {
@@ -1664,10 +1740,10 @@ namespace Vulkan {
 				slot->CLEAR_COLOR = vec2(DEPTHDESC.CLEAR_VALUE.x, DEPTHDESC.CLEAR_VALUE.y);
 				slot->DEPTH_OPTYPE = DEPTHDESC.OPTYPE;
 				slot->RT = GFXHandleConverter(VK_Texture*, DEPTHDESC.TextureHandles[SlotSetIndex]);
-				slot->STENCIL_OPTYPE = GFX_API::OPERATION_TYPE::UNUSED;
+				slot->STENCIL_OPTYPE = DEPTHDESC.OPTYPESTENCIL;
 				slot->IS_USED_LATER = DEPTHDESC.isUSEDLATER;
-				slot->LOADSTATE = DEPTHDESC.LOADOP;
-				LOG_NOTCODED_TAPI("Create_RTSlotSet() sets STENCIL_OPTYPE as UNUSED hard-coded for now, fix it in future!", false);
+				slot->DEPTH_LOAD = DEPTHDESC.LOADOP;
+				slot->STENCIL_LOAD = DEPTHDESC.LOADOPSTENCIL;
 			}
 			for (unsigned int i = 0; i < COLORRT_COUNT; i++) {
 				const GFX_API::RTSLOT_Description& desc = Descriptions[i];
@@ -1717,7 +1793,7 @@ namespace Vulkan {
 					return TAPI_INVALIDARGUMENT;
 				}
 				InheritedSet->DEPTH_OPTYPE = DESC.OPTYPE;
-				InheritedSet->STENCIL_OPTYPE = DESC.OPTYPE;
+				InheritedSet->STENCIL_OPTYPE = DESC.OPTYPESTENCIL;
 			}
 			else {
 				COLORSLOT_COUNT++;

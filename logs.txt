@@ -25,8 +25,6 @@ GLFW created a window surface!
 Window creation is successful!
 GFXContentManager->Create_Texture() should support mipmaps!
 GFXContentManager->Create_Texture() should support mipmaps!
-Create_RTSlotSet() sets STENCIL_OPTYPE as UNUSED hard-coded for now, fix it in future!
-Create_RTSlotSet() sets STENCIL_OPTYPE as UNUSED hard-coded for now, fix it in future!
 Started to print RP specs!
 VulkanRenderer: There are unnecessary VkSemaphore creations for Barrier TPs, fix it when you have time!
 VulkanRenderer: Create RGBranches's Linkage process has unnecessary loops, fix them when all the algorithm is finished!
@@ -38,6 +36,9 @@ Texture is loaded successfully!
 GFXContentManager->Create_Texture() should support mipmaps!
 Vertex Shader Module is successfully created!
 Vertex Shader Module is successfully created!
+Validation Error: [ UNASSIGNED-CoreValidation-Shader-FeatureNotEnabled ] Object 0: handle = 0x2c319847588, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x8c548bfd | Shader requires fragmentStoresAndAtomics but is not enabled on the device
+Vulkan Callback has lots of data to debug such as used object's name, object's type etc
+
 Finished creating Graphics Pipeline
 This TargetOffset in SetMaterial_UniformBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of 64
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
@@ -49,9 +50,18 @@ Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ VUID-VkWriteDescriptorSet-descriptorType-00327 ] Object 0: handle = 0x13986637318, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0xfdcfe89e | vkUpdateDescriptorSets(): pDescriptorWrites[0].pBufferInfo[0].offset (0x58) must be a multiple of device limit minUniformBufferOffsetAlignment 0x40. The Vulkan spec states: If descriptorType is VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, the offset member of each element of pBufferInfo must be a multiple of VkPhysicalDeviceLimits::minUniformBufferOffsetAlignment (https://vulkan.lunarg.com/doc/view/1.2.162.1/windows/1.2-extensions/vkspec.html#VUID-VkWriteDescriptorSet-descriptorType-00327)
+Validation Error: [ VUID-VkWriteDescriptorSet-descriptorType-00327 ] Object 0: handle = 0x2c319847588, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0xfdcfe89e | vkUpdateDescriptorSets(): pDescriptorWrites[0].pBufferInfo[0].offset (0x58) must be a multiple of device limit minUniformBufferOffsetAlignment 0x40. The Vulkan spec states: If descriptorType is VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, the offset member of each element of pBufferInfo must be a multiple of VkPhysicalDeviceLimits::minUniformBufferOffsetAlignment (https://vulkan.lunarg.com/doc/view/1.2.162.1/windows/1.2-extensions/vkspec.html#VUID-VkWriteDescriptorSet-descriptorType-00327)
 Vulkan Callback has lots of data to debug such as used object's name, object's type etc
 
+Validation Error: [ VUID-VkImageMemoryBarrier-oldLayout-01197 ] Object 0: handle = 0x2c324b6f828, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x124ffb34 | vkCmdPipelineBarrier(): For VkImage 0xe2c039000000003c[] you cannot transition the layout of aspect=1 level=0 layer=0 from VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL when the previous known layout is VK_IMAGE_LAYOUT_GENERAL. The Vulkan spec states: If srcQueueFamilyIndex and dstQueueFamilyIndex define a queue family ownership transfer or oldLayout and newLayout define a image layout transition, oldLayout must be VK_IMAGE_LAYOUT_UNDEFINED or the current layout of the image subresources affected by the barrier (https://vulkan.lunarg.com/doc/view/1.2.162.1/windows/1.2-extensions/vkspec.html#VUID-VkImageMemoryBarrier-oldLayout-01197)
+Vulkan Callback has lots of data to debug such as used object's name, object's type etc
+
+Validation Error: [ VUID-VkImageMemoryBarrier-oldLayout-01197 ] Object 0: handle = 0x2c324b6f828, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x124ffb34 | vkCmdPipelineBarrier(): For VkImage 0x7e7cff000000003a[] you cannot transition the layout of aspect=1 level=0 layer=0 from VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL when the previous known layout is VK_IMAGE_LAYOUT_GENERAL. The Vulkan spec states: If srcQueueFamilyIndex and dstQueueFamilyIndex define a queue family ownership transfer or oldLayout and newLayout define a image layout transition, oldLayout must be VK_IMAGE_LAYOUT_UNDEFINED or the current layout of the image subresources affected by the barrier (https://vulkan.lunarg.com/doc/view/1.2.162.1/windows/1.2-extensions/vkspec.html#VUID-VkImageMemoryBarrier-oldLayout-01197)
+Vulkan Callback has lots of data to debug such as used object's name, object's type etc
+
+Validation Error: [ SYNC-HAZARD-WRITE_AFTER_WRITE ] Object 0: handle = 0xe2c039000000003c, type = VK_OBJECT_TYPE_IMAGE; | MessageID = 0xfdf9f5e1 | vkCmdPipelineBarrier: Hazard WRITE_AFTER_WRITE for image barrier 1 VkImage 0xe2c039000000003c[]. Access info (usage: SYNC_IMAGE_LAYOUT_TRANSITION, prior_usage: SYNC_FRAGMENT_SHADER_SHADER_WRITE, write_barriers: 0, command: vkCmdDrawIndexed, seq_no: 4, reset_no: 1).
+Vulkan Callback has lots of data to debug such as used object's name, object's type etc
+
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
@@ -66,898 +76,913 @@ Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
 
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
 
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
+Take inputs!
 
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
-
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
+Take inputs!
 
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc94bc8, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9cc88, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x83d4ee000000000b[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
 Take inputs!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc92b98, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR--instead, current layout is VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ UNASSIGNED-CoreValidation-DrawState-InvalidImageLayout ] Object 0: handle = 0x1398bc9ac58, type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0x4dae5635 | Submitted command buffer expects VkImage 0x731f0f000000000a[] (subresource: aspectMask 0x1 array layer 0, mip level 0) to be in layout VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL--instead, current layout is VK_IMAGE_LAYOUT_PRESENT_SRC_KHR.
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
-Validation Error: [ VUID-VkPresentInfoKHR-pImageIndices-01296 ] Object 0: handle = 0x1398b1c7228, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0xc7aabc16 | vkQueuePresentKHR(): pSwapchains[1] images passed to present must be in layout VK_IMAGE_LAYOUT_PRESENT_SRC_KHR or VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR but is in VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL. The Vulkan spec states: Each element of pImageIndices must be the index of a presentable image acquired from the swapchain specified by the corresponding element of the pSwapchains array, and the presented image subresource must be in the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout at the time the operation is executed on a VkDevice (https://github.com/KhronosGroup/Vulkan-Docs/search?q=)VUID-VkPresentInfoKHR-pImageIndices-01296)
-Vulkan Callback has lots of data to debug such as used object's name, object's type etc
-
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Take inputs!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
+Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!
 Take inputs!
 

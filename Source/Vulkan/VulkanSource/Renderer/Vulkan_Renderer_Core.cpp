@@ -539,7 +539,7 @@ namespace Vulkan {
 				VKGPU->Fill_DepthAttachmentDescription(DepthDesc, VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT);
 				AttachmentDescs.push_back(DepthDesc);
 			}
-
+			
 
 			//RenderPass Creation
 			VkRenderPassCreateInfo RenderPass_CreationInfo = {};
@@ -938,7 +938,7 @@ namespace Vulkan {
 					info.descriptorCount = 1;
 					switch (Call.Type) {
 					case DescType::IMAGE:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
 						Call.Set->DescImages[Call.ArrayIndex].IsUpdated.store(0);
@@ -982,7 +982,7 @@ namespace Vulkan {
 					info.descriptorCount = 1;
 					switch (Call.Type) {
 					case DescType::IMAGE:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
 						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
 						Call.Set->DescImages[Call.ArrayIndex].IsUpdated.store(0);
@@ -1360,7 +1360,7 @@ namespace Vulkan {
 		im_bi.Barrier.image = Texture->Image;
 		Find_AccessPattern_byIMAGEACCESS(LAST_ACCESS, im_bi.Barrier.srcAccessMask, im_bi.Barrier.oldLayout);
 		Find_AccessPattern_byIMAGEACCESS(NEXT_ACCESS, im_bi.Barrier.dstAccessMask, im_bi.Barrier.newLayout);
-		if (Texture->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
+		if (Texture->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8 ) {
 			im_bi.Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 		}
 		else if (Texture->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {

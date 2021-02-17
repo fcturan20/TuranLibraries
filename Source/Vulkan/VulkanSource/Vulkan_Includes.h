@@ -188,4 +188,5 @@ namespace Vulkan {
 	VK_API VkStencilOp Find_StencilOp_byGFXStencilOp(GFX_API::STENCIL_OP op);
 	VK_API VkBlendOp Find_BlendOp_byGFXBlendMode(GFX_API::BLEND_MODE mode);
 	VK_API VkBlendFactor Find_BlendFactor_byGFXBlendFactor(GFX_API::BLEND_FACTOR factor);
+	VK_API void Fill_ComponentMapping_byCHANNELs(GFX_API::TEXTURE_CHANNELs channels, VkComponentMapping& mapping);
 }

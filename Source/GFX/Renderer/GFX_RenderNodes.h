@@ -31,8 +31,8 @@ namespace GFX_API {
 	*/
 	struct GFXAPI RTSLOT_Description {
 		GFX_API::GFXHandle TextureHandles[2];
-		GFX_API::OPERATION_TYPE OPTYPE;
-		GFX_API::DRAWPASS_LOAD LOADOP;
+		GFX_API::OPERATION_TYPE OPTYPE, OPTYPESTENCIL;
+		GFX_API::DRAWPASS_LOAD LOADOP, LOADOPSTENCIL;
 		vec4 CLEAR_VALUE; 
 		bool isUSEDLATER;
 		unsigned char SLOTINDEX;
@@ -42,7 +42,7 @@ namespace GFX_API {
 	struct GFXAPI RTSLOTUSAGE_Description {
 		unsigned char SLOTINDEX;
 		bool IS_DEPTH;
-		OPERATION_TYPE OPTYPE;
+		OPERATION_TYPE OPTYPE, OPTYPESTENCIL;
 	};
 	//Don't forget to inherite a SlotSet with GFXRenderer->Inherite_RTSlotSet() and pass the handle to BASESLOTSET
 	//If you set BASESLOTSET as a Base Slot Set, it is Undefined Behaviour!

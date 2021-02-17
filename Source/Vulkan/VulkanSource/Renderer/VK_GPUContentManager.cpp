@@ -1090,66 +1090,65 @@ namespace Vulkan {
 						continue;
 					}
 
-unsigned int BP = gfxdesc.BINDINGPOINT;
-for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
-	if (BP == bindings[bpsearchindex].binding) {
-		LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
-		return TAPI_FAIL;
-	}
-}
+					unsigned int BP = gfxdesc.BINDINGPOINT;
+					for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
+						if (BP == bindings[bpsearchindex].binding) {
+							LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
+							return TAPI_FAIL;
+						}
+					}
 
-VkDescriptorSetLayoutBinding bn = {};
-bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
-bn.pImmutableSamplers = VK_NULL_HANDLE;
-bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
-bn.descriptorCount = 1;		//I don't support array descriptors for now!
-bn.binding = BP;
-bindings.push_back(bn);
+					if (!gfxdesc.ELEMENTCOUNT) {
+						LOG_ERROR_TAPI("Link_MaterialType() has failed because one of the shader inputs have 0 element count!");
+						return TAPI_FAIL;
+					}
 
-switch (gfxdesc.TYPE) {
-case GFX_API::MATERIALDATA_TYPE::IMAGE_G:
-{
-	VK_DescImage descimage;
-	descimage.BindingIndex = BP;
-	descimage.info.imageView = VK_NULL_HANDLE;
-	descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	descimage.info.sampler = VK_NULL_HANDLE;
-	DescImages.push_back(descimage);
-}
-break;
-case GFX_API::MATERIALDATA_TYPE::SAMPLER_G:
-{
-	VK_DescImage descimage;
-	descimage.BindingIndex = BP;
-	descimage.info.imageView = VK_NULL_HANDLE;
-	descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	descimage.info.sampler = VK_NULL_HANDLE;
-	DescSamplers.push_back(descimage);
-}
-break;
-case GFX_API::MATERIALDATA_TYPE::UBUFFER_G:
-{
-	VK_DescBuffer descbuffer;
-	descbuffer.BindingIndex = BP;
-	descbuffer.Info.range = gfxdesc.DATA_SIZE;
-	descbuffer.IsUpdated.store(0);
-	descbuffer.Info.buffer = VK_NULL_HANDLE;
-	descbuffer.Info.offset = 0;
-	DescUBuffers.push_back(descbuffer);
-}
-break;
-case GFX_API::MATERIALDATA_TYPE::SBUFFER_G:
-{
-	VK_DescBuffer descbuffer;
-	descbuffer.BindingIndex = BP;
-	descbuffer.Info.range = gfxdesc.DATA_SIZE;
-	descbuffer.IsUpdated.store(0);
-	descbuffer.Info.buffer = VK_NULL_HANDLE;
-	descbuffer.Info.offset = 0;
-	DescSBuffers.push_back(descbuffer);
-}
-break;
-}
+					VkDescriptorSetLayoutBinding bn = {};
+					bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
+					bn.pImmutableSamplers = VK_NULL_HANDLE;
+					bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
+					bn.descriptorCount = gfxdesc.ELEMENTCOUNT;
+					bn.binding = BP;
+					bindings.push_back(bn);
+
+					switch (gfxdesc.TYPE) {
+					case GFX_API::MATERIALDATA_TYPE::IMAGE_G:
+					{
+						VK_DescImage descimage;
+						descimage.BindingIndex = BP;
+						descimage.ElementCount = gfxdesc.ELEMENTCOUNT;
+						descimage.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
+						DescImages.push_back(descimage);
+					}
+					break;
+					case GFX_API::MATERIALDATA_TYPE::SAMPLER_G:
+					{
+						VK_DescImage descimage;
+						descimage.BindingIndex = BP;
+						descimage.ElementCount = gfxdesc.ELEMENTCOUNT;
+						descimage.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
+						DescSamplers.push_back(descimage);
+					}
+					break;
+					case GFX_API::MATERIALDATA_TYPE::UBUFFER_G:
+					{
+						VK_DescBuffer descbuffer;
+						descbuffer.BindingIndex = BP;
+						descbuffer.ElementCount = gfxdesc.ELEMENTCOUNT;
+						descbuffer.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
+						DescUBuffers.push_back(descbuffer);
+					}
+					break;
+					case GFX_API::MATERIALDATA_TYPE::SBUFFER_G:
+					{
+						VK_DescBuffer descbuffer;
+						descbuffer.BindingIndex = BP;
+						descbuffer.ElementCount = gfxdesc.ELEMENTCOUNT;
+						descbuffer.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
+						DescSBuffers.push_back(descbuffer);
+					}
+					break;
+					}
 				}
 
 				VKPipeline->General_DescSet.DescImagesCount = DescImages.size();
@@ -1221,9 +1220,8 @@ break;
 					{
 						VK_DescImage descimage;
 						descimage.BindingIndex = BP;
-						descimage.info.imageView = VK_NULL_HANDLE;
-						descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-						descimage.info.sampler = VK_NULL_HANDLE;
+						descimage.ElementCount = gfxdesc.ELEMENTCOUNT;
+						descimage.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
 						DescImages.push_back(descimage);
 					}
 					break;
@@ -1231,9 +1229,8 @@ break;
 					{
 						VK_DescImage descimage;
 						descimage.BindingIndex = BP;
-						descimage.info.imageView = VK_NULL_HANDLE;
-						descimage.info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-						descimage.info.sampler = VK_NULL_HANDLE;
+						descimage.ElementCount = gfxdesc.ELEMENTCOUNT;
+						descimage.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
 						DescSamplers.push_back(descimage);
 					}
 					break;
@@ -1241,10 +1238,8 @@ break;
 					{
 						VK_DescBuffer descbuffer;
 						descbuffer.BindingIndex = BP;
-						descbuffer.Info.range = gfxdesc.DATA_SIZE;
-						descbuffer.IsUpdated.store(0);
-						descbuffer.Info.buffer = VK_NULL_HANDLE;
-						descbuffer.Info.offset = 0;
+						descbuffer.ElementCount = gfxdesc.ELEMENTCOUNT;
+						descbuffer.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
 						DescUBuffers.push_back(descbuffer);
 					}
 					break;
@@ -1252,10 +1247,8 @@ break;
 					{
 						VK_DescBuffer descbuffer;
 						descbuffer.BindingIndex = BP;
-						descbuffer.Info.range = gfxdesc.DATA_SIZE;
-						descbuffer.IsUpdated.store(0);
-						descbuffer.Info.buffer = VK_NULL_HANDLE;
-						descbuffer.Info.offset = 0;
+						descbuffer.ElementCount = gfxdesc.ELEMENTCOUNT;
+						descbuffer.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
 						DescSBuffers.push_back(descbuffer);
 					}
 					break;
@@ -1427,19 +1420,35 @@ break;
 		VKPInstance->DescSet.DescUBuffersCount = VKPSO->Instance_DescSet.DescUBuffersCount;
 		if (VKPInstance->DescSet.DescImagesCount) {
 			VKPInstance->DescSet.DescImages = new VK_DescImage[VKPInstance->DescSet.DescImagesCount];
-			memcpy(VKPInstance->DescSet.DescImages, VKPSO->Instance_DescSet.DescImages, VKPInstance->DescSet.DescImagesCount * sizeof(VK_DescImage));
+			for (unsigned int DescIndex = 0; DescIndex < VKPInstance->DescSet.DescImagesCount; DescIndex++) {
+				VKPInstance->DescSet.DescImages[DescIndex].BindingIndex = VKPSO->Instance_DescSet.DescImages->BindingIndex;
+				VKPInstance->DescSet.DescImages[DescIndex].ElementCount = VKPSO->Instance_DescSet.DescImages->ElementCount;
+				VKPInstance->DescSet.DescImages[DescIndex].Elements = new VK_DescImageElement[VKPInstance->DescSet.DescImages->ElementCount];
+			}
 		}
 		if (VKPInstance->DescSet.DescSamplersCount) {
 			VKPInstance->DescSet.DescSamplers = new VK_DescImage[VKPInstance->DescSet.DescSamplersCount];
-			memcpy(VKPInstance->DescSet.DescSamplers, VKPSO->Instance_DescSet.DescSamplers, VKPInstance->DescSet.DescSamplersCount * sizeof(VK_DescImage));
+			for (unsigned int DescIndex = 0; DescIndex < VKPInstance->DescSet.DescSamplersCount; DescIndex++) {
+				VKPInstance->DescSet.DescSamplers[DescIndex].BindingIndex = VKPSO->Instance_DescSet.DescSamplers->BindingIndex;
+				VKPInstance->DescSet.DescSamplers[DescIndex].ElementCount = VKPSO->Instance_DescSet.DescSamplers->ElementCount;
+				VKPInstance->DescSet.DescSamplers[DescIndex].Elements = new VK_DescImageElement[VKPInstance->DescSet.DescSamplers->ElementCount];
+			}
 		}
 		if (VKPInstance->DescSet.DescSBuffersCount) {
 			VKPInstance->DescSet.DescSBuffers = new VK_DescBuffer[VKPInstance->DescSet.DescSBuffersCount];
-			memcpy(VKPInstance->DescSet.DescSBuffers, VKPSO->Instance_DescSet.DescSBuffers, VKPInstance->DescSet.DescSBuffersCount * sizeof(VK_DescBuffer));
+			for (unsigned int DescIndex = 0; DescIndex < VKPInstance->DescSet.DescSBuffersCount; DescIndex++) {
+				VKPInstance->DescSet.DescSBuffers[DescIndex].BindingIndex = VKPSO->Instance_DescSet.DescSBuffers->BindingIndex;
+				VKPInstance->DescSet.DescSBuffers[DescIndex].ElementCount = VKPSO->Instance_DescSet.DescSBuffers->ElementCount;
+				VKPInstance->DescSet.DescSBuffers[DescIndex].Elements = new VK_DescBufferElement[VKPInstance->DescSet.DescSBuffers->ElementCount];
+			}
 		}
 		if (VKPInstance->DescSet.DescUBuffersCount) {
 			VKPInstance->DescSet.DescUBuffers = new VK_DescBuffer[VKPInstance->DescSet.DescUBuffersCount];
-			memcpy(VKPInstance->DescSet.DescUBuffers, VKPSO->Instance_DescSet.DescUBuffers, VKPInstance->DescSet.DescUBuffersCount * sizeof(VK_DescBuffer));
+			for (unsigned int DescIndex = 0; DescIndex < VKPInstance->DescSet.DescUBuffersCount; DescIndex++) {
+				VKPInstance->DescSet.DescUBuffers[DescIndex].BindingIndex = VKPSO->Instance_DescSet.DescUBuffers->BindingIndex;
+				VKPInstance->DescSet.DescUBuffers[DescIndex].ElementCount = VKPSO->Instance_DescSet.DescUBuffers->ElementCount;
+				VKPInstance->DescSet.DescUBuffers[DescIndex].Elements = new VK_DescBufferElement[VKPInstance->DescSet.DescUBuffers->ElementCount];
+			}
 		}
 		if (VKPInstance->DescSet.DescImagesCount ||
 			VKPInstance->DescSet.DescSamplersCount ||
@@ -1458,8 +1467,8 @@ break;
 		LOG_CRASHING_TAPI("Delete_MaterialInst() isn't coded yet!");
 	}
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
-	TAPIResult GPU_ContentManager::SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
-		GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) {
+	TAPIResult GPU_ContentManager::SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+		GFX_API::GFXHandle TargetBufferHandle, unsigned int ELEMENTINDEX, GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset) {
 		VK_DescBuffer* UB = nullptr;
 		VK_DescSet* Set = nullptr;
 		unsigned int UBIndex = 0;
@@ -1497,7 +1506,11 @@ break;
 			LOG_WARNING_TAPI("This TargetOffset in SetMaterial_UniformBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + to_string(VKGPU->Device_Properties.limits.minUniformBufferOffsetAlignment));
 		}
 		bool x = 0, y = 1;
-		if (!UB->IsUpdated.compare_exchange_strong(x, y)) {
+		if (ELEMENTINDEX >= UB->ElementCount) {
+			LOG_ERROR_TAPI("You gave SetMaterial_UniformBuffer() an overflowing ELEMENTINDEX!");
+			return TAPI_FAIL;
+		}
+		if (!UB->Elements[ELEMENTINDEX].IsUpdated.compare_exchange_strong(x, y)) {
 			LOG_ERROR_TAPI("You already set the uniform buffer, you can't change it at the same frame!");
 			return TAPI_WRONGTIMING;
 		}
@@ -1506,19 +1519,20 @@ break;
 		case GFX_API::BUFFER_TYPE::STAGING:
 		{
 			MemoryBlock* StagingBuf = GFXHandleConverter(MemoryBlock*, TargetBufferHandle);
-			FindBufferOBJ_byBufType(TargetBufferHandle, BufferType, UB->Info.buffer, FinalOffset);
+			FindBufferOBJ_byBufType(TargetBufferHandle, BufferType, UB->Elements[ELEMENTINDEX].Info.buffer, FinalOffset);
 		}
 		break;
 		default:
 			LOG_NOTCODED_TAPI("SetMaterial_UniformBuffer() doesn't support this type of target buffers right now!", true);
 			return TAPI_NOTCODED;
 		}
-		UB->Info.offset = FinalOffset;
-		UB->IsUpdated.store(1);
+		UB->Elements[ELEMENTINDEX].Info.offset = FinalOffset;
+		UB->Elements[ELEMENTINDEX].IsUpdated.store(1);
 		VK_DescSetUpdateCall call;
 		call.Set = Set;
-		call.ArrayIndex = UBIndex;
+		call.BindingArrayIndex = UBIndex;
 		call.Type = DescType::UBUFFER;
+		call.ElementIndex = ELEMENTINDEX;
 		if (isUsedRecently) {
 			call.Set->ShouldRecreate.store(1);
 			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
@@ -1529,7 +1543,7 @@ break;
 		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::SetMaterial_SampledTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
-		GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
+		unsigned int ELEMENTINDEX, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
 		VK_DescSet* Set = nullptr;
 		VK_DescImage* Image = nullptr;
 		unsigned int SamplerIndex = UINT32_MAX;
@@ -1570,19 +1584,24 @@ break;
 
 		VK_Sampler* Sampler = GFXHandleConverter(VK_Sampler*, SamplingType);
 		bool x = false, y = true;
-		if (!Image->IsUpdated.compare_exchange_strong(x, y)) {
+		if (ELEMENTINDEX >= Image->ElementCount) {
+			LOG_ERROR_TAPI("You gave SetMaterial_SampledTexture() an overflowing ELEMENTINDEX!");
+			return TAPI_FAIL;
+		}
+		if (!Image->Elements[ELEMENTINDEX].IsUpdated.compare_exchange_strong(x, y)) {
 			return TAPI_WRONGTIMING;
 		}
 		VkAccessFlags unused;
-		Find_AccessPattern_byIMAGEACCESS(usage, unused, Image->info.imageLayout);
+		Find_AccessPattern_byIMAGEACCESS(usage, unused, Image->Elements[ELEMENTINDEX].info.imageLayout);
 		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
-		Image->info.imageView = TEXTURE->ImageView;
-		Image->info.sampler = Sampler->Sampler;
+		Image->Elements[ELEMENTINDEX].info.imageView = TEXTURE->ImageView;
+		Image->Elements[ELEMENTINDEX].info.sampler = Sampler->Sampler;
 
 		VK_DescSetUpdateCall call;
 		call.Set = Set;
-		call.ArrayIndex = SamplerIndex;
+		call.BindingArrayIndex = SamplerIndex;
 		call.Type = DescType::SAMPLER;
+		call.ElementIndex = ELEMENTINDEX;
 		if (isUsedRecently) {
 			call.Set->ShouldRecreate.store(1);
 			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
@@ -1593,7 +1612,7 @@ break;
 		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::SetMaterial_ImageTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
-		GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
+		unsigned int ELEMENTINDEX, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
 		VK_DescSet* Set = nullptr;
 		VK_DescImage* Image = nullptr;
 		unsigned int SamplerIndex = UINT32_MAX;
@@ -1634,19 +1653,24 @@ break;
 
 		VK_Sampler* Sampler = GFXHandleConverter(VK_Sampler*, SamplingType);
 		bool x = false, y = true;
-		if (!Image->IsUpdated.compare_exchange_strong(x, y)) {
+		if (ELEMENTINDEX >= Image->ElementCount) {
+			LOG_ERROR_TAPI("You gave SetMaterial_ImageTexture() an overflowing ELEMENTINDEX!");
+			return TAPI_FAIL;
+		}
+		if (!Image->Elements[ELEMENTINDEX].IsUpdated.compare_exchange_strong(x, y)) {
 			return TAPI_WRONGTIMING;
 		}
 		VkAccessFlags unused;
-		Find_AccessPattern_byIMAGEACCESS(usage, unused, Image->info.imageLayout);
+		Find_AccessPattern_byIMAGEACCESS(usage, unused, Image->Elements[ELEMENTINDEX].info.imageLayout);
 		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
-		Image->info.imageView = TEXTURE->ImageView;
-		Image->info.sampler = Sampler->Sampler;
+		Image->Elements[ELEMENTINDEX].info.imageView = TEXTURE->ImageView;
+		Image->Elements[ELEMENTINDEX].info.sampler = Sampler->Sampler;
 
 		VK_DescSetUpdateCall call;
 		call.Set = Set;
-		call.ArrayIndex = SamplerIndex;
+		call.BindingArrayIndex = SamplerIndex;
 		call.Type = DescType::IMAGE;
+		call.ElementIndex = ELEMENTINDEX;
 		if (isUsedRecently) {
 			call.Set->ShouldRecreate.store(1);
 			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);

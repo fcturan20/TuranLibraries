@@ -939,27 +939,27 @@ namespace Vulkan {
 					switch (Call.Type) {
 					case DescType::IMAGE:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
-						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
-						Call.Set->DescImages[Call.ArrayIndex].IsUpdated.store(0);
+						info.dstBinding = Call.Set->DescImages[Call.BindingArrayIndex].BindingIndex;
+						info.pImageInfo = &Call.Set->DescImages[Call.BindingArrayIndex].Elements[Call.ElementIndex].info;
+						Call.Set->DescImages[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::SAMPLER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-						info.dstBinding = Call.Set->DescSamplers[Call.ArrayIndex].BindingIndex;
-						info.pImageInfo = &Call.Set->DescSamplers[Call.ArrayIndex].info;
-						Call.Set->DescSamplers[Call.ArrayIndex].IsUpdated.store(0);
+						info.dstBinding = Call.Set->DescSamplers[Call.BindingArrayIndex].BindingIndex;
+						info.pImageInfo = &Call.Set->DescSamplers[Call.BindingArrayIndex].Elements[Call.ElementIndex].info;
+						Call.Set->DescSamplers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::UBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-						info.dstBinding = Call.Set->DescUBuffers[Call.ArrayIndex].BindingIndex;
-						info.pBufferInfo = &Call.Set->DescUBuffers[Call.ArrayIndex].Info;
-						Call.Set->DescUBuffers[Call.ArrayIndex].IsUpdated.store(0);
+						info.dstBinding = Call.Set->DescUBuffers[Call.BindingArrayIndex].BindingIndex;
+						info.pBufferInfo = &Call.Set->DescUBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].Info;
+						Call.Set->DescUBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::SBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-						info.dstBinding = Call.Set->DescSBuffers[Call.ArrayIndex].BindingIndex;
-						info.pBufferInfo = &Call.Set->DescSBuffers[Call.ArrayIndex].Info;
-						Call.Set->DescSBuffers[Call.ArrayIndex].IsUpdated.store(0);
+						info.dstBinding = Call.Set->DescSBuffers[Call.BindingArrayIndex].BindingIndex;
+						info.pBufferInfo = &Call.Set->DescSBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].Info;
+						Call.Set->DescSBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					}
 					info.dstSet = Call.Set->Set;
@@ -983,30 +983,31 @@ namespace Vulkan {
 					switch (Call.Type) {
 					case DescType::IMAGE:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-						info.dstBinding = Call.Set->DescImages[Call.ArrayIndex].BindingIndex;
-						info.pImageInfo = &Call.Set->DescImages[Call.ArrayIndex].info;
-						Call.Set->DescImages[Call.ArrayIndex].IsUpdated.store(0);
+						info.dstBinding = Call.Set->DescImages[Call.BindingArrayIndex].BindingIndex;
+						info.pImageInfo = &Call.Set->DescImages[Call.BindingArrayIndex].Elements[Call.ElementIndex].info;
+						Call.Set->DescImages[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::SAMPLER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ;
-						info.dstBinding = Call.Set->DescSamplers[Call.ArrayIndex].BindingIndex;
-						info.pImageInfo = &Call.Set->DescSamplers[Call.ArrayIndex].info;
-						Call.Set->DescSamplers[Call.ArrayIndex].IsUpdated.store(0);
+						info.dstBinding = Call.Set->DescSamplers[Call.BindingArrayIndex].BindingIndex;
+						info.pImageInfo = &Call.Set->DescSamplers[Call.BindingArrayIndex].Elements[Call.ElementIndex].info;
+						Call.Set->DescSamplers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::UBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-						info.dstBinding = Call.Set->DescUBuffers[Call.ArrayIndex].BindingIndex;
-						info.pBufferInfo = &Call.Set->DescUBuffers[Call.ArrayIndex].Info;
-						Call.Set->DescUBuffers[Call.ArrayIndex].IsUpdated.store(0);
+						info.dstBinding = Call.Set->DescUBuffers[Call.BindingArrayIndex].BindingIndex;
+						info.pBufferInfo = &Call.Set->DescUBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].Info;
+						Call.Set->DescUBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::SBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-						info.dstBinding = Call.Set->DescSBuffers[Call.ArrayIndex].BindingIndex;
-						info.pBufferInfo = &Call.Set->DescSBuffers[Call.ArrayIndex].Info;
-						Call.Set->DescSBuffers[Call.ArrayIndex].IsUpdated.store(0);
+						info.dstBinding = Call.Set->DescSBuffers[Call.BindingArrayIndex].BindingIndex;
+						info.pBufferInfo = &Call.Set->DescSBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].Info;
+						Call.Set->DescSBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					}
 					info.dstSet = Call.Set->Set;
+					info.dstArrayElement = Call.ElementIndex;
 					info.pNext = nullptr;
 					info.pTexelBufferView = nullptr;
 					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

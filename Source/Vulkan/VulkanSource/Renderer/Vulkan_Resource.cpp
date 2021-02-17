@@ -179,16 +179,20 @@ namespace Vulkan {
 
 	}
 
-	VK_DescBuffer::VK_DescBuffer() : IsUpdated(0), Info(), BindingIndex(0) {
+	VK_DescImageElement::VK_DescImageElement() : IsUpdated(0), info(){
+		info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		info.imageView = VK_NULL_HANDLE;
+		info.sampler = VK_NULL_HANDLE;
+	}
+	VK_DescImageElement::VK_DescImageElement(const VK_DescImageElement& copydesc) : IsUpdated(copydesc.IsUpdated.load()), info(copydesc.info){
 
 	}
-	VK_DescBuffer::VK_DescBuffer(const VK_DescBuffer& copyBuf) : IsUpdated(copyBuf.IsUpdated.load()), Info(copyBuf.Info), BindingIndex(copyBuf.BindingIndex) {
-
+	VK_DescBufferElement::VK_DescBufferElement() : IsUpdated(0), Info() {
+		Info.buffer = VK_NULL_HANDLE;
+		Info.offset = UINT64_MAX;
+		Info.range = UINT64_MAX;
 	}
-	VK_DescImage::VK_DescImage() : IsUpdated(0), info(), BindingIndex(0) {
-
-	}
-	VK_DescImage::VK_DescImage(const VK_DescImage& copyIm) : IsUpdated(copyIm.IsUpdated.load()), info(copyIm.info), BindingIndex(copyIm.BindingIndex) {
+	VK_DescBufferElement::VK_DescBufferElement(const VK_DescBufferElement& copyBuf) : IsUpdated(copyBuf.IsUpdated.load()), Info(copyBuf.Info){
 
 	}
 }

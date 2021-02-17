@@ -106,19 +106,25 @@ namespace Vulkan {
 		UBUFFER,
 		SBUFFER
 	};
-	struct VK_API VK_DescBuffer {
-		unsigned int BindingIndex;
+	struct VK_API VK_DescBufferElement {
 		VkDescriptorBufferInfo Info;
 		std::atomic<bool> IsUpdated;
-		VK_DescBuffer();
-		VK_DescBuffer(const VK_DescBuffer& copyDesc);
+		VK_DescBufferElement();
+		VK_DescBufferElement(const VK_DescBufferElement& copyDesc);
+	};
+	struct VK_API VK_DescBuffer {
+		unsigned int BindingIndex = UINT32_MAX, ElementCount = 0;
+		VK_DescBufferElement* Elements = nullptr;
+	};
+	struct VK_API VK_DescImageElement {
+		VkDescriptorImageInfo info;
+		std::atomic_bool IsUpdated;
+		VK_DescImageElement();
+		VK_DescImageElement(const VK_DescImageElement& copyDesc);
 	};
 	struct VK_API VK_DescImage {
-		VkDescriptorImageInfo info;
-		unsigned int BindingIndex;
-		std::atomic_bool IsUpdated;
-		VK_DescImage();
-		VK_DescImage(const VK_DescImage& copyDesc);
+		unsigned int BindingIndex = UINT32_MAX, ElementCount = 0;
+		VK_DescImageElement* Elements = nullptr;
 	};
 	struct VK_API VK_DescSet {
 		VkDescriptorSet Set = VK_NULL_HANDLE;
@@ -131,7 +137,7 @@ namespace Vulkan {
 	struct VK_API VK_DescSetUpdateCall {
 		VK_DescSet* Set;
 		DescType Type;
-		unsigned int ArrayIndex;
+		unsigned int BindingArrayIndex, ElementIndex;
 	};
 	struct VK_API VK_DescPool {
 		VkDescriptorPool pool;

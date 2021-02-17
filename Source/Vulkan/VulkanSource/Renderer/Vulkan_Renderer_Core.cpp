@@ -672,8 +672,10 @@ namespace Vulkan {
 								}
 							}
 						}
-						Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
-						CurrentFrameIndexesArray_Element++;
+						if (isThereAny) {
+							Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
+							CurrentFrameIndexesArray_Element++;
+						}
 					}
 					break;
 					case GFX_API::TRANFERPASS_TYPE::TP_COPY:
@@ -717,7 +719,7 @@ namespace Vulkan {
 							Branch.CFNeeded_QueueSpecs.is_TRANSFERsupported = true;
 						}
 					}
-						break;
+					break;
 					default:
 						LOG_NOTCODED_TAPI("VulkanRenderer: CurrentFrame_WorkloadAnalysis() doesn't support this type of transfer pass type!", true);
 						break;

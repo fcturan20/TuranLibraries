@@ -1,1 +1,5 @@
 TuranAPI: Logging Started!
+This TargetOffset in SetMaterial_UniformBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of 64
+
+
+

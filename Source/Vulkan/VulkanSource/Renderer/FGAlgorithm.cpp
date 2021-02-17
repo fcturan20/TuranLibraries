@@ -849,7 +849,12 @@ namespace Vulkan {
 						FillBranch.CFDependentBranchCount = CFDRPCountNaive;
 
 						FillBranch.PenultimateSwapchainBranchCount = RP->CFDependentRPs.size() - CFDRPCountNaive;
-						FillBranch.PenultimateSwapchainBranches = new VK_RGBranch * [FillBranch.PenultimateSwapchainBranchCount];
+						if (FillBranch.PenultimateSwapchainBranchCount) {
+							FillBranch.PenultimateSwapchainBranches = new VK_RGBranch * [FillBranch.PenultimateSwapchainBranchCount];
+						}
+						else {
+							FillBranch.PenultimateSwapchainBranches = nullptr;
+						}
 					}
 					FillBranch.LFDependentBranchCount = RP->LFDependentRPs.size();
 					if (FillBranch.LFDependentBranchCount) {
@@ -1217,6 +1222,12 @@ namespace Vulkan {
 				}
 			}
 
+			if (!MainBranch->CFDynamicDependents.size()) {
+				VK_QUEUEFLAG TransferQueueFlag; TransferQueueFlag.is_TRANSFERsupported = true;
+				CreateSubmit_ForRGB(CurrentFG, MainBranchIndex, LastFG, FindAvailableQueue(TransferQueueFlag), SubmitlessBranches, NumberOfSubmitlessBranches);
+				continue;
+			}
+			
 			AttachRGB(CurrentFG, MainBranchIndex, LastFG, SubmitlessBranches, NumberOfSubmitlessBranches);
 		}
 
@@ -1414,6 +1425,12 @@ namespace Vulkan {
 				}
 				if (CFDBranch->CFNeeded_QueueSpecs.is_GRAPHICSsupported) {
 					flag |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+				}
+				if (!CFDBranch->CFNeeded_QueueSpecs.is_COMPUTEsupported &&
+					!CFDBranch->CFNeeded_QueueSpecs.is_GRAPHICSsupported &&
+					!CFDBranch->CFNeeded_QueueSpecs.is_PRESENTATIONsupported &&
+					!CFDBranch->CFNeeded_QueueSpecs.is_TRANSFERsupported) {
+					flag |= VK_PIPELINE_STAGE_TRANSFER_BIT;
 				}
 				
 				Submit->WaitSemaphoreStages.push_back(flag);

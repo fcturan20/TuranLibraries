@@ -1252,34 +1252,33 @@ namespace Vulkan {
 		DATAs->BUFBUFCopies.push_back(GFX->JobSys->GetThisThreadIndex(), finalinfo);
 	}
 	void Renderer::CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
-		GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, unsigned int TargetTexture_OffsetWidth, unsigned int TargetTexture_OffsetHeight,
-		unsigned int TargetTexture_OffsetDepth, unsigned int TargetTexture_CopyWidth, unsigned int TargetTexture_CopyHeight, unsigned int TargetTexture_CopyDepth) {
+		GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion) {
 		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
 		VkDeviceSize finaloffset = static_cast<VkDeviceSize>(SourceBuffer_offset);
 		VK_BUFtoIMinfo x;
 		x.BufferImageCopy.bufferImageHeight = 0;
 		x.BufferImageCopy.bufferRowLength = 0;
-		if (TargetTexture_CopyDepth) {
-			x.BufferImageCopy.imageExtent.depth = TargetTexture_CopyDepth;
+		if (TargetTextureRegion.Depth) {
+			x.BufferImageCopy.imageExtent.depth = TargetTextureRegion.Depth;
 		}
 		else {
 			x.BufferImageCopy.imageExtent.depth = 1;
 		}
-		if (TargetTexture_CopyHeight) {
-			x.BufferImageCopy.imageExtent.height = TargetTexture_CopyHeight;
+		if (TargetTextureRegion.Height) {
+			x.BufferImageCopy.imageExtent.height = TargetTextureRegion.Height;
 		}
 		else {
 			x.BufferImageCopy.imageExtent.height = TEXTURE->HEIGHT;
 		}
-		if (TargetTexture_CopyWidth) {
-			x.BufferImageCopy.imageExtent.width = TargetTexture_CopyWidth;
+		if (TargetTextureRegion.Width) {
+			x.BufferImageCopy.imageExtent.width = TargetTextureRegion.Width;
 		}
 		else {
 			x.BufferImageCopy.imageExtent.width = TEXTURE->WIDTH;
 		}
-		x.BufferImageCopy.imageOffset.x = TargetTexture_OffsetWidth;
-		x.BufferImageCopy.imageOffset.y = TargetTexture_OffsetHeight;
-		x.BufferImageCopy.imageOffset.z = TargetTexture_OffsetDepth;
+		x.BufferImageCopy.imageOffset.x = TargetTextureRegion.WidthOffset;
+		x.BufferImageCopy.imageOffset.y = TargetTextureRegion.HeightOffset;
+		x.BufferImageCopy.imageOffset.z = TargetTextureRegion.DepthOffset;
 		if (TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
 			x.BufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 		}
@@ -1302,6 +1301,46 @@ namespace Vulkan {
 		}
 		VK_TPCopyDatas* DATAs = GFXHandleConverter(VK_TPCopyDatas*, TP->TransferDatas);
 		DATAs->BUFIMCopies.push_back(GFX->JobSys->GetThisThreadIndex(), x);
+	}
+	void Renderer::CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle,
+		uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset) {
+		VK_Texture* SourceIm = GFXHandleConverter(VK_Texture*, SourceTextureHandle);
+		VK_Texture* TargetIm = GFXHandleConverter(VK_Texture*, TargetTextureHandle);
+		VK_IMtoIMinfo x;
+
+		VkImageCopy copy_i = {};
+		copy_i.dstOffset.x = TargetTextureOffset.x;
+		copy_i.dstOffset.y = TargetTextureOffset.y;
+		copy_i.dstOffset.z = TargetTextureOffset.z;
+		copy_i.srcOffset.x = SourceTextureOffset.x;
+		copy_i.srcOffset.y = SourceTextureOffset.y;
+		copy_i.srcOffset.z = SourceTextureOffset.z;
+		if (SourceIm->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
+			copy_i.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+			copy_i.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		}
+		else if (SourceIm->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8) {
+			copy_i.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+			copy_i.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+		else {
+			copy_i.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			copy_i.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		}
+		copy_i.dstSubresource.baseArrayLayer = 0; copy_i.srcSubresource.baseArrayLayer = 0;
+		copy_i.dstSubresource.layerCount = 1; copy_i.srcSubresource.layerCount = 1;
+		copy_i.dstSubresource.mipLevel = 0; copy_i.srcSubresource.mipLevel = 0;
+		
+		copy_i.extent.width = CopySize.x;
+		copy_i.extent.height = CopySize.y;
+		copy_i.extent.depth = CopySize.z;
+
+		x.info = copy_i;
+		x.SourceTexture = SourceIm->Image;
+		x.TargetTexture = TargetIm->Image;
+
+		VK_TPCopyDatas* DATAs = GFXHandleConverter(VK_TPCopyDatas*, GFXHandleConverter(VK_TransferPass*, TransferPassHandle)->TransferDatas);
+		DATAs->IMIMCopies.push_back(GFX->JobSys->GetThisThreadIndex(), x);
 	}
 
 	void Renderer::ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS

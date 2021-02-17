@@ -189,7 +189,8 @@ namespace Vulkan {
 		VkBufferCopy info;
 	};
 	struct VK_IMtoIMinfo {
-		VK_Texture* IMAGE;
+		VkImage SourceTexture, TargetTexture;
+		VkImageCopy info;
 	};
 	struct VK_TPCopyDatas {
 		TuranAPI::Threading::TLVector<VK_BUFtoIMinfo> BUFIMCopies;

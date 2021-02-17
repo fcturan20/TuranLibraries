@@ -400,6 +400,7 @@ namespace GFX_API {
 		bool is_GraphicOperations_Supported = false, is_ComputeOperations_Supported = false, is_TransferOperations_Supported = false;
 		vector<MemoryType> MEMTYPEs;
 		uint64_t DEVICELOCAL_MaxMemorySize, HOSTVISIBLE_MaxMemorySize, FASTHOSTVISIBLE_MaxMemorySize, READBACK_MaxMemorySize;
+		bool isSupported_SeperateDepthStencilLayouts = false, isSupported_SeperateRTSlotBlending = false;
 	};
 
 	struct GFXAPI WindowDescription {

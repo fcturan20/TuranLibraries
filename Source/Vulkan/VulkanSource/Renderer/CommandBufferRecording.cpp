@@ -265,6 +265,19 @@ namespace Vulkan {
 				DATAs->BUFIMCopies.clear(ThreadIndex);
 			}
 		}
+		{
+			std::unique_lock<std::mutex> IMIMLocker;
+			DATAs->IMIMCopies.PauseAllOperations(IMIMLocker);
+			unsigned int LastElementIndex = 0;
+			for (unsigned char ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+				for (unsigned int i = 0; i < DATAs->IMIMCopies.size(ThreadIndex); i++) {
+					VK_IMtoIMinfo& info = DATAs->IMIMCopies.get(ThreadIndex, i);
+					vkCmdCopyImage(CB, info.SourceTexture, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, info.TargetTexture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &info.info);
+					LastElementIndex++;
+				}
+				DATAs->IMIMCopies.clear(ThreadIndex);
+			}
+		}
 	}
 	void RecordRGBranchCalls(VK_RGBranch& Branch, VkCommandBuffer CB) {
 		unsigned char PassElementIndex = 0;

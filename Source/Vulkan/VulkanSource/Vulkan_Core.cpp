@@ -151,6 +151,142 @@ namespace Vulkan {
 	}
 
 
+	void Gather_PhysicalDeviceInformations(GPU* VKGPU) {
+		vkGetPhysicalDeviceProperties(VKGPU->Physical_Device, &VKGPU->Device_Properties);
+		vkGetPhysicalDeviceFeatures(VKGPU->Physical_Device, &VKGPU->Supported_Features);
+
+		//GET QUEUE FAMILIES, SAVE THEM TO GPU OBJECT, CHECK AND SAVE GRAPHICS,COMPUTE,TRANSFER QUEUEFAMILIES INDEX
+		uint32_t queueFamilyCount = 0;
+		vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, nullptr);
+		VKGPU->QueueFamilyProperties.resize(queueFamilyCount);
+		vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, VKGPU->QueueFamilyProperties.data());
+		
+		vkGetPhysicalDeviceMemoryProperties(VKGPU->Physical_Device, &VKGPU->MemoryProperties);
+	}
+	void Analize_PhysicalDeviceMemoryProperties(GPU* VKGPU, GFX_API::GPUDescription& GPUdesc) {
+		for (uint32_t MemoryTypeIndex = 0; MemoryTypeIndex < VKGPU->MemoryProperties.memoryTypeCount; MemoryTypeIndex++) {
+			VkMemoryType& MemoryType = VKGPU->MemoryProperties.memoryTypes[MemoryTypeIndex];
+			bool isDeviceLocal = false;
+			bool isHostVisible = false;
+			bool isHostCoherent = false;
+			bool isHostCached = false;
+
+			if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+				isDeviceLocal = true;
+			}
+			if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+				isHostVisible = true;
+			}
+			if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+				isHostCoherent = true;
+			}
+			if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
+				isHostCached = true;
+			}
+
+			if (GPUdesc.GPU_TYPE != GFX_API::GPU_TYPEs::DISCRETE_GPU) {
+				continue;
+			}
+			if (!isDeviceLocal && !isHostVisible && !isHostCoherent && !isHostCached) {
+				continue;
+			}
+			if (isDeviceLocal) {
+				if (isHostVisible && isHostCoherent) {
+					GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE, GPUdesc.MEMTYPEs.size());
+					GPUdesc.MEMTYPEs.push_back(MEMTYPE);
+					VK_MemoryAllocation alloc;
+					alloc.MemoryTypeIndex = MemoryTypeIndex;
+					alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE;
+					VKGPU->ALLOCs.push_back(alloc);
+					GPUdesc.FASTHOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+					LOG_STATUS_TAPI("Found FAST HOST VISIBLE BIT! Size: " + to_string(GPUdesc.FASTHOSTVISIBLE_MaxMemorySize));
+				}
+				else {
+					GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, GPUdesc.MEMTYPEs.size());
+					GPUdesc.MEMTYPEs.push_back(MEMTYPE);
+					VK_MemoryAllocation alloc;
+					alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
+					alloc.MemoryTypeIndex = MemoryTypeIndex;
+					VKGPU->ALLOCs.push_back(alloc);
+					GPUdesc.DEVICELOCAL_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+					LOG_STATUS_TAPI("Found DEVICE LOCAL BIT! Size: " + to_string(GPUdesc.DEVICELOCAL_MaxMemorySize));
+				}
+			}
+			else if (isHostVisible && isHostCoherent) {
+				if (isHostCached) {
+					GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK, GPUdesc.MEMTYPEs.size());
+					GPUdesc.MEMTYPEs.push_back(MEMTYPE);
+					VK_MemoryAllocation alloc;
+					alloc.MemoryTypeIndex = MemoryTypeIndex;
+					alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK;
+					VKGPU->ALLOCs.push_back(alloc);
+					GPUdesc.READBACK_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+					LOG_STATUS_TAPI("Found READBACK BIT! Size: " + to_string(GPUdesc.READBACK_MaxMemorySize));
+				}
+				else {
+					GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE, GPUdesc.MEMTYPEs.size());
+					GPUdesc.MEMTYPEs.push_back(MEMTYPE);
+					VK_MemoryAllocation alloc;
+					alloc.MemoryTypeIndex = MemoryTypeIndex;
+					alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE;
+					VKGPU->ALLOCs.push_back(alloc);
+					GPUdesc.HOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+					LOG_STATUS_TAPI("Found HOST VISIBLE BIT! Size: " + to_string(GPUdesc.HOSTVISIBLE_MaxMemorySize));
+				}
+			}
+		}
+	}
+	void Analize_Queues(GPU* VKGPU, GFX_API::GPUDescription& GPUdesc) {
+		bool is_presentationfound = false;
+		for (unsigned int queuefamily_index = 0; queuefamily_index < VKGPU->QueueFamilyProperties.size(); queuefamily_index++) {
+			VkQueueFamilyProperties* QueueFamily = &VKGPU->QueueFamilyProperties[queuefamily_index];
+			VK_QUEUE VKQUEUE;
+			VKQUEUE.QueueFamilyIndex = queuefamily_index;
+			if (QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+				GPUdesc.is_GraphicOperations_Supported = true;
+				VKQUEUE.SupportFlag.is_GRAPHICSsupported = true;
+				VKQUEUE.QueueFeatureScore++;
+			}
+			if (QueueFamily->queueFlags & VK_QUEUE_COMPUTE_BIT) {
+				GPUdesc.is_ComputeOperations_Supported = true;
+				VKQUEUE.SupportFlag.is_COMPUTEsupported = true;
+				VKGPU->COMPUTE_supportedqueuecount++;
+				VKQUEUE.QueueFeatureScore++;
+			}
+			if (QueueFamily->queueFlags & VK_QUEUE_TRANSFER_BIT) {
+				GPUdesc.is_TransferOperations_Supported = true;
+				VKQUEUE.SupportFlag.is_TRANSFERsupported = true;
+				VKGPU->TRANSFERs_supportedqueuecount++;
+				VKQUEUE.QueueFeatureScore++;
+			}
+
+			VKGPU->QUEUEs.push_back(VKQUEUE);
+			if (VKQUEUE.SupportFlag.is_GRAPHICSsupported) {
+				VKGPU->GRAPHICS_QUEUEIndex = VKGPU->QUEUEs.size() - 1;
+			}
+		}
+		if (!GPUdesc.is_GraphicOperations_Supported || !GPUdesc.is_TransferOperations_Supported || !GPUdesc.is_ComputeOperations_Supported) {
+			LOG_CRASHING_TAPI("The GPU doesn't support one of the following operations, so we can't let you use this GPU: Compute, Transfer, Graphics");
+			return;
+		}
+		//Sort the queues by their feature count (Example: Element 0 is Transfer Only, Element 1 is Transfer-Compute, Element 2 is Graphics-Transfer-Compute etc)
+		//QuickSort Algorithm
+		if (VKGPU->QUEUEs.size()) {
+			bool should_Sort = true;
+			while (should_Sort) {
+				should_Sort = false;
+				for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size() - 1; QueueIndex++) {
+					if (VKGPU->QUEUEs[QueueIndex + 1].QueueFeatureScore < VKGPU->QUEUEs[QueueIndex].QueueFeatureScore) {
+						should_Sort = true;
+						VK_QUEUE SecondQueue;
+						SecondQueue = VKGPU->QUEUEs[QueueIndex + 1];
+						VKGPU->QUEUEs[QueueIndex + 1] = VKGPU->QUEUEs[QueueIndex];
+						VKGPU->QUEUEs[QueueIndex] = SecondQueue;
+					}
+				}
+			}
+		}
+	}
 	void Vulkan_Core::Check_Computer_Specs(vector<GFX_API::GPUDescription>& GPUdescs) {
 		LOG_STATUS_TAPI("Started to check Computer Specifications!");
 		GPUdescs.clear();
@@ -173,8 +309,7 @@ namespace Vulkan {
 			GPU* VKGPU = new GPU;
 			GFX_API::GPUDescription GPUdesc;
 			VKGPU->Physical_Device = Physical_GPU_LIST[i];
-			vkGetPhysicalDeviceProperties(VKGPU->Physical_Device, &VKGPU->Device_Properties);
-			vkGetPhysicalDeviceFeatures(VKGPU->Physical_Device, &VKGPU->Device_Features);
+			Gather_PhysicalDeviceInformations(VKGPU);
 			const char* VendorName = VK_States.Convert_VendorID_toaString(VKGPU->Device_Properties.vendorID);
 
 			//SAVE BASIC INFOs TO THE GPU DESC
@@ -198,140 +333,9 @@ namespace Vulkan {
 				break;
 			}
 
-			//GET QUEUE FAMILIES, SAVE THEM TO GPU OBJECT, CHECK AND SAVE GRAPHICS,COMPUTE,TRANSFER QUEUEFAMILIES INDEX
-			uint32_t queueFamilyCount = 0;
-			vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, nullptr);
-			VkQueueFamilyProperties* QueueFamilyProperties = new VkQueueFamilyProperties[queueFamilyCount];
-			vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, QueueFamilyProperties);
-			bool is_presentationfound = false;
-			for (unsigned int queuefamily_index = 0; queuefamily_index < queueFamilyCount; queuefamily_index++) {
-				VkQueueFamilyProperties* QueueFamily = &QueueFamilyProperties[queuefamily_index];
-				VK_QUEUE VKQUEUE;
-				VKQUEUE.QueueFamilyIndex = queuefamily_index;
-				if (QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-					GPUdesc.is_GraphicOperations_Supported = true;
-					VKQUEUE.SupportFlag.is_GRAPHICSsupported = true;
-					VKQUEUE.QueueFeatureScore++;
-				}
-				if (QueueFamily->queueFlags & VK_QUEUE_COMPUTE_BIT) {
-					GPUdesc.is_ComputeOperations_Supported = true;
-					VKQUEUE.SupportFlag.is_COMPUTEsupported = true;
-					VKGPU->COMPUTE_supportedqueuecount++;
-					VKQUEUE.QueueFeatureScore++;
-				}
-				if (QueueFamily->queueFlags & VK_QUEUE_TRANSFER_BIT) {
-					GPUdesc.is_TransferOperations_Supported = true;
-					VKQUEUE.SupportFlag.is_TRANSFERsupported = true;
-					VKGPU->TRANSFERs_supportedqueuecount++;
-					VKQUEUE.QueueFeatureScore++;
-				}
+			Analize_PhysicalDeviceMemoryProperties(VKGPU, GPUdesc);
+			Analize_Queues(VKGPU, GPUdesc);
 
-				VKGPU->QUEUEs.push_back(VKQUEUE);
-				if (VKQUEUE.SupportFlag.is_GRAPHICSsupported) {
-					VKGPU->GRAPHICS_QUEUEIndex = VKGPU->QUEUEs.size() - 1;
-				}
-			}
-			if (!GPUdesc.is_GraphicOperations_Supported || !GPUdesc.is_TransferOperations_Supported || !GPUdesc.is_ComputeOperations_Supported) {
-				LOG_CRASHING_TAPI("The GPU doesn't support one of the following operations, so we can't let you use this GPU: Compute, Transfer, Graphics");
-				continue;
-			}
-			//Sort the queues by their feature count (Example: Element 0 is Transfer Only, Element 1 is Transfer-Compute, Element 2 is Graphics-Transfer-Compute etc)
-			//QuickSort Algorithm
-			if (VKGPU->QUEUEs.size()) {
-				bool should_Sort = true;
-				while (should_Sort) {
-					should_Sort = false;
-					for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size() - 1; QueueIndex++) {
-						if (VKGPU->QUEUEs[QueueIndex + 1].QueueFeatureScore < VKGPU->QUEUEs[QueueIndex].QueueFeatureScore) {
-							should_Sort = true;
-							VK_QUEUE SecondQueue;
-							SecondQueue = VKGPU->QUEUEs[QueueIndex + 1];
-							VKGPU->QUEUEs[QueueIndex + 1] = VKGPU->QUEUEs[QueueIndex];
-							VKGPU->QUEUEs[QueueIndex] = SecondQueue;
-						}
-					}
-				}
-			}
-			delete QueueFamilyProperties;
-
-			vkGetPhysicalDeviceMemoryProperties(VKGPU->Physical_Device, &VKGPU->MemoryProperties);
-			for (uint32_t MemoryTypeIndex = 0; MemoryTypeIndex < VKGPU->MemoryProperties.memoryTypeCount; MemoryTypeIndex++) {
-				VkMemoryType& MemoryType = VKGPU->MemoryProperties.memoryTypes[MemoryTypeIndex];
-				bool isDeviceLocal = false;
-				bool isHostVisible = false;
-				bool isHostCoherent = false;
-				bool isHostCached = false;
-
-				if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
-					isDeviceLocal = true;
-				}
-				if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-					isHostVisible = true;
-				}
-				if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-					isHostCoherent = true;
-				}
-				if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
-					isHostCached = true;
-				}
-
-				if (GPUdesc.GPU_TYPE != GFX_API::GPU_TYPEs::DISCRETE_GPU) {
-					continue;
-				}
-				if (!isDeviceLocal && !isHostVisible && !isHostCoherent && !isHostCached) {
-					continue;
-				}
-				if (isDeviceLocal) {
-					if (isHostVisible && isHostCoherent) {
-						GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE, GPUdesc.MEMTYPEs.size());
-						GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-						VK_MemoryAllocation alloc;
-						alloc.MemoryTypeIndex = MemoryTypeIndex;
-						alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE;
-						VKGPU->ALLOCs.push_back(alloc);
-						GPUdesc.FASTHOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-						LOG_STATUS_TAPI("Found FAST HOST VISIBLE BIT! Size: " + to_string(GPUdesc.FASTHOSTVISIBLE_MaxMemorySize));
-					}
-					else {
-						GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, GPUdesc.MEMTYPEs.size());
-						GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-						VK_MemoryAllocation alloc;
-						alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
-						alloc.MemoryTypeIndex = MemoryTypeIndex;
-						VKGPU->ALLOCs.push_back(alloc);
-						GPUdesc.DEVICELOCAL_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-						LOG_STATUS_TAPI("Found DEVICE LOCAL BIT! Size: " + to_string(GPUdesc.DEVICELOCAL_MaxMemorySize));
-					}
-				}
-				else if (isHostVisible && isHostCoherent) {
-					if (isHostCached) {
-						GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK, GPUdesc.MEMTYPEs.size());
-						GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-						VK_MemoryAllocation alloc;
-						alloc.MemoryTypeIndex = MemoryTypeIndex;
-						alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK;
-						VKGPU->ALLOCs.push_back(alloc);
-						GPUdesc.READBACK_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-						LOG_STATUS_TAPI("Found READBACK BIT! Size: " + to_string(GPUdesc.READBACK_MaxMemorySize));
-					}
-					else {
-						GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE, GPUdesc.MEMTYPEs.size());
-						GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-						VK_MemoryAllocation alloc;
-						alloc.MemoryTypeIndex = MemoryTypeIndex;
-						alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE;
-						VKGPU->ALLOCs.push_back(alloc);
-						GPUdesc.HOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-						LOG_STATUS_TAPI("Found HOST VISIBLE BIT! Size: " + to_string(GPUdesc.HOSTVISIBLE_MaxMemorySize));
-					}
-				}
-			}
-
-
-			LOG_STATUS_TAPI("Starting to setup logical device");
-
-			//We don't need for now, so leave it empty. But GPU has its own feature list already
-			VkPhysicalDeviceFeatures Features = {};
 
 			vector<VkDeviceQueueCreateInfo> QueueCreationInfos;
 			//Queue Creation Processes
@@ -353,12 +357,13 @@ namespace Vulkan {
 			Logical_Device_CreationInfo.flags = 0;
 			Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
 			Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
-			Logical_Device_CreationInfo.pEnabledFeatures = &Features;
 			VK_States.Check_DeviceExtensions(VKGPU);
+			VK_States.Check_DeviceFeatures(VKGPU, GPUdesc);
 
 
 			Logical_Device_CreationInfo.enabledExtensionCount = VKGPU->Active_DeviceExtensions.size();
 			Logical_Device_CreationInfo.ppEnabledExtensionNames = VKGPU->Active_DeviceExtensions.data();
+			Logical_Device_CreationInfo.pEnabledFeatures = &VKGPU->Active_Features;
 
 			Logical_Device_CreationInfo.enabledLayerCount = 0;
 

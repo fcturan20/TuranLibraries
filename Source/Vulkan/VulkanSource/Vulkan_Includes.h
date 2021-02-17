@@ -75,14 +75,16 @@ namespace Vulkan {
 	struct VK_API GPU {
 		VkPhysicalDevice Physical_Device = {};
 		VkPhysicalDeviceProperties Device_Properties = {};
-		VkPhysicalDeviceFeatures Device_Features = {};
 		VkPhysicalDeviceMemoryProperties MemoryProperties = {};
+		vector<VkQueueFamilyProperties> QueueFamilyProperties;
 		vector<VK_QUEUE> QUEUEs;
 		unsigned int TRANSFERs_supportedqueuecount = 0, COMPUTE_supportedqueuecount = 0;
 		unsigned int GRAPHICS_QUEUEIndex = 0;
 		VkDevice Logical_Device = {};
 		vector<VkExtensionProperties> Supported_DeviceExtensions;
 		vector<const char*> Active_DeviceExtensions;
+		VkPhysicalDeviceFeatures Supported_Features = {};
+		VkPhysicalDeviceFeatures Active_Features = {};
 
 		vector<VK_MemoryAllocation> ALLOCs;
 		uint32_t* AllQueueFamilies;
@@ -149,6 +151,7 @@ namespace Vulkan {
 		void Chech_InstanceExtensions();
 		//Same for Device
 		void Check_DeviceExtensions(GPU* Vulkan_GPU);
+		void Check_DeviceFeatures(GPU* Vulkan_GPU, GFX_API::GPUDescription& GPUDesc);
 
 		static VKAPI_ATTR VkBool32 VKAPI_CALL VK_DebugCallback(
 			VkDebugUtilsMessageSeverityFlagBitsEXT Message_Severity,

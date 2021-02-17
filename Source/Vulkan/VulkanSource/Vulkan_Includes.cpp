@@ -280,6 +280,13 @@ namespace Vulkan {
 			Vulkan_GPU->Active_DeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		}
 	}
+	void Vulkan_States::Check_DeviceFeatures(GPU* Vulkan_GPU, GFX_API::GPUDescription& GPUDesc) {
+		//Check for seperate RTSlot blending
+		if (Vulkan_GPU->Supported_Features.independentBlend) {
+			Vulkan_GPU->Active_Features.independentBlend = VK_TRUE;
+			GPUDesc.isSupported_SeperateRTSlotBlending = true;
+		}
+	}
 	VK_MemoryAllocation::VK_MemoryAllocation() : Allocated_Blocks(*GFX->JobSys) {
 
 	}

@@ -781,19 +781,22 @@ namespace Vulkan {
 		}
 	}
 	void CopyDescriptorSets(VK_DescSet& Set, vector<VkCopyDescriptorSet>& CopyVector, vector<VkDescriptorSet*>& CopyTargetSets) {
-		for (unsigned int ImageIndex = 0; ImageIndex < Set.DescImagesCount; ImageIndex++) {
-			VK_DescImage& DescImage = Set.DescImages[ImageIndex];
-			VkCopyDescriptorSet info;
-			info.descriptorCount = 1;
-			info.dstArrayElement = 0;
-			info.dstBinding = DescImage.BindingIndex;
-			info.dstSet = VK_NULL_HANDLE;
-			info.pNext = nullptr;
-			info.srcArrayElement = 0;
-			info.srcBinding = DescImage.BindingIndex;
-			info.srcSet = Set.Set;
-			info.sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
-			CopyVector.push_back(info);
+		unsigned int DescCount = Set.DescImagesCount + Set.DescSamplersCount + Set.DescSBuffersCount + Set.DescUBuffersCount;
+		for (unsigned int DescIndex = 0; DescIndex < DescCount; DescIndex++) {
+			VkCopyDescriptorSet copyinfo;
+			VK_Descriptor& SourceDesc = GFXHandleConverter(VK_Descriptor*, Set.Descs)[DescIndex];
+			copyinfo.pNext = nullptr;
+			copyinfo.sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
+			copyinfo.descriptorCount = SourceDesc.ElementCount;
+			//We will copy all descriptor array's elements
+			copyinfo.srcArrayElement = 0;
+			copyinfo.dstArrayElement = 0;
+			copyinfo.dstBinding = DescIndex;
+			copyinfo.srcBinding = DescIndex;
+			copyinfo.srcSet = Set.Set;
+			//We will fill this DistanceSet after creating it!
+			copyinfo.dstSet = VK_NULL_HANDLE;
+			CopyVector.push_back(copyinfo);
 			CopyTargetSets.push_back(&Set.Set);
 		}
 	}
@@ -936,30 +939,35 @@ namespace Vulkan {
 					VK_DescSetUpdateCall& Call = VKContentManager->DescSets_toCreateUpdate.get(ThreadIndex, CallIndex);
 					VkWriteDescriptorSet info = {};
 					info.descriptorCount = 1;
-					switch (Call.Type) {
+					VK_Descriptor& Desc = Call.Set->Descs[Call.BindingIndex];
+					switch (Desc.Type) {
 					case DescType::IMAGE:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-						info.dstBinding = Call.Set->DescImages[Call.BindingArrayIndex].BindingIndex;
-						info.pImageInfo = &Call.Set->DescImages[Call.BindingArrayIndex].Elements[Call.ElementIndex].info;
-						Call.Set->DescImages[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pImageInfo = &GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].info;
+						GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::SAMPLER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-						info.dstBinding = Call.Set->DescSamplers[Call.BindingArrayIndex].BindingIndex;
-						info.pImageInfo = &Call.Set->DescSamplers[Call.BindingArrayIndex].Elements[Call.ElementIndex].info;
-						Call.Set->DescSamplers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pImageInfo = &GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].info;
+						GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::UBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-						info.dstBinding = Call.Set->DescUBuffers[Call.BindingArrayIndex].BindingIndex;
-						info.pBufferInfo = &Call.Set->DescUBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].Info;
-						Call.Set->DescUBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pBufferInfo = &GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].Info;
+						GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::SBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-						info.dstBinding = Call.Set->DescSBuffers[Call.BindingArrayIndex].BindingIndex;
-						info.pBufferInfo = &Call.Set->DescSBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].Info;
-						Call.Set->DescSBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pBufferInfo = &GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].Info;
+						GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					}
 					info.dstSet = Call.Set->Set;
@@ -980,34 +988,38 @@ namespace Vulkan {
 					VK_DescSetUpdateCall& Call = VKContentManager->DescSets_toJustUpdate.get(ThreadIndex, CallIndex);
 					VkWriteDescriptorSet info = {};
 					info.descriptorCount = 1;
-					switch (Call.Type) {
+					VK_Descriptor& Desc = Call.Set->Descs[Call.BindingIndex];
+					switch (Desc.Type) {
 					case DescType::IMAGE:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-						info.dstBinding = Call.Set->DescImages[Call.BindingArrayIndex].BindingIndex;
-						info.pImageInfo = &Call.Set->DescImages[Call.BindingArrayIndex].Elements[Call.ElementIndex].info;
-						Call.Set->DescImages[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pImageInfo = &GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].info;
+						GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::SAMPLER:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ;
-						info.dstBinding = Call.Set->DescSamplers[Call.BindingArrayIndex].BindingIndex;
-						info.pImageInfo = &Call.Set->DescSamplers[Call.BindingArrayIndex].Elements[Call.ElementIndex].info;
-						Call.Set->DescSamplers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
+						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pImageInfo = &GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].info;
+						GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::UBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-						info.dstBinding = Call.Set->DescUBuffers[Call.BindingArrayIndex].BindingIndex;
-						info.pBufferInfo = &Call.Set->DescUBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].Info;
-						Call.Set->DescUBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pBufferInfo = &GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].Info;
+						GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					case DescType::SBUFFER:
 						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-						info.dstBinding = Call.Set->DescSBuffers[Call.BindingArrayIndex].BindingIndex;
-						info.pBufferInfo = &Call.Set->DescSBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].Info;
-						Call.Set->DescSBuffers[Call.BindingArrayIndex].Elements[Call.ElementIndex].IsUpdated.store(0);
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pBufferInfo = &GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].Info;
+						GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
 						break;
 					}
 					info.dstSet = Call.Set->Set;
-					info.dstArrayElement = Call.ElementIndex;
 					info.pNext = nullptr;
 					info.pTexelBufferView = nullptr;
 					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

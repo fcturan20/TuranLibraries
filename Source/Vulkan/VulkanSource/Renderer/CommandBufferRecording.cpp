@@ -9,10 +9,11 @@
 #define VKRENDERER ((Renderer*)GFX->RENDERER)
 #define VKCORE ((Vulkan_Core*)GFX)
 
+// Vulkan Render Command Buffer Recordings
 namespace Vulkan {
 
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
-	// Vulkan Render Command Buffer Recordings
+
 	void Record_RenderPass(VkCommandBuffer CB, VK_DrawPass* DrawPass) {
 		unsigned char FRAMEINDEX = GFXRENDERER->GetCurrentFrameIndex();
 

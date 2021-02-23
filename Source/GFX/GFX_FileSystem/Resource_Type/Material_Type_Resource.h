@@ -36,7 +36,7 @@ namespace GFX_API {
 	* In OpenGL, this structure's NAME should match with in-shader buffer's name (You shouldn't set binding in shader!). At linking, ContentManager finds BINDINGPOINT and stores it
 	*/
 	struct GFXAPI MaterialDataDescriptor {
-		unsigned int DATA_SIZE = 0, BINDINGPOINT = 0, ELEMENTCOUNT = 0;
+		unsigned int BINDINGPOINT = 0, ELEMENTCOUNT = 0;
 		string NAME;
 		SHADERSTAGEs_FLAG SHADERSTAGEs;
 		MATERIALDATA_TYPE TYPE;

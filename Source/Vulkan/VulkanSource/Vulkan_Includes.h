@@ -173,7 +173,7 @@ namespace Vulkan {
 	VK_API VkFormat Find_VkFormat_byTEXTURECHANNELs(GFX_API::TEXTURE_CHANNELs channels);
 	VK_API VkShaderStageFlags Find_VkShaderStages(GFX_API::SHADERSTAGEs_FLAG flag);
 	VK_API VkPipelineStageFlags Find_VkPipelineStages(GFX_API::SHADERSTAGEs_FLAG flag);
-	VK_API VkDescriptorType Find_VkDescType_byMATDATATYPE(GFX_API::MATERIALDATA_TYPE TYPE);
+	VK_API VkDescriptorType Find_VkDescType_byMATDATATYPE(GFX_API::SHADERINPUT_TYPE TYPE);
 	VK_API VkSamplerAddressMode Find_AddressMode_byWRAPPING(GFX_API::TEXTURE_WRAPPING Wrapping);
 	VK_API VkFilter Find_VkFilter_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter);
 	VK_API VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(GFX_API::TEXTURE_MIPMAPFILTER filter);

@@ -93,8 +93,10 @@ namespace Vulkan {
 							VkDescriptorSet Sets[1] = { VKContentManager->GlobalBuffers_DescSet };
 							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 1, Sets, 0, nullptr);
 						}
-						vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VOffset);
-						vkCmdDraw(CB, DrawCall.VertexCount, 1, 0, 0);
+						if (DrawCall.VBuffer != VK_NULL_HANDLE) {
+							vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VOffset);
+						}
+						vkCmdDraw(CB, DrawCall.VertexCount, 1, DrawCall.FirstVertex, 0);
 					}
 					SP.NonIndexedDrawCalls.clear(GFX->JobSys->GetThisThreadIndex());
 				}
@@ -139,9 +141,14 @@ namespace Vulkan {
 						else {
 							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 1, &VKContentManager->GlobalBuffers_DescSet, 0, nullptr);
 						}
-						vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VOffset);
-						vkCmdBindIndexBuffer(CB, DrawCall.IBuffer, DrawCall.IOffset, DrawCall.IType);
-						vkCmdDrawIndexed(CB, DrawCall.IndexCount, 1, 0, 0, 0);
+						if (DrawCall.VBuffer != VK_NULL_HANDLE) {
+							vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VBOffset);
+						}
+						vkCmdBindIndexBuffer(CB, DrawCall.IBuffer, DrawCall.IBOffset, DrawCall.IType);
+						{
+							TURAN_PROFILE_SCOPE_MCS("VkCmdDrawIndexed");
+							vkCmdDrawIndexed(CB, DrawCall.IndexCount, 1, DrawCall.FirstIndex, DrawCall.VOffset, 0);
+						}
 					}
 					SP.IndexedDrawCalls.clear(GFX->JobSys->GetThisThreadIndex());
 				}

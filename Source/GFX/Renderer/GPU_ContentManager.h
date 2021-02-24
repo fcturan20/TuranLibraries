@@ -59,7 +59,7 @@ namespace GFX_API {
 		virtual void Unload_AllResources() = 0;
 
 		//Registers Vertex Attribute to the system and gives it an ID
-		virtual TAPIResult Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, const bool& is_perVertex, GFX_API::GFXHandle& Handle) = 0;
+		virtual TAPIResult Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, GFX_API::GFXHandle& Handle) = 0;
 		//Returns true if operation is successful
 		virtual bool Delete_VertexAttribute(GFXHandle Attribute_ID) = 0;
 

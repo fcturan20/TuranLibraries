@@ -61,14 +61,13 @@ namespace Vulkan {
 
 
 
-	//I want to support InstanceAttribute too but not now because I don't know Vulkan yet
 	struct GFXAPI VK_VertexAttribute {
 		GFX_API::DATA_TYPE DATATYPE;
 	};
 	/* Vertex Attribute Layout Specification:
 			All vertex attributes should be interleaved because there is no easy way in Vulkan for de-interleaved path.
 			Vertex Attributes are created as seperate objects because this helps debug visualization of the data
-			Vertex Attributes are goona be ordered by VertexAttributeLayout's vector elements order and this also defines attribute's in-shader location
+			Vertex Attributes are gonna be ordered by VertexAttributeLayout's vector elements order and this also defines attribute's in-shader location
 			That means if position attribute is second element in "Attributes" vector, MaterialType that using this layout uses position attribute at location = 1 instead of 0.
 	*/
 	struct VK_API VK_VertexAttribLayout {
@@ -221,6 +220,7 @@ namespace Vulkan {
 	struct VK_NonIndexedDrawCall {
 		VkBuffer VBuffer;
 		VkDeviceSize VOffset = 0, VertexCount = 0;
+		uint32_t FirstVertex = 0;
 
 		VkPipeline MatTypeObj;
 		VkPipelineLayout MatTypeLayout;
@@ -228,7 +228,8 @@ namespace Vulkan {
 	};
 	struct VK_IndexedDrawCall {
 		VkBuffer VBuffer, IBuffer;
-		VkDeviceSize VOffset = 0, IOffset = 0, IndexCount = 0;
+		VkDeviceSize VBOffset = 0, IBOffset = 0, IndexCount = 0;
+		uint32_t VOffset = 0, FirstIndex = 0;
 		VkIndexType IType;
 
 		VkPipeline MatTypeObj;

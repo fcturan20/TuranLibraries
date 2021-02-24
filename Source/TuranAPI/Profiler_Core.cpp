@@ -6,13 +6,13 @@ namespace TuranAPI {
 
 	//CODE ALL OF THESE!
 	Profiled_Scope::Profiled_Scope() {}
-	Profiled_Scope::Profiled_Scope(const char* name, bool StartImmediately, unsigned char timingindex) : NAME(name) {
+	Profiled_Scope::Profiled_Scope(const char* name, bool StartImmediately, unsigned char timingindex) : NAME(name), TimingType(timingindex) {
 		if (StartImmediately) {
-			StartRecording(timingindex);
+			StartRecording();
 		}
 	}
-	bool Profiled_Scope::StartRecording(unsigned char timingindex) {
-		switch (timingindex) {
+	bool Profiled_Scope::StartRecording() {
+		switch (TimingType) {
 		case 0:
 			START_POINT = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
 			break;
@@ -37,7 +37,23 @@ namespace TuranAPI {
 		if (!Is_Recording) {
 			return false;
 		}
-		END_POINT = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+		switch (TimingType) {
+		case 0:
+			END_POINT = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+			break;
+		case 1:
+			END_POINT = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+			break;
+		case 2:
+			END_POINT = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+			break;
+		case 3:
+			END_POINT = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
+			break;
+		default:
+			LOG_CRASHING_TAPI("You should specify timing between 0-3, not anything else!");
+			return false;
+		}
 		duration = END_POINT - START_POINT;
 		return true;
 		/*
@@ -51,7 +67,23 @@ namespace TuranAPI {
 		if (Is_Recording) {
 			long long Duration;
 			StopRecording(Duration);
-			std::cout << NAME << " Scope Duration: " << Duration << " microseconds (1/1000 milliseconds)" << std::endl;
+			switch (TimingType) {
+			case 0:
+				std::cout << NAME << " Scope Duration: " << Duration << " nanoseconds (1/1000 microseconds)" << std::endl;
+				break;
+			case 1:
+				std::cout << NAME << " Scope Duration: " << Duration << " microseconds (1/1000 milliseconds)" << std::endl;
+				break;
+			case 2:
+				std::cout << NAME << " Scope Duration: " << Duration << " milliseconds (1/1000 seconds)" << std::endl;
+				break;
+			case 3:
+				std::cout << NAME << " Scope Duration: " << Duration << " seconds" << std::endl;
+				break;
+			default:
+				LOG_CRASHING_TAPI("You should specify timing between 0-3, not anything else!");
+				return;
+			}
 		}
 	}
 

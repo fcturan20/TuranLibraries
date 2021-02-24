@@ -14,32 +14,19 @@ namespace GFX_API {
 		unsigned int DATA_SIZE;
 		SHADER_LANGUAGEs LANGUAGE;
 	};
-	
-	/*
-		1) ACCESS_TYPE defines the texture's binding way
-		2) OP_TYPE defines why shader accesses the texture. 
-	If a texture is READ_WRITE but you just read it in the shader, you can set as READ_ONLY
-		3) TEXTURE_ID is texture's asset ID. But render targets (framebuffer attachments) aren't assets.
-	
-	struct GFXAPI Texture_Access {
-		TEXTURE_DIMENSIONs DIMENSIONs;
-		TEXTURE_CHANNELs CHANNELs;
-		TEXTURE_ACCESS ACCESS_TYPE;
-		unsigned int BINDING_POINT;		
-		unsigned int TEXTURE_ID;
-	};*/
-
 
 
 	/*	This structure is a Material Type specific buffer:
-	* In Vulkan, this structure represents Descriptor Set 1 and BINDINGPOINT and in-shader buffer binding should match (in-shader buffer should use Set 1)
+	* In Vulkan, this structure represents a descriptor. BINDINGPOINT and in-shader buffer binding should match. 
+	If there is no general shader input, per instance shader inputs should use Descriptor Set 1.
+	If there is general shader input, general shader input should use Descriptor Set 1 and per instance shader inputs should use Descriptor Set 2
 	* In OpenGL, this structure's NAME should match with in-shader buffer's name (You shouldn't set binding in shader!). At linking, ContentManager finds BINDINGPOINT and stores it
 	*/
-	struct GFXAPI MaterialDataDescriptor {
+	struct GFXAPI ShaderInput_Description {
 		unsigned int BINDINGPOINT = 0, ELEMENTCOUNT = 0;
 		string NAME;
 		SHADERSTAGEs_FLAG SHADERSTAGEs;
-		MATERIALDATA_TYPE TYPE;
+		SHADERINPUT_TYPE TYPE;
 	};
 
 	/* Used to specify the material instance specific data! The data responsibility's in your hands!
@@ -57,7 +44,7 @@ namespace GFX_API {
 
 
 		GFXHandle VERTEXSOURCE_ID, FRAGMENTSOURCE_ID, ATTRIBUTELAYOUT_ID, SubDrawPass_ID;
-		vector<MaterialDataDescriptor> MATERIALTYPEDATA;
+		vector<ShaderInput_Description> MATERIALTYPEDATA;
 		CULL_MODE culling;
 		POLYGON_MODE polygon;
 		DEPTH_TESTs depthtest;

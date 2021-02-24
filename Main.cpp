@@ -128,7 +128,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			RTSlots.push_back(EXTRASLOT);
 
 			GFX_API::RTSLOT_Description DEPTHSLOT;
-			DEPTHSLOT.CLEAR_VALUE = vec4(0.0f, 0.0f, 0.0f, 0.0f);
+			DEPTHSLOT.CLEAR_VALUE = vec4(1.0f, 1.0f, 1.0f, 1.0f);
 			DEPTHSLOT.LOADOP = GFX_API::DRAWPASS_LOAD::CLEAR;
 			DEPTHSLOT.LOADOPSTENCIL = GFX_API::DRAWPASS_LOAD::LOAD;
 			DEPTHSLOT.OPTYPESTENCIL = GFX_API::OPERATION_TYPE::READ_ONLY;
@@ -208,36 +208,42 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	//Also create index buffer
 	GFX_API::GFXHandle VERTEXBUFFER_ID = nullptr, INDEXBUFFER_ID = nullptr, VAL_ID = nullptr;
 	struct Vertex {
-		vec2 Pos;
+		vec3 Pos;
 		vec2 TextCoord;
 	};
 	{
-		Vertex VertexData[4]{
-			{vec2(-1.0f, 1.0f), vec2(0.0f,0.0f)},
-			{vec2(-1.0f, -1.0f), vec2(0.0f, 1.0f)},
-			{vec2(1.0f, 1.0f), vec2(1.0f, 0.0f)},
-			{vec2(1.0f, -1.0f), vec2(1.0f, 1.0f)}
+		Vertex VertexData[8]{
+			{vec3(-0.5f, -0.5f, 0.0f), vec2(0.0f,0.0f)},
+			{vec3(0.5f, -0.5f, 0.0f), vec2(1.0f, 0.0f)},
+			{vec3(0.5f, 0.5f, 0.0f), vec2(1.0f, 1.0f)},
+			{vec3(-0.5f, 0.5f, 0.0f), vec2(0.0f, 1.0f)},
+
+			{vec3(-0.5f, -0.5f, -0.5f), vec2(0.0f,0.0f)},
+			{vec3(0.5f, -0.5f, -0.5f), vec2(1.0f, 0.0f)},
+			{vec3(0.5f, 0.5f, -0.5f), vec2(1.0f, 1.0f)},
+			{vec3(-0.5f, 0.5f, -0.5f), vec2(0.0f, 1.0f)}
 		};
-		unsigned int IndexData[6]{ 0, 1, 2, 1, 3, 2 };
+		unsigned int IndexData[12]{ 0, 1, 2, 2, 3, 0, 
+									4, 5, 6, 6, 7, 4};
 
 		GFX_API::GFXHandle PositionVA_ID, ColorVA_ID;
-		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC2, true, PositionVA_ID);
-		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC2, true, ColorVA_ID);
+		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC3, PositionVA_ID);
+		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC2, ColorVA_ID);
 		vector<GFX_API::GFXHandle> VAs{ PositionVA_ID, ColorVA_ID };
 		GFXContentManager->Create_VertexAttributeLayout(VAs, GFX_API::VERTEXLIST_TYPEs::TRIANGLELIST, VAL_ID);
-		if (GFXContentManager->Create_VertexBuffer(VAL_ID, 4, 0, VERTEXBUFFER_ID) != TAPI_SUCCESS) {
+		if (GFXContentManager->Create_VertexBuffer(VAL_ID, 8, 0, VERTEXBUFFER_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("First Vertex Buffer creation has failed!");
 		}
 		
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VertexData, sizeof(Vertex) * 4, 0) != TAPI_SUCCESS) {
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VertexData, sizeof(Vertex) * 8, 0) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading vertex buffer to staging buffer has failed!");
 		}
 
-		if (GFXContentManager->Create_IndexBuffer(GFX_API::DATA_TYPE::VAR_UINT32, 6, 0, INDEXBUFFER_ID) != TAPI_SUCCESS) {
+		if (GFXContentManager->Create_IndexBuffer(GFX_API::DATA_TYPE::VAR_UINT32, 12, 0, INDEXBUFFER_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("First Index Buffer creation has failed!");
 		}
 
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, IndexData, 24, 80) != TAPI_SUCCESS) {
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, IndexData, 48, 160) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading index buffer to staging buffer has failed!");
 		}
 	}
@@ -257,7 +263,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			LOG_CRASHING_TAPI("Alita texture creation has failed!");
 		}
 		AlitaSize = im_desc.WIDTH * im_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(im_desc.Properties.CHANNEL_TYPE);
-		AlitaOffset = 144;
+		AlitaOffset = 448;
 		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, DATA, AlitaSize, AlitaOffset) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading the Alita texture has failed!");
 		}
@@ -287,27 +293,26 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		MATTYPE.MATERIALTYPEDATA.clear();
 		
 		{
-			GFX_API::MaterialDataDescriptor first_desc;
+			GFX_API::ShaderInput_Description first_desc;
 			first_desc.BINDINGPOINT = 0;
 			first_desc.ELEMENTCOUNT = 1;
-			first_desc.NAME = "FirstUniformInput";
-			first_desc.SHADERSTAGEs.VERTEXSHADER = true;
+			first_desc.NAME = "FirstSampledTexture";
 			first_desc.SHADERSTAGEs.FRAGMENTSHADER = true;
-			first_desc.TYPE = GFX_API::MATERIALDATA_TYPE::UBUFFER_G;
+			first_desc.TYPE = GFX_API::SHADERINPUT_TYPE::IMAGE_G;
 			MATTYPE.MATERIALTYPEDATA.push_back(first_desc);
 
-			GFX_API::MaterialDataDescriptor second_desc;
+			GFX_API::ShaderInput_Description second_desc;
 			second_desc.BINDINGPOINT = 1;
 			second_desc.ELEMENTCOUNT = 1;
-			second_desc.NAME = "FirstSampledTexture";
-			second_desc.SHADERSTAGEs.FRAGMENTSHADER = true;
-			second_desc.TYPE = GFX_API::MATERIALDATA_TYPE::IMAGE_G;
+			second_desc.NAME = "WorldData";
+			second_desc.SHADERSTAGEs.VERTEXSHADER = true;
+			second_desc.TYPE = GFX_API::SHADERINPUT_TYPE::UBUFFER_G;
 			MATTYPE.MATERIALTYPEDATA.push_back(second_desc);
 		}
 		MATTYPE.ATTRIBUTELAYOUT_ID = VAL_ID;
-		MATTYPE.culling = GFX_API::CULL_MODE::CULL_BACK;
+		MATTYPE.culling = GFX_API::CULL_MODE::CULL_OFF;
 		MATTYPE.polygon = GFX_API::POLYGON_MODE::FILL;
-		MATTYPE.depthtest = GFX_API::DEPTH_TESTs::DEPTH_TEST_ALWAYS;
+		MATTYPE.depthtest = GFX_API::DEPTH_TESTs::DEPTH_TEST_LESS;
 		MATTYPE.depthmode = GFX_API::DEPTH_MODEs::DEPTH_READ_WRITE;
 		MATTYPE.frontfacedstencil.CompareOperation = GFX_API::STENCIL_COMPARE::ALWAYS_PASS;
 		MATTYPE.frontfacedstencil.DepthFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
@@ -324,30 +329,35 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, FIRSTSAMPLINGTYPE_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Creation of sampling type has failed, so application has!");
 		}
-		GFXContentManager->SetMaterial_UniformBuffer(TEXTUREDISPLAY_MATTYPE, true, false, 0, StagingBuffer, 0, GFX_API::BUFFER_TYPE::STAGING, 64, 16);
-		vec3 FragColor(1.2f, 1.0f, 0.5f);
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, &FragColor, 12, 64) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Uploading vertex color to staging buffer has failed!");
-		}
-		vec3 SecondColor(0.2f, 0.6f, 0.6f);
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, &SecondColor, 12, 128) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Uploading second vertex color to staging buffer has failed!");
-		}
 
 
 		if (GFXContentManager->Create_MaterialInst(TEXTUREDISPLAY_MATTYPE, TEXTUREDISPLAY_MATINST) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Goku Black Material Instance creation has failed!");
+			LOG_CRASHING_TAPI("Texture Display Material Instance creation has failed!");
 		}
-		GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATTYPE, true, false, 1, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE);
+		if (GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Texture Display Material Type's image texture setting has failed!");
+		}
+
+		mat4 matrixes[3];
+		matrixes[0] = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		matrixes[1] = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		matrixes[2] = glm::perspective(glm::radians(45.0f), 1280.0f / 720.0f, 0.1f, 10000.0f);
+
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, &matrixes, 192, 256) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading the world matrix data has failed!");
+		}
+		if (GFXContentManager->SetMaterial_UniformBuffer(TEXTUREDISPLAY_MATTYPE, true, false, 1, StagingBuffer, 0, GFX_API::BUFFER_TYPE::STAGING, 256, 192) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Texture Display Material Type's uniform buffer seting has failed!");
+		}
 	}
 
-	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 4);
-	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, INDEXBUFFER_ID, GFX_API::BUFFER_TYPE::INDEX, 80, 0, 24);
+	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 8);
+	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, INDEXBUFFER_ID, GFX_API::BUFFER_TYPE::INDEX, 160, 0, 48);
 	GFXRENDERER->ImageBarrier(DEPTHRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::DEPTHREADWRITE_STENCILREAD, BarrierAfterUpload_ID);
 	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierAfterUpload_ID);
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierAfterUpload_ID);
 	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE, BarrierAfterUpload_ID);
-	GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, INDEXBUFFER_ID, TEXTUREDISPLAY_MATINST, SubpassID);
+	GFXRENDERER->DrawNonInstancedDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, TEXTUREDISPLAY_MATINST, SubpassID);
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, BarrierAfterDraw_ID);
 	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, BarrierAfterDraw_ID);
 	GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
@@ -361,7 +371,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierAfterUpload_ID);
 	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE, BarrierAfterUpload_ID);
-	GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, INDEXBUFFER_ID, TEXTUREDISPLAY_MATINST, SubpassID);
+	GFXRENDERER->DrawNonInstancedDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, TEXTUREDISPLAY_MATINST, SubpassID);
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, BarrierAfterDraw_ID);
 	GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 	GFXRENDERER->Run();
@@ -372,17 +382,11 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	while (true) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 
-		if (i % 2) {
-			GFXContentManager->SetMaterial_UniformBuffer(TEXTUREDISPLAY_MATTYPE, true, true, 0, StagingBuffer, 0, GFX_API::BUFFER_TYPE::STAGING, 64, 16);
-		}
-		else {
-			GFXContentManager->SetMaterial_UniformBuffer(TEXTUREDISPLAY_MATTYPE, true, true, 0, StagingBuffer, 0, GFX_API::BUFFER_TYPE::STAGING, 128, 16);
-		}
 
 		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierBeforeUpload_ID);
 		GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, BarrierBeforeUpload_ID);
 		GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierAfterUpload_ID);
-		GFXRENDERER->Render_DrawCall(VERTEXBUFFER_ID, INDEXBUFFER_ID, TEXTUREDISPLAY_MATINST, SubpassID);
+		GFXRENDERER->DrawNonInstancedDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, TEXTUREDISPLAY_MATINST, SubpassID);
 		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, BarrierAfterDraw_ID);
 		GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 		GFXRENDERER->Run();

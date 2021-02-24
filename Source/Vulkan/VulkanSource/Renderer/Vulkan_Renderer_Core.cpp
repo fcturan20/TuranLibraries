@@ -1181,14 +1181,28 @@ namespace Vulkan {
 		Set_NextFrameIndex();
 	}
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
-	void Renderer::Render_DrawCall(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) {
+	void Renderer::DrawNonInstancedDirect(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
+		unsigned int FirstIndex, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) {
+		TURAN_PROFILE_SCOPE_MCS("DrawNonInstanceDirect!");
 		VK_SubDrawPass* SP = GFXHandleConverter(VK_SubDrawPass*, SubDrawPass_ID);
 		if (IndexBuffer_ID) {
 			VK_IndexedDrawCall call;
-			FindBufferOBJ_byBufType(VertexBuffer_ID, GFX_API::BUFFER_TYPE::VERTEX, call.VBuffer, call.VOffset);
-			FindBufferOBJ_byBufType(IndexBuffer_ID, GFX_API::BUFFER_TYPE::INDEX, call.IBuffer, call.IOffset);
+			if (VertexBuffer_ID) {
+				FindBufferOBJ_byBufType(VertexBuffer_ID, GFX_API::BUFFER_TYPE::VERTEX, call.VBuffer, call.VBOffset);
+			}
+			else {
+				call.VBuffer = VK_NULL_HANDLE;
+			}
+			FindBufferOBJ_byBufType(IndexBuffer_ID, GFX_API::BUFFER_TYPE::INDEX, call.IBuffer, call.IBOffset);
 			call.IType = GFXHandleConverter(VK_IndexBuffer*, IndexBuffer_ID)->DATATYPE;
-			call.IndexCount = GFXHandleConverter(VK_IndexBuffer*, IndexBuffer_ID)->IndexCount;
+			if (Count) {
+				call.IndexCount = Count;
+			}
+			else {
+				call.IndexCount = GFXHandleConverter(VK_IndexBuffer*, IndexBuffer_ID)->IndexCount;
+			}
+			call.FirstIndex = FirstIndex;
+			call.VOffset = VertexOffset;
 			VK_PipelineInstance* PI = GFXHandleConverter(VK_PipelineInstance*, MaterialInstance_ID);
 			call.MatTypeObj = PI->PROGRAM->PipelineObject;
 			call.MatTypeLayout = PI->PROGRAM->PipelineLayout;
@@ -1198,8 +1212,19 @@ namespace Vulkan {
 		}
 		else {
 			VK_NonIndexedDrawCall call;
-			FindBufferOBJ_byBufType(VertexBuffer_ID, GFX_API::BUFFER_TYPE::VERTEX, call.VBuffer, call.VOffset);
-			call.VertexCount = static_cast<VkDeviceSize>(GFXHandleConverter(VK_VertexBuffer*, VertexBuffer_ID)->VERTEX_COUNT);
+			if (VertexBuffer_ID) {
+				FindBufferOBJ_byBufType(VertexBuffer_ID, GFX_API::BUFFER_TYPE::VERTEX, call.VBuffer, call.VOffset);
+			}
+			else {
+				call.VBuffer = VK_NULL_HANDLE;
+			}
+			if (Count) {
+				call.VertexCount = Count;
+			}
+			else {
+				call.VertexCount = static_cast<VkDeviceSize>(GFXHandleConverter(VK_VertexBuffer*, VertexBuffer_ID)->VERTEX_COUNT);
+			}
+			call.FirstVertex = VertexOffset;
 			VK_PipelineInstance* PI = GFXHandleConverter(VK_PipelineInstance*, MaterialInstance_ID);
 			call.MatTypeObj = PI->PROGRAM->PipelineObject;
 			call.MatTypeLayout = PI->PROGRAM->PipelineLayout;

@@ -54,7 +54,7 @@ namespace Vulkan {
 		virtual ~GPU_ContentManager();
 		virtual void Unload_AllResources() override;
 
-		virtual TAPIResult Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, const bool& is_perVertex, GFX_API::GFXHandle& Handle) override;
+		virtual TAPIResult Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, GFX_API::GFXHandle& Handle) override;
 		virtual bool Delete_VertexAttribute(GFX_API::GFXHandle Attribute_ID) override;
 
 		virtual TAPIResult Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel, 

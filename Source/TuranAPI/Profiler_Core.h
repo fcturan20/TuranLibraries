@@ -11,7 +11,8 @@
 namespace TuranAPI {
 	class TURANAPI Profiled_Scope {
 	public:
-		bool Is_Recording;
+		bool Is_Recording : 1;
+		unsigned char TimingType: 2;
 		long long START_POINT, END_POINT, THREAD_ID;
 		string NAME;
 		//Use this constructor to fill the data later!
@@ -19,7 +20,7 @@ namespace TuranAPI {
 		//Use this constructor to start profiling a scope!
 		//Timing Indexes: 0->Nanoseconds, 1->Microseconds, 2->Milliseconds, 3->Seconds
 		Profiled_Scope(const char* name, bool StartImmediately, unsigned char timingindex);
-		bool StartRecording(unsigned char timingindex);
+		bool StartRecording();
 		bool StopRecording(long long& duration);
 		~Profiled_Scope();
 	};

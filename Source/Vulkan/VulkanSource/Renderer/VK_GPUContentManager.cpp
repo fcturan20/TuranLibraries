@@ -389,12 +389,8 @@ namespace Vulkan {
 		}
 		return size;
 	}
-	TAPIResult GPU_ContentManager::Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, const bool& is_perVertex, GFX_API::GFXHandle& Handle) {
+	TAPIResult GPU_ContentManager::Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, GFX_API::GFXHandle& Handle) {
 		unsigned char ThisThreadIndex = GFX->JobSys->GetThisThreadIndex();
-		if (!is_perVertex) {
-			LOG_ERROR_TAPI("A Vertex Attribute description is not per vertex, so creation fail at it! Descriptions that are after it aren't created!");
-			return TAPI_INVALIDARGUMENT;
-		}
 		VK_VertexAttribute* VA = new VK_VertexAttribute;
 		VA->DATATYPE = TYPE;
 		VERTEXATTRIBUTEs.push_back(ThisThreadIndex, VA);
@@ -1080,11 +1076,11 @@ namespace Vulkan {
 			{
 				vector<VkDescriptorSetLayoutBinding> bindings;
 				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
-					const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-					if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::IMAGE_G ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SAMPLER_G ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SBUFFER_G ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::UBUFFER_G)) {
+					const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
+					if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_G ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_G ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_G ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_G)) {
 						continue;
 					}
 
@@ -1110,16 +1106,16 @@ namespace Vulkan {
 					bindings.push_back(bn);
 
 					switch (gfxdesc.TYPE) {
-					case GFX_API::MATERIALDATA_TYPE::IMAGE_G:
+					case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
 						VKPipeline->General_DescSet.DescImagesCount++;
 					break;
-					case GFX_API::MATERIALDATA_TYPE::SAMPLER_G:
+					case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
 						VKPipeline->General_DescSet.DescSamplersCount++;
 					break;
-					case GFX_API::MATERIALDATA_TYPE::UBUFFER_G:
+					case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
 						VKPipeline->General_DescSet.DescUBuffersCount++;
 					break;
-					case GFX_API::MATERIALDATA_TYPE::SBUFFER_G:
+					case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
 						VKPipeline->General_DescSet.DescSBuffersCount++;
 					break;
 					}
@@ -1130,38 +1126,42 @@ namespace Vulkan {
 				if (DescCount) {
 					VKPipeline->General_DescSet.Descs = new VK_Descriptor[DescCount];
 					for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
-						const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-						if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::IMAGE_G ||
-							gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SAMPLER_G ||
-							gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SBUFFER_G ||
-							gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::UBUFFER_G)) {
+						const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
+						if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_G ||
+							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_G ||
+							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_G ||
+							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_G)) {
 							continue;
+						}
+						if (gfxdesc.BINDINGPOINT >= DescCount) {
+							LOG_ERROR_TAPI("One of your Material Data Descriptors (General) uses a binding point that is exceeding the number of Material Data Descriptors (General). You have to use a binding point that's lower than size of the Material Data Descriptors (General)!");
+							return TAPI_FAIL;
 						}
 
 						VK_Descriptor& vkdesc = VKPipeline->General_DescSet.Descs[gfxdesc.BINDINGPOINT];
 						switch (gfxdesc.TYPE) {
-						case GFX_API::MATERIALDATA_TYPE::IMAGE_G:
+						case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
 						{
 							vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
 							vkdesc.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
 							vkdesc.Type = DescType::IMAGE;
 						}
 						break;
-						case GFX_API::MATERIALDATA_TYPE::SAMPLER_G:
+						case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
 						{
 							vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
 							vkdesc.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
 							vkdesc.Type = DescType::SAMPLER;
 						}
 						break;
-						case GFX_API::MATERIALDATA_TYPE::UBUFFER_G:
+						case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
 						{
 							vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
 							vkdesc.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
 							vkdesc.Type = DescType::UBUFFER;
 						}
 						break;
-						case GFX_API::MATERIALDATA_TYPE::SBUFFER_G:
+						case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
 						{
 							vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
 							vkdesc.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
@@ -1192,12 +1192,12 @@ namespace Vulkan {
 			{
 				vector<VkDescriptorSetLayoutBinding> bindings;
 				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
-					const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
+					const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
 
-					if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::IMAGE_PI ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SAMPLER_PI ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SBUFFER_PI ||
-						gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::UBUFFER_PI)) {
+					if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_PI ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_PI ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_PI ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_PI)) {
 						continue;
 					}
 					unsigned int BP = gfxdesc.BINDINGPOINT;
@@ -1215,22 +1215,22 @@ namespace Vulkan {
 					bn.binding = BP;
 					bindings.push_back(bn);
 					switch (gfxdesc.TYPE) {
-					case GFX_API::MATERIALDATA_TYPE::IMAGE_PI:
+					case GFX_API::SHADERINPUT_TYPE::IMAGE_PI:
 					{
 						VKPipeline->Instance_DescSet.DescImagesCount++;
 					}
 					break;
-					case GFX_API::MATERIALDATA_TYPE::SAMPLER_PI:
+					case GFX_API::SHADERINPUT_TYPE::SAMPLER_PI:
 					{
 						VKPipeline->Instance_DescSet.DescSamplersCount++;
 					}
 					break;
-					case GFX_API::MATERIALDATA_TYPE::UBUFFER_PI:
+					case GFX_API::SHADERINPUT_TYPE::UBUFFER_PI:
 					{
 						VKPipeline->Instance_DescSet.DescUBuffersCount++;
 					}
 					break;
-					case GFX_API::MATERIALDATA_TYPE::SBUFFER_PI:
+					case GFX_API::SHADERINPUT_TYPE::SBUFFER_PI:
 					{
 						VKPipeline->Instance_DescSet.DescSBuffersCount++;
 					}
@@ -1243,29 +1243,33 @@ namespace Vulkan {
 				if (DescCount) {
 					VKPipeline->Instance_DescSet.Descs = new VK_Descriptor[DescCount];
 					for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
-						const GFX_API::MaterialDataDescriptor& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-						if (!(gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::IMAGE_PI ||
-							gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SAMPLER_PI ||
-							gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::SBUFFER_PI ||
-							gfxdesc.TYPE == GFX_API::MATERIALDATA_TYPE::UBUFFER_PI)) {
+						const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
+						if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_PI ||
+							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_PI ||
+							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_PI ||
+							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_PI)) {
 							continue;
 						}
 
+						if (gfxdesc.BINDINGPOINT >= DescCount) {
+							LOG_ERROR_TAPI("One of your Material Data Descriptors (Per Instance) uses a binding point that is exceeding the number of Material Data Descriptors (Per Instance). You have to use a binding point that's lower than size of the Material Data Descriptors (Per Instance)!");
+							return TAPI_FAIL;
+						}
 
 						//We don't need to create each descriptor's array elements
 						VK_Descriptor& vkdesc = VKPipeline->Instance_DescSet.Descs[gfxdesc.BINDINGPOINT];
 						vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
 						switch (gfxdesc.TYPE) {
-						case GFX_API::MATERIALDATA_TYPE::IMAGE_G:
+						case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
 							vkdesc.Type = DescType::IMAGE;
 						break;
-						case GFX_API::MATERIALDATA_TYPE::SAMPLER_G:
+						case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
 							vkdesc.Type = DescType::SAMPLER;
 						break;
-						case GFX_API::MATERIALDATA_TYPE::UBUFFER_G:
+						case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
 							vkdesc.Type = DescType::UBUFFER;
 						break;
-						case GFX_API::MATERIALDATA_TYPE::SBUFFER_G:
+						case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
 							vkdesc.Type = DescType::SBUFFER;
 						break;
 						}
@@ -1300,13 +1304,16 @@ namespace Vulkan {
 				pl_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 				pl_ci.pNext = nullptr;
 				pl_ci.flags = 0;
-				VkDescriptorSetLayout descsetlays[3] = { GlobalBuffers_DescSetLayout, VKPipeline->General_DescSet.Layout, VK_NULL_HANDLE };
-				if (VKPipeline->Instance_DescSet.Layout != VK_NULL_HANDLE) {
-					descsetlays[2] = VKPipeline->Instance_DescSet.Layout;
-					pl_ci.setLayoutCount = 3;
+				
+				VkDescriptorSetLayout descsetlays[3] = { GlobalBuffers_DescSetLayout, VK_NULL_HANDLE, VK_NULL_HANDLE };
+				pl_ci.setLayoutCount = 1;
+				if (VKPipeline->General_DescSet.Layout != VK_NULL_HANDLE) {
+					descsetlays[1] = VKPipeline->General_DescSet.Layout;
+					pl_ci.setLayoutCount++;
 				}
-				else {
-					pl_ci.setLayoutCount = 2;
+				if (VKPipeline->Instance_DescSet.Layout != VK_NULL_HANDLE) {
+					descsetlays[pl_ci.setLayoutCount - 1] = VKPipeline->Instance_DescSet.Layout;
+					pl_ci.setLayoutCount++;
 				}
 				pl_ci.pSetLayouts = descsetlays;
 				//Don't support for now!

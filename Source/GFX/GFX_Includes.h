@@ -323,7 +323,7 @@ namespace GFX_API {
 	//If there is any PI data type in Material Type, we assume that you're accessing it in shader with MaterialInstance index (Back-end handles that)
 	//If there is no title, that means it's modifiable and possibly includes a double buffered implementation in GL back-end
 	//CONST title means it can't be changed after the creation
-	enum class MATERIALDATA_TYPE : unsigned char {
+	enum class SHADERINPUT_TYPE : unsigned char {
 		UNDEFINED = 0,
 		//DRAWCALL_DESCRIPTOR = 1,
 		SAMPLER_PI,

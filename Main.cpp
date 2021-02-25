@@ -21,7 +21,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	
 	//Create Global Buffers before the RenderGraph Construction
 	GFX_API::GFXHandle FirstGlobalBuffer;
-	GFXContentManager->Create_GlobalBuffer("FirstGlobalBuffer", 16, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
+	GFXContentManager->Create_GlobalBuffer("CameraData", 192, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
 		0, FirstGlobalBuffer);
 
 
@@ -200,53 +200,48 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 
 
 	GFX_API::GFXHandle StagingBuffer;
-	if (GFXContentManager->Create_StagingBuffer(1024 * 1024 * 10, 3, StagingBuffer) != TAPI_SUCCESS) {
+	if (GFXContentManager->Create_StagingBuffer(1024 * 1024 * 110, 3, StagingBuffer) != TAPI_SUCCESS) {
 		LOG_CRASHING_TAPI("Staging buffer creation has failed!");
 	}
 	
-	//Create first attribute layout and mesh buffer for first triangle
+	//Create first attribute layout and mesh buffer for first quad
 	//Also create index buffer
-	GFX_API::GFXHandle VERTEXBUFFER_ID = nullptr, INDEXBUFFER_ID = nullptr, VAL_ID = nullptr;
+	GFX_API::GFXHandle VERTEXBUFFER_ID = nullptr, INDEXBUFFER_ID = nullptr, MESH_VAL= nullptr;
 	struct Vertex {
 		vec3 Pos;
 		vec2 TextCoord;
 	};
 	{
-		Vertex VertexData[8]{
+		Vertex VertexData[4]{
 			{vec3(-0.5f, -0.5f, 0.0f), vec2(0.0f,0.0f)},
 			{vec3(0.5f, -0.5f, 0.0f), vec2(1.0f, 0.0f)},
 			{vec3(0.5f, 0.5f, 0.0f), vec2(1.0f, 1.0f)},
 			{vec3(-0.5f, 0.5f, 0.0f), vec2(0.0f, 1.0f)},
-
-			{vec3(-0.5f, -0.5f, -0.5f), vec2(0.0f,0.0f)},
-			{vec3(0.5f, -0.5f, -0.5f), vec2(1.0f, 0.0f)},
-			{vec3(0.5f, 0.5f, -0.5f), vec2(1.0f, 1.0f)},
-			{vec3(-0.5f, 0.5f, -0.5f), vec2(0.0f, 1.0f)}
 		};
-		unsigned int IndexData[12]{ 0, 1, 2, 2, 3, 0, 
-									4, 5, 6, 6, 7, 4};
+		unsigned int IndexData[6]{ 0, 1, 2, 2, 3, 0};
 
 		GFX_API::GFXHandle PositionVA_ID, ColorVA_ID;
 		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC3, PositionVA_ID);
 		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC2, ColorVA_ID);
 		vector<GFX_API::GFXHandle> VAs{ PositionVA_ID, ColorVA_ID };
-		GFXContentManager->Create_VertexAttributeLayout(VAs, GFX_API::VERTEXLIST_TYPEs::TRIANGLELIST, VAL_ID);
-		if (GFXContentManager->Create_VertexBuffer(VAL_ID, 8, 0, VERTEXBUFFER_ID) != TAPI_SUCCESS) {
+		GFXContentManager->Create_VertexAttributeLayout(VAs, GFX_API::VERTEXLIST_TYPEs::TRIANGLELIST, MESH_VAL);
+		if (GFXContentManager->Create_VertexBuffer(MESH_VAL, 4, 0, VERTEXBUFFER_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("First Vertex Buffer creation has failed!");
 		}
 		
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VertexData, sizeof(Vertex) * 8, 0) != TAPI_SUCCESS) {
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VertexData, sizeof(Vertex) * 4, 0) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading vertex buffer to staging buffer has failed!");
 		}
 
-		if (GFXContentManager->Create_IndexBuffer(GFX_API::DATA_TYPE::VAR_UINT32, 12, 0, INDEXBUFFER_ID) != TAPI_SUCCESS) {
+		if (GFXContentManager->Create_IndexBuffer(GFX_API::DATA_TYPE::VAR_UINT32, 6, 0, INDEXBUFFER_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("First Index Buffer creation has failed!");
 		}
 
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, IndexData, 48, 160) != TAPI_SUCCESS) {
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, IndexData, 24, 80) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading index buffer to staging buffer has failed!");
 		}
 	}
+
 
 	//Create and upload first sampled texture in host visible memory
 	GFX_API::GFXHandle AlitaTexture;
@@ -263,18 +258,18 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			LOG_CRASHING_TAPI("Alita texture creation has failed!");
 		}
 		AlitaSize = im_desc.WIDTH * im_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(im_desc.Properties.CHANNEL_TYPE);
-		AlitaOffset = 448;
+		AlitaOffset = 944;
 		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, DATA, AlitaSize, AlitaOffset) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading the Alita texture has failed!");
 		}
 		delete DATA;
-		DATA = nullptr;
 	}
-	
-	//Create and Link Goku Black material type/inst
-	GFX_API::GFXHandle VS_ID, FS_ID, FIRSTSAMPLINGTYPE_ID;
-	GFX_API::GFXHandle TEXTUREDISPLAY_MATTYPE, TEXTUREDISPLAY_MATINST;
+
+
+	//Create and Link Texture Display Material Type/Instance
+	GFX_API::GFXHandle FIRSTSAMPLINGTYPE_ID, TEXTUREDISPLAY_MATTYPE, TEXTUREDISPLAY_MATINST;
 	{
+		GFX_API::GFXHandle VS_ID, FS_ID;
 		unsigned int VS_CODESIZE = 0, FS_CODESIZE = 0;
 		char* VS_CODE = (char*)TAPIFILESYSTEM::Read_BinaryFile("C:/dev/VulkanRenderer/Content/FirstVert.spv", VS_CODESIZE);
 		char* FS_CODE = (char*)TAPIFILESYSTEM::Read_BinaryFile("C:/dev/VulkanRenderer/Content/FirstFrag.spv", FS_CODESIZE);
@@ -300,16 +295,8 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			first_desc.SHADERSTAGEs.FRAGMENTSHADER = true;
 			first_desc.TYPE = GFX_API::SHADERINPUT_TYPE::IMAGE_G;
 			MATTYPE.MATERIALTYPEDATA.push_back(first_desc);
-
-			GFX_API::ShaderInput_Description second_desc;
-			second_desc.BINDINGPOINT = 1;
-			second_desc.ELEMENTCOUNT = 1;
-			second_desc.NAME = "WorldData";
-			second_desc.SHADERSTAGEs.VERTEXSHADER = true;
-			second_desc.TYPE = GFX_API::SHADERINPUT_TYPE::UBUFFER_G;
-			MATTYPE.MATERIALTYPEDATA.push_back(second_desc);
 		}
-		MATTYPE.ATTRIBUTELAYOUT_ID = VAL_ID;
+		MATTYPE.ATTRIBUTELAYOUT_ID = MESH_VAL;
 		MATTYPE.culling = GFX_API::CULL_MODE::CULL_OFF;
 		MATTYPE.polygon = GFX_API::POLYGON_MODE::FILL;
 		MATTYPE.depthtest = GFX_API::DEPTH_TESTs::DEPTH_TEST_LESS;
@@ -335,9 +322,11 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			LOG_CRASHING_TAPI("Texture Display Material Instance creation has failed!");
 		}
 		if (GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Texture Display Material Type's image texture setting has failed!");
+			LOG_CRASHING_TAPI("Texture Display Material Type's Alita image texture setting has failed!");
 		}
-
+	}
+	//Upload Camera Data
+	{
 		mat4 matrixes[3];
 		matrixes[0] = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		matrixes[1] = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -346,33 +335,189 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, &matrixes, 192, 256) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading the world matrix data has failed!");
 		}
-		if (GFXContentManager->SetMaterial_UniformBuffer(TEXTUREDISPLAY_MATTYPE, true, false, 1, StagingBuffer, 0, GFX_API::BUFFER_TYPE::STAGING, 256, 192) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Texture Display Material Type's uniform buffer seting has failed!");
+	}
+
+
+
+
+	//Create skybox's attribute layout and mesh buffer for the skybox cube
+	GFX_API::GFXHandle SKYBOXVB_ID = nullptr, SKYBOXVAL = nullptr;
+	{
+		float skyboxVertices[] = {
+			-1.0f,  1.0f, -1.0f,
+			-1.0f, -1.0f, -1.0f,
+			 1.0f, -1.0f, -1.0f,
+			 1.0f, -1.0f, -1.0f,
+			 1.0f,  1.0f, -1.0f,
+			-1.0f,  1.0f, -1.0f,
+
+			-1.0f, -1.0f,  1.0f,
+			-1.0f, -1.0f, -1.0f,
+			-1.0f,  1.0f, -1.0f,
+			-1.0f,  1.0f, -1.0f,
+			-1.0f,  1.0f,  1.0f,
+			-1.0f, -1.0f,  1.0f,
+
+			 1.0f, -1.0f, -1.0f,
+			 1.0f, -1.0f,  1.0f,
+			 1.0f,  1.0f,  1.0f,
+			 1.0f,  1.0f,  1.0f,
+			 1.0f,  1.0f, -1.0f,
+			 1.0f, -1.0f, -1.0f,
+
+			-1.0f, -1.0f,  1.0f,
+			-1.0f,  1.0f,  1.0f,
+			 1.0f,  1.0f,  1.0f,
+			 1.0f,  1.0f,  1.0f,
+			 1.0f, -1.0f,  1.0f,
+			-1.0f, -1.0f,  1.0f,
+
+			-1.0f,  1.0f, -1.0f,
+			 1.0f,  1.0f, -1.0f,
+			 1.0f,  1.0f,  1.0f,
+			 1.0f,  1.0f,  1.0f,
+			-1.0f,  1.0f,  1.0f,
+			-1.0f,  1.0f, -1.0f,
+
+			-1.0f, -1.0f, -1.0f,
+			-1.0f, -1.0f,  1.0f,
+			 1.0f, -1.0f, -1.0f,
+			 1.0f, -1.0f, -1.0f,
+			-1.0f, -1.0f,  1.0f,
+			 1.0f, -1.0f,  1.0f
+		};
+
+		GFX_API::GFXHandle PositionVA_ID;
+		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC3, PositionVA_ID);
+		GFXContentManager->Create_VertexAttributeLayout({ PositionVA_ID }, GFX_API::VERTEXLIST_TYPEs::TRIANGLELIST, SKYBOXVAL);
+		if (GFXContentManager->Create_VertexBuffer(SKYBOXVAL, 36, 0, SKYBOXVB_ID) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Skybox Vertex Buffer creation has failed!");
+		}
+
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, skyboxVertices, sizeof(vec3) * 36, 512) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading vertex buffer to staging buffer has failed!");
 		}
 	}
 
-	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 8);
-	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, INDEXBUFFER_ID, GFX_API::BUFFER_TYPE::INDEX, 160, 0, 48);
-	GFXRENDERER->ImageBarrier(DEPTHRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::DEPTHREADWRITE_STENCILREAD, BarrierAfterUpload_ID);
-	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierAfterUpload_ID);
-	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierAfterUpload_ID);
-	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE, BarrierAfterUpload_ID);
-	GFXRENDERER->DrawNonInstancedDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, TEXTUREDISPLAY_MATINST, SubpassID);
-	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, BarrierAfterDraw_ID);
-	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, BarrierAfterDraw_ID);
+	//Create and upload skybox cubemap texture
+	GFX_API::GFXHandle SkyboxTexture = nullptr;
+	unsigned int SkyBoxSize = 0, SkyBoxOffset = 0;
+	{
+		GFX_API::Texture_Description im_desc;
+
+		im_desc.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE;
+		im_desc.USAGE.isSampledReadOnly = true;
+		im_desc.HEIGHT = 2048;
+		im_desc.WIDTH = 2048;
+		im_desc.Properties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA8UB;
+		im_desc.Properties.DATAORDER = GFX_API::TEXTURE_ORDER::SWIZZLE;
+		im_desc.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP;
+		im_desc.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
+		if (GFXContentManager->Create_Texture(im_desc, 0, SkyboxTexture) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Skybox texture creation has failed!");
+		}
+		SkyBoxSize = im_desc.WIDTH * im_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(im_desc.Properties.CHANNEL_TYPE) * 6;
+		SkyBoxOffset = AlitaOffset + AlitaSize;
+
+		for (unsigned int i = 0; i < 6; i++) {
+			void* DATA = nullptr;
+			if (TuranEditor::Texture_Loader::Import_Texture(("C:/Users/furka/Desktop/" + to_string(i) + ".jpg").c_str(), im_desc, DATA, false) != TAPI_SUCCESS) {
+				LOG_CRASHING_TAPI("Skybox texture import has failed!");
+			}
+
+			if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, DATA, SkyBoxSize / 6, SkyBoxOffset + (SkyBoxSize * i) / 6) != TAPI_SUCCESS) {
+				LOG_CRASHING_TAPI("Uploading the Skybox texture has failed!");
+			}
+
+			GFXRENDERER->ImageBarrier(SkyboxTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, i, BarrierBeforeUpload_ID);
+			GFXRENDERER->CopyBuffer_toImage(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, SkyboxTexture, SkyBoxOffset + (SkyBoxSize * i) / 6, { 0,0,0,0,0,0 }, i);
+			GFXRENDERER->ImageBarrier(SkyboxTexture, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY, i, BarrierAfterUpload_ID);
+			delete DATA;
+		}
+
+	}
+
+	//Create and Link Skybox Display Material Type/Instance
+	GFX_API::GFXHandle SKYBOXDISPlAY_MATTYPE, SKYBOXDISPlAY_MATINST;
+	{
+		GFX_API::GFXHandle VS_ID, FS_ID;
+		unsigned int VS_CODESIZE = 0, FS_CODESIZE = 0;
+		char* VS_CODE = (char*)TAPIFILESYSTEM::Read_BinaryFile("C:/dev/VulkanRenderer/Content/SkyBoxVert.spv", VS_CODESIZE);
+		char* FS_CODE = (char*)TAPIFILESYSTEM::Read_BinaryFile("C:/dev/VulkanRenderer/Content/SkyBoxFrag.spv", FS_CODESIZE);
+		GFX_API::ShaderSource_Resource VS, FS;
+		VS.LANGUAGE = GFX_API::SHADER_LANGUAGEs::SPIRV; FS.LANGUAGE = GFX_API::SHADER_LANGUAGEs::SPIRV;
+		VS.STAGE.VERTEXSHADER = true; FS.STAGE.VERTEXSHADER = false;
+		VS.STAGE.FRAGMENTSHADER = false; FS.STAGE.FRAGMENTSHADER = true;
+		VS.SOURCE_DATA = VS_CODE; VS.DATA_SIZE = VS_CODESIZE;
+		FS.SOURCE_DATA = FS_CODE; FS.DATA_SIZE = FS_CODESIZE;
+		GFXContentManager->Compile_ShaderSource(&VS, VS_ID);
+		GFXContentManager->Compile_ShaderSource(&FS, FS_ID);
+		GFX_API::Material_Type MATTYPE;
+		MATTYPE.VERTEXSOURCE_ID = VS_ID;
+		MATTYPE.FRAGMENTSOURCE_ID = FS_ID;
+		MATTYPE.SubDrawPass_ID = SubpassID;
+		MATTYPE.MATERIALTYPEDATA.clear();
+
+		{
+			GFX_API::ShaderInput_Description first_desc;
+			first_desc.BINDINGPOINT = 0;
+			first_desc.ELEMENTCOUNT = 1;
+			first_desc.NAME = "SkyBoxTexture";
+			first_desc.SHADERSTAGEs.FRAGMENTSHADER = true;
+			first_desc.TYPE = GFX_API::SHADERINPUT_TYPE::SAMPLER_G;
+			MATTYPE.MATERIALTYPEDATA.push_back(first_desc);
+		}
+		MATTYPE.ATTRIBUTELAYOUT_ID = SKYBOXVAL;
+		MATTYPE.culling = GFX_API::CULL_MODE::CULL_OFF;
+		MATTYPE.polygon = GFX_API::POLYGON_MODE::FILL;
+		MATTYPE.depthtest = GFX_API::DEPTH_TESTs::DEPTH_TEST_LESS;
+		MATTYPE.depthmode = GFX_API::DEPTH_MODEs::DEPTH_READ_WRITE;
+		MATTYPE.frontfacedstencil.CompareOperation = GFX_API::STENCIL_COMPARE::ALWAYS_PASS;
+		MATTYPE.frontfacedstencil.DepthFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
+		MATTYPE.frontfacedstencil.DepthSuccess = GFX_API::STENCIL_OP::CHANGE;
+		MATTYPE.frontfacedstencil.STENCILCOMPAREMASK = 0xFF;
+		MATTYPE.frontfacedstencil.StencilFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
+		MATTYPE.frontfacedstencil.STENCILVALUE = 255;
+		MATTYPE.frontfacedstencil.STENCILWRITEMASK = 0xFF;
+		if (GFXContentManager->Link_MaterialType(MATTYPE, SKYBOXDISPlAY_MATTYPE) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Link MaterialType has failed!");
+		}
+
+
+		if (GFXContentManager->Create_MaterialInst(SKYBOXDISPlAY_MATTYPE, SKYBOXDISPlAY_MATINST) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("SkyBox Display Material Instance creation has failed!");
+		}
+		if (GFXContentManager->SetMaterial_SampledTexture(SKYBOXDISPlAY_MATTYPE, true, false, 0, 0, SkyboxTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("SkyBox Display Material Type's Alita image texture setting has failed!");
+		}
+	}
+
+
+
+
+	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, 0, BarrierBeforeUpload_ID);
+	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 4);
+	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, SKYBOXVB_ID, GFX_API::BUFFER_TYPE::VERTEX, 512, 0, sizeof(vec3) * 36);
+	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, INDEXBUFFER_ID, GFX_API::BUFFER_TYPE::INDEX, 80, 0, 24);
+	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, FirstGlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, 256, 0, 192);
+	GFXRENDERER->CopyBuffer_toImage(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, AlitaTexture, AlitaOffset, { 0,0,0,0,0,0 }, 0);
+	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE, 0, BarrierAfterUpload_ID);
+	GFXRENDERER->ImageBarrier(DEPTHRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::DEPTHREADWRITE_STENCILREAD, 0, BarrierAfterUpload_ID);
+	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
+	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
+	GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 2, 0, TEXTUREDISPLAY_MATINST, SubpassID);
+	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, 0, BarrierAfterDraw_ID);
 	GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 	GFXRENDERER->Run();
 	Editor_System::Take_Inputs();
 
 	//Copy Color2RT to GokuBlackWindow's swapchain textures in second frame
-	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, BarrierBeforeUpload_ID);
-	GFXRENDERER->CopyBuffer_toImage(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, AlitaTexture, AlitaOffset, { 0,0,0,0,0,0 });
-	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierAfterUpload_ID);
+	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, 0, BarrierBeforeUpload_ID);
+	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
 
-	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierAfterUpload_ID);
-	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE, BarrierAfterUpload_ID);
-	GFXRENDERER->DrawNonInstancedDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, TEXTUREDISPLAY_MATINST, SubpassID);
-	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, BarrierAfterDraw_ID);
+	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
+	GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 2, 0, TEXTUREDISPLAY_MATINST, SubpassID);
+	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, 0, BarrierAfterDraw_ID);
 	GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 	GFXRENDERER->Run();
 	Editor_System::Take_Inputs();
@@ -383,11 +528,12 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 
 
-		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierBeforeUpload_ID);
-		GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, BarrierBeforeUpload_ID);
-		GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, BarrierAfterUpload_ID);
-		GFXRENDERER->DrawNonInstancedDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, TEXTUREDISPLAY_MATINST, SubpassID);
-		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, BarrierAfterDraw_ID);
+		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierBeforeUpload_ID);
+		GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, 0, BarrierBeforeUpload_ID);
+		GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
+		GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 1, 0, TEXTUREDISPLAY_MATINST, SubpassID);
+		GFXRENDERER->DrawDirect(SKYBOXVB_ID, nullptr, 0, 0, 0, 1, 0, SKYBOXDISPlAY_MATINST, SubpassID);
+		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, 0, BarrierAfterDraw_ID);
 		GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 		GFXRENDERER->Run();
 

@@ -163,7 +163,8 @@ namespace GFX_API {
 
 	enum class TEXTURE_DIMENSIONs : unsigned char {
 		TEXTURE_2D = 0,
-		TEXTURE_3D = 1
+		TEXTURE_3D = 1,
+		TEXTURE_CUBE = 2
 	};
 
 	enum class TEXTURE_MIPMAPFILTER : unsigned char {

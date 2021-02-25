@@ -219,8 +219,8 @@ namespace Vulkan {
 
 	struct VK_NonIndexedDrawCall {
 		VkBuffer VBuffer;
-		VkDeviceSize VOffset = 0, VertexCount = 0;
-		uint32_t FirstVertex = 0;
+		VkDeviceSize VOffset = 0;
+		uint32_t FirstVertex = 0, VertexCount = 0, FirstInstance = 0, InstanceCount = 0;
 
 		VkPipeline MatTypeObj;
 		VkPipelineLayout MatTypeLayout;
@@ -228,8 +228,8 @@ namespace Vulkan {
 	};
 	struct VK_IndexedDrawCall {
 		VkBuffer VBuffer, IBuffer;
-		VkDeviceSize VBOffset = 0, IBOffset = 0, IndexCount = 0;
-		uint32_t VOffset = 0, FirstIndex = 0;
+		VkDeviceSize VBOffset = 0, IBOffset = 0;
+		uint32_t VOffset = 0, FirstIndex = 0, IndexCount = 0, FirstInstance = 0, InstanceCount = 0;
 		VkIndexType IType;
 
 		VkPipeline MatTypeObj;

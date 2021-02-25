@@ -158,6 +158,7 @@ namespace Vulkan {
 	VK_API VkImageType Find_VkImageType(GFX_API::TEXTURE_DIMENSIONs dimensions) {
 		switch (dimensions) {
 		case GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D:
+		case GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE:
 			return VK_IMAGE_TYPE_2D;
 		case GFX_API::TEXTURE_DIMENSIONs::TEXTURE_3D:
 			return VK_IMAGE_TYPE_3D;

@@ -1181,8 +1181,8 @@ namespace Vulkan {
 		Set_NextFrameIndex();
 	}
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
-	void Renderer::DrawNonInstancedDirect(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
-		unsigned int FirstIndex, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) {
+	void Renderer::DrawDirect(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
+		unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) {
 		TURAN_PROFILE_SCOPE_MCS("DrawNonInstanceDirect!");
 		VK_SubDrawPass* SP = GFXHandleConverter(VK_SubDrawPass*, SubDrawPass_ID);
 		if (IndexBuffer_ID) {
@@ -1208,6 +1208,8 @@ namespace Vulkan {
 			call.MatTypeLayout = PI->PROGRAM->PipelineLayout;
 			call.GeneralSet = &PI->PROGRAM->General_DescSet.Set;
 			call.PerInstanceSet = &PI->DescSet.Set;
+			call.FirstInstance = FirstInstance;
+			call.InstanceCount = InstanceCount;
 			SP->IndexedDrawCalls.push_back(GFX->JobSys->GetThisThreadIndex(), call);
 		}
 		else {
@@ -1225,6 +1227,8 @@ namespace Vulkan {
 				call.VertexCount = static_cast<VkDeviceSize>(GFXHandleConverter(VK_VertexBuffer*, VertexBuffer_ID)->VERTEX_COUNT);
 			}
 			call.FirstVertex = VertexOffset;
+			call.FirstInstance = FirstInstance;
+			call.InstanceCount = InstanceCount;
 			VK_PipelineInstance* PI = GFXHandleConverter(VK_PipelineInstance*, MaterialInstance_ID);
 			call.MatTypeObj = PI->PROGRAM->PipelineObject;
 			call.MatTypeLayout = PI->PROGRAM->PipelineLayout;
@@ -1292,7 +1296,7 @@ namespace Vulkan {
 		DATAs->BUFBUFCopies.push_back(GFX->JobSys->GetThisThreadIndex(), finalinfo);
 	}
 	void Renderer::CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
-		GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion) {
+		GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion, unsigned int TargetTextureLayer) {
 		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
 		VkDeviceSize finaloffset = static_cast<VkDeviceSize>(SourceBuffer_offset);
 		VK_BUFtoIMinfo x;
@@ -1328,7 +1332,7 @@ namespace Vulkan {
 		else {
 			x.BufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
-		x.BufferImageCopy.imageSubresource.baseArrayLayer = 0;
+		x.BufferImageCopy.imageSubresource.baseArrayLayer = TargetTextureLayer;
 		x.BufferImageCopy.imageSubresource.layerCount = 1;
 		x.BufferImageCopy.imageSubresource.mipLevel = 0;
 		x.TargetImage = TEXTURE->Image;
@@ -1343,7 +1347,7 @@ namespace Vulkan {
 		DATAs->BUFIMCopies.push_back(GFX->JobSys->GetThisThreadIndex(), x);
 	}
 	void Renderer::CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle,
-		uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset) {
+		unsigned int SourceTextureLayer, uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset, unsigned int TargetTextureLayer) {
 		VK_Texture* SourceIm = GFXHandleConverter(VK_Texture*, SourceTextureHandle);
 		VK_Texture* TargetIm = GFXHandleConverter(VK_Texture*, TargetTextureHandle);
 		VK_IMtoIMinfo x;
@@ -1367,7 +1371,8 @@ namespace Vulkan {
 			copy_i.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			copy_i.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
-		copy_i.dstSubresource.baseArrayLayer = 0; copy_i.srcSubresource.baseArrayLayer = 0;
+		copy_i.dstSubresource.baseArrayLayer = TargetTextureLayer;
+		copy_i.srcSubresource.baseArrayLayer = SourceTextureLayer;
 		copy_i.dstSubresource.layerCount = 1; copy_i.srcSubresource.layerCount = 1;
 		copy_i.dstSubresource.mipLevel = 0; copy_i.srcSubresource.mipLevel = 0;
 		
@@ -1384,7 +1389,7 @@ namespace Vulkan {
 	}
 
 	void Renderer::ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
-		, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, GFX_API::GFXHandle BarrierTPHandle) {
+		, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int LayerIndex, GFX_API::GFXHandle BarrierTPHandle) {
 		VK_Texture* Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
 		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, BarrierTPHandle);
 		if (TP->TYPE != GFX_API::TRANFERPASS_TYPE::TP_BARRIER) {
@@ -1409,7 +1414,7 @@ namespace Vulkan {
 		}
 		//Mipmap settings, but mipmap is not supported right now
 		LOG_NOTCODED_TAPI("Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!", false);
-		im_bi.Barrier.subresourceRange.baseArrayLayer = 0;
+		im_bi.Barrier.subresourceRange.baseArrayLayer = LayerIndex;
 		im_bi.Barrier.subresourceRange.layerCount = 1;
 		im_bi.Barrier.subresourceRange.levelCount = 1;
 		im_bi.Barrier.subresourceRange.baseMipLevel = 0;

@@ -5,14 +5,14 @@ layout(location = 1) in vec2 inTextCoord;
 
 layout(location = 0) out vec2 TextCoord;
 
-layout(set = 1, binding = 1) uniform WorldData{
+layout(set = 0, binding = 1) uniform WorldData{
     mat4 object_toworld;
     mat4 world_tocamera;
     mat4 camera_toprojection;
-} matrixes;
+} CameraData;
 
 void main() {
-    gl_Position = matrixes.camera_toprojection * matrixes.world_tocamera * matrixes.object_toworld *  vec4(inPosition, 1.0);
+    gl_Position = CameraData.camera_toprojection * CameraData.world_tocamera * CameraData.object_toworld *  vec4(inPosition, 1.0);
     //gl_Position = vec4(inPosition.xy, 0.0, 1.0);
     gl_Position.y = -gl_Position.y;
     TextCoord = inTextCoord;

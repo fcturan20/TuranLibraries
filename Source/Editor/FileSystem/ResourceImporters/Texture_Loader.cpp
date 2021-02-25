@@ -25,13 +25,11 @@ namespace TuranEditor {
 			return TAPI_FAIL;
 		}
 		//If application arrives here, loading is successful!
-		desc.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
 		desc.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP;
 		desc.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
 		desc.Properties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA8UB;
 		desc.WIDTH = WIDTH;
 		desc.HEIGHT = HEIGHT;
-		desc.USAGE.isSampledReadOnly = true;
 
 		LOG_STATUS_TAPI("Texture is loaded successfully!");
 		return TAPI_SUCCESS;

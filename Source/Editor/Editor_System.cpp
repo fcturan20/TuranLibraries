@@ -6,7 +6,7 @@ namespace TuranEditor {
 		std::cout << "Editor System Constructor is started!\n";
 		Vulkan::Vulkan_Core* VK = new Vulkan::Vulkan_Core(Monitors, GPUs, JobSystem);
 
-		unsigned int ALLOCSIZE = 1024 * 1024 * 40;
+		unsigned int ALLOCSIZE = 1024 * 1024 * 150;
 		//Search for RGBA8UB supported memory type that's device local
 		{
 			GFX_API::Texture_Description RGBA8UB_IM;

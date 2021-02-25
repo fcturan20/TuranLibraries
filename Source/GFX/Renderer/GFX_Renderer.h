@@ -63,20 +63,21 @@ namespace GFX_API {
 		//You can set Count as 0. For IndexedDraws, this means all of index buffer will be used. For NonIndexedDraws, all of the vertex buffer will be used.
 		//For IndexedDraws, VertexOffset is the added to the value gotten from index buffer. For NonIndexedDraws, it is the place to start reading from Vertex Buffer.
 		//For IndexedDraws, IndexOffset is the place to start reading from Index Buffer
-		virtual void DrawNonInstancedDirect(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset, 
-			unsigned int FirstIndex, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) = 0;
+		virtual void DrawDirect(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset, 
+			unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) = 0;
 		virtual void SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle) = 0;
 		virtual void CopyBuffer_toBuffer(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE, 
 			GFX_API::GFXHandle TargetBuffer_Handle, GFX_API::BUFFER_TYPE TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) = 0;
 		//If TargetTexture_CopyXXX is 0, it's converted to size of the texture in that dimension
 		virtual void CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
-			GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion) = 0;
+			GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion, unsigned int TargetTextureLayer) = 0;
 		//This function copies CopySize amount of data from Source to Target
 		//Which means texture channels and layouts should match for a bugless copy
 		virtual void CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle,
-			uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset) = 0;
+			unsigned int SourceTextureLayer, uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset, unsigned int TargetTextureLayer) = 0;
+		//If your texture is an array texture or a cubemap, you should use LayerIndex to specify the texture you're gonna use barrier for.
 		virtual void ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
-			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, GFX_API::GFXHandle BarrierTPHandle) = 0;
+			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int LayerIndex, GFX_API::GFXHandle BarrierTPHandle) = 0;
 
 
 		unsigned char GetCurrentFrameIndex();

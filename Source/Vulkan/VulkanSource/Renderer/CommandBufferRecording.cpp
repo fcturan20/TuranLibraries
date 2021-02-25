@@ -96,7 +96,7 @@ namespace Vulkan {
 						if (DrawCall.VBuffer != VK_NULL_HANDLE) {
 							vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VOffset);
 						}
-						vkCmdDraw(CB, DrawCall.VertexCount, 1, DrawCall.FirstVertex, 0);
+						vkCmdDraw(CB, DrawCall.VertexCount, DrawCall.InstanceCount, DrawCall.FirstVertex, DrawCall.FirstInstance);
 					}
 					SP.NonIndexedDrawCalls.clear(GFX->JobSys->GetThisThreadIndex());
 				}
@@ -145,10 +145,7 @@ namespace Vulkan {
 							vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VBOffset);
 						}
 						vkCmdBindIndexBuffer(CB, DrawCall.IBuffer, DrawCall.IBOffset, DrawCall.IType);
-						{
-							TURAN_PROFILE_SCOPE_MCS("VkCmdDrawIndexed");
-							vkCmdDrawIndexed(CB, DrawCall.IndexCount, 1, DrawCall.FirstIndex, DrawCall.VOffset, 0);
-						}
+						vkCmdDrawIndexed(CB, DrawCall.IndexCount, DrawCall.InstanceCount, DrawCall.FirstIndex, DrawCall.VOffset, DrawCall.FirstInstance);
 					}
 					SP.IndexedDrawCalls.clear(GFX->JobSys->GetThisThreadIndex());
 				}

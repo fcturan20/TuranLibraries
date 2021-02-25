@@ -32,8 +32,8 @@ namespace Vulkan {
 
 		//Rendering operations
 		virtual void Run() override;
-		virtual void DrawNonInstancedDirect(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
-			unsigned int FirstIndex, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) override;
+		virtual void DrawDirect(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
+			unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) override;
 		virtual void SwapBuffers(GFX_API::GFXHandle WindowHandle, GFX_API::GFXHandle WindowPassHandle) override;
 		//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 		//Target Buffer should be created with DEVICELOCAL
@@ -41,11 +41,11 @@ namespace Vulkan {
 			GFX_API::GFXHandle TargetBuffer_Handle, GFX_API::BUFFER_TYPE TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) override;
 		//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 		virtual void CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
-			GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion) override;
+			GFX_API::GFXHandle TextureHandle, unsigned int SourceTextureLayer, GFX_API::BoxRegion TargetTextureRegion, unsigned int TargetTextureLayer) override;
 		virtual void CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle,
-			uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset) override;
+			unsigned int SourceTextureLayer, uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset, unsigned int TargetTextureLayer) override;
 		virtual void ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
-			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, GFX_API::GFXHandle BarrierTPHandle) override;
+			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int LayerIndex, GFX_API::GFXHandle BarrierTPHandle) override;
 
 	};
 }

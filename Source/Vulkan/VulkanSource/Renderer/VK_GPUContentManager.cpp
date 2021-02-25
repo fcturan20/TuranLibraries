@@ -717,11 +717,17 @@ namespace Vulkan {
 		{
 			VkImageCreateInfo im_ci = {};
 			im_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-			im_ci.arrayLayers = 1;
 			im_ci.extent.width = TEXTURE->WIDTH;
 			im_ci.extent.height = TEXTURE->HEIGHT;
 			im_ci.extent.depth = 1;
-			im_ci.flags = 0;
+			if (TEXTURE_ASSET.Properties.DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
+				im_ci.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+				im_ci.arrayLayers = 6;
+			}
+			else {
+				im_ci.flags = 0;
+				im_ci.arrayLayers = 1;
+			}
 			im_ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE->CHANNELs);
 			im_ci.imageType = Find_VkImageType(TEXTURE_ASSET.Properties.DIMENSION);
 			im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -760,7 +766,18 @@ namespace Vulkan {
 			ci.pNext = nullptr;
 
 			ci.image = TEXTURE->Image;
-			ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+			if (TEXTURE_ASSET.Properties.DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
+				ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE;
+				ci.subresourceRange.layerCount = 6;
+			}
+			else {
+				ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+				ci.subresourceRange.layerCount = 1;
+			}
+			ci.subresourceRange.baseArrayLayer = 0;
+			ci.subresourceRange.baseMipLevel = 0;
+			ci.subresourceRange.levelCount = 1;
+
 			ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE->CHANNELs);
 			if (TEXTURE->CHANNELs == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32){
 				ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -772,10 +789,6 @@ namespace Vulkan {
 				ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			}
 			
-			ci.subresourceRange.baseArrayLayer = 0;
-			ci.subresourceRange.layerCount = 1;
-			ci.subresourceRange.baseMipLevel = 0;
-			ci.subresourceRange.levelCount = 1;
 			Fill_ComponentMapping_byCHANNELs(TEXTURE->CHANNELs, ci.components);
 
 			if (vkCreateImageView(VKGPU->Logical_Device, &ci, nullptr, &TEXTURE->ImageView) != VK_SUCCESS) {
@@ -1551,7 +1564,7 @@ namespace Vulkan {
 			return TAPI_FAIL;
 		}
 		VK_Descriptor& Descriptor = Set->Descs[BINDINDEX];
-		if (Descriptor.Type != DescType::IMAGE) {
+		if (Descriptor.Type != DescType::SAMPLER) {
 			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input (isn't pointing to an image texture!)");
 			return TAPI_FAIL;
 		}

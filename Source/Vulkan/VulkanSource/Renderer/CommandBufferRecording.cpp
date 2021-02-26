@@ -51,6 +51,9 @@ namespace Vulkan {
 			if (SP.Binding_Index != SubPassIndex) {
 				LOG_NOTCODED_TAPI("Subpass Binding Index and the SubDrawPass' element index doesn't match, handle this case!", true);
 			}
+			if (SP.render_dearIMGUI) {
+				VKCORE->VK_IMGUI->Render_toCB(CB);
+			}
 			//NonIndexed Draw Calls
 			{
 				std::unique_lock<std::mutex> DrawCallLocker;

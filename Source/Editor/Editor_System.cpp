@@ -27,10 +27,7 @@ namespace TuranEditor {
 		GPUs[0].MEMTYPEs[0].AllocationSize = ALLOCSIZE;
 		GPUs[0].MEMTYPEs[3].AllocationSize = ALLOCSIZE;
 
-
-
-
-		VK->Start_SecondStage(0, GPUs[0].MEMTYPEs);
+		VK->Start_SecondStage(0, GPUs[0].MEMTYPEs, true);
 	}
 	Editor_System::~Editor_System() {
 		delete GFX;
@@ -154,7 +151,7 @@ namespace TuranEditor {
 			DPFdep.WaitLastFramesPass = false;
 			GFXRENDERER->Create_WindowPass({ DPFdep }, "WPA", WPA);
 		}
-		GFXRENDERER->Finish_RenderGraphConstruction();
+		GFXRENDERER->Finish_RenderGraphConstruction(nullptr);
 		LOG_CRASHING_TAPI("Application is successful, this is just to stop!");
 		
 	}
@@ -245,6 +242,6 @@ namespace TuranEditor {
 
 			GFXRENDERER->Create_TransferPass({DPEdep}, GFX_API::TRANFERPASS_TYPE::TP_BARRIER, "DPF", DPF);
 		}
-		GFXRENDERER->Finish_RenderGraphConstruction();
+		GFXRENDERER->Finish_RenderGraphConstruction(nullptr);
 	}
 }

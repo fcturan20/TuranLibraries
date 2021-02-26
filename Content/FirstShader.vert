@@ -8,6 +8,7 @@ layout(location = 0) out vec2 TextCoord;
 layout(set = 0, binding = 1) uniform WorldData{
     mat4 object_toworld;
     mat4 world_tocamera;
+    mat4 sky_tocamera;
     mat4 camera_toprojection;
 } CameraData;
 

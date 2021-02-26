@@ -1,6 +1,5 @@
 #pragma once
 #include "GFX/GFX_Includes.h"
-#include "IMGUI_GFX.h"
 #include "IMGUI_WINDOW.h"
 #include "GFX/Renderer/GPU_ContentManager.h"
 
@@ -8,24 +7,19 @@
 namespace GFX_API {
 	class GFXAPI IMGUI_Core {
 	public:
-		IMGUI_GFX* GFX_IMGUI;
+		void* Context = nullptr;
 		IMGUI_WindowManager* WindowManager;
 		GPU_ContentManager* GPUContentManager;
 		bool Is_IMGUI_Open;
 		IMGUI_Core();
 		bool Check_IMGUI_Version();
-		void* Create_Context(void* gpu_window_context);
-		void Set_Current_Context(void* context);
 		void Destroy_IMGUI_Resources();
-		void Platform_Settings();
 		void Set_as_MainViewport();
 
 		bool Show_DemoWindow();
 		bool Show_MetricsWindow();
 
 		//IMGUI FUNCTIONALITY!
-		void New_Frame();
-		void Render_Frame();
 		bool Create_Window(const char* title, bool& should_close, const bool& has_menubar = false);
 		void End_Window();
 		void Text(const char* text);

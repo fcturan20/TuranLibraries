@@ -117,6 +117,7 @@
     <ClCompile Include="Source\GFX\IMGUI\Includes\imgui_demo.cpp" />
     <ClCompile Include="Source\GFX\IMGUI\Includes\imgui_draw.cpp" />
     <ClCompile Include="Source\GFX\IMGUI\Includes\imgui_stdlib.cpp" />
+    <ClCompile Include="Source\GFX\IMGUI\Includes\imgui_tables.cpp" />
     <ClCompile Include="Source\GFX\IMGUI\Includes\imgui_widgets.cpp" />
     <ClCompile Include="Source\GFX\Renderer\GFX_Renderer.cpp" />
     <ClCompile Include="Source\GFX\Renderer\GFX_RenderNodes.cpp" />
@@ -127,6 +128,9 @@
     <ClCompile Include="Source\TuranAPI\Logger_Core.cpp" />
     <ClCompile Include="Source\TuranAPI\Profiler_Core.cpp" />
     <ClCompile Include="Source\TuranAPI\ThreadedJobCore.cpp" />
+    <ClCompile Include="Source\Vulkan\VulkanSource\IMGUI\imgui_impl_glfw.cpp" />
+    <ClCompile Include="Source\Vulkan\VulkanSource\IMGUI\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="Source\Vulkan\VulkanSource\IMGUI\IMGUI_VK.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\CommandBufferRecording.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\FGAlgorithm.cpp" />
     <ClCompile Include="Source\Vulkan\VulkanSource\Renderer\VK_GPUContentManager.cpp" />
@@ -415,7 +419,6 @@
     <ClInclude Include="Source\GFX\GFX_FileSystem\Resource_Type\Material_Type_Resource.h" />
     <ClInclude Include="Source\GFX\GFX_Includes.h" />
     <ClInclude Include="Source\GFX\IMGUI\IMGUI_Core.h" />
-    <ClInclude Include="Source\GFX\IMGUI\IMGUI_GFX.h" />
     <ClInclude Include="Source\GFX\IMGUI\IMGUI_WINDOW.h" />
     <ClInclude Include="Source\GFX\IMGUI\Includes\imconfig.h" />
     <ClInclude Include="Source\GFX\IMGUI\Includes\imgui.h" />
@@ -434,6 +437,9 @@
     <ClInclude Include="Source\TuranAPI\Logger_Core.h" />
     <ClInclude Include="Source\TuranAPI\Profiler_Core.h" />
     <ClInclude Include="Source\TuranAPI\ThreadedJobCore.h" />
+    <ClInclude Include="Source\Vulkan\VulkanSource\IMGUI\imgui_impl_glfw.h" />
+    <ClInclude Include="Source\Vulkan\VulkanSource\IMGUI\imgui_impl_vulkan.h" />
+    <ClInclude Include="Source\Vulkan\VulkanSource\IMGUI\IMGUI_VK.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\VK_GPUContentManager.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Renderer_Core.h" />
     <ClInclude Include="Source\Vulkan\VulkanSource\Renderer\Vulkan_Resource.h" />

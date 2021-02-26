@@ -16,7 +16,6 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_GraphicsPipeline*> SHADERPROGRAMs;
 		TuranAPI::Threading::TLVector<VK_PipelineInstance*> SHADERPINSTANCEs;
 		TuranAPI::Threading::TLVector<VK_Sampler*> SAMPLERs;
-		TuranAPI::Threading::TLVector<VK_VertexAttribute*> VERTEXATTRIBUTEs;
 		TuranAPI::Threading::TLVector<VK_VertexAttribLayout*> VERTEXATTRIBLAYOUTs;
 		TuranAPI::Threading::TLVector<VK_RTSLOTSET*> RT_SLOTSETs;
 
@@ -54,15 +53,13 @@ namespace Vulkan {
 		virtual ~GPU_ContentManager();
 		virtual void Unload_AllResources() override;
 
-		virtual TAPIResult Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, GFX_API::GFXHandle& Handle) override;
-		virtual bool Delete_VertexAttribute(GFX_API::GFXHandle Attribute_ID) override;
 
 		virtual TAPIResult Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel, 
 			GFX_API::TEXTURE_MIPMAPFILTER MINFILTER, GFX_API::TEXTURE_MIPMAPFILTER MAGFILTER, GFX_API::TEXTURE_WRAPPING WRAPPING_WIDTH, 
 			GFX_API::TEXTURE_WRAPPING WRAPPING_HEIGHT, GFX_API::TEXTURE_WRAPPING WRAPPING_DEPTH, GFX_API::GFXHandle& SamplingTypeHandle) override;
 
-		unsigned int Calculate_sizeofVertexLayout(const VK_VertexAttribute* const* ATTRIBUTEs, unsigned int Count);
-		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) override;
+		unsigned int Calculate_sizeofVertexLayout(const GFX_API::DATA_TYPE* ATTRIBUTEs, unsigned int Count);
+		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::DATA_TYPE>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) override;
 		virtual void Delete_VertexAttributeLayout(GFX_API::GFXHandle Layout_ID) override;
 
 		virtual TAPIResult Upload_toBuffer(GFX_API::GFXHandle BufferHandle, GFX_API::BUFFER_TYPE BufferType, const void* DATA, unsigned int DATA_SIZE,

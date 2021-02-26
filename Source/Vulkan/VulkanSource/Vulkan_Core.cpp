@@ -24,7 +24,7 @@ namespace Vulkan {
 		Check_Computer_Specs(GPUs);
 	}
 
-	TAPIResult Vulkan_Core::Start_SecondStage(unsigned char GPUIndex, const vector<GFX_API::MemoryType>& MEMORYTYPEs){
+	TAPIResult Vulkan_Core::Start_SecondStage(unsigned char GPUIndex, const vector<GFX_API::MemoryType>& MEMORYTYPEs, bool Active_dearIMGUI){
 		GPU_TO_RENDER = DEVICE_GPUs[GPUIndex];
 		//Some basic algorithms accesses some of the GPU's datas
 		//Because GFX API doesn't support multi-GPU, just give the GPU Handle to VK_States
@@ -40,7 +40,9 @@ namespace Vulkan {
 	
 		GFXRENDERER = new Vulkan::Renderer;
 		ContentManager = new Vulkan::GPU_ContentManager;
-		LOG_NOTCODED_TAPI("VulkanCore: Vulkan's IMGUI support isn't coded!\n", false);
+
+		IMGUI_o = new GFX_API::IMGUI_Core;
+		VK_IMGUI = new IMGUI_VK;
 
 		LOG_STATUS_TAPI("VulkanCore: Vulkan systems are started!");
 		return TAPI_SUCCESS;
@@ -430,7 +432,6 @@ namespace Vulkan {
 				Vulkan_GPU->QUEUEs[QueueIndex].SupportFlag.is_PRESENTATIONsupported = true;
 				Vulkan_GPU->QUEUEs[QueueIndex].QueueFeatureScore++;
 				Vulkan_Window->DISPLAY_QUEUEIndex = QueueIndex;
-				break;
 			}
 		}
 

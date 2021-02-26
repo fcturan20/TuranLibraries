@@ -21,12 +21,12 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	
 	//Create Global Buffers before the RenderGraph Construction
 	GFX_API::GFXHandle FirstGlobalBuffer;
-	GFXContentManager->Create_GlobalBuffer("CameraData", 192, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
-		0, FirstGlobalBuffer);
+	GFXContentManager->Create_GlobalBuffer("CameraData", 256, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
+		3, FirstGlobalBuffer);
 
 
 	//Useful rendergraph handles to use later
-	GFX_API::GFXHandle COLOR2RT, DEPTHRT, SubpassID, ISlotSetID, WP_ID, BarrierBeforeUpload_ID, UploadTP_ID, BarrierAfterUpload_ID, BarrierAfterDraw_ID;
+	GFX_API::GFXHandle DEPTHRT, WorldSubpassID, IMGUISubpassID, WP_ID, BarrierBeforeUpload_ID, UploadTP_ID, BarrierAfterUpload_ID, BarrierAfterDraw_ID;
 
 	//RenderGraph Construction
 	{
@@ -41,7 +41,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			LastFrameBarrierWait.WaitedStage.TRANSFERCMD = true;
 			LastFrameBarrierWait.WaitLastFramesPass = true;
 
-			if (GFXRENDERER->Create_TransferPass({LastFrameBarrierWait}, GFX_API::TRANFERPASS_TYPE::TP_BARRIER, "BarrierBeforeUpload", BarrierBeforeUpload_ID) != TAPI_SUCCESS) {
+			if (GFXRENDERER->Create_TransferPass({ LastFrameBarrierWait }, GFX_API::TRANFERPASS_TYPE::TP_BARRIER, "BarrierBeforeUpload", BarrierBeforeUpload_ID) != TAPI_SUCCESS) {
 				LOG_CRASHING_TAPI("BarrierBeforeUpload creation has failed!");
 			}
 		}
@@ -76,23 +76,8 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 
 		vector<GFX_API::RTSLOT_Description> RTSlots;
 		//Create RTs, Base RTSlotSet and the inherited one!
+		GFX_API::GFXHandle ISlotSetID;
 		{
-			GFX_API::Texture_Description COLORRT;
-			COLORRT.WIDTH = 1280;
-			COLORRT.HEIGHT = 720;
-			COLORRT.USAGE.isCopiableFrom = true;
-			COLORRT.USAGE.isCopiableTo = false;
-			COLORRT.USAGE.isRandomlyWrittenTo = false;
-			COLORRT.USAGE.isRenderableTo = true;
-			COLORRT.USAGE.isSampledReadOnly = false;
-			COLORRT.Properties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_BGRA8UNORM;
-			COLORRT.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
-			COLORRT.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_LINEAR_FROM_1MIP;
-			COLORRT.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
-			if (GFXContentManager->Create_Texture(COLORRT, 0, COLOR2RT) != TAPI_SUCCESS) {
-				LOG_CRASHING_TAPI("First RT creation has failed!");
-			}
-
 			GFX_API::Texture_Description DEPTH_desc;
 			DEPTH_desc.WIDTH = 1280;
 			DEPTH_desc.HEIGHT = 720;
@@ -117,15 +102,6 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			SWPCHNSLOT.SLOTINDEX = 0;
 			RTSlots.push_back(SWPCHNSLOT);
 
-			GFX_API::RTSLOT_Description EXTRASLOT;
-			EXTRASLOT.CLEAR_VALUE = vec4(0.6f, 0.5f, 0.5f, 1.0f);
-			EXTRASLOT.LOADOP = GFX_API::DRAWPASS_LOAD::CLEAR;
-			EXTRASLOT.OPTYPE = GFX_API::OPERATION_TYPE::READ_AND_WRITE;
-			EXTRASLOT.TextureHandles[0] = COLOR2RT;
-			EXTRASLOT.TextureHandles[1] = COLOR2RT;
-			EXTRASLOT.isUSEDLATER = true;
-			EXTRASLOT.SLOTINDEX = 1;
-			RTSlots.push_back(EXTRASLOT);
 
 			GFX_API::RTSLOT_Description DEPTHSLOT;
 			DEPTHSLOT.CLEAR_VALUE = vec4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -148,33 +124,35 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			IRT_SWPCHNSLOT.IS_DEPTH = false;
 			IRT_SWPCHNSLOT.OPTYPE = GFX_API::OPERATION_TYPE::READ_AND_WRITE;
 			IRT_SWPCHNSLOT.SLOTINDEX = 0;
-			GFX_API::RTSLOTUSAGE_Description IRT_EXTRASLOT;
-			IRT_EXTRASLOT.IS_DEPTH = false;
-			IRT_EXTRASLOT.OPTYPE = GFX_API::OPERATION_TYPE::READ_AND_WRITE;
-			IRT_EXTRASLOT.SLOTINDEX = 1;
 			GFX_API::RTSLOTUSAGE_Description IRT_DEPTHSLOT;
 			IRT_DEPTHSLOT.IS_DEPTH = true;
 			IRT_DEPTHSLOT.OPTYPE = GFX_API::OPERATION_TYPE::READ_AND_WRITE;
 			IRT_DEPTHSLOT.OPTYPESTENCIL = GFX_API::OPERATION_TYPE::READ_ONLY;
 			IRT_DEPTHSLOT.SLOTINDEX = 0;
-			GFXContentManager->Inherite_RTSlotSet({ IRT_SWPCHNSLOT, IRT_EXTRASLOT, IRT_DEPTHSLOT }, RTSlotSet_ID, ISlotSetID);
+			GFXContentManager->Inherite_RTSlotSet({ IRT_SWPCHNSLOT, IRT_DEPTHSLOT }, RTSlotSet_ID, ISlotSetID);
 		}
 
 		//Create Draw Pass
 		{
-			GFX_API::SubDrawPass_Description Subpass_desc;
-			Subpass_desc.INHERITEDSLOTSET = ISlotSetID;
-			Subpass_desc.SubDrawPass_Index = 0;
-			vector<GFX_API::SubDrawPass_Description> DESCS{ Subpass_desc };
+			GFX_API::SubDrawPass_Description WorldSubpass_desc;
+			WorldSubpass_desc.INHERITEDSLOTSET = ISlotSetID;
+			WorldSubpass_desc.SubDrawPass_Index = 0;
+			GFX_API::SubDrawPass_Description IMGUISubpass_desc;
+			IMGUISubpass_desc.INHERITEDSLOTSET = ISlotSetID;
+			IMGUISubpass_desc.SubDrawPass_Index = 1;
+			IMGUISubpass_desc.WaitOp = GFX_API::SUBPASS_ACCESS::LATE_Z_READWRITE;
+			IMGUISubpass_desc.ContinueOp = GFX_API::SUBPASS_ACCESS::ALLCOMMANDS;
+			vector<GFX_API::SubDrawPass_Description> DESCS{ WorldSubpass_desc, IMGUISubpass_desc };
 			vector<GFX_API::GFXHandle> SPs_ofFIRSTDP;
-			
+
 
 			GFX_API::PassWait_Description FirstBarrierTP_dep;
 			FirstBarrierTP_dep.WaitedPass = &BarrierAfterUpload_ID;
 			FirstBarrierTP_dep.WaitedStage.TRANSFERCMD = true;
 			FirstBarrierTP_dep.WaitLastFramesPass = false;
 			GFXRENDERER->Create_DrawPass(DESCS, RTSlotSet_ID, { FirstBarrierTP_dep }, "FirstDP", SPs_ofFIRSTDP, FIRSTDRAWPASS_ID);
-			SubpassID = SPs_ofFIRSTDP[0];
+			WorldSubpassID = SPs_ofFIRSTDP[0];
+			IMGUISubpassID = SPs_ofFIRSTDP[1];
 		}
 
 		//Create Final Barrier TP (to change layout of the Swapchain texture)
@@ -195,7 +173,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			GFXRENDERER->Create_WindowPass({ FinalBarrier_dep }, "First WP", WP_ID);
 		}
 
-		GFXRENDERER->Finish_RenderGraphConstruction();
+		GFXRENDERER->Finish_RenderGraphConstruction(IMGUISubpassID);
 	}
 
 
@@ -220,11 +198,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		};
 		unsigned int IndexData[6]{ 0, 1, 2, 2, 3, 0};
 
-		GFX_API::GFXHandle PositionVA_ID, ColorVA_ID;
-		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC3, PositionVA_ID);
-		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC2, ColorVA_ID);
-		vector<GFX_API::GFXHandle> VAs{ PositionVA_ID, ColorVA_ID };
-		GFXContentManager->Create_VertexAttributeLayout(VAs, GFX_API::VERTEXLIST_TYPEs::TRIANGLELIST, MESH_VAL);
+		GFXContentManager->Create_VertexAttributeLayout({ GFX_API::DATA_TYPE::VAR_VEC3, GFX_API::DATA_TYPE::VAR_VEC2 }, GFX_API::VERTEXLIST_TYPEs::TRIANGLELIST, MESH_VAL);
 		if (GFXContentManager->Create_VertexBuffer(MESH_VAL, 4, 0, VERTEXBUFFER_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("First Vertex Buffer creation has failed!");
 		}
@@ -284,7 +258,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		GFX_API::Material_Type MATTYPE;
 		MATTYPE.VERTEXSOURCE_ID = VS_ID;
 		MATTYPE.FRAGMENTSOURCE_ID = FS_ID;
-		MATTYPE.SubDrawPass_ID = SubpassID;
+		MATTYPE.SubDrawPass_ID = WorldSubpassID;
 		MATTYPE.MATERIALTYPEDATA.clear();
 		
 		{
@@ -327,12 +301,13 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	}
 	//Upload Camera Data
 	{
-		mat4 matrixes[3];
+		mat4 matrixes[4];
 		matrixes[0] = glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		matrixes[1] = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		matrixes[2] = glm::perspective(glm::radians(45.0f), 1280.0f / 720.0f, 0.1f, 10000.0f);
+		matrixes[2] = mat4(mat3(matrixes[1]));
+		matrixes[3] = glm::perspective(glm::radians(45.0f), 1280.0f / 720.0f, 0.1f, 10000.0f);
 
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, &matrixes, 192, 256) != TAPI_SUCCESS) {
+		if (GFXContentManager->Upload_toBuffer(FirstGlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, &matrixes, 256, 0) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading the world matrix data has failed!");
 		}
 	}
@@ -387,9 +362,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			 1.0f, -1.0f,  1.0f
 		};
 
-		GFX_API::GFXHandle PositionVA_ID;
-		GFXContentManager->Create_VertexAttribute(GFX_API::DATA_TYPE::VAR_VEC3, PositionVA_ID);
-		GFXContentManager->Create_VertexAttributeLayout({ PositionVA_ID }, GFX_API::VERTEXLIST_TYPEs::TRIANGLELIST, SKYBOXVAL);
+		GFXContentManager->Create_VertexAttributeLayout({ GFX_API::DATA_TYPE::VAR_VEC3 }, GFX_API::VERTEXLIST_TYPEs::TRIANGLELIST, SKYBOXVAL);
 		if (GFXContentManager->Create_VertexBuffer(SKYBOXVAL, 36, 0, SKYBOXVB_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Skybox Vertex Buffer creation has failed!");
 		}
@@ -438,7 +411,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	}
 
 	//Create and Link Skybox Display Material Type/Instance
-	GFX_API::GFXHandle SKYBOXDISPlAY_MATTYPE, SKYBOXDISPlAY_MATINST;
+	GFX_API::GFXHandle SKYBOXDISPLAY_MATTYPE, SKYBOXDISPLAY_MATINST;
 	{
 		GFX_API::GFXHandle VS_ID, FS_ID;
 		unsigned int VS_CODESIZE = 0, FS_CODESIZE = 0;
@@ -455,7 +428,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		GFX_API::Material_Type MATTYPE;
 		MATTYPE.VERTEXSOURCE_ID = VS_ID;
 		MATTYPE.FRAGMENTSOURCE_ID = FS_ID;
-		MATTYPE.SubDrawPass_ID = SubpassID;
+		MATTYPE.SubDrawPass_ID = WorldSubpassID;
 		MATTYPE.MATERIALTYPEDATA.clear();
 
 		{
@@ -471,7 +444,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		MATTYPE.culling = GFX_API::CULL_MODE::CULL_OFF;
 		MATTYPE.polygon = GFX_API::POLYGON_MODE::FILL;
 		MATTYPE.depthtest = GFX_API::DEPTH_TESTs::DEPTH_TEST_LESS;
-		MATTYPE.depthmode = GFX_API::DEPTH_MODEs::DEPTH_READ_WRITE;
+		MATTYPE.depthmode = GFX_API::DEPTH_MODEs::DEPTH_READ_ONLY;
 		MATTYPE.frontfacedstencil.CompareOperation = GFX_API::STENCIL_COMPARE::ALWAYS_PASS;
 		MATTYPE.frontfacedstencil.DepthFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
 		MATTYPE.frontfacedstencil.DepthSuccess = GFX_API::STENCIL_OP::CHANGE;
@@ -479,15 +452,15 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		MATTYPE.frontfacedstencil.StencilFailed = GFX_API::STENCIL_OP::DONT_CHANGE;
 		MATTYPE.frontfacedstencil.STENCILVALUE = 255;
 		MATTYPE.frontfacedstencil.STENCILWRITEMASK = 0xFF;
-		if (GFXContentManager->Link_MaterialType(MATTYPE, SKYBOXDISPlAY_MATTYPE) != TAPI_SUCCESS) {
+		if (GFXContentManager->Link_MaterialType(MATTYPE, SKYBOXDISPLAY_MATTYPE) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Link MaterialType has failed!");
 		}
 
 
-		if (GFXContentManager->Create_MaterialInst(SKYBOXDISPlAY_MATTYPE, SKYBOXDISPlAY_MATINST) != TAPI_SUCCESS) {
+		if (GFXContentManager->Create_MaterialInst(SKYBOXDISPLAY_MATTYPE, SKYBOXDISPLAY_MATINST) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("SkyBox Display Material Instance creation has failed!");
 		}
-		if (GFXContentManager->SetMaterial_SampledTexture(SKYBOXDISPlAY_MATTYPE, true, false, 0, 0, SkyboxTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY) != TAPI_SUCCESS) {
+		if (GFXContentManager->SetMaterial_SampledTexture(SKYBOXDISPLAY_MATTYPE, true, false, 0, 0, SkyboxTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("SkyBox Display Material Type's Alita image texture setting has failed!");
 		}
 	}
@@ -499,40 +472,32 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 4);
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, SKYBOXVB_ID, GFX_API::BUFFER_TYPE::VERTEX, 512, 0, sizeof(vec3) * 36);
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, INDEXBUFFER_ID, GFX_API::BUFFER_TYPE::INDEX, 80, 0, 24);
-	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, FirstGlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, 256, 0, 192);
 	GFXRENDERER->CopyBuffer_toImage(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, AlitaTexture, AlitaOffset, { 0,0,0,0,0,0 }, 0);
 	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE, 0, BarrierAfterUpload_ID);
 	GFXRENDERER->ImageBarrier(DEPTHRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::DEPTHREADWRITE_STENCILREAD, 0, BarrierAfterUpload_ID);
-	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
-	GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 2, 0, TEXTUREDISPLAY_MATINST, SubpassID);
+	GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 2, 0, TEXTUREDISPLAY_MATINST, WorldSubpassID);
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, 0, BarrierAfterDraw_ID);
 	GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 	GFXRENDERER->Run();
 	Editor_System::Take_Inputs();
 
-	//Copy Color2RT to GokuBlackWindow's swapchain textures in second frame
-	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, 0, BarrierBeforeUpload_ID);
-	GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
-
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
-	GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 2, 0, TEXTUREDISPLAY_MATINST, SubpassID);
+	GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 2, 0, TEXTUREDISPLAY_MATINST, WorldSubpassID);
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, 0, BarrierAfterDraw_ID);
 	GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 	GFXRENDERER->Run();
 	Editor_System::Take_Inputs();
 
-
+	new Main_Window;
 	unsigned int i = 0;
 	while (true) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 
-
+		IMGUI_RUNWINDOWS();
 		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierBeforeUpload_ID);
-		GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, 0, BarrierBeforeUpload_ID);
-		GFXRENDERER->ImageBarrier(COLOR2RT, GFX_API::IMAGE_ACCESS::TRANSFER_SRC, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
-		GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 1, 0, TEXTUREDISPLAY_MATINST, SubpassID);
-		GFXRENDERER->DrawDirect(SKYBOXVB_ID, nullptr, 0, 0, 0, 1, 0, SKYBOXDISPlAY_MATINST, SubpassID);
+		GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 1, 0, TEXTUREDISPLAY_MATINST, WorldSubpassID);
+		GFXRENDERER->DrawDirect(SKYBOXVB_ID, nullptr, 0, 0, 0, 1, 0, SKYBOXDISPLAY_MATINST, WorldSubpassID);
 		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, 0, BarrierAfterDraw_ID);
 		GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 		GFXRENDERER->Run();

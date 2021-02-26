@@ -1,4 +1,4 @@
-// [DEAR IMGUI] 
+// [DEAR IMGUI]
 // This is a slightly modified version of stb_truetype.h 1.20.
 // Mostly fixing for compiler and static analyzer warnings.
 // Grep for [DEAR IMGUI] to find the changes.
@@ -996,7 +996,7 @@ STBTT_DEF unsigned char * stbtt_GetCodepointSDF(const stbtt_fontinfo *info, floa
 //             unicode-encoded names to try to find the font you want;
 //             you can run this before calling stbtt_InitFont()
 //
-//     stbtt_GetFontNamestring() lets you get any of the various strings
+//     stbtt_GetFontNameString() lets you get any of the various strings
 //             from the file yourself and do your own comparisons on them.
 //             You have to have called stbtt_InitFont() first.
 
@@ -1016,7 +1016,7 @@ STBTT_DEF int stbtt_CompareUTF8toUTF16_bigendian(const char *s1, int len1, const
 // returns 1/0 whether the first string interpreted as utf8 is identical to
 // the second string interpreted as big-endian utf16... useful for strings from next func
 
-STBTT_DEF const char *stbtt_GetFontNamestring(const stbtt_fontinfo *font, int *length, int platformID, int encodingID, int languageID, int nameID);
+STBTT_DEF const char *stbtt_GetFontNameString(const stbtt_fontinfo *font, int *length, int platformID, int encodingID, int languageID, int nameID);
 // returns the string (which may be big-endian double byte, e.g. for unicode)
 // and puts the length in bytes in *length.
 //
@@ -2538,11 +2538,11 @@ static stbtt_int32  stbtt__GetGlyphGPOSInfoAdvance(const stbtt_fontinfo *info, i
                             // There are no other cases.
                             STBTT_assert(0);
                             break;
-                        };
+                        } // [DEAR IMGUI] removed ;
                     }
                 }
                 break;
-            };
+            } // [DEAR IMGUI] removed ;
 
             default:
                 // TODO: Implement other stuff.
@@ -4132,7 +4132,7 @@ STBTT_DEF void stbtt_PackFontRangesPackRects(stbtt_pack_context *spc, stbrp_rect
 STBTT_DEF int stbtt_PackFontRanges(stbtt_pack_context *spc, const unsigned char *fontdata, int font_index, stbtt_pack_range *ranges, int num_ranges)
 {
    stbtt_fontinfo info;
-   int i,j,n, return_value = 1;
+   int i,j,n, return_value; // [DEAR IMGUI] removed = 1
    //stbrp_context *context = (stbrp_context *) spc->pack_info;
    stbrp_rect    *rects;
 
@@ -4302,7 +4302,7 @@ static int stbtt__compute_crossings_x(float x, float y, int nverts, stbtt_vertex
    int winding = 0;
 
    orig[0] = x;
-   //orig[1] = y; // [DEAR IMGUI] commmented double assignment
+   //orig[1] = y; // [DEAR IMGUI] commented double assignment
 
    // make sure y never passes through a vertex of the shape
    y_frac = (float) STBTT_fmod(y, 1.0f);
@@ -4651,7 +4651,7 @@ static int stbtt_CompareUTF8toUTF16_bigendian_internal(char *s1, int len1, char 
 
 // returns results in whatever encoding you request... but note that 2-byte encodings
 // will be BIG-ENDIAN... use stbtt_CompareUTF8toUTF16_bigendian() to compare
-STBTT_DEF const char *stbtt_GetFontNamestring(const stbtt_fontinfo *font, int *length, int platformID, int encodingID, int languageID, int nameID)
+STBTT_DEF const char *stbtt_GetFontNameString(const stbtt_fontinfo *font, int *length, int platformID, int encodingID, int languageID, int nameID)
 {
    stbtt_int32 i,count,stringOffset;
    stbtt_uint8 *fc = font->data;

@@ -12,7 +12,7 @@ namespace GFX_API {
 		Handle = nullptr;
 	}
 
-	GFXAPI unsigned int Get_UNIFORMTYPEs_SIZEinbytes(DATA_TYPE uniform) {
+	GFXAPI unsigned int Get_UNIFORMTYPEs_SIZEinbytes(const DATA_TYPE& uniform) {
 		switch (uniform)
 		{
 		case DATA_TYPE::VAR_FLOAT32:

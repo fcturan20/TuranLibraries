@@ -34,7 +34,7 @@ namespace Vulkan {
 		return buffer;
 	}
 	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), INDEXBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
-		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBUTEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys),
+		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys),
 		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys){
 
 		for (unsigned int allocindex = 0; allocindex < VKGPU->ALLOCs.size(); allocindex++) {
@@ -382,22 +382,13 @@ namespace Vulkan {
 		return TAPI_SUCCESS;
 	}
 
-	unsigned int GPU_ContentManager::Calculate_sizeofVertexLayout(const VK_VertexAttribute* const* ATTRIBUTEs, unsigned int count) {
+	unsigned int GPU_ContentManager::Calculate_sizeofVertexLayout(const GFX_API::DATA_TYPE* ATTRIBUTEs, unsigned int count) {
 		unsigned int size = 0;
 		for (unsigned int i = 0; i < count; i++) {
-			size += GFX_API::Get_UNIFORMTYPEs_SIZEinbytes(ATTRIBUTEs[i]->DATATYPE);
+			size += GFX_API::Get_UNIFORMTYPEs_SIZEinbytes(ATTRIBUTEs[i]);
 		}
 		return size;
 	}
-	TAPIResult GPU_ContentManager::Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, GFX_API::GFXHandle& Handle) {
-		unsigned char ThisThreadIndex = GFX->JobSys->GetThisThreadIndex();
-		VK_VertexAttribute* VA = new VK_VertexAttribute;
-		VA->DATATYPE = TYPE;
-		VERTEXATTRIBUTEs.push_back(ThisThreadIndex, VA);
-		Handle = VA;
-		return TAPI_SUCCESS;
-	}
-
 	TAPIResult GPU_ContentManager::Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
 		GFX_API::TEXTURE_MIPMAPFILTER MINFILTER, GFX_API::TEXTURE_MIPMAPFILTER MAGFILTER, GFX_API::TEXTURE_WRAPPING WRAPPING_WIDTH,
 		GFX_API::TEXTURE_WRAPPING WRAPPING_HEIGHT, GFX_API::TEXTURE_WRAPPING WRAPPING_DEPTH, GFX_API::GFXHandle& SamplingTypeHandle) {
@@ -443,48 +434,12 @@ namespace Vulkan {
 		return true;
 	}
 
-
-	bool GPU_ContentManager::Delete_VertexAttribute(GFX_API::GFXHandle Attribute_ID) {
-		VK_VertexAttribute* FOUND_ATTRIB = GFXHandleConverter(VK_VertexAttribute*, Attribute_ID);
-		//Check if it's still in use in a Layout
-		std::unique_lock<std::mutex> SearchLock;
-		VERTEXATTRIBLAYOUTs.PauseAllOperations(SearchLock);
-		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-			for (unsigned int i = 0; i < VERTEXATTRIBLAYOUTs.size(ThreadID); i++) {
-				VK_VertexAttribLayout* VERTEXATTRIBLAYOUT = VERTEXATTRIBLAYOUTs.get(ThreadID, i);
-				for (unsigned int j = 0; j < VERTEXATTRIBLAYOUT->Attribute_Number; j++) {
-					if (VERTEXATTRIBLAYOUT->Attributes[j] == FOUND_ATTRIB) {
-						return false;
-					}
-				}
-			}
-		}
-		SearchLock.unlock();
-
-
-		unsigned int vector_index = 0;
-		VERTEXATTRIBUTEs.PauseAllOperations(SearchLock);
-		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-			unsigned int elementindex = 0;
-			if (VERTEXATTRIBUTEs.Search(FOUND_ATTRIB, ThreadID, elementindex)) {
-				VERTEXATTRIBUTEs.erase(ThreadID, elementindex);
-				delete FOUND_ATTRIB;
-			}
-		}
-		return true;
-	}
-	TAPIResult GPU_ContentManager::Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) {
+	TAPIResult GPU_ContentManager::Create_VertexAttributeLayout(const vector<GFX_API::DATA_TYPE>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) {
 		VK_VertexAttribLayout* Layout = new VK_VertexAttribLayout;
 		Layout->Attribute_Number = Attributes.size();
-		Layout->Attributes = new VK_VertexAttribute * [Attributes.size()];
+		Layout->Attributes = new GFX_API::DATA_TYPE[Attributes.size()];
 		for (unsigned int i = 0; i < Attributes.size(); i++) {
-			VK_VertexAttribute* Attribute = GFXHandleConverter(VK_VertexAttribute*, Attributes[i]);
-			if (!Attribute) {
-				LOG_ERROR_TAPI("You referenced an uncreated attribute to Create_VertexAttributeLayout!");
-				delete Layout;
-				return TAPI_INVALIDARGUMENT;
-			}
-			Layout->Attributes[i] = Attribute;
+			Layout->Attributes[i] = Attributes[i];
 		}
 		unsigned int size_pervertex = Calculate_sizeofVertexLayout(Layout->Attributes, Attributes.size());
 		Layout->size_perVertex = size_pervertex;
@@ -500,8 +455,8 @@ namespace Vulkan {
 			Layout->AttribDescs[i].binding = 0;
 			Layout->AttribDescs[i].location = i;
 			Layout->AttribDescs[i].offset = stride_ofcurrentattribute;
-			Layout->AttribDescs[i].format = Find_VkFormat_byDataType(Layout->Attributes[i]->DATATYPE);
-			stride_ofcurrentattribute += GFX_API::Get_UNIFORMTYPEs_SIZEinbytes(Layout->Attributes[i]->DATATYPE);
+			Layout->AttribDescs[i].format = Find_VkFormat_byDataType(Layout->Attributes[i]);
+			stride_ofcurrentattribute += GFX_API::Get_UNIFORMTYPEs_SIZEinbytes(Layout->Attributes[i]);
 		}
 		VERTEXATTRIBLAYOUTs.push_back(GFX->JobSys->GetThisThreadIndex(), Layout);
 		Handle = Layout;

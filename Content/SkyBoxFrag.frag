@@ -2,7 +2,6 @@
 layout(location = 0) in vec3 TextCoord;
 
 layout(location = 0) out vec4 outColor;
-layout(location = 1) out vec4 outExtraColor;
 
 layout(binding = 0, set = 1) uniform usamplerCube SkyBoxTexture;
 

@@ -7,16 +7,11 @@ namespace GFX_API {
 		std::cout << "IMGUI_Core's constructor has finished!\n";
 		WindowManager = new IMGUI_WindowManager;
 		Is_IMGUI_Open = true;
-	}
-	bool IMGUI_Core::Check_IMGUI_Version() {
-		//Check version here, I don't care here for now!
-		return IMGUI_CHECKVERSION();
-	}
 
-	void* IMGUI_Core::Create_Context(void* gpu_window_context) {
+
 		//Create Context here!
 		IMGUI_CHECKVERSION();
-		void* Context = ImGui::CreateContext();
+		Context = ImGui::CreateContext();
 		if (Context == nullptr) {
 			std::cout << "Error: Context is nullptr after creation!\n";
 		}
@@ -30,15 +25,10 @@ namespace GFX_API {
 
 		//Set color style to dark by default for now!
 		ImGui::StyleColorsDark();
-
-		
-		//Set context's GFX_API settings!
-		if (GFX_IMGUI == nullptr) {
-			TuranAPI::Breakpoint("GFX_IMGUI isn't initialized, initializing failed for IMGUI!");
-			return nullptr;
-		}
-		GFX_IMGUI->Initialize(gpu_window_context);
-		return Context;
+	}
+	bool IMGUI_Core::Check_IMGUI_Version() {
+		//Check version here, I don't care for now!
+		return IMGUI_CHECKVERSION();
 	}
 
 	void IMGUI_Core::Set_as_MainViewport() {
@@ -46,13 +36,8 @@ namespace GFX_API {
 		ImGui::SetNextWindowSize(ImGui::GetMainViewport()->Size);
 	}
 
-	void IMGUI_Core::Set_Current_Context(void* context) {
-		ImGui::SetCurrentContext((ImGuiContext*)context);
-	}
-
 	void IMGUI_Core::Destroy_IMGUI_Resources() {
 		std::cout << "IMGUI resources are being destroyed!\n";
-		GFX_IMGUI->Destroy_IMGUI_GFX_Resources();
 		ImGui::DestroyContext();
 		Is_IMGUI_Open = false;
 	}
@@ -69,22 +54,6 @@ namespace GFX_API {
 		return x;
 	}
 
-	//IMGUI FUNCTIONALITY!
-
-	void IMGUI_Core::New_Frame() {
-		GFX_IMGUI->GFX_New_Frame();
-		ImGui::NewFrame();
-	}
-
-	void IMGUI_Core::Render_Frame() {
-		ImGui::Render();
-		GFX_IMGUI->Render_IMGUI(ImGui::GetDrawData());
-		Platform_Settings();
-	}
-
-	void IMGUI_Core::Platform_Settings() {
-		GFX_IMGUI->Set_Platform_Settings();
-	}
 
 	bool IMGUI_Core::Create_Window(const char* title, bool& should_close, const bool& has_menubar) {
 		ImGuiWindowFlags window_flags = 0;

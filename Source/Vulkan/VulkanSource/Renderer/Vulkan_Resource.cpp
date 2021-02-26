@@ -179,6 +179,29 @@ namespace Vulkan {
 	VK_SubDrawPass::VK_SubDrawPass() : NonIndexedDrawCalls(*GFX->JobSys), IndexedDrawCalls(*GFX->JobSys) {
 
 	}
+	bool VK_SubDrawPass::isThereWorkload() {
+		if (render_dearIMGUI) {
+			return true;
+		}
+		{
+			std::unique_lock<std::mutex> Locker;
+			IndexedDrawCalls.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				if (IndexedDrawCalls.size(ThreadID)) {
+					return true;
+				}
+			}
+		}
+		{
+			std::unique_lock<std::mutex> Locker;
+			NonIndexedDrawCalls.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				if (NonIndexedDrawCalls.size(ThreadID)) {
+					return true;
+				}
+			}
+		}
+	}
 
 	VK_DescImageElement::VK_DescImageElement() : IsUpdated(0), info(){
 		info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;

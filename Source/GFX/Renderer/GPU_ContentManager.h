@@ -58,11 +58,6 @@ namespace GFX_API {
 
 		virtual void Unload_AllResources() = 0;
 
-		//Registers Vertex Attribute to the system and gives it an ID
-		virtual TAPIResult Create_VertexAttribute(const GFX_API::DATA_TYPE& TYPE, GFX_API::GFXHandle& Handle) = 0;
-		//Returns true if operation is successful
-		virtual bool Delete_VertexAttribute(GFXHandle Attribute_ID) = 0;
-
 
 		virtual TAPIResult Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
 			GFX_API::TEXTURE_MIPMAPFILTER MINFILTER, GFX_API::TEXTURE_MIPMAPFILTER MAGFILTER, GFX_API::TEXTURE_WRAPPING WRAPPING_WIDTH,
@@ -72,7 +67,7 @@ namespace GFX_API {
 		* For example: Same attribute ID may have different location/order in another attribute layout
 		* So you should gather your vertex buffer data according to that
 		*/
-		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::GFXHandle>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) = 0;
+		virtual TAPIResult Create_VertexAttributeLayout(const vector<GFX_API::DATA_TYPE>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) = 0;
 		virtual void Delete_VertexAttributeLayout(GFXHandle Layout_ID) = 0;
 
 		virtual TAPIResult Upload_toBuffer(GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) = 0;

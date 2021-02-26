@@ -60,10 +60,6 @@ namespace Vulkan {
 	};
 
 
-
-	struct GFXAPI VK_VertexAttribute {
-		GFX_API::DATA_TYPE DATATYPE;
-	};
 	/* Vertex Attribute Layout Specification:
 			All vertex attributes should be interleaved because there is no easy way in Vulkan for de-interleaved path.
 			Vertex Attributes are created as seperate objects because this helps debug visualization of the data
@@ -71,7 +67,7 @@ namespace Vulkan {
 			That means if position attribute is second element in "Attributes" vector, MaterialType that using this layout uses position attribute at location = 1 instead of 0.
 	*/
 	struct VK_API VK_VertexAttribLayout {
-		VK_VertexAttribute** Attributes;
+		GFX_API::DATA_TYPE* Attributes;
 		unsigned int Attribute_Number, size_perVertex;
 
 
@@ -238,11 +234,13 @@ namespace Vulkan {
 	};
 	struct VK_API VK_SubDrawPass {
 		unsigned char Binding_Index;
+		bool render_dearIMGUI = false;
 		VK_IRTSLOTSET* SLOTSET;
 		GFX_API::GFXHandle DrawPass;
 		TuranAPI::Threading::TLVector<VK_NonIndexedDrawCall> NonIndexedDrawCalls;
 		TuranAPI::Threading::TLVector<VK_IndexedDrawCall> IndexedDrawCalls;
 		VK_SubDrawPass();
+		bool isThereWorkload();
 	};
 	struct VK_API VK_DrawPass {
 		//Name is to debug the rendergraph algorithms, production ready code won't use it!

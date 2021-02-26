@@ -5,6 +5,7 @@
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
 #define VKContentManager ((Vulkan::GPU_ContentManager*)GFXContentManager)
 #define VKGPU (((Vulkan::Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
+#define VKCORE ((Vulkan::Vulkan_Core*)GFX)
 
 namespace Vulkan {
 	Renderer::Renderer() {
@@ -245,7 +246,7 @@ namespace Vulkan {
 
 	//Each framegraph is constructed as same, so there is no difference about passing different framegraphs here
 	void Create_VkDataofRGBranches(const VK_FrameGraph& FrameGraph, vector<VK_Semaphore>& Semaphores);
-	void Renderer::Finish_RenderGraphConstruction() {
+	void Renderer::Finish_RenderGraphConstruction(GFX_API::GFXHandle IMGUI_Subpass) {
 		if (!Record_RenderGraphConstruction) {
 			LOG_CRASHING_TAPI("VulkanRenderer->Finish_RenderGraphCreation() has failed because you either didn't start it or finished before!");
 			return;
@@ -306,58 +307,37 @@ namespace Vulkan {
 			}
 		}
 
-
-		/*
-		//Swapchain Layout Operations
-		//Note: One CB is created because this will be used only at the start of the frame
-		{
-			VkImageMemoryBarrier* SWPCHN_IMLAYBARRIER = new VkImageMemoryBarrier[VKWINDOW->Swapchain_Textures.size()];
-			for (unsigned int swpchn_index = 0; swpchn_index < VKWINDOW->Swapchain_Textures.size(); swpchn_index++) {
-				VK_Texture* SWPCHN_im = GFXHandleConverter(VK_Texture*, VKWINDOW->Swapchain_Textures[swpchn_index]);
-				SWPCHN_IMLAYBARRIER[swpchn_index].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-				SWPCHN_IMLAYBARRIER[swpchn_index].image = SWPCHN_im->Image;
-				SWPCHN_IMLAYBARRIER[swpchn_index].pNext = nullptr;
-				SWPCHN_IMLAYBARRIER[swpchn_index].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				SWPCHN_IMLAYBARRIER[swpchn_index].subresourceRange.baseArrayLayer = 0;
-				SWPCHN_IMLAYBARRIER[swpchn_index].subresourceRange.baseMipLevel = 0;
-				SWPCHN_IMLAYBARRIER[swpchn_index].subresourceRange.layerCount = 1;
-				SWPCHN_IMLAYBARRIER[swpchn_index].subresourceRange.levelCount = 1;
-
-				//Vulkan Core already created the swapchain for the Display Queue, so we don't need to specify its queue!
-				SWPCHN_IMLAYBARRIER[swpchn_index].srcAccessMask = 0;
-				SWPCHN_IMLAYBARRIER[swpchn_index].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				SWPCHN_IMLAYBARRIER[swpchn_index].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-				//Vulkan Core already created the swapchain for the Display Queue, so we don't need to change its queue!
-				SWPCHN_IMLAYBARRIER[swpchn_index].dstAccessMask = 0;
-				SWPCHN_IMLAYBARRIER[swpchn_index].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				SWPCHN_IMLAYBARRIER[swpchn_index].newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-			}
-
-			vkCmdPipelineBarrier(*Swapchain_CreationCB->CBs[0], VK_PIPELINE_STAGE, VK_PIPELINE_STAGE_TRANSFER_BIT, 0
-				, 0, nullptr, 0, nullptr, VKWINDOW->Swapchain_Textures.size(), SWPCHN_IMLAYBARRIER);
-
-			vkEndCommandBuffer(*Swapchain_CreationCB->CBs[0]);
-
-
-			vkDeviceWaitIdle(VKGPU->Logical_Device);
-			VkSubmitInfo QueueSubmitInfo = {};
-			QueueSubmitInfo.commandBufferCount = 1;
-			QueueSubmitInfo.pCommandBuffers = Swapchain_CreationCB->CBs[0];
-			QueueSubmitInfo.pNext = nullptr;
-			VkPipelineStageFlags WaitStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-			QueueSubmitInfo.pWaitDstStageMask = &WaitStageMask;
-			QueueSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			QueueSubmitInfo.signalSemaphoreCount = 0;
-			QueueSubmitInfo.waitSemaphoreCount = 0;
-			if (vkQueueSubmit(VKGPU->QUEUEs[VKGPU->GRAPHICS_QUEUEIndex].Queue, 1, &QueueSubmitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("VulkanRenderer: SWPCHN_IMLAYCB submit to Graphics Queue has failed!");
+		if (IMGUI_Subpass) {
+			if (GFXHandleConverter(VK_DrawPass*, GFXHandleConverter(VK_SubDrawPass*, IMGUI_Subpass)->DrawPass)->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT != 1) {
+				LOG_CRASHING_TAPI("The Drawpass that's gonna render dear IMGUI should only have one color slot!");
 				return;
 			}
-			vkDeviceWaitIdle(VKGPU->Logical_Device);
-			vkFreeCommandBuffers(VKGPU->Logical_Device, VKGPU->QUEUEs[VKGPU->GRAPHICS_QUEUEIndex].CommandPool, 1, Swapchain_CreationCB->CBs[0]);
-			delete Swapchain_CreationCB;
+
+			//Create a special Descriptor Pool for IMGUI
+			VkDescriptorPoolSize pool_sizes[] =
+			{
+				{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
+			};
+
+			VkDescriptorPoolCreateInfo descpool_ci;
+			descpool_ci.flags = 0;
+			descpool_ci.maxSets = 1;
+			descpool_ci.pNext = nullptr;
+			descpool_ci.poolSizeCount = 1;
+			descpool_ci.pPoolSizes = pool_sizes;
+			descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			VkDescriptorPool IMGUIPOOL;
+			if (vkCreateDescriptorPool(VKGPU->Logical_Device, &descpool_ci, nullptr, &IMGUIPOOL) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("Creating a descriptor pool for dear IMGUI has failed!");
+			}
+
+			GFXHandleConverter(VK_SubDrawPass*, IMGUI_Subpass)->render_dearIMGUI = true;
+			VKCORE->VK_IMGUI->Initialize(IMGUI_Subpass, IMGUIPOOL);
+
+			VKCORE->VK_IMGUI->UploadFontTextures();
+			VKCORE->VK_IMGUI->NewFrame();
 		}
-		*/
+
 	}
 	
 	unsigned char Renderer::Get_FrameIndex(bool is_LastFrame) {
@@ -408,7 +388,7 @@ namespace Vulkan {
 		}
 		Desc.flags = 0;
 	}
-	void Fill_SubpassStructs(VK_IRTSLOTSET* slotset, VkSubpassDescription& descs, VkSubpassDependency& dependencies) {
+	void Fill_SubpassStructs(VK_IRTSLOTSET* slotset, GFX_API::SUBPASS_ACCESS WaitedOp, GFX_API::SUBPASS_ACCESS ContinueOp, unsigned char SubpassIndex, VkSubpassDescription& descs, VkSubpassDependency& dependencies) {
 		VkAttachmentReference* COLOR_ATTACHMENTs = new VkAttachmentReference[slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT];
 		VkAttachmentReference* DS_Attach = nullptr;
 		
@@ -443,12 +423,20 @@ namespace Vulkan {
 
 		dependencies = {};
 		dependencies.dependencyFlags = 0;
-		dependencies.srcSubpass = VK_SUBPASS_EXTERNAL;
-		dependencies.dstSubpass = 0;
-		dependencies.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependencies.srcAccessMask = 0;
-		dependencies.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependencies.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		if (SubpassIndex) {
+			dependencies.srcSubpass = SubpassIndex - 1;
+			dependencies.dstSubpass = SubpassIndex;
+			Find_SubpassAccessPattern(WaitedOp, true, dependencies.srcStageMask, dependencies.srcAccessMask);
+			Find_SubpassAccessPattern(ContinueOp, true, dependencies.dstStageMask, dependencies.dstAccessMask);
+		}
+		else {
+			dependencies.srcSubpass = VK_SUBPASS_EXTERNAL;
+			dependencies.dstSubpass = 0;
+			dependencies.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependencies.srcAccessMask = 0;
+			dependencies.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependencies.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		}
 	}
 	TAPIResult Renderer::Create_DrawPass(const vector<GFX_API::SubDrawPass_Description>& SubDrawPasses, GFX_API::GFXHandle RTSLOTSET_ID, 
 		const vector<GFX_API::PassWait_Description>& WAITs, const char* NAME, vector<GFX_API::GFXHandle>& SubDrawPassIDs, GFX_API::GFXHandle& DPHandle) {
@@ -517,7 +505,7 @@ namespace Vulkan {
 			const GFX_API::SubDrawPass_Description& Subpass_gfxdesc = SubDrawPasses[i];
 			VK_IRTSLOTSET* Subpass_Slotset = GFXHandleConverter(VK_IRTSLOTSET*, Subpass_gfxdesc.INHERITEDSLOTSET);
 
-			Fill_SubpassStructs(Subpass_Slotset, SubpassDescs[i], SubpassDepends[i]);
+			Fill_SubpassStructs(Subpass_Slotset, Subpass_gfxdesc.WaitOp, Subpass_gfxdesc.ContinueOp, Subpass_gfxdesc.SubDrawPass_Index, SubpassDescs[i], SubpassDepends[i]);
 
 			Final_Subpasses[i].Binding_Index = Subpass_gfxdesc.SubDrawPass_Index;
 			Final_Subpasses[i].SLOTSET = Subpass_Slotset;
@@ -730,12 +718,12 @@ namespace Vulkan {
 				{
 					VK_DrawPass* DP = GFXHandleConverter(VK_DrawPass*, CorePass->Handle);
 					for (unsigned char SubpassIndex = 0; SubpassIndex < DP->Subpass_Count; SubpassIndex++) {
-						const VK_SubDrawPass& SP = DP->Subpasses[SubpassIndex];
-						if (//SP.DrawCalls.size()
-							true) {
+						VK_SubDrawPass& SP = DP->Subpasses[SubpassIndex];
+						if (SP.isThereWorkload()) {
 							Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
 							CurrentFrameIndexesArray_Element++;
 							Branch.CFNeeded_QueueSpecs.is_GRAPHICSsupported = true;
+							break;
 						}
 					}
 				}
@@ -801,6 +789,7 @@ namespace Vulkan {
 		}
 	}
 	void Renderer::Run() {
+		
 		//Maybe the rendering of the last frame took less than V-Sync, this is to handle this case
 		//Because that means the swapchain texture we will render to in above command buffers is being displayed
 		for (unsigned char WindowIndex = 0; WindowIndex < ((Vulkan_Core*)GFX)->Get_WindowHandles().size(); WindowIndex++) {
@@ -1104,6 +1093,7 @@ namespace Vulkan {
 			VKGPU->QUEUEs[QueueIndex].RenderGraphFences[FrameIndex].is_Used = true;
 		}
 
+		VKCORE->VK_IMGUI->Render_AdditionalWindows();
 		//Send displays
 		for (unsigned char WindowPassIndex = 0; WindowPassIndex < WindowPasses.size(); WindowPassIndex++) {
 			VK_WindowPass* WP = WindowPasses[WindowPassIndex];
@@ -1177,8 +1167,10 @@ namespace Vulkan {
 			Window->PresentationWaitSemaphoreIndexes[2] = penultimate_semaphore;
 		}
 
+
 		//Current frame has finished, so every call after this call affects to the next frame
 		Set_NextFrameIndex();
+		VKCORE->VK_IMGUI->NewFrame();
 	}
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
 	void Renderer::DrawDirect(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,

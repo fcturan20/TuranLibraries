@@ -28,14 +28,14 @@ namespace Vulkan {
 	struct VK_CommandPool {
 		std::mutex Sync;
 		vector<VK_CommandBuffer> CBs;
-		VkCommandPool CPHandle;
+		VkCommandPool CPHandle = VK_NULL_HANDLE;
 		VK_CommandPool();
 		VK_CommandPool(const VK_CommandPool& RefCP);
 		void operator= (const VK_CommandPool& RefCP);
 	};
 
 	struct VK_Fence {
-		VkFence Fence_o;
+		VkFence Fence_o = VK_NULL_HANDLE;
 		bool is_Used = false;
 	};
 

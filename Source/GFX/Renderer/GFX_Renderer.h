@@ -28,6 +28,8 @@ namespace GFX_API {
 		//Returns Swapchain's Handle
 		virtual void Start_RenderGraphConstruction() = 0;
 		virtual void Finish_RenderGraphConstruction(GFXHandle IMGUI_Subpass) = 0;
+		//When you call this function, you have to create your material types and instances from scratch
+		virtual void Destroy_RenderGraph() = 0;
 		//SubDrawPassIDs is used to return created SubDrawPasses IDs and DrawPass ID
 		//SubDrawPassIDs argument array's order is in the order of passed SubDrawPass_Description vector
 		virtual TAPIResult Create_DrawPass(const vector<SubDrawPass_Description>& SubDrawPasses, GFXHandle RTSLOTSET_ID, const vector<GFX_API::PassWait_Description>& WAITs, const char* NAME, vector<GFXHandle>& SubDrawPassIDs, GFXHandle& DPHandle) = 0;

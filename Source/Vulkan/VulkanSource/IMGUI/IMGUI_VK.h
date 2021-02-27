@@ -10,5 +10,6 @@ namespace Vulkan {
 		void Render_toCB(VkCommandBuffer cb);
 		//Creates command pool/buffer and sends font textures
 		void UploadFontTextures();
+		void Destroy_IMGUIResources();
 	};
 }

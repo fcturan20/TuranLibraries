@@ -561,7 +561,6 @@ namespace Vulkan {
 			SWAPCHAINTEXTURE->USAGE.isSampledReadOnly = true;
 
 			Vulkan_Window->Swapchain_Textures[vkim_index] = SWAPCHAINTEXTURE;
-			((GPU_ContentManager*)GFXContentManager)->TEXTUREs.push_back(GFX->JobSys->GetThisThreadIndex(), SWAPCHAINTEXTURE);
 			SwapchainTextureHandles[vkim_index] = SWAPCHAINTEXTURE;
 		}
 
@@ -695,19 +694,64 @@ namespace Vulkan {
 
 	void Vulkan_Core::Destroy_GFX_Resources() {
 		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
-		LOG_NOTCODED_TAPI("Destroying GFX resources isn't coded yet!", true);
 
+		VKRENDERER->Destroy_RenderGraph();
+		((GPU_ContentManager*)GFXContentManager)->Destroy_AllResources();
+
+		//Destroy dear IMGUI
+		VK_IMGUI->Destroy_IMGUIResources();
+		vkDestroyDescriptorPool(Vulkan_GPU->Logical_Device, VKRENDERER->IMGUIPOOL, nullptr);
+
+		//Close windows and delete related datas
+		for (unsigned int WindowIndex = 0; WindowIndex < WINDOWs.size(); WindowIndex++) {
+			WINDOW* window = GFXHandleConverter(WINDOW*, WINDOWs[WindowIndex]);
+			VK_Texture* Texture0 = GFXHandleConverter(VK_Texture*, window->Swapchain_Textures[0]);
+			VK_Texture* Texture1 = GFXHandleConverter(VK_Texture*, window->Swapchain_Textures[1]);
+			vkDestroyImageView(Vulkan_GPU->Logical_Device, Texture0->ImageView, nullptr);
+			vkDestroyImageView(Vulkan_GPU->Logical_Device, Texture1->ImageView, nullptr);
+
+			vkDestroySwapchainKHR(Vulkan_GPU->Logical_Device, window->Window_SwapChain, nullptr);
+			vkDestroySurfaceKHR(VK_States.Vulkan_Instance, window->Window_Surface, nullptr);
+			glfwDestroyWindow(window->GLFW_WINDOW);
+		}
+
+		//Free the allocated memories
+		for (unsigned int AllocIndex = 0; AllocIndex < Vulkan_GPU->ALLOCs.size(); AllocIndex++) {
+			VK_MemoryAllocation& Alloc = Vulkan_GPU->ALLOCs[AllocIndex];
+			if (Alloc.FullSize) {
+				vkDestroyBuffer(Vulkan_GPU->Logical_Device, Alloc.Buffer, nullptr);
+				vkFreeMemory(Vulkan_GPU->Logical_Device, Alloc.Allocated_Memory, nullptr);
+			}
+		}
+		Vulkan_GPU->ALLOCs.clear();
 
 		//GPU deleting
 		for (unsigned int i = 0; i < DEVICE_GPUs.size(); i++) {
 			GPU* a_Vulkan_GPU = GFXHandleConverter(GPU*, DEVICE_GPUs[i]);
+			delete[] a_Vulkan_GPU->AllQueueFamilies;
+			for (unsigned int QueueIndex = 0; QueueIndex < a_Vulkan_GPU->QUEUEs.size(); QueueIndex++) {
+				VK_QUEUE& Queue = a_Vulkan_GPU->QUEUEs[QueueIndex];
+				if (Queue.CommandPools[0].CPHandle) {
+					vkDestroyCommandPool(a_Vulkan_GPU->Logical_Device, Queue.CommandPools[0].CPHandle, nullptr);
+					vkDestroyCommandPool(a_Vulkan_GPU->Logical_Device, Queue.CommandPools[1].CPHandle, nullptr);
+					vkDestroyFence(a_Vulkan_GPU->Logical_Device, Queue.RenderGraphFences[0].Fence_o, nullptr);
+					vkDestroyFence(a_Vulkan_GPU->Logical_Device, Queue.RenderGraphFences[1].Fence_o, nullptr);
+				}
+			}
+
 			vkDestroyDevice(a_Vulkan_GPU->Logical_Device, nullptr);
 		}
-		VK_States.vkDestroyDebugUtilsMessengerEXT()(VK_States.Vulkan_Instance, VK_States.Debug_Messenger, nullptr);
+		if (VK_States.Debug_Messenger) {
+			VK_States.vkDestroyDebugUtilsMessengerEXT()(VK_States.Vulkan_Instance, VK_States.Debug_Messenger, nullptr);
+		}
 		vkDestroyInstance(VK_States.Vulkan_Instance, nullptr);
 
 		glfwTerminate();
 
+
+		//delete (Renderer*)RENDERER;
+		//delete (GPU_ContentManager*)ContentManager;
+		//delete IMGUI_o;
 		LOG_STATUS_TAPI("Vulkan Resources are destroyed!");
 	}
 

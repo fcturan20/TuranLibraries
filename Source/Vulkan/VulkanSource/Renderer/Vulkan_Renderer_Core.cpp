@@ -326,7 +326,6 @@ namespace Vulkan {
 			descpool_ci.poolSizeCount = 1;
 			descpool_ci.pPoolSizes = pool_sizes;
 			descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			VkDescriptorPool IMGUIPOOL;
 			if (vkCreateDescriptorPool(VKGPU->Logical_Device, &descpool_ci, nullptr, &IMGUIPOOL) != VK_SUCCESS) {
 				LOG_CRASHING_TAPI("Creating a descriptor pool for dear IMGUI has failed!");
 			}

@@ -88,7 +88,7 @@ namespace Vulkan {
 
 
 
-		if (vkResetCommandPool(VKGPU->Logical_Device, cp, 0) != VK_SUCCESS) {
+		if (vkResetCommandPool(VKGPU->Logical_Device, cp, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("Resetting of Command Pool for dear IMGUI Font Upload has failed!");
 		}
 		VkCommandBufferBeginInfo begin_info = {};
@@ -120,5 +120,12 @@ namespace Vulkan {
 			LOG_CRASHING_TAPI("Resetting of Command Pool for destruction of dear IMGUI Font Upload has failed!");
 		}
 		vkDestroyCommandPool(VKGPU->Logical_Device, cp, nullptr);
+	}
+
+	void IMGUI_VK::Destroy_IMGUIResources() {
+		// Resources to destroy when the program ends
+		ImGui_ImplVulkan_Shutdown();
+		ImGui_ImplGlfw_Shutdown();
+		ImGui::DestroyContext();
 	}
 }

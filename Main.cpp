@@ -74,8 +74,8 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			GFXRENDERER->Create_TransferPass({ Upload_dep, WP_dep }, GFX_API::TRANFERPASS_TYPE::TP_BARRIER, "BarrierAfterUpload", BarrierAfterUpload_ID);
 		}
 
-		vector<GFX_API::RTSLOT_Description> RTSlots;
 		//Create RTs, Base RTSlotSet and the inherited one!
+		vector<GFX_API::RTSLOT_Description> RTSlots;
 		GFX_API::GFXHandle ISlotSetID;
 		{
 			GFX_API::Texture_Description DEPTH_desc;
@@ -141,7 +141,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			IMGUISubpass_desc.INHERITEDSLOTSET = ISlotSetID;
 			IMGUISubpass_desc.SubDrawPass_Index = 1;
 			IMGUISubpass_desc.WaitOp = GFX_API::SUBPASS_ACCESS::LATE_Z_READWRITE;
-			IMGUISubpass_desc.ContinueOp = GFX_API::SUBPASS_ACCESS::ALLCOMMANDS;
+			IMGUISubpass_desc.ContinueOp = GFX_API::SUBPASS_ACCESS::FRAGMENTRT_WRITEONLY;
 			vector<GFX_API::SubDrawPass_Description> DESCS{ WorldSubpass_desc, IMGUISubpass_desc };
 			vector<GFX_API::GFXHandle> SPs_ofFIRSTDP;
 
@@ -489,9 +489,9 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	GFXRENDERER->Run();
 	Editor_System::Take_Inputs();
 
-	new Main_Window;
+	Main_Window* MainWindow = new Main_Window;
 	unsigned int i = 0;
-	while (true) {
+	while (MainWindow->Get_Is_Window_Open()) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 
 		IMGUI_RUNWINDOWS();

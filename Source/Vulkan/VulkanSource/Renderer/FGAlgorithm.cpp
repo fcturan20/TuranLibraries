@@ -1438,6 +1438,70 @@ namespace Vulkan {
 		}
 	}
 
+	void Renderer::Destroy_RenderGraph() {
+		vkDeviceWaitIdle(VKGPU->Logical_Device);
+		VKContentManager->Destroy_RenderGraphRelatedResources();
+
+		for (unsigned int SemaphoreIndex = 0; SemaphoreIndex < Semaphores.size(); SemaphoreIndex++) {
+			vkDestroySemaphore(VKGPU->Logical_Device, Semaphores[SemaphoreIndex].SPHandle, nullptr);
+		}
+		Semaphores.clear();
+		for (unsigned int DrawPassIndex = 0; DrawPassIndex < DrawPasses.size(); DrawPassIndex++) {
+			VK_DrawPass* DP = DrawPasses[DrawPassIndex];
+			vkDestroyFramebuffer(VKGPU->Logical_Device, DP->FBs[0], nullptr);
+			vkDestroyFramebuffer(VKGPU->Logical_Device, DP->FBs[1], nullptr);
+			vkDestroyRenderPass(VKGPU->Logical_Device, DP->RenderPassObject, nullptr);
+			delete DP;
+		}
+		DrawPasses.clear();
+		for (unsigned int TransferPassIndex = 0; TransferPassIndex < TransferPasses.size(); TransferPassIndex++) {
+			delete TransferPasses[TransferPassIndex];
+		}
+		TransferPasses.clear();
+		for (unsigned int WindowPassIndex = 0; WindowPassIndex < WindowPasses.size(); WindowPassIndex++) {
+			delete WindowPasses[WindowPassIndex];
+		}
+		WindowPasses.clear();
+
+		for (unsigned char i = 0; i < 2; i++) {
+			VK_FrameGraph& FG = FrameGraphs[i];
+
+			for (unsigned int SubmitIndex = 0; SubmitIndex < FG.CurrentFrameSubmits.size(); SubmitIndex++) {
+				delete FG.CurrentFrameSubmits[SubmitIndex];
+			}
+			FG.CurrentFrameSubmits.clear();
+			
+			for (unsigned int BranchIndex = 0; BranchIndex < FG.BranchCount; BranchIndex++) {
+				VK_RGBranch& Branch = FG.FrameGraphTree[BranchIndex];
+
+				if (Branch.CFDependentBranches) {
+					delete[] Branch.CFDependentBranches;
+				}
+
+				delete[] Branch.CorePasses;
+				//delete[] Branch.CurrentFramePassesIndexes;
+				if (Branch.LaterExecutedBranches) {
+					delete[] Branch.LaterExecutedBranches;
+				}
+				if (Branch.LFDependentBranches) {
+					delete[] Branch.LFDependentBranches;
+				}
+				if (Branch.PenultimateSwapchainBranches) {
+					delete[] Branch.PenultimateSwapchainBranches;
+				}
+			}
+			delete[] FG.FrameGraphTree;
+			FG.FrameGraphTree = nullptr;
+		}
+
+		//Delete Command Buffer related data from the renderer GPU
+		for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+			VK_QUEUE& Queue = VKGPU->QUEUEs[QueueIndex];
+			Queue.ActiveSubmits.clear();
+			vkResetCommandPool(VKGPU->Logical_Device, Queue.CommandPools[0].CPHandle, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT);
+			vkResetCommandPool(VKGPU->Logical_Device, Queue.CommandPools[1].CPHandle, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT);
+		}
+	}
 
 
 

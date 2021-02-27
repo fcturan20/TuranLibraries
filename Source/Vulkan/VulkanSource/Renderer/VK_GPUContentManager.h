@@ -18,6 +18,8 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_Sampler*> SAMPLERs;
 		TuranAPI::Threading::TLVector<VK_VertexAttribLayout*> VERTEXATTRIBLAYOUTs;
 		TuranAPI::Threading::TLVector<VK_RTSLOTSET*> RT_SLOTSETs;
+		TuranAPI::Threading::TLVector<VK_IRTSLOTSET*> IRT_SLOTSETs;
+		TuranAPI::Threading::TLVector<MemoryBlock*> STAGINGBUFFERs;
 
 		//Suballocate and bind memory to VkBuffer object
 		TAPIResult				Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, MemoryBlock& Block);
@@ -34,6 +36,7 @@ namespace Vulkan {
 		//These are the desc sets that should be destroyed 2 frames later!
 		vector<VkDescriptorSet> UnboundDescSetList[2];
 		unsigned int UnboundDescSetImageCount[2], UnboundDescSetSamplerCount[2], UnboundDescSetUBufferCount[2], UnboundDescSetSBufferCount[2];
+
 		VK_DescPool MaterialRelated_DescPool;
 		VkDescriptorPool GlobalBuffers_DescPool;
 		VkDescriptorSet GlobalBuffers_DescSet;
@@ -51,7 +54,8 @@ namespace Vulkan {
 
 		GPU_ContentManager();
 		virtual ~GPU_ContentManager();
-		virtual void Unload_AllResources() override;
+		void Destroy_RenderGraphRelatedResources();
+		virtual void Destroy_AllResources() override;
 
 
 		virtual TAPIResult Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel, 

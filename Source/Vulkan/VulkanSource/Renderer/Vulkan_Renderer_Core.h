@@ -13,6 +13,9 @@ namespace Vulkan {
 		vector<VK_Semaphore> Semaphores;
 
 
+		VkDescriptorPool IMGUIPOOL = VK_NULL_HANDLE;
+
+
 		bool Is_ConstructingRenderGraph();
 		unsigned char Get_FrameIndex(bool is_LastFrame);
 
@@ -22,6 +25,8 @@ namespace Vulkan {
 		//RenderGraph operations
 		virtual void Start_RenderGraphConstruction() override;
 		virtual void Finish_RenderGraphConstruction(GFX_API::GFXHandle IMGUI_Subpass) override;
+		//This function is defined in the FGAlgorithm.cpp
+		virtual void Destroy_RenderGraph() override;
 		virtual TAPIResult Create_DrawPass(const vector<GFX_API::SubDrawPass_Description>& SubDrawPasses, GFX_API::GFXHandle RTSLOTSET_ID, const vector<GFX_API::PassWait_Description>& WAITs, const char* NAME, vector<GFX_API::GFXHandle>& SubDrawPassIDs, GFX_API::GFXHandle& DPHandle) override;
 		virtual TAPIResult Create_TransferPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, const GFX_API::TRANFERPASS_TYPE& TP_TYPE, const string& NAME, GFX_API::GFXHandle& TPHandle) override;
 		virtual TAPIResult Create_WindowPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, const string& NAME, GFX_API::GFXHandle& WindowPassHandle) override;

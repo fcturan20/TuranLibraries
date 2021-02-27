@@ -34,8 +34,8 @@ namespace Vulkan {
 		return buffer;
 	}
 	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), INDEXBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
-		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys),
-		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys){
+		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys), STAGINGBUFFERs(*GFX->JobSys),
+		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys), IRT_SLOTSETs(*GFX->JobSys){
 
 		for (unsigned int allocindex = 0; allocindex < VKGPU->ALLOCs.size(); allocindex++) {
 			VK_MemoryAllocation& ALLOC = VKGPU->ALLOCs[allocindex];
@@ -120,10 +120,188 @@ namespace Vulkan {
 		}
 	}
 	GPU_ContentManager::~GPU_ContentManager() {
-
+		Destroy_AllResources();
 	}
-	void GPU_ContentManager::Unload_AllResources() {
+	void GPU_ContentManager::Destroy_RenderGraphRelatedResources() {
+		//Destroy Material Types and Instances
+		{
+			std::unique_lock<std::mutex> Locker;
+			SHADERPROGRAMs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int MatTypeIndex = 0; MatTypeIndex < SHADERPROGRAMs.size(ThreadID); MatTypeIndex++) {
+					VK_GraphicsPipeline* PSO = GFXHandleConverter(VK_GraphicsPipeline*, SHADERPROGRAMs.get(ThreadID, MatTypeIndex));
+					vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, PSO->General_DescSet.Layout, nullptr);
+					vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, PSO->Instance_DescSet.Layout, nullptr);
+					delete[] PSO->General_DescSet.Descs;
+					vkDestroyPipelineLayout(VKGPU->Logical_Device, PSO->PipelineLayout, nullptr);
+					vkDestroyPipeline(VKGPU->Logical_Device, PSO->PipelineObject, nullptr);
+					delete PSO;
+				}
+				SHADERPROGRAMs.clear(ThreadID);
+			}
+			Locker.unlock();
 
+			std::unique_lock<std::mutex> InstanceLocker;
+			SHADERPINSTANCEs.PauseAllOperations(InstanceLocker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int MatInstIndex = 0; MatInstIndex < SHADERPINSTANCEs.size(ThreadID); MatInstIndex++) {
+					VK_PipelineInstance* PSO = GFXHandleConverter(VK_PipelineInstance*, SHADERPINSTANCEs.get(ThreadID, MatInstIndex));
+					vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, PSO->DescSet.Layout, nullptr);
+					delete[] PSO->DescSet.Descs;
+					delete PSO;
+				}
+				SHADERPINSTANCEs.clear(ThreadID);
+			}
+			InstanceLocker.unlock();
+		}
+
+		//There is no need to free each descriptor set, just destroy pool
+		if (MaterialRelated_DescPool.pool != VK_NULL_HANDLE) {
+			vkDestroyDescriptorPool(VKGPU->Logical_Device, MaterialRelated_DescPool.pool, nullptr);
+			MaterialRelated_DescPool.pool = VK_NULL_HANDLE;
+			{
+				MaterialRelated_DescPool.REMAINING_IMAGE.DirectStore(0);
+				MaterialRelated_DescPool.REMAINING_SAMPLER.DirectStore(0);
+				MaterialRelated_DescPool.REMAINING_SBUFFER.DirectStore(0);
+				MaterialRelated_DescPool.REMAINING_SET.DirectStore(0);
+				MaterialRelated_DescPool.REMAINING_UBUFFER.DirectStore(0);
+			}
+		}
+	}
+	void GPU_ContentManager::Destroy_AllResources() {
+		Destroy_RenderGraphRelatedResources();
+		//Destroy Shader Sources
+		{
+			std::unique_lock<std::mutex> Locker;
+			SHADERSOURCEs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < SHADERSOURCEs.size(ThreadID); i++) {
+					VK_ShaderSource* ShaderSource = SHADERSOURCEs.get(ThreadID, i);
+					vkDestroyShaderModule(VKGPU->Logical_Device, ShaderSource->Module, nullptr);
+					delete ShaderSource;
+				}
+				SHADERSOURCEs.clear(ThreadID);
+			}
+		}
+		//Destroy Samplers
+		{
+			std::unique_lock<std::mutex> Locker;
+			SAMPLERs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < SAMPLERs.size(ThreadID); i++) {
+					VK_Sampler* Sampler = SAMPLERs.get(ThreadID, i);
+					vkDestroySampler(VKGPU->Logical_Device, Sampler->Sampler, nullptr);
+					delete Sampler;
+				}
+				SAMPLERs.clear(ThreadID);
+			}
+		}
+		//Destroy Vertex Attribute Layouts
+		{
+			std::unique_lock<std::mutex> Locker;
+			VERTEXATTRIBLAYOUTs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < VERTEXATTRIBLAYOUTs.size(ThreadID); i++) {
+					VK_VertexAttribLayout* LAYOUT = VERTEXATTRIBLAYOUTs.get(ThreadID, i);
+					delete[] LAYOUT->AttribDescs;
+					delete[] LAYOUT->Attributes;
+					delete LAYOUT;
+				}
+				VERTEXATTRIBLAYOUTs.clear(ThreadID);
+			}
+		}
+		//Destroy RTSLotSets
+		{
+			std::unique_lock<std::mutex> Locker;
+			RT_SLOTSETs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < RT_SLOTSETs.size(ThreadID); i++) {
+					VK_RTSLOTSET* SlotSet = RT_SLOTSETs.get(ThreadID, i);
+					delete[] SlotSet->PERFRAME_SLOTSETs[0].COLOR_SLOTs;
+					delete SlotSet->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT;
+					delete[] SlotSet->PERFRAME_SLOTSETs[1].COLOR_SLOTs;
+					delete SlotSet->PERFRAME_SLOTSETs[1].DEPTHSTENCIL_SLOT;
+					delete SlotSet;
+				}
+				RT_SLOTSETs.clear(ThreadID);
+			}
+		}
+		//Destroy IRTSlotSets
+		{
+			std::unique_lock<std::mutex> Locker;
+			IRT_SLOTSETs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < IRT_SLOTSETs.size(ThreadID); i++) {
+					VK_IRTSLOTSET* ISlotSet = IRT_SLOTSETs.get(ThreadID, i);
+					delete[] ISlotSet->COLOR_OPTYPEs;
+					delete ISlotSet;
+				}
+				IRT_SLOTSETs.clear(ThreadID);
+			}
+		}
+		//Destroy Global Buffers
+		{
+			std::unique_lock<std::mutex> Locker;
+			GLOBALBUFFERs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < GLOBALBUFFERs.size(ThreadID); i++) {
+					delete GLOBALBUFFERs.get(ThreadID, i);
+				}
+				GLOBALBUFFERs.clear(ThreadID);
+			}
+		}
+		//Destroy Mesh Buffers
+		{
+			std::unique_lock<std::mutex> Locker;
+			MESHBUFFERs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < MESHBUFFERs.size(ThreadID); i++) {
+					delete MESHBUFFERs.get(ThreadID, i);
+				}
+				MESHBUFFERs.clear(ThreadID);
+			}
+		}
+		//Destroy Index Buffers
+		{
+			std::unique_lock<std::mutex> Locker;
+			INDEXBUFFERs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < INDEXBUFFERs.size(ThreadID); i++) {
+					delete INDEXBUFFERs.get(ThreadID, i);
+				}
+				INDEXBUFFERs.clear(ThreadID);
+			}
+		}
+		//Destroy Staging Buffers
+		{
+			std::unique_lock<std::mutex> Locker;
+			STAGINGBUFFERs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < STAGINGBUFFERs.size(ThreadID); i++) {
+					delete STAGINGBUFFERs.get(ThreadID, i);
+				}
+				STAGINGBUFFERs.clear(ThreadID);
+			}
+		}
+		//Destroy Textures
+		{
+			std::unique_lock<std::mutex> Locker;
+			TEXTUREs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < TEXTUREs.size(ThreadID); i++) {
+					VK_Texture* Texture = TEXTUREs.get(ThreadID, i);
+					vkDestroyImageView(VKGPU->Logical_Device, Texture->ImageView, nullptr);
+					vkDestroyImage(VKGPU->Logical_Device, Texture->Image, nullptr);
+					delete Texture; 
+				}
+				TEXTUREs.clear(ThreadID);
+			}
+		}
+		//Destroy Global Buffer related Descriptor Datas
+		{
+			vkDestroyDescriptorPool(VKGPU->Logical_Device, GlobalBuffers_DescPool, nullptr);
+			vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, GlobalBuffers_DescSetLayout, nullptr);
+		}
 	}
 
 	void GPU_ContentManager::Resource_Finalizations() {
@@ -417,6 +595,7 @@ namespace Vulkan {
 			return TAPI_FAIL;
 		}
 		SamplingTypeHandle = SAMPLER;
+		SAMPLERs.push_back(GFX->JobSys->GetThisThreadIndex(), SAMPLER);
 		return TAPI_SUCCESS;
 	}
 	
@@ -507,6 +686,7 @@ namespace Vulkan {
 		}
 		vkDestroyBuffer(VKGPU->Logical_Device, Bufferobj, nullptr);
 		Handle = StagingBuffer;
+		STAGINGBUFFERs.push_back(GFX->JobSys->GetThisThreadIndex(), StagingBuffer);
 		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::Upload_toBuffer(GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET) {
@@ -789,6 +969,7 @@ namespace Vulkan {
 			LOG_ERROR_TAPI("Create_GlobalBuffer has failed at suballocation!");
 			return TAPI_FAIL;
 		}
+		vkDestroyBuffer(VKGPU->Logical_Device, obj, nullptr);
 		
 		GB->ACCESSED_STAGEs = AccessableStages;
 		GB->BINDINGPOINT = BINDINDEX;
@@ -1807,6 +1988,7 @@ namespace Vulkan {
 		}
 
 		InheritedSlotSetHandle = InheritedSet;
+		IRT_SLOTSETs.push_back(GFX->JobSys->GetThisThreadIndex(), InheritedSet);
 		return TAPI_SUCCESS;
 	}
 

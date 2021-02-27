@@ -207,6 +207,9 @@ namespace TuranAPI {
 			void PauseAllOperations(std::unique_lock<std::mutex>& Locker) {
 				Locker = std::unique_lock<std::mutex>(Sync);
 			}
+			~TLVector() {
+				delete[] PerThreadVectors;
+			}
 		};
 	}
 }

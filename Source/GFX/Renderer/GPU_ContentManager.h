@@ -55,8 +55,7 @@ namespace GFX_API {
 	public:
 		GPU_ContentManager();
 		virtual ~GPU_ContentManager();
-
-		virtual void Unload_AllResources() = 0;
+		virtual void Destroy_AllResources() = 0;
 
 
 		virtual TAPIResult Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,

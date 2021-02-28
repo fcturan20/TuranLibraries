@@ -26,12 +26,12 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 
 
 	//Useful rendergraph handles to use later
-	GFX_API::GFXHandle DEPTHRT, WorldSubpassID, IMGUISubpassID, WP_ID, BarrierBeforeUpload_ID, UploadTP_ID, BarrierAfterUpload_ID, BarrierAfterDraw_ID;
+	GFX_API::GFXHandle DEPTHRT, WorldSubpassID, IMGUISubpassID, WP_ID, BarrierBeforeUpload_ID, UploadTP_ID, BarrierAfterUpload_ID, BarrierAfterDraw_ID, RTSlotSet_ID;
 
 	//RenderGraph Construction
 	{
 		//Handles that're not used outside of the function
-		GFX_API::GFXHandle FIRSTDRAWPASS_ID, RTSlotSet_ID;
+		GFX_API::GFXHandle FIRSTDRAWPASS_ID;
 
 		GFXRENDERER->Start_RenderGraphConstruction();
 
@@ -465,9 +465,25 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		}
 	}
 
+	//Create a RT to test Change_RTSlotTexture
+	GFX_API::GFXHandle RTTexture;
+	{
+		GFX_API::Texture_Description desc;
+		desc.WIDTH = 1280;
+		desc.HEIGHT = 720;
+		desc.USAGE.isRenderableTo = true;
+		desc.Properties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_BGRA8UNORM;
+		desc.Properties.DATAORDER = GFX_API::TEXTURE_ORDER::SWIZZLE;
+		desc.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
+		desc.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP;
+		desc.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
+		if (GFXContentManager->Create_Texture(desc, 0, RTTexture) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Creating RTTexture has failed!");
+		}
+	}
 
 
-
+	GFXRENDERER->ImageBarrier(RTTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierBeforeUpload_ID);
 	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, 0, BarrierBeforeUpload_ID);
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 4);
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, SKYBOXVB_ID, GFX_API::BUFFER_TYPE::VERTEX, 512, 0, sizeof(vec3) * 36);
@@ -493,7 +509,17 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	unsigned int i = 0;
 	while (MainWindow->Get_Is_Window_Open()) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
-
+		
+		if (i % 2) {
+			if (GFXContentManager->Change_RTSlotTexture(RTSlotSet_ID, true, 0, GFXRENDERER->GetCurrentFrameIndex(), RTTexture) != TAPI_SUCCESS) {
+				LOG_CRASHING_TAPI("Changing SlotTexture has failed!");
+			}
+		}
+		else {
+			if (GFXContentManager->Change_RTSlotTexture(RTSlotSet_ID, true, 0, GFXRENDERER->GetCurrentFrameIndex(), AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()])) {
+				LOG_CRASHING_TAPI("Changing SlotTexture has failed!");
+			}
+		}
 		IMGUI_RUNWINDOWS();
 		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierBeforeUpload_ID);
 		GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 1, 0, TEXTUREDISPLAY_MATINST, WorldSubpassID);

@@ -35,6 +35,7 @@ namespace Vulkan {
 		bool IS_USED_LATER;
 		GFX_API::OPERATION_TYPE RT_OPERATIONTYPE;
 		vec4 CLEAR_COLOR;
+		std::atomic_bool IsChanged = false;
 	};
 	struct VK_API VK_DEPTHSTENCILSLOT {
 		VK_Texture* RT;
@@ -42,15 +43,20 @@ namespace Vulkan {
 		bool IS_USED_LATER;
 		GFX_API::OPERATION_TYPE DEPTH_OPTYPE, STENCIL_OPTYPE;
 		vec2 CLEAR_COLOR;
+		std::atomic_bool IsChanged = false;
 	};
 	struct VK_RTSLOTs {
 		VK_COLORRTSLOT* COLOR_SLOTs = nullptr;
 		unsigned char COLORSLOTs_COUNT = 0;
 		VK_DEPTHSTENCILSLOT* DEPTHSTENCIL_SLOT = nullptr;	//There is one, but there may not be a Depth Slot. So if there is no, then this is nullptr.
 		//Unused Depth and NoDepth are different. Unused Depth means RenderPass does have one but current Subpass doesn't use, but NoDepth means RenderPass doesn't have one!
+		atomic_bool IsChanged = false;
 	};
 	struct VK_API VK_RTSLOTSET {
 		VK_RTSLOTs PERFRAME_SLOTSETs[2];
+		//You should change this struct's vkRenderPass object pointer as your vkRenderPass object
+		VkFramebufferCreateInfo FB_ci[2];
+		vector<VkImageView> ImageViews[2];
 	};
 	struct VK_API VK_IRTSLOTSET {
 		VK_RTSLOTSET* BASESLOTSET;

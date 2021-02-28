@@ -15,6 +15,6 @@ namespace GFX_API {
 		LOG_STATUS_TAPI("GFX Core systems are started!");
 	}
 	GFX_Core::~GFX_Core() {
-		LOG_NOTCODED_TAPI("GFX Core destructor is called but not coded yet!", false);
+
 	}
 }

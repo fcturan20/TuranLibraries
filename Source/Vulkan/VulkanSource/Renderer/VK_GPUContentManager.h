@@ -47,6 +47,10 @@ namespace Vulkan {
 		void Resource_Finalizations();
 
 
+		//Apply changes in Descriptor Sets, RTSlotSets
+		void Apply_ResourceChanges();
+
+
 
 
 
@@ -108,6 +112,7 @@ namespace Vulkan {
 			unsigned int ELEMENTINDEX, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) override;
 
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) override;
+		virtual TAPIResult Change_RTSlotTexture(GFX_API::GFXHandle RTSlotHandle, bool isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, GFX_API::GFXHandle TextureHandle) override;
 		virtual TAPIResult Inherite_RTSlotSet(const vector<GFX_API::RTSLOTUSAGE_Description>& Descriptions, GFX_API::GFXHandle RTSlotSetHandle, GFX_API::GFXHandle& InheritedSlotSetHandle) override;
 	};
 }

@@ -35,7 +35,7 @@ namespace Vulkan {
 	}
 	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), INDEXBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
 		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys), STAGINGBUFFERs(*GFX->JobSys),
-		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys), IRT_SLOTSETs(*GFX->JobSys){
+		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys), IRT_SLOTSETs(*GFX->JobSys) {
 
 		for (unsigned int allocindex = 0; allocindex < VKGPU->ALLOCs.size(); allocindex++) {
 			VK_MemoryAllocation& ALLOC = VKGPU->ALLOCs[allocindex];
@@ -301,6 +301,270 @@ namespace Vulkan {
 		{
 			vkDestroyDescriptorPool(VKGPU->Logical_Device, GlobalBuffers_DescPool, nullptr);
 			vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, GlobalBuffers_DescSetLayout, nullptr);
+		}
+	}
+
+	void CopyDescriptorSets(VK_DescSet& Set, vector<VkCopyDescriptorSet>& CopyVector, vector<VkDescriptorSet*>& CopyTargetSets) {
+		unsigned int DescCount = Set.DescImagesCount + Set.DescSamplersCount + Set.DescSBuffersCount + Set.DescUBuffersCount;
+		for (unsigned int DescIndex = 0; DescIndex < DescCount; DescIndex++) {
+			VkCopyDescriptorSet copyinfo;
+			VK_Descriptor& SourceDesc = GFXHandleConverter(VK_Descriptor*, Set.Descs)[DescIndex];
+			copyinfo.pNext = nullptr;
+			copyinfo.sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
+			copyinfo.descriptorCount = SourceDesc.ElementCount;
+			//We will copy all descriptor array's elements
+			copyinfo.srcArrayElement = 0;
+			copyinfo.dstArrayElement = 0;
+			copyinfo.dstBinding = DescIndex;
+			copyinfo.srcBinding = DescIndex;
+			copyinfo.srcSet = Set.Set;
+			//We will fill this DistanceSet after creating it!
+			copyinfo.dstSet = VK_NULL_HANDLE;
+			CopyVector.push_back(copyinfo);
+			CopyTargetSets.push_back(&Set.Set);
+		}
+	}
+
+	void GPU_ContentManager::Apply_ResourceChanges() {
+		const unsigned char FrameIndex = VKRENDERER->GetCurrentFrameIndex();
+		//Handle Descriptor Sets
+		{
+			//Clear 2 frames before's unbound descriptor set list
+			if (UnboundDescSetList[FrameIndex].size()) {
+				VK_DescPool& DP = MaterialRelated_DescPool;
+				vkFreeDescriptorSets(VKGPU->Logical_Device, DP.pool, UnboundDescSetList[FrameIndex].size(),
+					UnboundDescSetList[FrameIndex].data());
+				DP.REMAINING_SET.DirectAdd(UnboundDescSetList[FrameIndex].size());
+
+				DP.REMAINING_IMAGE.DirectAdd(UnboundDescSetImageCount[FrameIndex]);
+				UnboundDescSetImageCount[FrameIndex] = 0;
+				DP.REMAINING_SAMPLER.DirectAdd(UnboundDescSetSamplerCount[FrameIndex]);
+				UnboundDescSetSamplerCount[FrameIndex] = 0;
+				DP.REMAINING_SBUFFER.DirectAdd(UnboundDescSetSBufferCount[FrameIndex]);
+				UnboundDescSetSBufferCount[FrameIndex] = 0;
+				DP.REMAINING_UBUFFER.DirectAdd(UnboundDescSetUBufferCount[FrameIndex]);
+				UnboundDescSetUBufferCount[FrameIndex] = 0;
+				UnboundDescSetList[FrameIndex].clear();
+			}
+			//Create Descriptor Sets for material types/instances that are created this frame
+			{
+				vector<VkDescriptorSet> Sets;
+				vector<VkDescriptorSet*> SetPTRs;
+				vector<VkDescriptorSetLayout> SetLayouts;
+				std::unique_lock<std::mutex> Locker;
+				DescSets_toCreate.PauseAllOperations(Locker);
+				for (unsigned int ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+					for (unsigned int SetIndex = 0; SetIndex < DescSets_toCreate.size(ThreadIndex); SetIndex++) {
+						VK_DescSet* Set = DescSets_toCreate.get(ThreadIndex, SetIndex);
+						Sets.push_back(VkDescriptorSet());
+						SetLayouts.push_back(Set->Layout);
+						SetPTRs.push_back(&Set->Set);
+						UnboundDescSetImageCount[FrameIndex] += Set->DescImagesCount;
+						UnboundDescSetSamplerCount[FrameIndex] += Set->DescSamplersCount;
+						UnboundDescSetSBufferCount[FrameIndex] += Set->DescSBuffersCount;
+						UnboundDescSetUBufferCount[FrameIndex] += Set->DescUBuffersCount;
+					}
+					DescSets_toCreate.clear(ThreadIndex);
+				}
+				Locker.unlock();
+
+				if (Sets.size()) {
+					VkDescriptorSetAllocateInfo al_in = {};
+					al_in.descriptorPool = MaterialRelated_DescPool.pool;
+					al_in.descriptorSetCount = Sets.size();
+					al_in.pNext = nullptr;
+					al_in.pSetLayouts = SetLayouts.data();
+					al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+					vkAllocateDescriptorSets(VKGPU->Logical_Device, &al_in, Sets.data());
+					for (unsigned int SetIndex = 0; SetIndex < Sets.size(); SetIndex++) {
+						*SetPTRs[SetIndex] = Sets[SetIndex];
+					}
+				}
+			}
+			//Create Descriptor Sets for material types/instances that are created before and used recently (last 2 frames), to update their descriptor sets
+			{
+				vector<VkDescriptorSet> NewSets;
+				vector<VkDescriptorSet*> SetPTRs;
+				vector<VkDescriptorSetLayout> SetLayouts;
+
+				//Copy descriptor sets exactly, then update with this frame's SetMaterial_xxx calls
+				vector<VkCopyDescriptorSet> CopySetInfos;
+				vector<VkDescriptorSet*> CopyTargetSets;
+
+
+				std::unique_lock<std::mutex> Locker;
+				DescSets_toCreateUpdate.PauseAllOperations(Locker);
+				for (unsigned int ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+					for (unsigned int SetIndex = 0; SetIndex < DescSets_toCreateUpdate.size(ThreadIndex); SetIndex++) {
+						VK_DescSetUpdateCall& Call = DescSets_toCreateUpdate.get(ThreadIndex, SetIndex);
+						VK_DescSet* Set = Call.Set;
+						bool SetStatus = Set->ShouldRecreate.load();
+						switch (SetStatus) {
+						case 0:
+							continue;
+						case 1:
+							NewSets.push_back(VkDescriptorSet());
+							SetPTRs.push_back(&Set->Set);
+							SetLayouts.push_back(Set->Layout);
+							UnboundDescSetImageCount[FrameIndex] += Set->DescImagesCount;
+							UnboundDescSetSamplerCount[FrameIndex] += Set->DescSamplersCount;
+							UnboundDescSetSBufferCount[FrameIndex] += Set->DescSBuffersCount;
+							UnboundDescSetUBufferCount[FrameIndex] += Set->DescUBuffersCount;
+							UnboundDescSetList[FrameIndex].push_back(Set->Set);
+
+							CopyDescriptorSets(*Set, CopySetInfos, CopyTargetSets);
+							Set->ShouldRecreate.store(0);
+							break;
+						default:
+							LOG_NOTCODED_TAPI("Descriptor Set atomic_uchar isn't supposed to have a value that's 2+! Please check 'Handle Descriptor Sets' in Vulkan Renderer->Run()", true);
+							break;
+						}
+					}
+				}
+
+				if (NewSets.size()) {
+					VkDescriptorSetAllocateInfo al_in = {};
+					al_in.descriptorPool = MaterialRelated_DescPool.pool;
+					al_in.descriptorSetCount = NewSets.size();
+					al_in.pNext = nullptr;
+					al_in.pSetLayouts = SetLayouts.data();
+					al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+					vkAllocateDescriptorSets(VKGPU->Logical_Device, &al_in, NewSets.data());
+					for (unsigned int SetIndex = 0; SetIndex < NewSets.size(); SetIndex++) {
+						*SetPTRs[SetIndex] = NewSets[SetIndex];
+					}
+
+					for (unsigned int CopyIndex = 0; CopyIndex < CopySetInfos.size(); CopyIndex++) {
+						CopySetInfos[CopyIndex].dstSet = *CopyTargetSets[CopyIndex];
+					}
+					vkUpdateDescriptorSets(VKGPU->Logical_Device, 0, nullptr, CopySetInfos.size(), CopySetInfos.data());
+				}
+			}
+			//Update descriptor sets
+			{
+				vector<VkWriteDescriptorSet> UpdateInfos;
+				std::unique_lock<std::mutex> Locker1;
+				DescSets_toCreateUpdate.PauseAllOperations(Locker1);
+				for (unsigned int ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+					for (unsigned int CallIndex = 0; CallIndex < DescSets_toCreateUpdate.size(ThreadIndex); CallIndex++) {
+						VK_DescSetUpdateCall& Call = DescSets_toCreateUpdate.get(ThreadIndex, CallIndex);
+						VkWriteDescriptorSet info = {};
+						info.descriptorCount = 1;
+						VK_Descriptor& Desc = Call.Set->Descs[Call.BindingIndex];
+						switch (Desc.Type) {
+						case DescType::IMAGE:
+							info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+							info.dstBinding = Call.BindingIndex;
+							info.dstArrayElement = Call.ElementIndex;
+							info.pImageInfo = &GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].info;
+							GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+							break;
+						case DescType::SAMPLER:
+							info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+							info.dstBinding = Call.BindingIndex;
+							info.dstArrayElement = Call.ElementIndex;
+							info.pImageInfo = &GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].info;
+							GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+							break;
+						case DescType::UBUFFER:
+							info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+							info.dstBinding = Call.BindingIndex;
+							info.dstArrayElement = Call.ElementIndex;
+							info.pBufferInfo = &GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].Info;
+							GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+							break;
+						case DescType::SBUFFER:
+							info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+							info.dstBinding = Call.BindingIndex;
+							info.dstArrayElement = Call.ElementIndex;
+							info.pBufferInfo = &GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].Info;
+							GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+							break;
+						}
+						info.dstSet = Call.Set->Set;
+						info.pNext = nullptr;
+						info.pTexelBufferView = nullptr;
+						info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+						UpdateInfos.push_back(info);
+					}
+					DescSets_toCreateUpdate.clear(ThreadIndex);
+				}
+				Locker1.unlock();
+
+
+				std::unique_lock<std::mutex> Locker2;
+				DescSets_toJustUpdate.PauseAllOperations(Locker2);
+				for (unsigned int ThreadIndex = 0; ThreadIndex < GFX->JobSys->GetThreadCount(); ThreadIndex++) {
+					for (unsigned int CallIndex = 0; CallIndex < DescSets_toJustUpdate.size(ThreadIndex); CallIndex++) {
+						VK_DescSetUpdateCall& Call = DescSets_toJustUpdate.get(ThreadIndex, CallIndex);
+						VkWriteDescriptorSet info = {};
+						info.descriptorCount = 1;
+						VK_Descriptor& Desc = Call.Set->Descs[Call.BindingIndex];
+						switch (Desc.Type) {
+						case DescType::IMAGE:
+							info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+							info.dstBinding = Call.BindingIndex;
+							info.dstArrayElement = Call.ElementIndex;
+							info.pImageInfo = &GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].info;
+							GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+							break;
+						case DescType::SAMPLER:
+							info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+							info.dstBinding = Call.BindingIndex;
+							info.dstArrayElement = Call.ElementIndex;
+							info.pImageInfo = &GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].info;
+							GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+							break;
+						case DescType::UBUFFER:
+							info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+							info.dstBinding = Call.BindingIndex;
+							info.dstArrayElement = Call.ElementIndex;
+							info.pBufferInfo = &GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].Info;
+							GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+							break;
+						case DescType::SBUFFER:
+							info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+							info.dstBinding = Call.BindingIndex;
+							info.dstArrayElement = Call.ElementIndex;
+							info.pBufferInfo = &GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].Info;
+							GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+							break;
+						}
+						info.dstSet = Call.Set->Set;
+						info.pNext = nullptr;
+						info.pTexelBufferView = nullptr;
+						info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+						UpdateInfos.push_back(info);
+					}
+					DescSets_toJustUpdate.clear(ThreadIndex);
+				}
+				Locker2.unlock();
+
+				vkUpdateDescriptorSets(VKGPU->Logical_Device, UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
+			}
+		}
+
+		//Handle RTSlotSet changes by recreating framebuffers of draw passes
+		for (unsigned int DrawPassIndex = 0; DrawPassIndex < VKRENDERER->DrawPasses.size(); DrawPassIndex++) {
+			VK_DrawPass* DP = VKRENDERER->DrawPasses[DrawPassIndex];
+			if (!DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.load()) {
+				continue;
+			}
+
+			//This is safe because this FB is used 2 frames ago and CPU already waits for the frame's GPU process to end
+			vkDestroyFramebuffer(VKGPU->Logical_Device, DP->FBs[FrameIndex], nullptr);
+
+			VkFramebufferCreateInfo fb_ci = DP->SLOTSET->FB_ci[FrameIndex];
+			fb_ci.renderPass = DP->RenderPassObject;
+			if (vkCreateFramebuffer(VKGPU->Logical_Device, &fb_ci, nullptr, &DP->FBs[FrameIndex]) != VK_SUCCESS) {
+				LOG_CRASHING_TAPI("vkCreateFramebuffer() has failed while changing one of the drawpasses' current frame slot's texture! Please report this!");
+				return;
+			}
+
+			DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.store(false);
+			for (unsigned int SlotIndex = 0; SlotIndex < DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].COLORSLOTs_COUNT; SlotIndex++) {
+				DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].COLOR_SLOTs[SlotIndex].IsChanged.store(false);
+			}
 		}
 	}
 
@@ -1864,6 +2128,16 @@ namespace Vulkan {
 			}
 		}
 
+		unsigned int FBWIDTH = GFXHandleConverter(VK_Texture*, Descriptions[0].TextureHandles[0])->WIDTH;
+		unsigned int FBHEIGHT = GFXHandleConverter(VK_Texture*, Descriptions[0].TextureHandles[0])->HEIGHT;
+		for (unsigned int SlotIndex = 0; SlotIndex < Descriptions.size(); SlotIndex++) {
+			VK_Texture* Texture = GFXHandleConverter(VK_Texture*, Descriptions[SlotIndex].TextureHandles[0]);
+			if (Texture->WIDTH != FBWIDTH || Texture->HEIGHT != FBHEIGHT) {
+				LOG_ERROR_TAPI("Create_RTSlotSet() has failed because one of your slot's texture has wrong resolution!");
+				return TAPI_INVALIDARGUMENT;
+			}
+		}
+
 
 		VK_RTSLOTSET* VKSLOTSET = new VK_RTSLOTSET;
 		for (unsigned int SlotSetIndex = 0; SlotSetIndex < 2; SlotSetIndex++) {
@@ -1886,18 +2160,102 @@ namespace Vulkan {
 			for (unsigned int i = 0; i < COLORRT_COUNT; i++) {
 				const GFX_API::RTSLOT_Description& desc = Descriptions[i];
 				VK_Texture* RT = GFXHandleConverter(VK_Texture*, desc.TextureHandles[SlotSetIndex]);
-				VK_COLORRTSLOT SLOT;
+				VK_COLORRTSLOT& SLOT = PF_SLOTSET.COLOR_SLOTs[desc.SLOTINDEX];
 				SLOT.RT_OPERATIONTYPE = desc.OPTYPE;
 				SLOT.LOADSTATE = desc.LOADOP;
 				SLOT.RT = RT;
 				SLOT.IS_USED_LATER = desc.isUSEDLATER;
 				SLOT.CLEAR_COLOR = desc.CLEAR_VALUE;
-				PF_SLOTSET.COLOR_SLOTs[desc.SLOTINDEX] = SLOT;
 			}
+
+
+			for (unsigned int i = 0; i < PF_SLOTSET.COLORSLOTs_COUNT; i++) {
+				VK_Texture* VKTexture = PF_SLOTSET.COLOR_SLOTs[i].RT;
+				if (!VKTexture->ImageView) {
+					LOG_CRASHING_TAPI("One of your RTs doesn't have a VkImageView! You can't use such a texture as RT. Generally this case happens when you forgot to specify your swapchain texture's usage (while creating a window).");
+					return TAPI_FAIL;
+				}
+				VKSLOTSET->ImageViews[SlotSetIndex].push_back(VKTexture->ImageView);
+			}
+			if (PF_SLOTSET.DEPTHSTENCIL_SLOT) {
+				VKSLOTSET->ImageViews[SlotSetIndex].push_back(PF_SLOTSET.DEPTHSTENCIL_SLOT->RT->ImageView);
+			}
+
+			VkFramebufferCreateInfo& fb_ci = VKSLOTSET->FB_ci[SlotSetIndex];
+			fb_ci.attachmentCount = VKSLOTSET->ImageViews[SlotSetIndex].size();
+			fb_ci.pAttachments = VKSLOTSET->ImageViews[SlotSetIndex].data();
+			fb_ci.flags = 0;
+			fb_ci.height = FBHEIGHT;
+			fb_ci.width = FBWIDTH;
+			fb_ci.layers = 1;
+			fb_ci.pNext = nullptr;
+			fb_ci.renderPass = VK_NULL_HANDLE;
+			fb_ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		}
 
 		RT_SLOTSETs.push_back(GFX->JobSys->GetThisThreadIndex(), VKSLOTSET);
 		RTSlotSetHandle = VKSLOTSET;
+		return TAPI_SUCCESS;
+	}
+	TAPIResult GPU_ContentManager::Change_RTSlotTexture(GFX_API::GFXHandle RTSlotHandle, bool isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, GFX_API::GFXHandle TextureHandle) {
+		VK_RTSLOTSET* SlotSet = GFXHandleConverter(VK_RTSLOTSET*, RTSlotHandle);
+		VK_Texture* Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
+		if (!Texture->USAGE.isRenderableTo) {
+			LOG_ERROR_TAPI("You can't change RTSlot's texture because given texture's USAGE flag doesn't activate isRenderableTo!");
+			return TAPI_FAIL;
+		}
+
+		VkFramebufferCreateInfo& FB_ci = SlotSet->FB_ci[FrameIndex];
+		if (Texture->WIDTH != FB_ci.width || Texture->HEIGHT != FB_ci.height) {
+			LOG_ERROR_TAPI("You can't change RTSlot's texture because given texture has unmatching resolution!");
+			return TAPI_FAIL;
+		}
+
+		if (isColorRT) {
+			if (SlotSet->PERFRAME_SLOTSETs[FrameIndex].COLORSLOTs_COUNT <= SlotIndex) {
+				LOG_ERROR_TAPI("You can't change RTSlot's texture because given SlotIndex is exceeding the number of color slots!");
+				return TAPI_FAIL;
+			}
+			VK_COLORRTSLOT& Slot = SlotSet->PERFRAME_SLOTSETs[FrameIndex].COLOR_SLOTs[SlotIndex];
+			if (Slot.RT->CHANNELs != Texture->CHANNELs) {
+				LOG_ERROR_TAPI("You can't change RTSlot's texture because given Texture's channel type isn't same with target slot's!");
+				return TAPI_FAIL;
+			}
+
+			//Race against concurrency (*plays Tokyo Drift)
+			bool x = false, y = true;
+			if (!Slot.IsChanged.compare_exchange_strong(x, y)) {
+				LOG_ERROR_TAPI("You already changed this slot!");
+				return TAPI_WRONGTIMING;
+			}
+			SlotSet->PERFRAME_SLOTSETs[FrameIndex].IsChanged.store(true);
+
+			Slot.RT = Texture;
+			SlotSet->ImageViews[FrameIndex][SlotIndex] = Texture->ImageView;
+		}
+		else {
+			VK_DEPTHSTENCILSLOT* Slot = SlotSet->PERFRAME_SLOTSETs[FrameIndex].DEPTHSTENCIL_SLOT;
+			if (!Slot) {
+				LOG_ERROR_TAPI("You can't change RTSlot's texture because SlotSet doesn't have any Depth-Stencil Slot!");
+				return TAPI_FAIL;
+			}
+
+			if (Slot->RT->CHANNELs != Texture->CHANNELs) {
+				LOG_ERROR_TAPI("You can't change RTSlot's texture because given Texture's channel type isn't same with target slot's!");
+				return TAPI_FAIL;
+			}
+
+			//Race against concurrency
+			bool x = false, y = true;
+			if (!Slot->IsChanged.compare_exchange_strong(x, y)) {
+				LOG_ERROR_TAPI("You already changed this slot!");
+				return TAPI_WRONGTIMING;
+			}
+			SlotSet->PERFRAME_SLOTSETs[FrameIndex].IsChanged.store(true);
+
+			Slot->RT = Texture;
+			SlotSet->ImageViews[FrameIndex][SlotSet->PERFRAME_SLOTSETs[FrameIndex].COLORSLOTs_COUNT] = Texture->ImageView;
+		}
 		return TAPI_SUCCESS;
 	}
 	TAPIResult GPU_ContentManager::Inherite_RTSlotSet(const vector<GFX_API::RTSLOTUSAGE_Description>& Descriptions, GFX_API::GFXHandle RTSlotSetHandle, GFX_API::GFXHandle& InheritedSlotSetHandle) {

@@ -1479,7 +1479,6 @@ namespace Vulkan {
 				}
 
 				delete[] Branch.CorePasses;
-				//delete[] Branch.CurrentFramePassesIndexes;
 				if (Branch.LaterExecutedBranches) {
 					delete[] Branch.LaterExecutedBranches;
 				}

@@ -118,6 +118,10 @@ namespace GFX_API {
 
 
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) = 0;
+		//Changes on RTSlots only happens at the frame slot is gonna be used
+		//For example; if you change next frame's slot, necessary API calls are gonna be called next frame
+		//For example; if you change slot but related slotset isn't used by drawpass, it doesn't happen until it is used
+		virtual TAPIResult Change_RTSlotTexture(GFX_API::GFXHandle RTSlotHandle, bool isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, GFX_API::GFXHandle TextureHandle) = 0;
 		virtual TAPIResult Inherite_RTSlotSet(const vector<GFX_API::RTSLOTUSAGE_Description>& Descriptions, GFX_API::GFXHandle RTSlotSetHandle, GFX_API::GFXHandle& InheritedSlotSetHandle) = 0;
 	};
 }

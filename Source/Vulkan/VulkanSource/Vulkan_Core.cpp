@@ -700,7 +700,6 @@ namespace Vulkan {
 
 		//Destroy dear IMGUI
 		VK_IMGUI->Destroy_IMGUIResources();
-		vkDestroyDescriptorPool(Vulkan_GPU->Logical_Device, VKRENDERER->IMGUIPOOL, nullptr);
 
 		//Close windows and delete related datas
 		for (unsigned int WindowIndex = 0; WindowIndex < WINDOWs.size(); WindowIndex++) {

@@ -79,14 +79,10 @@ namespace Vulkan {
 				return;
 			}
 		}
-		UnboundDescSetImageCount[0] = 0;
-		UnboundDescSetImageCount[1] = 0;
-		UnboundDescSetSamplerCount[0] = 0;
-		UnboundDescSetSamplerCount[1] = 0;
-		UnboundDescSetSBufferCount[0] = 0;
-		UnboundDescSetSBufferCount[1] = 0;
-		UnboundDescSetUBufferCount[0] = 0;
-		UnboundDescSetUBufferCount[1] = 0;
+		UnboundDescSetImageCount = 0;
+		UnboundDescSetSamplerCount = 0;
+		UnboundDescSetSBufferCount = 0;
+		UnboundDescSetUBufferCount = 0;
 
 		//Material Related Descriptor Pool Creation
 		{
@@ -305,8 +301,7 @@ namespace Vulkan {
 	}
 
 	void CopyDescriptorSets(VK_DescSet& Set, vector<VkCopyDescriptorSet>& CopyVector, vector<VkDescriptorSet*>& CopyTargetSets) {
-		unsigned int DescCount = Set.DescImagesCount + Set.DescSamplersCount + Set.DescSBuffersCount + Set.DescUBuffersCount;
-		for (unsigned int DescIndex = 0; DescIndex < DescCount; DescIndex++) {
+		for (unsigned int DescIndex = 0; DescIndex < Set.DescCount; DescIndex++) {
 			VkCopyDescriptorSet copyinfo;
 			VK_Descriptor& SourceDesc = GFXHandleConverter(VK_Descriptor*, Set.Descs)[DescIndex];
 			copyinfo.pNext = nullptr;
@@ -324,27 +319,27 @@ namespace Vulkan {
 			CopyTargetSets.push_back(&Set.Set);
 		}
 	}
-
+	//Backup
 	void GPU_ContentManager::Apply_ResourceChanges() {
 		const unsigned char FrameIndex = VKRENDERER->GetCurrentFrameIndex();
 		//Handle Descriptor Sets
 		{
-			//Clear 2 frames before's unbound descriptor set list
-			if (UnboundDescSetList[FrameIndex].size()) {
+			//Destroy descriptor sets that are changed last frame
+			if (UnboundDescSetList.size()) {
 				VK_DescPool& DP = MaterialRelated_DescPool;
-				vkFreeDescriptorSets(VKGPU->Logical_Device, DP.pool, UnboundDescSetList[FrameIndex].size(),
-					UnboundDescSetList[FrameIndex].data());
-				DP.REMAINING_SET.DirectAdd(UnboundDescSetList[FrameIndex].size());
+				vkFreeDescriptorSets(VKGPU->Logical_Device, DP.pool, UnboundDescSetList.size(),
+					UnboundDescSetList.data());
+				DP.REMAINING_SET.DirectAdd(UnboundDescSetList.size());
 
-				DP.REMAINING_IMAGE.DirectAdd(UnboundDescSetImageCount[FrameIndex]);
-				UnboundDescSetImageCount[FrameIndex] = 0;
-				DP.REMAINING_SAMPLER.DirectAdd(UnboundDescSetSamplerCount[FrameIndex]);
-				UnboundDescSetSamplerCount[FrameIndex] = 0;
-				DP.REMAINING_SBUFFER.DirectAdd(UnboundDescSetSBufferCount[FrameIndex]);
-				UnboundDescSetSBufferCount[FrameIndex] = 0;
-				DP.REMAINING_UBUFFER.DirectAdd(UnboundDescSetUBufferCount[FrameIndex]);
-				UnboundDescSetUBufferCount[FrameIndex] = 0;
-				UnboundDescSetList[FrameIndex].clear();
+				DP.REMAINING_IMAGE.DirectAdd(UnboundDescSetImageCount);
+				UnboundDescSetImageCount = 0;
+				DP.REMAINING_SAMPLER.DirectAdd(UnboundDescSetSamplerCount);
+				UnboundDescSetSamplerCount = 0;
+				DP.REMAINING_SBUFFER.DirectAdd(UnboundDescSetSBufferCount);
+				UnboundDescSetSBufferCount = 0;
+				DP.REMAINING_UBUFFER.DirectAdd(UnboundDescSetUBufferCount);
+				UnboundDescSetUBufferCount = 0;
+				UnboundDescSetList.clear();
 			}
 			//Create Descriptor Sets for material types/instances that are created this frame
 			{
@@ -359,10 +354,6 @@ namespace Vulkan {
 						Sets.push_back(VkDescriptorSet());
 						SetLayouts.push_back(Set->Layout);
 						SetPTRs.push_back(&Set->Set);
-						UnboundDescSetImageCount[FrameIndex] += Set->DescImagesCount;
-						UnboundDescSetSamplerCount[FrameIndex] += Set->DescSamplersCount;
-						UnboundDescSetSBufferCount[FrameIndex] += Set->DescSBuffersCount;
-						UnboundDescSetUBufferCount[FrameIndex] += Set->DescUBuffersCount;
 					}
 					DescSets_toCreate.clear(ThreadIndex);
 				}
@@ -406,11 +397,11 @@ namespace Vulkan {
 							NewSets.push_back(VkDescriptorSet());
 							SetPTRs.push_back(&Set->Set);
 							SetLayouts.push_back(Set->Layout);
-							UnboundDescSetImageCount[FrameIndex] += Set->DescImagesCount;
-							UnboundDescSetSamplerCount[FrameIndex] += Set->DescSamplersCount;
-							UnboundDescSetSBufferCount[FrameIndex] += Set->DescSBuffersCount;
-							UnboundDescSetUBufferCount[FrameIndex] += Set->DescUBuffersCount;
-							UnboundDescSetList[FrameIndex].push_back(Set->Set);
+							UnboundDescSetImageCount += Set->DescImagesCount;
+							UnboundDescSetSamplerCount += Set->DescSamplersCount;
+							UnboundDescSetSBufferCount += Set->DescSBuffersCount;
+							UnboundDescSetUBufferCount += Set->DescUBuffersCount;
+							UnboundDescSetList.push_back(Set->Set);
 
 							CopyDescriptorSets(*Set, CopySetInfos, CopyTargetSets);
 							Set->ShouldRecreate.store(0);
@@ -567,7 +558,7 @@ namespace Vulkan {
 			}
 		}
 	}
-
+	
 	void GPU_ContentManager::Resource_Finalizations() {
 		//Create Global Buffer Descriptors etc
 		{
@@ -864,6 +855,9 @@ namespace Vulkan {
 	}
 	
 	bool GPU_ContentManager::Create_DescSet(VK_DescSet* Set) {
+		if (!Set->DescCount) {
+			return true;
+		}
 		if(!MaterialRelated_DescPool.REMAINING_IMAGE.LimitedSubtract_weak(Set->DescImagesCount, 0) ||
 			!MaterialRelated_DescPool.REMAINING_SAMPLER.LimitedSubtract_weak(Set->DescSamplersCount, 0) ||
 			!MaterialRelated_DescPool.REMAINING_SBUFFER.LimitedSubtract_weak(Set->DescSBuffersCount, 0) ||
@@ -872,7 +866,6 @@ namespace Vulkan {
 			LOG_ERROR_TAPI("Create_DescSets() has failed because descriptor pool doesn't have enough space!");
 			return false;
 		}
-
 		DescSets_toCreate.push_back(GFX->JobSys->GetThisThreadIndex(), Set);
 		return true;
 	}
@@ -1518,26 +1511,25 @@ namespace Vulkan {
 					bn.binding = BP;
 					bindings.push_back(bn);
 
+					VKPipeline->General_DescSet.DescCount++;
 					switch (gfxdesc.TYPE) {
 					case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
-						VKPipeline->General_DescSet.DescImagesCount++;
+						VKPipeline->General_DescSet.DescImagesCount += gfxdesc.ELEMENTCOUNT;
 					break;
 					case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
-						VKPipeline->General_DescSet.DescSamplersCount++;
+						VKPipeline->General_DescSet.DescSamplersCount += gfxdesc.ELEMENTCOUNT;
 					break;
 					case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
-						VKPipeline->General_DescSet.DescUBuffersCount++;
+						VKPipeline->General_DescSet.DescUBuffersCount += gfxdesc.ELEMENTCOUNT;
 					break;
 					case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
-						VKPipeline->General_DescSet.DescSBuffersCount++;
+						VKPipeline->General_DescSet.DescSBuffersCount += gfxdesc.ELEMENTCOUNT;
 					break;
 					}
 				}
 
-				unsigned int DescCount = VKPipeline->General_DescSet.DescImagesCount + VKPipeline->General_DescSet.DescSamplersCount
-					+ VKPipeline->General_DescSet.DescUBuffersCount + VKPipeline->General_DescSet.DescSBuffersCount;
-				if (DescCount) {
-					VKPipeline->General_DescSet.Descs = new VK_Descriptor[DescCount];
+				if (VKPipeline->General_DescSet.DescCount) {
+					VKPipeline->General_DescSet.Descs = new VK_Descriptor[VKPipeline->General_DescSet.DescCount];
 					for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
 						const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
 						if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_G ||
@@ -1546,7 +1538,7 @@ namespace Vulkan {
 							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_G)) {
 							continue;
 						}
-						if (gfxdesc.BINDINGPOINT >= DescCount) {
+						if (gfxdesc.BINDINGPOINT >= VKPipeline->General_DescSet.DescCount) {
 							LOG_ERROR_TAPI("One of your Material Data Descriptors (General) uses a binding point that is exceeding the number of Material Data Descriptors (General). You have to use a binding point that's lower than size of the Material Data Descriptors (General)!");
 							return TAPI_FAIL;
 						}
@@ -1627,34 +1619,34 @@ namespace Vulkan {
 					bn.descriptorCount = 1;		//I don't support array descriptors for now!
 					bn.binding = BP;
 					bindings.push_back(bn);
+
+					VKPipeline->Instance_DescSet.DescCount++;
 					switch (gfxdesc.TYPE) {
 					case GFX_API::SHADERINPUT_TYPE::IMAGE_PI:
 					{
-						VKPipeline->Instance_DescSet.DescImagesCount++;
+						VKPipeline->Instance_DescSet.DescImagesCount += gfxdesc.ELEMENTCOUNT;
 					}
 					break;
 					case GFX_API::SHADERINPUT_TYPE::SAMPLER_PI:
 					{
-						VKPipeline->Instance_DescSet.DescSamplersCount++;
+						VKPipeline->Instance_DescSet.DescSamplersCount += gfxdesc.ELEMENTCOUNT;
 					}
 					break;
 					case GFX_API::SHADERINPUT_TYPE::UBUFFER_PI:
 					{
-						VKPipeline->Instance_DescSet.DescUBuffersCount++;
+						VKPipeline->Instance_DescSet.DescUBuffersCount += gfxdesc.ELEMENTCOUNT;
 					}
 					break;
 					case GFX_API::SHADERINPUT_TYPE::SBUFFER_PI:
 					{
-						VKPipeline->Instance_DescSet.DescSBuffersCount++;
+						VKPipeline->Instance_DescSet.DescSBuffersCount += gfxdesc.ELEMENTCOUNT;
 					}
 					break;
 					}
 				}
 
-				unsigned int DescCount = VKPipeline->Instance_DescSet.DescImagesCount + VKPipeline->Instance_DescSet.DescSamplersCount
-					+ VKPipeline->Instance_DescSet.DescSBuffersCount + VKPipeline->Instance_DescSet.DescUBuffersCount;
-				if (DescCount) {
-					VKPipeline->Instance_DescSet.Descs = new VK_Descriptor[DescCount];
+				if (VKPipeline->Instance_DescSet.DescCount) {
+					VKPipeline->Instance_DescSet.Descs = new VK_Descriptor[VKPipeline->Instance_DescSet.DescCount];
 					for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
 						const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
 						if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_PI ||
@@ -1664,7 +1656,7 @@ namespace Vulkan {
 							continue;
 						}
 
-						if (gfxdesc.BINDINGPOINT >= DescCount) {
+						if (gfxdesc.BINDINGPOINT >= VKPipeline->Instance_DescSet.DescCount) {
 							LOG_ERROR_TAPI("One of your Material Data Descriptors (Per Instance) uses a binding point that is exceeding the number of Material Data Descriptors (Per Instance). You have to use a binding point that's lower than size of the Material Data Descriptors (Per Instance)!");
 							return TAPI_FAIL;
 						}
@@ -1673,16 +1665,16 @@ namespace Vulkan {
 						VK_Descriptor& vkdesc = VKPipeline->Instance_DescSet.Descs[gfxdesc.BINDINGPOINT];
 						vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
 						switch (gfxdesc.TYPE) {
-						case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
+						case GFX_API::SHADERINPUT_TYPE::IMAGE_PI:
 							vkdesc.Type = DescType::IMAGE;
 						break;
-						case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
+						case GFX_API::SHADERINPUT_TYPE::SAMPLER_PI:
 							vkdesc.Type = DescType::SAMPLER;
 						break;
-						case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
+						case GFX_API::SHADERINPUT_TYPE::UBUFFER_PI:
 							vkdesc.Type = DescType::UBUFFER;
 						break;
-						case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
+						case GFX_API::SHADERINPUT_TYPE::SBUFFER_PI:
 							vkdesc.Type = DescType::SBUFFER;
 						break;
 						}
@@ -1721,12 +1713,12 @@ namespace Vulkan {
 				VkDescriptorSetLayout descsetlays[3] = { GlobalBuffers_DescSetLayout, VK_NULL_HANDLE, VK_NULL_HANDLE };
 				pl_ci.setLayoutCount = 1;
 				if (VKPipeline->General_DescSet.Layout != VK_NULL_HANDLE) {
-					descsetlays[1] = VKPipeline->General_DescSet.Layout;
 					pl_ci.setLayoutCount++;
+					descsetlays[1] = VKPipeline->General_DescSet.Layout;
 				}
 				if (VKPipeline->Instance_DescSet.Layout != VK_NULL_HANDLE) {
-					descsetlays[pl_ci.setLayoutCount - 1] = VKPipeline->Instance_DescSet.Layout;
 					pl_ci.setLayoutCount++;
+					descsetlays[pl_ci.setLayoutCount - 1] = VKPipeline->Instance_DescSet.Layout;
 				}
 				pl_ci.pSetLayouts = descsetlays;
 				//Don't support for now!
@@ -1835,14 +1827,12 @@ namespace Vulkan {
 		VKPInstance->DescSet.DescSamplersCount = VKPSO->Instance_DescSet.DescSamplersCount;
 		VKPInstance->DescSet.DescSBuffersCount = VKPSO->Instance_DescSet.DescSBuffersCount;
 		VKPInstance->DescSet.DescUBuffersCount = VKPSO->Instance_DescSet.DescUBuffersCount;
-		unsigned int DescCount = VKPInstance->DescSet.DescUBuffersCount + VKPInstance->DescSet.DescSBuffersCount
-			+ VKPInstance->DescSet.DescSamplersCount + VKPInstance->DescSet.DescImagesCount;
+		VKPInstance->DescSet.DescCount = VKPSO->Instance_DescSet.DescCount;
 		
-		if (DescCount) {
+		if (VKPInstance->DescSet.DescCount) {
+			VKPInstance->DescSet.Descs = new VK_Descriptor[VKPInstance->DescSet.DescCount];
 
-			VKPInstance->DescSet.Descs = new VK_Descriptor[DescCount];
-
-			for (unsigned int i = 0; i < DescCount; i++) {
+			for (unsigned int i = 0; i < VKPInstance->DescSet.DescCount; i++) {
 				VK_Descriptor& desc = VKPInstance->DescSet.Descs[i];
 				desc.ElementCount = VKPSO->Instance_DescSet.Descs[i].ElementCount;
 				desc.Type = VKPSO->Instance_DescSet.Descs[i].Type;
@@ -1883,13 +1873,11 @@ namespace Vulkan {
 			Set = &PSO->DescSet;
 		}
 
-		unsigned int DescCount = Set->DescImagesCount + Set->DescSamplersCount
-			+ Set->DescSBuffersCount + Set->DescUBuffersCount;
-		if (!DescCount) {
+		if (!Set->DescCount) {
 			LOG_ERROR_TAPI("Given Material Type/Instance doesn't have any shader input to set!");
 			return TAPI_FAIL;
 		}
-		if (BINDINDEX >= DescCount) {
+		if (BINDINDEX >= Set->DescCount) {
 			LOG_ERROR_TAPI("BINDINDEX is exceeding the shader input count in the Material Type/Instance");
 			return TAPI_FAIL;
 		}
@@ -1953,19 +1941,17 @@ namespace Vulkan {
 			Set = &PSO->DescSet;
 		}
 
-		unsigned int DescCount = Set->DescImagesCount + Set->DescSamplersCount
-			+ Set->DescSBuffersCount + Set->DescUBuffersCount;
-		if (!DescCount) {
+		if (!Set->DescCount) {
 			LOG_ERROR_TAPI("Given Material Type/Instance doesn't have any shader input to set!");
 			return TAPI_FAIL;
 		}
-		if (BINDINDEX >= DescCount) {
+		if (BINDINDEX >= Set->DescCount) {
 			LOG_ERROR_TAPI("BINDINDEX is exceeding the shader input count in the Material Type/Instance");
 			return TAPI_FAIL;
 		}
 		VK_Descriptor& Descriptor = Set->Descs[BINDINDEX];
 		if (Descriptor.Type != DescType::SAMPLER) {
-			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input (isn't pointing to an image texture!)");
+			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input (isn't pointing to an sampler texture!)");
 			return TAPI_FAIL;
 		}
 		if (ELEMENTINDEX >= Descriptor.ElementCount) {
@@ -2011,13 +1997,11 @@ namespace Vulkan {
 			Set = &PSO->DescSet;
 		}
 
-		unsigned int DescCount = Set->DescImagesCount + Set->DescSamplersCount
-			+ Set->DescSBuffersCount + Set->DescUBuffersCount;
-		if (!DescCount) {
+		if (!Set->DescCount) {
 			LOG_ERROR_TAPI("Given Material Type/Instance doesn't have any shader input to set!");
 			return TAPI_FAIL;
 		}
-		if (BINDINDEX >= DescCount) {
+		if (BINDINDEX >= Set->DescCount) {
 			LOG_ERROR_TAPI("BINDINDEX is exceeding the shader input count in the Material Type/Instance");
 			return TAPI_FAIL;
 		}

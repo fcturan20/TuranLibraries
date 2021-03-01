@@ -128,7 +128,8 @@ namespace Vulkan {
 		VkDescriptorSet Set = VK_NULL_HANDLE;
 		VkDescriptorSetLayout Layout = VK_NULL_HANDLE;
 		VK_Descriptor* Descs = nullptr;
-		unsigned int DescUBuffersCount = 0, DescSBuffersCount = 0, DescSamplersCount = 0, DescImagesCount = 0;
+		//DescCount is size of the "Descs" pointer above, others are including element counts of each descriptor
+		unsigned int DescCount = 0, DescUBuffersCount = 0, DescSBuffersCount = 0, DescSamplersCount = 0, DescImagesCount = 0;
 		std::atomic_bool ShouldRecreate = false;
 	};
 	struct VK_API VK_DescSetUpdateCall {

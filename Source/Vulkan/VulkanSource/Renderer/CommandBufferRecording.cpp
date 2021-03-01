@@ -133,8 +133,8 @@ namespace Vulkan {
 								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 3, Sets, 0, nullptr);
 							}
 							else {
-								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 1, &VKContentManager->GlobalBuffers_DescSet, 0, nullptr);
-								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 2, 1, DrawCall.PerInstanceSet, 0, nullptr);
+								VkDescriptorSet Sets[2] = { VKContentManager->GlobalBuffers_DescSet, *DrawCall.PerInstanceSet };
+								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 2, Sets, 0, nullptr);
 							}
 						}
 						else if(*DrawCall.GeneralSet){

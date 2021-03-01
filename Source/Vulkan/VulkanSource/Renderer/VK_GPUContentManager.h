@@ -34,8 +34,8 @@ namespace Vulkan {
 		//These desc sets are not used recently in draw calls. So don't go to create-update-delete process, just update.
 		TuranAPI::Threading::TLVector<VK_DescSetUpdateCall> DescSets_toJustUpdate;
 		//These are the desc sets that should be destroyed 2 frames later!
-		vector<VkDescriptorSet> UnboundDescSetList[2];
-		unsigned int UnboundDescSetImageCount[2], UnboundDescSetSamplerCount[2], UnboundDescSetUBufferCount[2], UnboundDescSetSBufferCount[2];
+		vector<VkDescriptorSet> UnboundDescSetList;
+		unsigned int UnboundDescSetImageCount, UnboundDescSetSamplerCount, UnboundDescSetUBufferCount, UnboundDescSetSBufferCount;
 
 		VK_DescPool MaterialRelated_DescPool;
 		VkDescriptorPool GlobalBuffers_DescPool;

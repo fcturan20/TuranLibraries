@@ -14,7 +14,7 @@ namespace GFX_API {
 
 
 
-	bool IMGUI_WINDOW::Get_Is_Window_Open() {
+	bool IMGUI_WINDOW::isWindowOpen() {
 		return Is_Window_Open;
 	}
 

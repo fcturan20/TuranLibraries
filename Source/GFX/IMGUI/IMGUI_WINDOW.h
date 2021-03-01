@@ -15,7 +15,7 @@ namespace GFX_API {
 		IMGUI_WINDOW(const char* name);
 
 
-		bool Get_Is_Window_Open();
+		bool isWindowOpen();
 
 		virtual ~IMGUI_WINDOW();
 	};

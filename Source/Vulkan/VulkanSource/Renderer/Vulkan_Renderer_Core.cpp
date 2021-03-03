@@ -490,6 +490,10 @@ namespace Vulkan {
 			VKDrawPass->RenderRegion.Width = SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[0].RT->WIDTH;
 			VKDrawPass->RenderRegion.Height = SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[0].RT->HEIGHT;
 		}
+		else {
+			VKDrawPass->RenderRegion.Width = SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->RT->WIDTH;
+			VKDrawPass->RenderRegion.Height = SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->RT->HEIGHT;
+		}
 		DrawPasses.push_back(VKDrawPass);
 
 
@@ -776,9 +780,9 @@ namespace Vulkan {
 			uint32_t SwapchainImage_Index;
 			vkAcquireNextImageKHR(VKGPU->Logical_Device, VKWINDOW->Window_SwapChain, UINT64_MAX,
 				Semaphores[VKWINDOW->PresentationWaitSemaphoreIndexes[2]].SPHandle, VK_NULL_HANDLE, &SwapchainImage_Index);
-			if (SwapchainImage_Index != FrameIndex) {
+			if (SwapchainImage_Index != VKWINDOW->CurrentFrameSWPCHNIndex) {
 				std::cout << "Current SwapchainImage_Index: " << SwapchainImage_Index << std::endl;
-				std::cout << "Current FrameCount: " << unsigned int(FrameIndex) << std::endl;
+				std::cout << "Current FrameCount: " << unsigned int(VKWINDOW->CurrentFrameSWPCHNIndex) << std::endl;
 				LOG_CRASHING_TAPI("Renderer's FrameCount and Vulkan's SwapchainIndex don't match, there is something missing!");
 			}
 		}
@@ -867,11 +871,11 @@ namespace Vulkan {
 			}
 
 			//Fill swapchain and image indices vectors
-			uint32_t FrameIndex_uint32_t = FrameIndex;
 			vector<VkSwapchainKHR> Swapchains;	Swapchains.resize(WP->WindowCalls[2].size());
 			vector<uint32_t> ImageIndices;		ImageIndices.resize(WP->WindowCalls[2].size());
 			for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[2].size(); WindowIndex++) {
-				ImageIndices[WindowIndex] = FrameIndex;	//All windows are using the same swapchain index, because otherwise it'd be complicated
+				ImageIndices[WindowIndex] = WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex;
+				WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex = (WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex + 1) % 2;
 				Swapchains[WindowIndex] = WP->WindowCalls[2][WindowIndex].Window->Window_SwapChain;
 			}
 
@@ -1183,7 +1187,70 @@ namespace Vulkan {
 
 		TPDatas->TextureBarriers.push_back(GFX->JobSys->GetThisThreadIndex(), im_bi);
 	}
+	void Renderer::ChangeDrawPass_RTSlotSet(GFX_API::GFXHandle DrawPassHandle, GFX_API::GFXHandle RTSlotSetHandle) {
+		VK_DrawPass* DP = GFXHandleConverter(VK_DrawPass*, DrawPassHandle);
+		VK_RTSLOTSET* slotset = GFXHandleConverter(VK_RTSLOTSET*, RTSlotSetHandle);
 
+		//Check if slotsets are compatible
+		if (slotset->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT == DP->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT) {
+			if ((slotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT && !DP->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) ||
+				(!slotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT && DP->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT)) {
+				LOG_ERROR_TAPI("ChangeDrawPass_RTSlotSet() has failed because slotsets are not compatible in depth slots");
+				return;
+			}
+		}
+		else {
+			LOG_ERROR_TAPI("ChangeDrawPass_RTSlotSet() has failed because slotsets are not compatible in color slots count!");
+			return;
+		}
+		for (unsigned char SlotSetIndex = 0; SlotSetIndex < 2; SlotSetIndex++) {
+			for (unsigned int ColorSlotIndex = 0; ColorSlotIndex < slotset->PERFRAME_SLOTSETs[SlotSetIndex].COLORSLOTs_COUNT; ColorSlotIndex++) {
+				VK_COLORRTSLOT& targetslot = slotset->PERFRAME_SLOTSETs[SlotSetIndex].COLOR_SLOTs[ColorSlotIndex];
+				VK_COLORRTSLOT& referenceslot = DP->SLOTSET->PERFRAME_SLOTSETs[SlotSetIndex].COLOR_SLOTs[ColorSlotIndex];
+				if (targetslot.RT->CHANNELs != referenceslot.RT->CHANNELs ||
+					targetslot.IS_USED_LATER != referenceslot.IS_USED_LATER ||
+					targetslot.LOADSTATE != referenceslot.LOADSTATE ||
+					targetslot.RT_OPERATIONTYPE != referenceslot.RT_OPERATIONTYPE ||
+					targetslot.CLEAR_COLOR != referenceslot.CLEAR_COLOR) {
+					LOG_ERROR_TAPI("ChangeDrawPass_RTSlotSet() has failed because one of the color slots is incompatible!");
+					return;
+				}
+			}
+		}
+		if (slotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
+			VK_DEPTHSTENCILSLOT* targetslot = slotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT;
+			VK_DEPTHSTENCILSLOT* referenceslot = DP->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT;
+			if (targetslot->RT->CHANNELs != referenceslot->RT->CHANNELs ||
+				targetslot->IS_USED_LATER != referenceslot->IS_USED_LATER ||
+				targetslot->DEPTH_LOAD != referenceslot->DEPTH_LOAD ||
+				targetslot->DEPTH_OPTYPE != referenceslot->DEPTH_OPTYPE ||
+				targetslot->STENCIL_LOAD != referenceslot->STENCIL_LOAD ||
+				targetslot->STENCIL_OPTYPE != referenceslot->STENCIL_OPTYPE ||
+				targetslot->CLEAR_COLOR != referenceslot->CLEAR_COLOR) {
+				LOG_ERROR_TAPI("ChangeDrawPass_RTSlotSet() has failed because depth slot is incompatible!");
+				return;
+			}
+		}
+
+		unsigned char raceinfo = DP->SlotSetChanged.load();
+		if (raceinfo == 3) {
+			LOG_WARNING_TAPI("You already changed the slotset this frame, second time isn't allowed!");
+			return;
+		}
+		else if(raceinfo > 3){
+			LOG_CRASHING_TAPI("There is an issue to fix in vulkan backend!");
+			return;
+		}
+		else if(!DP->SlotSetChanged.compare_exchange_strong(raceinfo, 3)){
+			LOG_WARNING_TAPI("You are changing the draw pass' RTSlotSet concurrently between threads, only one of them succeeds!");
+			return;
+		}
+		else {
+			DP->RenderRegion.Width = slotset->FB_ci->width;
+			DP->RenderRegion.Height = slotset->FB_ci->height;
+			DP->SLOTSET = slotset;
+		}
+	}
 
 
 

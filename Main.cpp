@@ -1,12 +1,81 @@
 #include "Source/Main.h"
 using namespace TuranEditor;
 
+//Useful rendergraph handles to use later
+GFX_API::GFXHandle DEPTHRT, FIRSTDRAWPASS_ID, WorldSubpassID, IMGUISubpassID, WP_ID, BarrierBeforeUpload_ID, UploadTP_ID, BarrierAfterUpload_ID, BarrierAfterDraw_ID, RTSlotSet_ID;
+//Window handles
+GFX_API::GFXHandle AlitaSwapchains[2], AlitaWindowHandle;
+
+void Create_RTSlotSet_forFirstDrawPass(unsigned int WIDTH, unsigned int HEIGHT, GFX_API::GFXHandle& SlotSetID, GFX_API::GFXHandle& DepthRT) {
+	vector<GFX_API::RTSLOT_Description> RTSlots;
+	GFX_API::Texture_Description DEPTH_desc;
+	DEPTH_desc.WIDTH = WIDTH;
+	DEPTH_desc.HEIGHT = HEIGHT;
+	DEPTH_desc.USAGE.isRenderableTo = true;
+	DEPTH_desc.Properties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8;
+	DEPTH_desc.Properties.DATAORDER = GFX_API::TEXTURE_ORDER::SWIZZLE;
+	DEPTH_desc.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
+	DEPTH_desc.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP;
+	DEPTH_desc.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
+	if (GFXContentManager->Create_Texture(DEPTH_desc, 0, DepthRT) != TAPI_SUCCESS) {
+		LOG_CRASHING_TAPI("Creation of the depth RT has failed!");
+	}
+
+
+	GFX_API::RTSLOT_Description SWPCHNSLOT;
+	SWPCHNSLOT.CLEAR_VALUE = vec4(0.1f, 0.5f, 0.5f, 1.0f);
+	SWPCHNSLOT.LOADOP = GFX_API::DRAWPASS_LOAD::CLEAR;
+	SWPCHNSLOT.OPTYPE = GFX_API::OPERATION_TYPE::READ_AND_WRITE;
+	SWPCHNSLOT.TextureHandles[0] = AlitaSwapchains[0];
+	SWPCHNSLOT.TextureHandles[1] = AlitaSwapchains[1];
+	SWPCHNSLOT.isUSEDLATER = true;
+	SWPCHNSLOT.SLOTINDEX = 0;
+	RTSlots.push_back(SWPCHNSLOT);
+
+
+	GFX_API::RTSLOT_Description DEPTHSLOT;
+	DEPTHSLOT.CLEAR_VALUE = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	DEPTHSLOT.LOADOP = GFX_API::DRAWPASS_LOAD::CLEAR;
+	DEPTHSLOT.LOADOPSTENCIL = GFX_API::DRAWPASS_LOAD::LOAD;
+	DEPTHSLOT.OPTYPESTENCIL = GFX_API::OPERATION_TYPE::READ_ONLY;
+	DEPTHSLOT.OPTYPE = GFX_API::OPERATION_TYPE::READ_AND_WRITE;
+	DEPTHSLOT.isUSEDLATER = true;
+	DEPTHSLOT.SLOTINDEX = 0;	//Depth RTSlot's SLOTINDEX is ignored because you can only have one depth buffer at the same slot set
+	DEPTHSLOT.TextureHandles[0] = DepthRT;
+	DEPTHSLOT.TextureHandles[1] = DepthRT;
+	RTSlots.push_back(DEPTHSLOT);
+
+	if (GFXContentManager->Create_RTSlotset(RTSlots, SlotSetID) != TAPI_SUCCESS) {
+		LOG_CRASHING_TAPI("RT SlotSet creation has failed!");
+	}
+}
+
+bool isWindowResized = false;
+void WindowResizeCallback(GFX_API::GFXHandle WindowHandle, void* UserPointer, unsigned int WIDTH, unsigned int HEIGHT, GFX_API::GFXHandle* SwapchainTextureHandles) {
+	AlitaSwapchains[0] = SwapchainTextureHandles[0];
+	AlitaSwapchains[1] = SwapchainTextureHandles[1];
+
+	GFX_API::GFXHandle NewSlotSetID, NewDepthRT;
+	Create_RTSlotSet_forFirstDrawPass(WIDTH, HEIGHT, NewSlotSetID, NewDepthRT);
+	GFXRENDERER->ChangeDrawPass_RTSlotSet(FIRSTDRAWPASS_ID, NewSlotSetID);
+	//GFXContentManager->Delete_RTSlotSet(RTSlotSet_ID);
+	//GFXContentManager->Delete_Texture(DEPTHRT, true);
+	DEPTHRT = NewDepthRT;
+	RTSlotSet_ID = NewSlotSetID;
+	GFXRENDERER->ImageBarrier(DEPTHRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::DEPTHREADWRITE_STENCILREAD, 0, BarrierAfterUpload_ID);
+	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
+	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
+
+
+
+	isWindowResized = true;
+}
+
 void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	Editor_System Systems(JobSystem);
 
 
 	//Create Alita Window
-	GFX_API::GFXHandle AlitaSwapchains[2], AlitaWindowHandle;
 	{
 		GFX_API::WindowDescription WindowDesc;
 		WindowDesc.WIDTH = 1280; WindowDesc.HEIGHT = 720; WindowDesc.MODE = GFX_API::WINDOW_MODE::WINDOWED;
@@ -15,6 +84,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		WindowDesc.SWAPCHAINUSAGEs.isRenderableTo = true;
 		WindowDesc.SWAPCHAINUSAGEs.isRandomlyWrittenTo = true;
 		WindowDesc.SWAPCHAINUSAGEs.isSampledReadOnly = true;
+		WindowDesc.resize_cb = WindowResizeCallback;
 		GFX_API::Texture_Properties SwapchainProperties;
 		AlitaWindowHandle = GFX->CreateWindow(WindowDesc, AlitaSwapchains, SwapchainProperties);
 	}
@@ -25,13 +95,9 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		3, FirstGlobalBuffer);
 
 
-	//Useful rendergraph handles to use later
-	GFX_API::GFXHandle DEPTHRT, WorldSubpassID, IMGUISubpassID, WP_ID, BarrierBeforeUpload_ID, UploadTP_ID, BarrierAfterUpload_ID, BarrierAfterDraw_ID, RTSlotSet_ID;
 
 	//RenderGraph Construction
 	{
-		//Handles that're not used outside of the function
-		GFX_API::GFXHandle FIRSTDRAWPASS_ID;
 
 		GFXRENDERER->Start_RenderGraphConstruction();
 
@@ -75,50 +141,9 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		}
 
 		//Create RTs, Base RTSlotSet and the inherited one!
-		vector<GFX_API::RTSLOT_Description> RTSlots;
 		GFX_API::GFXHandle ISlotSetID;
 		{
-			GFX_API::Texture_Description DEPTH_desc;
-			DEPTH_desc.WIDTH = 1280;
-			DEPTH_desc.HEIGHT = 720;
-			DEPTH_desc.USAGE.isRenderableTo = true;
-			DEPTH_desc.Properties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8;
-			DEPTH_desc.Properties.DATAORDER = GFX_API::TEXTURE_ORDER::SWIZZLE;
-			DEPTH_desc.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
-			DEPTH_desc.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP;
-			DEPTH_desc.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
-			if (GFXContentManager->Create_Texture(DEPTH_desc, 0, DEPTHRT) != TAPI_SUCCESS) {
-				LOG_CRASHING_TAPI("Creation of the depth RT has failed!");
-			}
-
-
-			GFX_API::RTSLOT_Description SWPCHNSLOT;
-			SWPCHNSLOT.CLEAR_VALUE = vec4(0.1f, 0.5f, 0.5f, 1.0f);
-			SWPCHNSLOT.LOADOP = GFX_API::DRAWPASS_LOAD::CLEAR;
-			SWPCHNSLOT.OPTYPE = GFX_API::OPERATION_TYPE::READ_AND_WRITE;
-			SWPCHNSLOT.TextureHandles[0] = AlitaSwapchains[0];
-			SWPCHNSLOT.TextureHandles[1] = AlitaSwapchains[1];
-			SWPCHNSLOT.isUSEDLATER = true;
-			SWPCHNSLOT.SLOTINDEX = 0;
-			RTSlots.push_back(SWPCHNSLOT);
-
-
-			GFX_API::RTSLOT_Description DEPTHSLOT;
-			DEPTHSLOT.CLEAR_VALUE = vec4(1.0f, 1.0f, 1.0f, 1.0f);
-			DEPTHSLOT.LOADOP = GFX_API::DRAWPASS_LOAD::CLEAR;
-			DEPTHSLOT.LOADOPSTENCIL = GFX_API::DRAWPASS_LOAD::LOAD;
-			DEPTHSLOT.OPTYPESTENCIL = GFX_API::OPERATION_TYPE::READ_ONLY;
-			DEPTHSLOT.OPTYPE = GFX_API::OPERATION_TYPE::READ_AND_WRITE;
-			DEPTHSLOT.isUSEDLATER = true;
-			DEPTHSLOT.SLOTINDEX = 0;	//Depth RTSlot's SLOTINDEX is ignored because you can only have one depth buffer at the same slot set
-			DEPTHSLOT.TextureHandles[0] = DEPTHRT;
-			DEPTHSLOT.TextureHandles[1] = DEPTHRT;
-			RTSlots.push_back(DEPTHSLOT);
-
-			if (GFXContentManager->Create_RTSlotset(RTSlots, RTSlotSet_ID) != TAPI_SUCCESS) {
-				LOG_CRASHING_TAPI("RT SlotSet creation has failed!");
-			}
-
+			Create_RTSlotSet_forFirstDrawPass(1280, 720, RTSlotSet_ID, DEPTHRT);
 
 			GFX_API::RTSLOTUSAGE_Description IRT_SWPCHNSLOT;
 			IRT_SWPCHNSLOT.IS_DEPTH = false;
@@ -287,7 +312,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			first_desc.ELEMENTCOUNT = 1;
 			first_desc.NAME = "FirstSampledTexture";
 			first_desc.SHADERSTAGEs.FRAGMENTSHADER = true;
-			first_desc.TYPE = GFX_API::SHADERINPUT_TYPE::IMAGE_PI;
+			first_desc.TYPE = GFX_API::SHADERINPUT_TYPE::IMAGE_G;
 			MATTYPE.MATERIALTYPEDATA.push_back(first_desc);
 		}
 		MATTYPE.ATTRIBUTELAYOUT_ID = MESH_VAL;
@@ -315,7 +340,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		if (GFXContentManager->Create_MaterialInst(TEXTUREDISPLAY_MATTYPE, TEXTUREDISPLAY_MATINST) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Texture Display Material Instance creation has failed!");
 		}
-		if (GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATINST, false, false, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE) != TAPI_SUCCESS) {
+		if (GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Texture Display Material Instance's Alita image texture setting has failed!");
 		}
 	}
@@ -362,18 +387,22 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 		
 		if (i % 2) {
-			GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATINST, false, true, 0, 0, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE);
+			GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATTYPE, true, true, 0, 0, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE);
 		}
 		else {
-			GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATINST, false, true, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE);
+			GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATTYPE, true, true, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE);
 		}
 		IMGUI_RUNWINDOWS();
-		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierBeforeUpload_ID);
+		if (!isWindowResized) {
+			GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierBeforeUpload_ID);
+		}
+		else {
+			isWindowResized = false;
+		}
 		GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 1, 0, TEXTUREDISPLAY_MATINST, WorldSubpassID);
 		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, 0, BarrierAfterDraw_ID);
 		GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 		GFXRENDERER->Run();
-
 
 		//Take inputs by GFX API specific library that supports input (For now, just GLFW for OpenGL4) and send it to Engine!
 		//In final product, directly OS should be used to take inputs!

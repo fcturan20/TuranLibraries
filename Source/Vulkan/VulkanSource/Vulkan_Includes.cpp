@@ -1,5 +1,6 @@
 #include "Vulkan_Includes.h"
 #include "Renderer/Vulkan_Resource.h"
+#include <numeric>
 #define VKGPU ((Vulkan::GPU*)GFX->GPU_TO_RENDER)
 
 namespace Vulkan {
@@ -902,6 +903,76 @@ namespace Vulkan {
 			break;
 		default:
 			break;
+		}
+	}
+
+	//Don't use this functions outside of the FindAvailableOffset
+	VkDeviceSize CalculateOffset(VkDeviceSize baseoffset, VkDeviceSize AlignmentOffset, VkDeviceSize ReqAlignment) {
+		VkDeviceSize FinalOffset = 0;
+		VkDeviceSize LCM = std::lcm(AlignmentOffset, ReqAlignment);
+		FinalOffset = (baseoffset % LCM) ? (((baseoffset / LCM) + 1) * LCM) : baseoffset;
+		return FinalOffset;
+	}
+	VkDeviceSize VK_MemoryAllocation::FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
+		VkDeviceSize FurthestOffset = 0;
+		if (AlignmentOffset && !RequiredAlignment) {
+			RequiredAlignment = AlignmentOffset;
+		}
+		else if (!AlignmentOffset && RequiredAlignment) {
+			AlignmentOffset = RequiredAlignment;
+		}
+		else if (!AlignmentOffset && !RequiredAlignment) {
+			AlignmentOffset = 1;
+			RequiredAlignment = 1;
+		}
+		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+			for (unsigned int i = 0; i < Allocated_Blocks.size(ThreadID); i++) {
+				VK_SubAllocation& Block = Allocated_Blocks.get(ThreadID, i);
+				if (FurthestOffset <= Block.Offset) {
+					FurthestOffset = Block.Offset + Block.Size;
+				}
+				if (!Block.isEmpty.load()) {
+					continue;
+				}
+
+				VkDeviceSize Offset = CalculateOffset(Block.Offset, AlignmentOffset, RequiredAlignment);
+
+				if (Offset + RequiredSize - Block.Offset > Block.Size ||
+					Offset + RequiredSize - Block.Offset < (Block.Size / 5) * 3) {
+					continue;
+				}
+				bool x = true, y = false;
+				//Try to get the block first (Concurrent usages are prevented that way)
+				if (!Block.isEmpty.compare_exchange_strong(x, y)) {
+					continue;
+				}
+				//Don't change the block's own offset, because that'd probably cause shifting offset the memory block after free-reuse-free-reuse sequences
+				return Offset;
+			}
+		}
+
+		//None of the current blocks is suitable, so create a new block in this thread's local memoryblocks list
+		VK_SubAllocation newblock;
+		newblock.isEmpty.store(false);
+		newblock.Offset = CalculateOffset(FurthestOffset, AlignmentOffset, RequiredAlignment);
+		newblock.Size = RequiredSize + newblock.Offset - FurthestOffset;
+		Allocated_Blocks.push_back(GFX->JobSys->GetThisThreadIndex(), newblock);
+		return newblock.Offset;
+	}
+	void VK_MemoryAllocation::FreeBlock(VkDeviceSize Offset) {
+		std::unique_lock<std::mutex> Locker;
+		Allocated_Blocks.PauseAllOperations(Locker);
+		for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+			for (unsigned int i = 0; i < Allocated_Blocks.size(ThreadID); i++) {
+				VK_SubAllocation& Block = Allocated_Blocks.get(ThreadID, i);
+				if (Block.isEmpty.load()) {
+					continue;
+				}
+				if (Block.Offset <= Offset && Block.Offset + Block.Size > Offset) {
+					Block.isEmpty.store(true);
+					return;
+				}
+			}
 		}
 	}
 }

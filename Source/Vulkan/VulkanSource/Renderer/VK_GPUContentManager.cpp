@@ -1,7 +1,6 @@
 #include "VK_GPUContentManager.h"
 #include "Vulkan_Renderer_Core.h"
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
-#include <numeric>
 #define VKRENDERER ((Vulkan::Renderer*)GFXRENDERER)
 #define VKGPU (((Vulkan::Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
 
@@ -35,7 +34,8 @@ namespace Vulkan {
 	}
 	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), INDEXBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
 		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys), STAGINGBUFFERs(*GFX->JobSys),
-		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys), IRT_SLOTSETs(*GFX->JobSys) {
+		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys), IRT_SLOTSETs(*GFX->JobSys),
+		DeleteTextureList(*GFX->JobSys), NextFrameDeleteTextureCalls(*GFX->JobSys){
 
 		for (unsigned int allocindex = 0; allocindex < VKGPU->ALLOCs.size(); allocindex++) {
 			VK_MemoryAllocation& ALLOC = VKGPU->ALLOCs[allocindex];
@@ -319,7 +319,6 @@ namespace Vulkan {
 			CopyTargetSets.push_back(&Set.Set);
 		}
 	}
-	//Backup
 	void GPU_ContentManager::Apply_ResourceChanges() {
 		const unsigned char FrameIndex = VKRENDERER->GetCurrentFrameIndex();
 		//Handle Descriptor Sets
@@ -536,27 +535,60 @@ namespace Vulkan {
 		}
 
 		//Handle RTSlotSet changes by recreating framebuffers of draw passes
+		//by "RTSlotSet changes": DrawPass' slotset is changed to different one or slotset's slots is changed.
 		for (unsigned int DrawPassIndex = 0; DrawPassIndex < VKRENDERER->DrawPasses.size(); DrawPassIndex++) {
 			VK_DrawPass* DP = VKRENDERER->DrawPasses[DrawPassIndex];
-			if (!DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.load()) {
-				continue;
-			}
+			unsigned char ChangeInfo = DP->SlotSetChanged.load();
+			if (ChangeInfo == FrameIndex + 1 || ChangeInfo == 3 || DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.load()) {
+				//This is safe because this FB is used 2 frames ago and CPU already waits for the frame's GPU process to end
+				vkDestroyFramebuffer(VKGPU->Logical_Device, DP->FBs[FrameIndex], nullptr);
 
-			//This is safe because this FB is used 2 frames ago and CPU already waits for the frame's GPU process to end
-			vkDestroyFramebuffer(VKGPU->Logical_Device, DP->FBs[FrameIndex], nullptr);
+				VkFramebufferCreateInfo fb_ci = DP->SLOTSET->FB_ci[FrameIndex];
+				fb_ci.renderPass = DP->RenderPassObject;
+				if (vkCreateFramebuffer(VKGPU->Logical_Device, &fb_ci, nullptr, &DP->FBs[FrameIndex]) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("vkCreateFramebuffer() has failed while changing one of the drawpasses' current frame slot's texture! Please report this!");
+					return;
+				}
 
-			VkFramebufferCreateInfo fb_ci = DP->SLOTSET->FB_ci[FrameIndex];
-			fb_ci.renderPass = DP->RenderPassObject;
-			if (vkCreateFramebuffer(VKGPU->Logical_Device, &fb_ci, nullptr, &DP->FBs[FrameIndex]) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("vkCreateFramebuffer() has failed while changing one of the drawpasses' current frame slot's texture! Please report this!");
-				return;
-			}
+				DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.store(false);
+				for (unsigned int SlotIndex = 0; SlotIndex < DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].COLORSLOTs_COUNT; SlotIndex++) {
+					DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].COLOR_SLOTs[SlotIndex].IsChanged.store(false);
+				}
 
-			DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.store(false);
-			for (unsigned int SlotIndex = 0; SlotIndex < DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].COLORSLOTs_COUNT; SlotIndex++) {
-				DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].COLOR_SLOTs[SlotIndex].IsChanged.store(false);
+				if (ChangeInfo) {
+					DP->SlotSetChanged.store(ChangeInfo - FrameIndex - 1);
+				}
 			}
 		}
+
+		//Delete textures
+		{
+			std::unique_lock<std::mutex> Locker;
+			DeleteTextureList.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < DeleteTextureList.size(ThreadID); i++) {
+					VK_Texture* Texture = DeleteTextureList.get(ThreadID, i);
+					vkDestroyImageView(VKGPU->Logical_Device, Texture->ImageView, nullptr);
+					vkDestroyImage(VKGPU->Logical_Device, Texture->Image, nullptr);
+					VKGPU->ALLOCs[Texture->Block.MemAllocIndex].FreeBlock(Texture->Block.Offset);
+					delete Texture;
+				}
+				DeleteTextureList.clear(ThreadID);
+			}
+		}
+		//Push next frame delete texture list to the delete textures list
+		{
+			std::unique_lock<std::mutex> Locker;
+			NextFrameDeleteTextureCalls.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int i = 0; i < NextFrameDeleteTextureCalls.size(ThreadID); i++) {
+					DeleteTextureList.push_back(0, NextFrameDeleteTextureCalls.get(ThreadID, i));
+				}
+				NextFrameDeleteTextureCalls.clear(ThreadID);
+			}
+		}
+
+
 	}
 	
 	void GPU_ContentManager::Resource_Finalizations() {
@@ -693,60 +725,6 @@ namespace Vulkan {
 		}
 	}
 	
-	//Don't use this functions outside of the FindAvailableOffset
-	VkDeviceSize CalculateOffset(VkDeviceSize baseoffset, VkDeviceSize AlignmentOffset, VkDeviceSize ReqAlignment) {
-		VkDeviceSize FinalOffset = 0;
-		VkDeviceSize LCM = std::lcm(AlignmentOffset, ReqAlignment);
-		FinalOffset = (baseoffset % LCM) ? (((baseoffset / LCM) + 1) * LCM) : baseoffset;
-		return FinalOffset;
-	}
-	//Use this function in Suballocate_Buffer and Suballocate_Image after you're sure that you have enough memory in the allocation
-	VkDeviceSize FindAvailableOffset(VK_MemoryAllocation* MEMALLOC, VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
-		VkDeviceSize FurthestOffset = 0;
-		if (AlignmentOffset && !RequiredAlignment) {
-			RequiredAlignment = AlignmentOffset;
-		}
-		else if (!AlignmentOffset && RequiredAlignment) {
-			AlignmentOffset = RequiredAlignment;
-		}
-		else if(!AlignmentOffset && !RequiredAlignment){
-			AlignmentOffset = 1;
-			RequiredAlignment = 1;
-		}
-		for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-			for (unsigned int i = 0; i < MEMALLOC->Allocated_Blocks.size(ThreadID); i++) {
-				VK_SubAllocation& Block = MEMALLOC->Allocated_Blocks.get(ThreadID, i);
-				if (FurthestOffset <= Block.Offset) {
-					FurthestOffset = Block.Offset + Block.Size;
-				}
-				if (!Block.isEmpty.load()) {
-					continue;
-				}
-
-				VkDeviceSize Offset = CalculateOffset(Block.Offset, AlignmentOffset, RequiredAlignment);
-
-				if (Offset + RequiredSize - Block.Offset > Block.Size || 
-					Offset + RequiredSize - Block.Offset < (Block.Size / 5) * 3) {
-					continue;
-				}
-				bool x = true, y = false;
-				//Try to get the block first (Concurrent usages are prevented that way)
-				if (!Block.isEmpty.compare_exchange_strong(x, y)) {
-					continue;
-				}
-				//Don't change the block's own offset, because that'd probably cause shifting offset the memory block after free-reuse-free-reuse sequences
-				return Offset;
-			}
-		}
-
-		//None of the current blocks is suitable, so create a new block in this thread's local memoryblocks list
-		VK_SubAllocation newblock;
-		newblock.isEmpty.store(false);
-		newblock.Offset = CalculateOffset(FurthestOffset, AlignmentOffset, RequiredAlignment);
-		newblock.Size = RequiredSize + newblock.Offset - FurthestOffset;
-		MEMALLOC->Allocated_Blocks.push_back(GFX->JobSys->GetThisThreadIndex(), newblock);
-		return newblock.Offset;
-	}
 	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, MemoryBlock& Block) {
 		VkMemoryRequirements bufferreq;
 		vkGetBufferMemoryRequirements(VKGPU->Logical_Device, BUFFER, &bufferreq);
@@ -771,7 +749,7 @@ namespace Vulkan {
 		}
 
 
-		Block.Offset = FindAvailableOffset(MEMALLOC, bufferreq.size, AlignmentOffset_ofGPU, bufferreq.alignment);
+		Block.Offset = MEMALLOC->FindAvailableOffset(bufferreq.size, AlignmentOffset_ofGPU, bufferreq.alignment);
 		return TAPI_SUCCESS;
 	}
 	VkMemoryPropertyFlags ConvertGFXMemoryType_toVulkan(GFX_API::SUBALLOCATEBUFFERTYPEs type) {
@@ -805,7 +783,7 @@ namespace Vulkan {
 			LOG_ERROR_TAPI("Buffer doesn't fit the remaining memory allocation! SuballocateBuffer has failed.");
 			return TAPI_FAIL;
 		}
-		Offset = FindAvailableOffset(MEMALLOC, req.size, 0, req.alignment);
+		Offset = MEMALLOC->FindAvailableOffset(req.size, 0, req.alignment);
 
 		if (vkBindImageMemory(VKGPU->Logical_Device, Texture.Image, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("VKContentManager->Suballocate_Image() has failed at VkBindImageMemory()!");
@@ -1197,8 +1175,18 @@ namespace Vulkan {
 		LOG_NOTCODED_TAPI("GFXContentManager->Upload_Texture(): Uploading the data isn't coded yet!", true);
 		return TAPI_NOTCODED;
 	}
-	void GPU_ContentManager::Unload_Texture(GFX_API::GFXHandle ASSET_ID) {
-		LOG_NOTCODED_TAPI("GFXContentManager->Unload_Texture() isn't coded!", true);
+	void GPU_ContentManager::Delete_Texture(GFX_API::GFXHandle TextureHandle, bool isUsedLastFrame) {
+		if (!TextureHandle) {
+			return;
+		}
+		VK_Texture* Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
+
+		if (isUsedLastFrame) {
+			NextFrameDeleteTextureCalls.push_back(GFX->JobSys->GetThisThreadIndex(), Texture);
+		}
+		else {
+			DeleteTextureList.push_back(GFX->JobSys->GetThisThreadIndex(), Texture);
+		}
 	}
 
 
@@ -2044,11 +2032,6 @@ namespace Vulkan {
 	}
 
 	TAPIResult GPU_ContentManager::Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) {
-		if (!VKRENDERER->Is_ConstructingRenderGraph()) {
-			LOG_ERROR_TAPI("GFXContentManager->Create_RTSlotSet() has failed because you can't create a RTSlotSet if you aren't constructing a RenderGraph!");
-			return TAPI_FAIL;
-		}
-
 		for (unsigned int SlotIndex = 0; SlotIndex < Descriptions.size(); SlotIndex++) {
 			const GFX_API::RTSLOT_Description& desc = Descriptions[SlotIndex];
 			VK_Texture* FirstHandle = GFXHandleConverter(VK_Texture*, desc.TextureHandles[0]);
@@ -2334,4 +2317,24 @@ namespace Vulkan {
 		return TAPI_SUCCESS;
 	}
 
+	void GPU_ContentManager::Delete_RTSlotSet(GFX_API::GFXHandle RTSlotSetHandle) {
+		if (!RTSlotSetHandle) {
+			return;
+		}
+		VK_RTSLOTSET* SlotSet = GFXHandleConverter(VK_RTSLOTSET*, RTSlotSetHandle);
+
+		delete[] SlotSet->PERFRAME_SLOTSETs[0].COLOR_SLOTs;
+		delete SlotSet->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT;
+		delete[] SlotSet->PERFRAME_SLOTSETs[1].COLOR_SLOTs;
+		delete SlotSet->PERFRAME_SLOTSETs[1].DEPTHSTENCIL_SLOT;
+		delete SlotSet;
+
+		unsigned char ThreadID = 0;
+		unsigned int ElementIndex = 0;
+		if (RT_SLOTSETs.SearchAllThreads(SlotSet, ThreadID, ElementIndex)) {
+			std::unique_lock<std::mutex> Locker;
+			RT_SLOTSETs.PauseAllOperations(Locker);
+			RT_SLOTSETs.erase(ThreadID, ElementIndex);
+		}
+	}
 }

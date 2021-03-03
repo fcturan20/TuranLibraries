@@ -26,6 +26,9 @@ namespace Vulkan {
 		//Suballocate and bind memory to VkImage object
 		TAPIResult				Suballocate_Image(VK_Texture& Texture);
 
+
+		//DESCRIPTOR RELATED DATAs
+
 		//This vector contains descriptor sets that are for material types/instances that are created this frame
 		TuranAPI::Threading::TLVector<VK_DescSet*> DescSets_toCreate;
 		//This vector contains descriptor sets that needs update
@@ -33,19 +36,21 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_DescSetUpdateCall> DescSets_toCreateUpdate;
 		//These desc sets are not used recently in draw calls. So don't go to create-update-delete process, just update.
 		TuranAPI::Threading::TLVector<VK_DescSetUpdateCall> DescSets_toJustUpdate;
-		//These are the desc sets that should be destroyed 2 frames later!
+		//These are the desc sets that should be destroyed next frame!
 		vector<VkDescriptorSet> UnboundDescSetList;
 		unsigned int UnboundDescSetImageCount, UnboundDescSetSamplerCount, UnboundDescSetUBufferCount, UnboundDescSetSBufferCount;
-
 		VK_DescPool MaterialRelated_DescPool;
 		VkDescriptorPool GlobalBuffers_DescPool;
 		VkDescriptorSet GlobalBuffers_DescSet;
 		VkDescriptorSetLayout	GlobalBuffers_DescSetLayout;
 		bool Create_DescSet(VK_DescSet* Set);
-
 		//Create Global descriptor sets
 		void Resource_Finalizations();
 
+		//These are the textures that will be deleted after waiting for 2 frames ago's command buffer
+		TuranAPI::Threading::TLVector<VK_Texture*> DeleteTextureList;
+		//These are the texture that will be added to the list above after clearing the above list
+		TuranAPI::Threading::TLVector<VK_Texture*> NextFrameDeleteTextureCalls;
 
 		//Apply changes in Descriptor Sets, RTSlotSets
 		void Apply_ResourceChanges();
@@ -88,7 +93,7 @@ namespace Vulkan {
 		virtual TAPIResult Create_Texture(const GFX_API::Texture_Description& TEXTURE_ASSET, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& TextureHandle) override;
 		virtual TAPIResult Upload_Texture(GFX_API::GFXHandle BufferHandle, const void* InputData,
 			unsigned int DataSize, unsigned int TargetOffset) override;
-		virtual void Unload_Texture(GFX_API::GFXHandle TEXTUREHANDLE) override;
+		virtual void Delete_Texture(GFX_API::GFXHandle TEXTUREHANDLE, bool isUsedLastFrame) override;
 
 
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
@@ -114,5 +119,6 @@ namespace Vulkan {
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) override;
 		virtual TAPIResult Change_RTSlotTexture(GFX_API::GFXHandle RTSlotHandle, bool isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, GFX_API::GFXHandle TextureHandle) override;
 		virtual TAPIResult Inherite_RTSlotSet(const vector<GFX_API::RTSLOTUSAGE_Description>& Descriptions, GFX_API::GFXHandle RTSlotSetHandle, GFX_API::GFXHandle& InheritedSlotSetHandle) override;
-	};
+		virtual void Delete_RTSlotSet(GFX_API::GFXHandle RTSlotSetHandle) override;
+};
 }

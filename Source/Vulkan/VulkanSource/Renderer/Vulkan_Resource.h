@@ -255,6 +255,7 @@ namespace Vulkan {
 		VkRenderPass RenderPassObject;
 
 		VK_RTSLOTSET* SLOTSET;
+		std::atomic<unsigned char> SlotSetChanged = false;
 		unsigned char Subpass_Count;
 		VK_SubDrawPass* Subpasses;
 		VkFramebuffer FBs[2];

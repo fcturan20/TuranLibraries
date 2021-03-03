@@ -388,20 +388,166 @@ namespace Vulkan {
 		LOG_STATUS_TAPI("Finished checking Computer Specifications!");
 	}
 
+	bool Vulkan_Core::Create_WindowSwapchain(WINDOW* Vulkan_Window, unsigned int WIDTH, unsigned int HEIGHT, VkSwapchainKHR* SwapchainOBJ, GFX_API::GFXHandle* SwapchainTextureHandles) {
+		GPU* Vulkan_GPU = VK_States.GPU_TO_RENDER;
+
+		//Choose Surface Format
+		VkSurfaceFormatKHR Window_SurfaceFormat = {};
+		for (unsigned int i = 0; i < Vulkan_Window->SurfaceFormats.size(); i++) {
+			VkSurfaceFormatKHR& SurfaceFormat = Vulkan_Window->SurfaceFormats[i];
+			if (SurfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM && SurfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+				Window_SurfaceFormat = SurfaceFormat;
+			}
+		}
+
+		//Choose Surface Presentation Mode
+		VkPresentModeKHR Window_PresentationMode = {};
+		for (unsigned int i = 0; i < Vulkan_Window->PresentationModes.size(); i++) {
+			VkPresentModeKHR& PresentationMode = Vulkan_Window->PresentationModes[i];
+			if (PresentationMode == VK_PRESENT_MODE_FIFO_KHR) {
+				Window_PresentationMode = PresentationMode;
+			}
+		}
+
+
+		VkExtent2D Window_ImageExtent = { WIDTH, HEIGHT };
+		uint32_t image_count = 0;
+		if (Vulkan_Window->SurfaceCapabilities.maxImageCount > Vulkan_Window->SurfaceCapabilities.minImageCount) {
+			image_count = 2;
+		}
+		else {
+			LOG_NOTCODED_TAPI("VulkanCore: Window Surface Capabilities have issues, maxImageCount <= minImageCount!", true);
+			return false;
+		}
+		VkSwapchainCreateInfoKHR swpchn_ci = {};
+		swpchn_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+		swpchn_ci.flags = 0;
+		swpchn_ci.pNext = nullptr;
+		swpchn_ci.presentMode = Window_PresentationMode;
+		swpchn_ci.surface = Vulkan_Window->Window_Surface;
+		swpchn_ci.minImageCount = image_count;
+		swpchn_ci.imageFormat = Window_SurfaceFormat.format;
+		swpchn_ci.imageColorSpace = Window_SurfaceFormat.colorSpace;
+		swpchn_ci.imageExtent = Window_ImageExtent;
+		swpchn_ci.imageArrayLayers = 1;
+		swpchn_ci.imageUsage = 0;
+		if (Vulkan_Window->SWAPCHAINUSAGE.isCopiableFrom) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		}
+		if (Vulkan_Window->SWAPCHAINUSAGE.isCopiableTo) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		}
+		if (Vulkan_Window->SWAPCHAINUSAGE.isRandomlyWrittenTo) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
+		}
+		if (Vulkan_Window->SWAPCHAINUSAGE.isRenderableTo) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		}
+		if (Vulkan_Window->SWAPCHAINUSAGE.isSampledReadOnly) {
+			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+		}
+		swpchn_ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		swpchn_ci.clipped = VK_TRUE;
+		swpchn_ci.preTransform = Vulkan_Window->SurfaceCapabilities.currentTransform;
+		swpchn_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+		if (Vulkan_Window->Window_SwapChain) {
+			swpchn_ci.oldSwapchain = Vulkan_Window->Window_SwapChain;
+		}
+		else {
+			swpchn_ci.oldSwapchain = nullptr;
+		}
+
+		if (Vulkan_GPU->QUEUEs.size() > 1) {
+			swpchn_ci.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+		}
+		else {
+			swpchn_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		}
+		swpchn_ci.pQueueFamilyIndices = Vulkan_GPU->AllQueueFamilies;
+		swpchn_ci.queueFamilyIndexCount = Vulkan_GPU->QUEUEs.size();
+
+
+		if (vkCreateSwapchainKHR(Vulkan_GPU->Logical_Device, &swpchn_ci, nullptr, SwapchainOBJ) != VK_SUCCESS) {
+			LOG_CRASHING_TAPI("VulkanCore: Failed to create a SwapChain for a Window");
+			return false;
+		}
+
+		//Get Swapchain images
+		uint32_t created_imagecount = 0;
+		vkGetSwapchainImagesKHR(Vulkan_GPU->Logical_Device, *SwapchainOBJ, &created_imagecount, nullptr);
+		VkImage* SWPCHN_IMGs = new VkImage[created_imagecount];
+		vkGetSwapchainImagesKHR(Vulkan_GPU->Logical_Device, *SwapchainOBJ, &created_imagecount, SWPCHN_IMGs);
+		if (created_imagecount < 2) {
+			LOG_ERROR_TAPI("GFX API asked for 2 swapchain textures but Vulkan gave less number of textures!");
+			return false;
+		}
+		else if (created_imagecount > 2) {
+			LOG_STATUS_TAPI("GFX API asked for 2 swapchain textures but Vulkan gave more than that, so GFX API only used 2 of them!");
+		}
+		for (unsigned int vkim_index = 0; vkim_index < 2; vkim_index++) {
+			VK_Texture* SWAPCHAINTEXTURE = new VK_Texture;
+			SWAPCHAINTEXTURE->CHANNELs = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_BGRA8UNORM;
+			SWAPCHAINTEXTURE->WIDTH = WIDTH;
+			SWAPCHAINTEXTURE->HEIGHT = HEIGHT;
+			SWAPCHAINTEXTURE->DATA_SIZE = SWAPCHAINTEXTURE->WIDTH * SWAPCHAINTEXTURE->HEIGHT * 4;
+			SWAPCHAINTEXTURE->Image = SWPCHN_IMGs[vkim_index];
+			SWAPCHAINTEXTURE->USAGE.isCopiableFrom = true;
+			SWAPCHAINTEXTURE->USAGE.isCopiableTo = true;
+			SWAPCHAINTEXTURE->USAGE.isRenderableTo = true;
+			SWAPCHAINTEXTURE->USAGE.isSampledReadOnly = true;
+
+			SwapchainTextureHandles[vkim_index] = SWAPCHAINTEXTURE;
+		}
+		delete SWPCHN_IMGs;
+
+		if (Vulkan_Window->SWAPCHAINUSAGE.isRandomlyWrittenTo || Vulkan_Window->SWAPCHAINUSAGE.isRenderableTo || Vulkan_Window->SWAPCHAINUSAGE.isSampledReadOnly) {
+			for (unsigned int i = 0; i < 2; i++) {
+				VkImageViewCreateInfo ImageView_ci = {};
+				ImageView_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+				VK_Texture* SwapchainTexture = GFXHandleConverter(VK_Texture*, SwapchainTextureHandles[i]);
+				ImageView_ci.image = SwapchainTexture->Image;
+				ImageView_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+				ImageView_ci.format = Window_SurfaceFormat.format;
+				ImageView_ci.flags = 0;
+				ImageView_ci.pNext = nullptr;
+				ImageView_ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+				ImageView_ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+				ImageView_ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+				ImageView_ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+				ImageView_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				ImageView_ci.subresourceRange.baseArrayLayer = 0;
+				ImageView_ci.subresourceRange.baseMipLevel = 0;
+				ImageView_ci.subresourceRange.layerCount = 1;
+				ImageView_ci.subresourceRange.levelCount = 1;
+
+				if (vkCreateImageView(Vulkan_GPU->Logical_Device, &ImageView_ci, nullptr, &SwapchainTexture->ImageView) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("VulkanCore: Image View creation has failed!");
+					return false;
+				}
+			}
+		}
+		return true;
+	}
 	GFX_API::GFXHandle Vulkan_Core::CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) {
 		LOG_STATUS_TAPI("Window creation has started!");
 		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
-
+		
+		if (Desc.resize_cb) {
+			glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+		}
 		//Create window as it will share resources with Renderer Context to get display texture!
 		GLFWwindow* glfw_window = glfwCreateWindow(Desc.WIDTH, Desc.HEIGHT, Desc.NAME, NULL, nullptr);
 		WINDOW* Vulkan_Window = new WINDOW;
-		Vulkan_Window->WIDTH = Desc.WIDTH;
-		Vulkan_Window->HEIGHT = Desc.HEIGHT;
+		Vulkan_Window->LASTWIDTH = Desc.WIDTH;
+		Vulkan_Window->LASTHEIGHT = Desc.HEIGHT;
 		Vulkan_Window->DISPLAYMODE = Desc.MODE;
 		Vulkan_Window->MONITOR = Desc.MONITOR;
 		Vulkan_Window->NAME = Desc.NAME;
-		//glfwSetWindowMonitor(glfw_window, NULL, 0, 0, Vulkan_Window->Get_Window_Mode().x, Vulkan_Window->Get_Window_Mode().y, Vulkan_Window->Get_Window_Mode().z);
 		Vulkan_Window->GLFW_WINDOW = glfw_window;
+		Vulkan_Window->SWAPCHAINUSAGE = Desc.SWAPCHAINUSAGEs;
+		Vulkan_Window->resize_cb = Desc.resize_cb;
+		Vulkan_Window->UserPTR = Desc.UserPointer;
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 		//Check and Report if GLFW fails
 		if (glfw_window == NULL) {
@@ -410,18 +556,22 @@ namespace Vulkan {
 			return nullptr;
 		}
 
-			//Window VulkanSurface Creation
-
+		//Window VulkanSurface Creation
 		VkSurfaceKHR Window_Surface = {};
 		if (glfwCreateWindowSurface(VK_States.Vulkan_Instance, Vulkan_Window->GLFW_WINDOW, nullptr, &Window_Surface) != VK_SUCCESS) {
 			LOG_CRASHING_TAPI("GLFW failed to create a window surface");
-			delete Vulkan_Window;
 			return nullptr;
 		}
 		else {
 			LOG_STATUS_TAPI("GLFW created a window surface!");
 		}
 		Vulkan_Window->Window_Surface = Window_Surface;
+
+		if (Desc.resize_cb) {
+			glfwSetWindowUserPointer(Vulkan_Window->GLFW_WINDOW, Vulkan_Window);
+			glfwSetWindowSizeCallback(Vulkan_Window->GLFW_WINDOW, Window_ResizeCallback);
+		}
+
 
 		//Finding GPU_TO_RENDER's Surface Capabilities
 		
@@ -455,142 +605,15 @@ namespace Vulkan {
 			vkGetPhysicalDeviceSurfacePresentModesKHR(Vulkan_GPU->Physical_Device, Vulkan_Window->Window_Surface, &PresentationModesCount, Vulkan_Window->PresentationModes.data());
 		}
 
-
-			//Swapchain Textures creation
-
-		//Choose Surface Format
-		VkSurfaceFormatKHR Window_SurfaceFormat = {};
-		for (unsigned int i = 0; i < Vulkan_Window->SurfaceFormats.size(); i++) {
-			VkSurfaceFormatKHR& SurfaceFormat = Vulkan_Window->SurfaceFormats[i];
-			if (SurfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM && SurfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-				Window_SurfaceFormat = SurfaceFormat;
-			}
-		}
-
-		//Choose Surface Presentation Mode
-		VkPresentModeKHR Window_PresentationMode = {};
-		for (unsigned int i = 0; i < Vulkan_Window->PresentationModes.size(); i++) {
-			VkPresentModeKHR& PresentationMode = Vulkan_Window->PresentationModes[i];
-			if (PresentationMode == VK_PRESENT_MODE_FIFO_KHR) {
-				Window_PresentationMode = PresentationMode;
-			}
-		}
-
-
-		VkExtent2D Window_ImageExtent = { Vulkan_Window->WIDTH, Vulkan_Window->HEIGHT };
-		uint32_t image_count = 0;
-		if (Vulkan_Window->SurfaceCapabilities.maxImageCount > Vulkan_Window->SurfaceCapabilities.minImageCount) {
-			image_count = 2;
-		}
-		else {
-			LOG_NOTCODED_TAPI("VulkanCore: Window Surface Capabilities have issues, maxImageCount <= minImageCount!", true);
+		if (!Create_WindowSwapchain(Vulkan_Window, Vulkan_Window->LASTWIDTH, Vulkan_Window->LASTHEIGHT, &Vulkan_Window->Window_SwapChain, SwapchainTextureHandles)) {
+			LOG_ERROR_TAPI("Window's swapchain creation has failed, so window's creation!");
+			vkDestroySurfaceKHR(VK_States.Vulkan_Instance, Vulkan_Window->Window_Surface, nullptr);
+			glfwDestroyWindow(Vulkan_Window->GLFW_WINDOW);
 			delete Vulkan_Window;
 			return nullptr;
 		}
-		VkSwapchainCreateInfoKHR swpchn_ci = {};
-		swpchn_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		swpchn_ci.flags = 0;
-		swpchn_ci.pNext = nullptr;
-		swpchn_ci.presentMode = Window_PresentationMode;
-		swpchn_ci.surface = Vulkan_Window->Window_Surface;
-		swpchn_ci.minImageCount = image_count;
-		swpchn_ci.imageFormat = Window_SurfaceFormat.format;
-		swpchn_ci.imageColorSpace = Window_SurfaceFormat.colorSpace;
-		swpchn_ci.imageExtent = Window_ImageExtent;
-		swpchn_ci.imageArrayLayers = 1;
-		swpchn_ci.imageUsage = 0;
-		if (Desc.SWAPCHAINUSAGEs.isCopiableFrom) {
-			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		}
-		if (Desc.SWAPCHAINUSAGEs.isCopiableTo) {
-			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-		}
-		if (Desc.SWAPCHAINUSAGEs.isRandomlyWrittenTo) {
-			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
-		}
-		if (Desc.SWAPCHAINUSAGEs.isRenderableTo) {
-			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-		}
-		if (Desc.SWAPCHAINUSAGEs.isSampledReadOnly) {
-			swpchn_ci.imageUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
-		}
-		swpchn_ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-		swpchn_ci.clipped = VK_TRUE;
-		swpchn_ci.preTransform = Vulkan_Window->SurfaceCapabilities.currentTransform;
-		swpchn_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		swpchn_ci.oldSwapchain = nullptr;
-
-		if (Vulkan_GPU->QUEUEs.size() > 1) {
-			swpchn_ci.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-		}
-		else {
-			swpchn_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		}
-		swpchn_ci.pQueueFamilyIndices = Vulkan_GPU->AllQueueFamilies;
-		swpchn_ci.queueFamilyIndexCount = Vulkan_GPU->QUEUEs.size();
-
-
-		if (vkCreateSwapchainKHR(Vulkan_GPU->Logical_Device, &swpchn_ci, nullptr, &Vulkan_Window->Window_SwapChain) != VK_SUCCESS) {
-			LOG_CRASHING_TAPI("VulkanCore: Failed to create a SwapChain for a Window");
-			delete Vulkan_Window;
-			return nullptr;
-		}
-
-		//Get Swapchain images
-		uint32_t created_imagecount = 0;
-		vkGetSwapchainImagesKHR(Vulkan_GPU->Logical_Device, Vulkan_Window->Window_SwapChain, &created_imagecount, nullptr);
-		VkImage* SWPCHN_IMGs = new VkImage[created_imagecount];
-		vkGetSwapchainImagesKHR(Vulkan_GPU->Logical_Device, Vulkan_Window->Window_SwapChain, &created_imagecount, SWPCHN_IMGs);
-		if (created_imagecount < 2) {
-			LOG_CRASHING_TAPI("GFX API asked for 2 swapchain textures but Vulkan gave less number of textures, so GFX API failed to run! Please contact us!");
-			return nullptr;
-		}
-		else if (created_imagecount > 2) {
-			LOG_CRASHING_TAPI("GFX API asked for 2 swapchain textures but Vulkan gave more than that, so GFX API only used 2 of them! Please contact us!");
-		}
-		for (unsigned int vkim_index = 0; vkim_index < 2; vkim_index++) {
-			VK_Texture* SWAPCHAINTEXTURE = new VK_Texture;
-			SWAPCHAINTEXTURE->CHANNELs = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_BGRA8UNORM;
-			SWAPCHAINTEXTURE->WIDTH = Vulkan_Window->WIDTH;
-			SWAPCHAINTEXTURE->HEIGHT = Vulkan_Window->HEIGHT;
-			SWAPCHAINTEXTURE->DATA_SIZE = SWAPCHAINTEXTURE->WIDTH * SWAPCHAINTEXTURE->HEIGHT * 4;
-			SWAPCHAINTEXTURE->Image = SWPCHN_IMGs[vkim_index];
-			SWAPCHAINTEXTURE->USAGE.isCopiableFrom = true;
-			SWAPCHAINTEXTURE->USAGE.isCopiableTo = true;
-			SWAPCHAINTEXTURE->USAGE.isRenderableTo = true;
-			SWAPCHAINTEXTURE->USAGE.isSampledReadOnly = true;
-
-			Vulkan_Window->Swapchain_Textures[vkim_index] = SWAPCHAINTEXTURE;
-			SwapchainTextureHandles[vkim_index] = SWAPCHAINTEXTURE;
-		}
-
-		if (Desc.SWAPCHAINUSAGEs.isRandomlyWrittenTo || Desc.SWAPCHAINUSAGEs.isRenderableTo || Desc.SWAPCHAINUSAGEs.isSampledReadOnly) {
-			for (unsigned int i = 0; i < 2; i++) {
-				VkImageViewCreateInfo ImageView_ci = {};
-				ImageView_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-				VK_Texture* SwapchainTexture = GFXHandleConverter(VK_Texture*, Vulkan_Window->Swapchain_Textures[i]);
-				ImageView_ci.image = SwapchainTexture->Image;
-				ImageView_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-				ImageView_ci.format = Window_SurfaceFormat.format;
-				ImageView_ci.flags = 0;
-				ImageView_ci.pNext = nullptr;
-				ImageView_ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-				ImageView_ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-				ImageView_ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-				ImageView_ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-				ImageView_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				ImageView_ci.subresourceRange.baseArrayLayer = 0;
-				ImageView_ci.subresourceRange.baseMipLevel = 0;
-				ImageView_ci.subresourceRange.layerCount = 1;
-				ImageView_ci.subresourceRange.levelCount = 1;
-
-				if (vkCreateImageView(Vulkan_GPU->Logical_Device, &ImageView_ci, nullptr, &SwapchainTexture->ImageView) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("VulkanCore: Image View creation has failed!");
-					delete Vulkan_Window;
-					return nullptr;
-				}
-			}
-		}
+		Vulkan_Window->Swapchain_Textures[0] = SwapchainTextureHandles[0];
+		Vulkan_Window->Swapchain_Textures[1] = SwapchainTextureHandles[1];
 
 		//Create presentation wait semaphores
 		//We are creating 3 semaphores because if 2+ frames combined is faster than vertical blank, there is tearing!
@@ -756,8 +779,43 @@ namespace Vulkan {
 
 	//Input (Keyboard-Controller) Operations
 	void Vulkan_Core::Take_Inputs() {
-		LOG_STATUS_TAPI("Take inputs!");
+		Vulkan_Core* VKCORE = ((Vulkan_Core*)GFX);
+		GPU* VKGPU = (GPU*)VKCORE->VK_States.GPU_TO_RENDER;
+
 		glfwPollEvents();
+		if (isAnyWindowResized) {
+			for (unsigned int WindowIndex = 0; WindowIndex < WINDOWs.size(); WindowIndex++) {
+				WINDOW* VKWINDOW = GFXHandleConverter(WINDOW*, WINDOWs[WindowIndex]);
+				if (!VKWINDOW->isResized) {
+					continue;
+				}
+				if (VKWINDOW->NEWWIDTH == VKWINDOW->LASTWIDTH && VKWINDOW->NEWHEIGHT == VKWINDOW->LASTHEIGHT) {
+					VKWINDOW->isResized = false;
+					continue;
+				}
+
+				VkSwapchainKHR swpchn;
+				GFX_API::GFXHandle* swpchntextures = new GFX_API::GFXHandle[2];
+				//If new window size isn't able to create a swapchain, return to last window size
+				if (!VKCORE->Create_WindowSwapchain(VKWINDOW, VKWINDOW->NEWWIDTH, VKWINDOW->NEWHEIGHT, &swpchn, swpchntextures)) {
+					LOG_ERROR_TAPI("New size for the window is not possible, returns to the last successful size!");
+					glfwSetWindowSize(VKWINDOW->GLFW_WINDOW, VKWINDOW->LASTWIDTH, VKWINDOW->LASTHEIGHT);
+					VKWINDOW->isResized = false;
+					delete[] swpchntextures;
+					continue;
+				}
+
+				VKWINDOW->LASTHEIGHT = VKWINDOW->NEWHEIGHT;
+				VKWINDOW->LASTWIDTH = VKWINDOW->NEWWIDTH;
+				VKWINDOW->Swapchain_Textures[0] = swpchntextures[0];
+				VKWINDOW->Swapchain_Textures[1] = swpchntextures[1];
+				VKWINDOW->Window_SwapChain = swpchn;
+				VKWINDOW->CurrentFrameSWPCHNIndex = 0;
+				LOG_NOTCODED_TAPI("Destroy swapchain mechanism should destroy last swapchain textures next frame because of RTSlotSet compatibility testing!", false);
+				VKWINDOW->resize_cb(VKWINDOW, VKWINDOW->UserPTR, VKWINDOW->NEWWIDTH, VKWINDOW->NEWHEIGHT, VKWINDOW->Swapchain_Textures);
+				delete swpchntextures;
+			}
+		}
 	}
 
 	//CODE ALL OF THE BELOW FUNCTIONS!!!!
@@ -765,8 +823,14 @@ namespace Vulkan {
 		LOG_NOTCODED_TAPI("VulkanCore: Change_Window_Resolution isn't coded!", true);
 	}
 	void Vulkan_Core::Window_ResizeCallback(GLFWwindow* window, int WIDTH, int HEIGHT) {
-		Vulkan_Core* THIS = (Vulkan_Core*)GFX;
-		LOG_NOTCODED_TAPI("GLFW dependent callbacks is designed differently but not coded yet!", true);
+		WINDOW* VKWINDOW = (WINDOW*)glfwGetWindowUserPointer(window);
+		Vulkan_Core* VKCORE = ((Vulkan_Core*)GFX);
+		GPU* VKGPU = (GPU*)VKCORE->VK_States.GPU_TO_RENDER;
+
+		VKWINDOW->NEWWIDTH = WIDTH;
+		VKWINDOW->NEWHEIGHT = HEIGHT;
+		VKWINDOW->isResized = true;
+		VKCORE->isAnyWindowResized = true;
 	}
 	void Vulkan_Core::Check_Errors() {
 		LOG_NOTCODED_TAPI("VulkanCore: Check_Errors isn't coded!", true);

@@ -80,6 +80,8 @@ namespace GFX_API {
 		//If your texture is an array texture or a cubemap, you should use LayerIndex to specify the texture you're gonna use barrier for.
 		virtual void ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
 			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int LayerIndex, GFX_API::GFXHandle BarrierTPHandle) = 0;
+		virtual void ChangeDrawPass_RTSlotSet(GFX_API::GFXHandle DrawPassHandle, GFX_API::GFXHandle RTSlotSetHandle) = 0;
+
 
 
 		unsigned char GetCurrentFrameIndex();

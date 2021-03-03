@@ -440,12 +440,16 @@ namespace GFX_API {
 		bool isSupported_SeperateDepthStencilLayouts = false, isSupported_SeperateRTSlotBlending = false;
 	};
 
+	typedef void (*GFXWindowResizeCallback) (GFX_API::GFXHandle WindowHandle, void* UserPointer, unsigned int WIDTH, unsigned int HEIGHT, GFX_API::GFXHandle* SwapchainTextureHandles);
+
 	struct GFXAPI WindowDescription {
 		const char* NAME;
 		unsigned int WIDTH, HEIGHT;
 		GFX_API::WINDOW_MODE MODE;
 		GFX_API::GFXHandle MONITOR;
 		TEXTUREUSAGEFLAG SWAPCHAINUSAGEs;
+		GFXWindowResizeCallback resize_cb = nullptr;
+		void* UserPointer = nullptr;
 	};
 
 }

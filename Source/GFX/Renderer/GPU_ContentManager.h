@@ -85,10 +85,10 @@ namespace GFX_API {
 		virtual void Unload_IndexBuffer(GFX_API::GFXHandle BufferHandle) = 0;
 		
 		virtual TAPIResult Create_Texture(const GFX_API::Texture_Description& TEXTURE_ASSET, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& TextureHandle) = 0;
+		//TARGET OFFSET is the offset in the texture's buffer to copy to
 		virtual TAPIResult Upload_Texture(GFX_API::GFXHandle BufferHandle, const void* InputData,
 			unsigned int DataSize, unsigned int TargetOffset) = 0;
-		//TARGET OFFSET is the offset in the texture's buffer to copy to
-		virtual void Unload_Texture(GFXHandle TEXTUREHANDLE) = 0;
+		virtual void Delete_Texture(GFXHandle TEXTUREHANDLE, bool isUsedLastFrame) = 0;
 
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
 			GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
@@ -123,5 +123,6 @@ namespace GFX_API {
 		//For example; if you change slot but related slotset isn't used by drawpass, it doesn't happen until it is used
 		virtual TAPIResult Change_RTSlotTexture(GFX_API::GFXHandle RTSlotHandle, bool isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, GFX_API::GFXHandle TextureHandle) = 0;
 		virtual TAPIResult Inherite_RTSlotSet(const vector<GFX_API::RTSLOTUSAGE_Description>& Descriptions, GFX_API::GFXHandle RTSlotSetHandle, GFX_API::GFXHandle& InheritedSlotSetHandle) = 0;
+		virtual void Delete_RTSlotSet(GFX_API::GFXHandle RTSlotSetHandle) = 0;
 	};
 }

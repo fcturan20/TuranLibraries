@@ -68,6 +68,10 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_SubAllocation> Allocated_Blocks;
 		VK_MemoryAllocation();
 		VK_MemoryAllocation(const VK_MemoryAllocation& copyALLOC);
+		//Use this function in Suballocate_Buffer and Suballocate_Image after you're sure that you have enough memory in the allocation
+		VkDeviceSize FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment);
+		//Free a block
+		void FreeBlock(VkDeviceSize Offset);
 	};
 
 	//Forward declarations for struct that will be used in Vulkan Versioning/Extension system
@@ -112,19 +116,24 @@ namespace Vulkan {
 
 	//Window will be accessed from only Vulkan.dll, so the programmer may be aware what he can cause
 	struct VK_API WINDOW {
-		unsigned int WIDTH, HEIGHT, DISPLAY_QUEUEIndex = 0;
+		unsigned int LASTWIDTH, LASTHEIGHT, NEWWIDTH, NEWHEIGHT, DISPLAY_QUEUEIndex = 0;
 		GFX_API::WINDOW_MODE DISPLAYMODE;
 		GFX_API::GFXHandle MONITOR;
 		string NAME;
+		GFX_API::TEXTUREUSAGEFLAG SWAPCHAINUSAGE;
+		GFX_API::GFXWindowResizeCallback resize_cb = nullptr;
+		void* UserPTR;
 
 		VkSurfaceKHR Window_Surface = {};
 		VkSwapchainKHR Window_SwapChain = {};
 		GLFWwindow* GLFW_WINDOW = {};
 		unsigned char PresentationWaitSemaphoreIndexes[3];
+		unsigned char CurrentFrameSWPCHNIndex = 0;
 		GFX_API::GFXHandle Swapchain_Textures[2];
 		VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
 		vector<VkSurfaceFormatKHR> SurfaceFormats;
 		vector<VkPresentModeKHR> PresentationModes;
+		bool isResized = false;
 	};
 
 	//Use this class to store Vulkan Global Variables (Such as VkInstance, VkApplicationInfo etc)

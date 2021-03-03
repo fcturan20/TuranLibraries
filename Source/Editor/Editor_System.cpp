@@ -34,6 +34,7 @@ namespace TuranEditor {
 	}
 	void Editor_System::Take_Inputs() {
 		GFX->Take_Inputs();
+		LOG_STATUS_TAPI("It is returned I guess!");
 	}
 	bool Editor_System::Should_EditorClose() {
 		return Should_EditorClose;

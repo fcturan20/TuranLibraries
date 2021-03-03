@@ -13,6 +13,8 @@ namespace Vulkan {
 	public:
 		Vulkan_States VK_States;
 		IMGUI_VK* VK_IMGUI = nullptr;
+		//Instead of checking each window each frame, just check this
+		bool isAnyWindowResized = false;
 
 		//Initialization Processes
 
@@ -33,6 +35,7 @@ namespace Vulkan {
 		//Input (Keyboard-Controller) Operations
 		virtual void Take_Inputs() override;
 
+		bool Create_WindowSwapchain(WINDOW* Vulkan_Window, unsigned int WIDTH, unsigned int HEIGHT, VkSwapchainKHR* SwapchainOBJ, GFX_API::GFXHandle* SwapchainTextureHandles);
 		//Callbacks
 		static void GFX_Error_Callback(int error_code, const char* description);
 		static void Window_ResizeCallback(GLFWwindow* window, int WIDTH, int HEIGHT);

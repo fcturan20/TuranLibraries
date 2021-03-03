@@ -21,6 +21,7 @@ namespace Vulkan {
 
 		//INHERITANCE
 		Renderer();
+		~Renderer();
 
 		//RenderGraph operations
 		virtual void Start_RenderGraphConstruction() override;

@@ -2,7 +2,7 @@
 #include "Vulkan/VulkanSource/Vulkan_Core.h"
 
 namespace TuranEditor {
-	Editor_System::Editor_System(TuranAPI::Threading::JobSystem* JobSystem) : LOGGING("C:/dev/VulkanRenderer") {
+	Editor_System::Editor_System(TuranAPI::Threading::JobSystem* JobSystem) : LOGGING("C:/dev/VulkanRenderer"), JobSys(JobSystem){
 		std::cout << "Editor System Constructor is started!\n";
 		Vulkan::Vulkan_Core* VK = new Vulkan::Vulkan_Core(Monitors, GPUs, JobSystem);
 
@@ -31,10 +31,10 @@ namespace TuranEditor {
 	}
 	Editor_System::~Editor_System() {
 		delete GFX;
+		JobSys->CloseJobSystem();
 	}
 	void Editor_System::Take_Inputs() {
 		GFX->Take_Inputs();
-		LOG_STATUS_TAPI("It is returned I guess!");
 	}
 	bool Editor_System::Should_EditorClose() {
 		return Should_EditorClose;

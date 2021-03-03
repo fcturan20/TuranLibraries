@@ -49,11 +49,13 @@ namespace TuranAPI {
 			void WaitJob_empty(const JobWaitInfo& wait);
 			void ClearWaitInfo(JobWaitInfo& wait);
 			void WaitForAllOtherJobs();
-			//Destructor may run jobs if there is any when it is called
+			//If you want to close job system, you should call this instead of Desctructor!
+			//This function may run jobs if there is any when it is called
 			//So that means, destruction of the job system is the responsibility of the user to handle their jobs
 			//I mean, you probably should synchronize all your jobs at one point and check if you should close the job system
-			//If you call destructor while running some other jobs in other threads and they don't care if destructor is called
+			//If you call this while running some other jobs in other threads and they don't care if destructor is called
 			//Application may run forever 
+			void CloseJobSystem();
 			~JobSystem();
 		};
 

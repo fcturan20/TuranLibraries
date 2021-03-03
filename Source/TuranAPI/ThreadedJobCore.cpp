@@ -174,9 +174,11 @@ namespace TuranAPI {
 			return std::thread::hardware_concurrency();
 		}
 		JobSystem::~JobSystem() {
+			std::cout << "Job system is closed!\n";
+		}
+		void JobSystem::CloseJobSystem() {
 			ShouldClose.store(true);
 			WaitForAllOtherJobs();
-			std::cout << "Job system is closed!\n";
 		}
 
 

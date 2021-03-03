@@ -16,6 +16,7 @@ namespace TuranEditor {
 		TuranAPI::Logging::Logger LOGGING;
 		Editor_FileSystem FileSystem;
 		TuranAPI::Profiler_System Profiler;
+		TuranAPI::Threading::JobSystem* JobSys = nullptr;
 		static bool Should_Close;
 	public:
 		vector<GFX_API::GPUDescription> GPUs;

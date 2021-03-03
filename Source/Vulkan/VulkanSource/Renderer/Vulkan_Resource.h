@@ -5,7 +5,7 @@
 namespace Vulkan {
 	//This structure defines offset of the suballocation in the big memory allocation that happens at initialization
 	struct MemoryBlock {
-		unsigned int MemAllocIndex;
+		unsigned int MemAllocIndex = UINT32_MAX;
 		VkDeviceSize Offset;
 	};
 	struct VK_API VK_Semaphore {

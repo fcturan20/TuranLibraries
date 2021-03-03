@@ -66,8 +66,6 @@ void WindowResizeCallback(GFX_API::GFXHandle WindowHandle, void* UserPointer, un
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
 	GFXRENDERER->ImageBarrier(AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, 0, BarrierAfterUpload_ID);
 
-
-
 	isWindowResized = true;
 }
 
@@ -400,7 +398,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			isWindowResized = false;
 		}
 		GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 1, 0, TEXTUREDISPLAY_MATINST, WorldSubpassID);
-		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, 0, BarrierAfterDraw_ID);
+		GFXRENDERER->ImageBarrier(AlitaSwapchains[GFX->Get_WindowFrameIndex(AlitaWindowHandle)], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, 0, BarrierAfterDraw_ID);
 		GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 		GFXRENDERER->Run();
 
@@ -415,7 +413,6 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			WRITE_LOGs_toFILEs_TAPI();
 		}
 	}
-
 }
 
 int main() {
@@ -423,5 +420,7 @@ int main() {
 	new TuranAPI::Threading::JobSystem([&JobSys]()
 		{FirstMain(JobSys); }
 	, JobSys);
-	
+	//Don't call LOG_xxx here because logging system is closed with EditorSystem
+	std::cout << "Returned to main()!\n";
+	delete JobSys;
 }

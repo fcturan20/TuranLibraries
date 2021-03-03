@@ -11,6 +11,9 @@ namespace Vulkan {
 	Renderer::Renderer() {
 
 	}
+	Renderer::~Renderer() {
+		Destroy_RenderGraph();
+	}
 
 	//Create framegraphs to lower the cost of per frame rendergraph optimization (Pass Culling, Pass Merging, Wait Culling etc) proccess!
 	void Create_FrameGraphs(const vector<VK_DrawPass*>& DrawPasses, const vector<VK_TransferPass*>& TransferPasses, const vector<VK_WindowPass*>& WindowPasses, VK_FrameGraph* FrameGraphs);
@@ -781,9 +784,9 @@ namespace Vulkan {
 			vkAcquireNextImageKHR(VKGPU->Logical_Device, VKWINDOW->Window_SwapChain, UINT64_MAX,
 				Semaphores[VKWINDOW->PresentationWaitSemaphoreIndexes[2]].SPHandle, VK_NULL_HANDLE, &SwapchainImage_Index);
 			if (SwapchainImage_Index != VKWINDOW->CurrentFrameSWPCHNIndex) {
-				std::cout << "Current SwapchainImage_Index: " << SwapchainImage_Index << std::endl;
-				std::cout << "Current FrameCount: " << unsigned int(VKWINDOW->CurrentFrameSWPCHNIndex) << std::endl;
-				LOG_CRASHING_TAPI("Renderer's FrameCount and Vulkan's SwapchainIndex don't match, there is something missing!");
+				std::cout << "Vulkan's reported SwapchainImage_Index: " << SwapchainImage_Index << std::endl;
+				std::cout << "GFX's stored SwapchainImage_Index: " << unsigned int(VKWINDOW->CurrentFrameSWPCHNIndex) << std::endl;
+				LOG_CRASHING_TAPI("GFX's SwapchainIndex and Vulkan's SwapchainIndex don't match, there is something missing!");
 			}
 		}
 

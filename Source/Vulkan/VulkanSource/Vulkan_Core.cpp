@@ -641,6 +641,9 @@ namespace Vulkan {
 		WINDOWs.push_back(Vulkan_Window);
 		return Vulkan_Window;
 	}
+	unsigned char Vulkan_Core::Get_WindowFrameIndex(GFX_API::GFXHandle WindowHandle) {
+		return GFXHandleConverter(WINDOW*, WindowHandle)->CurrentFrameSWPCHNIndex;
+	}
 	vector<GFX_API::GFXHandle>& Vulkan_Core::Get_WindowHandles() {
 		return WINDOWs;
 	}
@@ -718,11 +721,12 @@ namespace Vulkan {
 	void Vulkan_Core::Destroy_GFX_Resources() {
 		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
 
-		VKRENDERER->Destroy_RenderGraph();
-		((GPU_ContentManager*)GFXContentManager)->Destroy_AllResources();
-
+		VkDescriptorPool IMGUIPOOL = ((Renderer*)RENDERER)->IMGUIPOOL;
+		delete (Renderer*)RENDERER;
+		delete (GPU_ContentManager*)ContentManager;
 		//Destroy dear IMGUI
 		VK_IMGUI->Destroy_IMGUIResources();
+		vkDestroyDescriptorPool(Vulkan_GPU->Logical_Device, IMGUIPOOL, nullptr);
 
 		//Close windows and delete related datas
 		for (unsigned int WindowIndex = 0; WindowIndex < WINDOWs.size(); WindowIndex++) {
@@ -771,9 +775,7 @@ namespace Vulkan {
 		glfwTerminate();
 
 
-		//delete (Renderer*)RENDERER;
-		//delete (GPU_ContentManager*)ContentManager;
-		//delete IMGUI_o;
+		delete IMGUI_o;
 		LOG_STATUS_TAPI("Vulkan Resources are destroyed!");
 	}
 
@@ -784,6 +786,7 @@ namespace Vulkan {
 
 		glfwPollEvents();
 		if (isAnyWindowResized) {
+			vkDeviceWaitIdle(VKGPU->Logical_Device);
 			for (unsigned int WindowIndex = 0; WindowIndex < WINDOWs.size(); WindowIndex++) {
 				WINDOW* VKWINDOW = GFXHandleConverter(WINDOW*, WINDOWs[WindowIndex]);
 				if (!VKWINDOW->isResized) {
@@ -804,6 +807,19 @@ namespace Vulkan {
 					delete[] swpchntextures;
 					continue;
 				}
+
+				VK_Texture* oldswpchn0 = GFXHandleConverter(VK_Texture*, VKWINDOW->Swapchain_Textures[0]);
+				VK_Texture* oldswpchn1 = GFXHandleConverter(VK_Texture*, VKWINDOW->Swapchain_Textures[1]);
+
+				vkDestroyImageView(VKGPU->Logical_Device, oldswpchn0->ImageView, nullptr);
+				vkDestroyImageView(VKGPU->Logical_Device, oldswpchn1->ImageView, nullptr);
+				vkDestroySwapchainKHR(VKGPU->Logical_Device, VKWINDOW->Window_SwapChain, nullptr);
+				oldswpchn0->Image = VK_NULL_HANDLE;
+				oldswpchn0->ImageView = VK_NULL_HANDLE;
+				oldswpchn1->Image = VK_NULL_HANDLE;
+				oldswpchn1->ImageView = VK_NULL_HANDLE;
+				GFXContentManager->Delete_Texture(oldswpchn0, false);
+				GFXContentManager->Delete_Texture(oldswpchn1, false);
 
 				VKWINDOW->LASTHEIGHT = VKWINDOW->NEWHEIGHT;
 				VKWINDOW->LASTWIDTH = VKWINDOW->NEWWIDTH;

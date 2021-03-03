@@ -165,7 +165,6 @@ namespace Vulkan {
 		}
 	}
 	void GPU_ContentManager::Destroy_AllResources() {
-		Destroy_RenderGraphRelatedResources();
 		//Destroy Shader Sources
 		{
 			std::unique_lock<std::mutex> Locker;
@@ -568,9 +567,13 @@ namespace Vulkan {
 			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
 				for (unsigned int i = 0; i < DeleteTextureList.size(ThreadID); i++) {
 					VK_Texture* Texture = DeleteTextureList.get(ThreadID, i);
-					vkDestroyImageView(VKGPU->Logical_Device, Texture->ImageView, nullptr);
-					vkDestroyImage(VKGPU->Logical_Device, Texture->Image, nullptr);
-					VKGPU->ALLOCs[Texture->Block.MemAllocIndex].FreeBlock(Texture->Block.Offset);
+					if (Texture->Image) {
+						vkDestroyImageView(VKGPU->Logical_Device, Texture->ImageView, nullptr);
+						vkDestroyImage(VKGPU->Logical_Device, Texture->Image, nullptr);
+					}
+					if (Texture->Block.MemAllocIndex != UINT32_MAX) {
+						VKGPU->ALLOCs[Texture->Block.MemAllocIndex].FreeBlock(Texture->Block.Offset);
+					}
 					delete Texture;
 				}
 				DeleteTextureList.clear(ThreadID);

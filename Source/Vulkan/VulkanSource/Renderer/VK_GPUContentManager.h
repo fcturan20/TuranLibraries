@@ -12,6 +12,7 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_IndexBuffer*> INDEXBUFFERs;
 		TuranAPI::Threading::TLVector<VK_Texture*> TEXTUREs;
 		TuranAPI::Threading::TLVector<VK_GlobalBuffer*> GLOBALBUFFERs;
+		TuranAPI::Threading::TLVector<VK_GlobalTexture*> GLOBALTEXTUREs;
 		TuranAPI::Threading::TLVector<VK_ShaderSource*> SHADERSOURCEs;
 		TuranAPI::Threading::TLVector<VK_GraphicsPipeline*> SHADERPROGRAMs;
 		TuranAPI::Threading::TLVector<VK_PipelineInstance*> SHADERPINSTANCEs;
@@ -37,13 +38,14 @@ namespace Vulkan {
 		//These desc sets are not used recently in draw calls. So don't go to create-update-delete process, just update.
 		TuranAPI::Threading::TLVector<VK_DescSetUpdateCall> DescSets_toJustUpdate;
 		//These are the desc sets that should be destroyed next frame!
-		vector<VkDescriptorSet> UnboundDescSetList;
+		vector<VkDescriptorSet> UnboundMaterialDescSetList;
+		VkDescriptorSet UnboundGlobalDescSet = VK_NULL_HANDLE;
 		unsigned int UnboundDescSetImageCount, UnboundDescSetSamplerCount, UnboundDescSetUBufferCount, UnboundDescSetSBufferCount;
 		VK_DescPool MaterialRelated_DescPool;
 		VkDescriptorPool GlobalBuffers_DescPool;
-		VkDescriptorSet GlobalBuffers_DescSet;
-		VkDescriptorSetLayout	GlobalBuffers_DescSetLayout;
+		VK_DescSet GlobalShaderInputs_DescSet;
 		bool Create_DescSet(VK_DescSet* Set);
+		void CreateandUpdate_GlobalDescSet();
 		//Create Global descriptor sets
 		void Resource_Finalizations();
 
@@ -99,6 +101,10 @@ namespace Vulkan {
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
 			GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) override;
 		virtual void Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) override;
+		virtual TAPIResult Create_GlobalTexture(const char* TEXTURE_NAME, bool isSamledTexture, unsigned int BINDINDEX, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
+			GFX_API::GFXHandle& GlobalTextureHandle) override;
+		virtual TAPIResult SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
+			GFX_API::IMAGE_ACCESS access) override;
 
 
 		virtual TAPIResult Compile_ShaderSource(const GFX_API::ShaderSource_Resource* SHADER, GFX_API::GFXHandle& ShaderSourceHandle) override;

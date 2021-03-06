@@ -100,6 +100,14 @@ namespace Vulkan {
 		bool isUniform;
 		GFX_API::SHADERSTAGEs_FLAG ACCESSED_STAGEs;
 	};
+	struct VK_API VK_GlobalTexture {
+		VkDeviceSize BINDINGPOINT;
+		bool isSampledTexture;
+		GFX_API::SHADERSTAGEs_FLAG ACCESSED_STAGEs;
+		VK_Texture* Texture = nullptr;
+		VkImageLayout Layout = VK_IMAGE_LAYOUT_UNDEFINED;
+		VkSampler Sampler = VK_NULL_HANDLE;
+	};
 
 	enum class DescType : unsigned char {
 		IMAGE,

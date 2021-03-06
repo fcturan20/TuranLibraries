@@ -87,11 +87,11 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		AlitaWindowHandle = GFX->CreateWindow(WindowDesc, AlitaSwapchains, SwapchainProperties);
 	}
 	
-	//Create Global Buffers before the RenderGraph Construction
-	GFX_API::GFXHandle FirstGlobalBuffer;
+	//Create Global Shader Inputs before the RenderGraph Construction
+	GFX_API::GFXHandle FirstGlobalBuffer, FirstGlobalTexture;
 	GFXContentManager->Create_GlobalBuffer("CameraData", 256, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
 		3, FirstGlobalBuffer);
-
+	GFXContentManager->Create_GlobalTexture("FirstGlobTexture", false, 0, GFX_API::Create_ShaderStageFlag(false, true, false, false, false), FirstGlobalTexture);
 
 
 	//RenderGraph Construction
@@ -355,7 +355,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		}
 	}
 
-
+	GFXContentManager->SetGlobal_ImageTexture(FirstGlobalTexture, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE);
 	GFXRENDERER->ImageBarrier(AlitaTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, 0, BarrierBeforeUpload_ID);
 	GFXRENDERER->ImageBarrier(GokuBlackTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::TRANSFER_DIST, 0, BarrierBeforeUpload_ID);
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 4);

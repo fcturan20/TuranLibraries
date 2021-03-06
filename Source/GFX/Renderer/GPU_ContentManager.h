@@ -34,9 +34,11 @@ namespace GFX_API {
 	6) How to create them is described well in related function's arguments and argument's structure definitions in GFX_RenderNodes.h.
 
 
-	Why Global Buffer is different than all other resources?
-	1) Because you can't create global buffers after RenderGraph construction!
-	2) Because global buffers are accessed by all shaders. A Shader needs re-compiling if global buffers list changes.
+	Why Global Buffer and Global Textures are different than all other resources?
+	1) Because you can't create globals after RenderGraph construction!
+	2) Because globals are accessed by all shaders. A Shader needs re-compiling if global buffers list changes.
+	3) Global Buffer is a buffer (like all other buffers) but Global Texture is a description of a Shader Input
+	So you can change a global texture to point to some other texture
 		
 
 	How does Material System works?
@@ -93,6 +95,10 @@ namespace GFX_API {
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
 			GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
 		virtual void Unload_GlobalBuffer(GFXHandle BUFFER_ID) = 0;
+		virtual TAPIResult Create_GlobalTexture(const char* TEXTURE_NAME, bool isSampledTexture, unsigned int BINDINDEX, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
+			GFX_API::GFXHandle& GlobalTextureHandle) = 0;
+		virtual TAPIResult SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
+			GFX_API::IMAGE_ACCESS access) = 0;
 
 
 		//Return handle to reference in GFX!

@@ -100,13 +100,17 @@ namespace Vulkan {
 		bool isUniform;
 		GFX_API::SHADERSTAGEs_FLAG ACCESSED_STAGEs;
 	};
+	struct VK_API VK_GlobalTextureElement {
+		VK_Texture* Texture = nullptr;
+		VkImageLayout Layout = VK_IMAGE_LAYOUT_UNDEFINED;
+		VkSampler Sampler = VK_NULL_HANDLE;
+	};
 	struct VK_API VK_GlobalTexture {
 		VkDeviceSize BINDINGPOINT;
 		bool isSampledTexture;
 		GFX_API::SHADERSTAGEs_FLAG ACCESSED_STAGEs;
-		VK_Texture* Texture = nullptr;
-		VkImageLayout Layout = VK_IMAGE_LAYOUT_UNDEFINED;
-		VkSampler Sampler = VK_NULL_HANDLE;
+		unsigned int ElementCount;
+		VK_GlobalTextureElement* Elements;
 	};
 
 	enum class DescType : unsigned char {
@@ -122,7 +126,7 @@ namespace Vulkan {
 		VK_DescBufferElement(const VK_DescBufferElement& copyDesc);
 	};
 	struct VK_API VK_DescImageElement {
-		VkDescriptorImageInfo info;
+		VkDescriptorImageInfo info = {};
 		std::atomic_bool IsUpdated;
 		VK_DescImageElement();
 		VK_DescImageElement(const VK_DescImageElement& copyDesc);

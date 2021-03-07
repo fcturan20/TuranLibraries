@@ -11,10 +11,6 @@ This project is a Vulkan backend for Turan Engine's (Non-DLL, Non-STL version) G
 7) You should call GFX->Create_Window() to create a window. Because it creates Swapchain Textures, you should handle textures' layout transitions etc.
 
 
-# Plans:
-1) Finish all of the non-coded parts
-2) Support reconstruction of RenderGraph and GFX API as fast as possible (Custom memory allocation is needed)
-
-# Work In Progress:
-1) Multi-threading library is coded but application doesn't benefit from it
-2) Vulkan initialization process is getting cleaner
+# How to track changes
+For Completed Tasks: https://share.clickup.com/l/h/6-50820492-1/62179be39c72e34
+For Uncompleted Tasks: https://share.clickup.com/l/h/4ee11-15/02ea89bd13b5c58

@@ -653,31 +653,35 @@ namespace Vulkan {
 				}
 				for (unsigned int i = 0; i < GLOBALTEXTUREs.size(ThreadID); i++) {
 					VK_GlobalTexture* tex = GLOBALTEXTUREs.get(ThreadID, i);
-					VkWriteDescriptorSet info = {};
-					info.descriptorCount = 1;
+					VkDescriptorType texDescType;
 					if (tex->isSampledTexture) {
-						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+						texDescType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 					}
 					else {
-						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+						texDescType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 					}
-					info.dstArrayElement = 0;
-					info.dstBinding = tex->BINDINGPOINT;
-					info.dstSet = GlobalShaderInputs_DescSet.Set;
-					VkDescriptorImageInfo* desciminfo = new VkDescriptorImageInfo;
-					if (tex->Texture) {
-						desciminfo->imageView = tex->Texture->ImageView;
+					for (unsigned int ElementIndex = 0; ElementIndex < tex->ElementCount; ElementIndex++) {
+						VkWriteDescriptorSet info = {};
+						info.descriptorCount = 1;
+						info.dstArrayElement = ElementIndex;
+						info.dstBinding = tex->BINDINGPOINT;
+						info.dstSet = GlobalShaderInputs_DescSet.Set;
+						VkDescriptorImageInfo* desciminfo = new VkDescriptorImageInfo;
+						if (tex->Elements[ElementIndex].Texture) {
+							desciminfo->imageView = tex->Elements[ElementIndex].Texture->ImageView;
+						}
+						else {
+							desciminfo->imageView = VK_NULL_HANDLE;
+						}
+						info.descriptorType = texDescType;
+						desciminfo->imageLayout = tex->Elements[ElementIndex].Layout;
+						desciminfo->sampler = tex->Elements[ElementIndex].Sampler;
+						info.pImageInfo = desciminfo;
+						info.pNext = nullptr;
+						info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+						DeleteImageInfoList.push_back(desciminfo);
+						UpdateInfos.push_back(info);
 					}
-					else {
-						desciminfo->imageView = VK_NULL_HANDLE;
-					}
-					desciminfo->imageLayout = tex->Layout;
-					desciminfo->sampler = tex->Sampler;
-					info.pImageInfo = desciminfo;
-					info.pNext = nullptr;
-					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					DeleteImageInfoList.push_back(desciminfo);
-					UpdateInfos.push_back(info);
 				}
 			}
 
@@ -760,14 +764,14 @@ namespace Vulkan {
 						bindings.push_back(VkDescriptorSetLayoutBinding());
 						VkDescriptorSetLayoutBinding& targetbinding = bindings[bindings.size() - 1];
 						targetbinding.binding = gt->BINDINGPOINT;
-						targetbinding.descriptorCount = 1;
+						targetbinding.descriptorCount = gt->ElementCount;
 						if (gt->isSampledTexture) {
 							targetbinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-							SAMPLED_COUNT++;
+							SAMPLED_COUNT += gt->ElementCount;
 						}
 						else {
 							targetbinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-							IMAGE_COUNT++;
+							IMAGE_COUNT += gt->ElementCount;
 						}
 						targetbinding.pImmutableSamplers = VK_NULL_HANDLE;
 						targetbinding.stageFlags = Find_VkShaderStages(gt->ACCESSED_STAGEs);
@@ -1337,29 +1341,57 @@ namespace Vulkan {
 	void GPU_ContentManager::Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Unload_GlobalBuffer() isn't coded!", true);
 	}
-	TAPIResult GPU_ContentManager::Create_GlobalTexture(const char* TEXTURE_NAME, bool isSampledTexture, unsigned int BINDINDEX, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
+	TAPIResult GPU_ContentManager::Create_GlobalTexture(const char* TEXTURE_NAME, bool isSampledTexture, unsigned int BINDINDEX, unsigned int TextureCount, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
 		GFX_API::GFXHandle& GlobalTextureHandle) {
 		//It is possible to add a synchronization and check BINDINDEX, but it is not necessary for now
 
+		if (!TextureCount) {
+			LOG_ERROR_TAPI("Create_GlobalTexture() has failed because TextureCount is zero!");
+			return TAPI_FAIL;
+		}
 		VK_GlobalTexture* Descriptor = new VK_GlobalTexture;
 		Descriptor->ACCESSED_STAGEs = AccessableStages;
 		Descriptor->BINDINGPOINT = BINDINDEX;
 		Descriptor->isSampledTexture = isSampledTexture;
+		Descriptor->Elements = new VK_GlobalTextureElement[TextureCount];
+		Descriptor->ElementCount = TextureCount;
 		GLOBALTEXTUREs.push_back(GFX->JobSys->GetThisThreadIndex(), Descriptor);
 		GlobalTextureHandle = Descriptor;
 		return TAPI_SUCCESS;
 	}
-	TAPIResult GPU_ContentManager::SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, 
+	TAPIResult GPU_ContentManager::SetGlobal_SampledTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int ElementIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
+		GFX_API::IMAGE_ACCESS access) {
+		VK_GlobalTexture* GB = GFXHandleConverter(VK_GlobalTexture*, GlobalTextureHandle);
+		if (!GB->isSampledTexture) {
+			LOG_ERROR_TAPI("SetGlobal_SampledTexture() has failed because global texture is image texture!");
+			return TAPI_FAIL;
+		}
+		if (ElementIndex >= GB->ElementCount) {
+			LOG_ERROR_TAPI("SetGlobal_SampledTexture() has failed because ElementIndex isn't smaller than TextureCount of the GlobalTexture!");
+			return TAPI_FAIL;
+		}
+		GB->Elements[ElementIndex].Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
+		GB->Elements[ElementIndex].Sampler = GFXHandleConverter(VK_Sampler*, SamplingType)->Sampler;
+		VkAccessFlags unused;
+		Find_AccessPattern_byIMAGEACCESS(access, unused, GB->Elements[ElementIndex].Layout);
+		GlobalShaderInputs_DescSet.ShouldRecreate.store(true);
+		return TAPI_SUCCESS;
+	}
+	TAPIResult GPU_ContentManager::SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int ElementIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
 		GFX_API::IMAGE_ACCESS access) {
 		VK_GlobalTexture* GB = GFXHandleConverter(VK_GlobalTexture*, GlobalTextureHandle);
 		if (GB->isSampledTexture) {
 			LOG_ERROR_TAPI("SetGlobal_ImageTexture() has failed because global texture is sampled texture!");
 			return TAPI_FAIL;
 		}
-		GB->Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
-		GB->Sampler = GFXHandleConverter(VK_Sampler*, SamplingType)->Sampler;
+		if (ElementIndex >= GB->ElementCount) {
+			LOG_ERROR_TAPI("SetGlobal_ImageTexture() has failed because ElementIndex isn't smaller than TextureCount of the GlobalTexture!");
+			return TAPI_FAIL;
+		}
+		GB->Elements[ElementIndex].Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
+		GB->Elements[ElementIndex].Sampler = GFXHandleConverter(VK_Sampler*, SamplingType)->Sampler;
 		VkAccessFlags unused;
-		Find_AccessPattern_byIMAGEACCESS(access, unused, GB->Layout);
+		Find_AccessPattern_byIMAGEACCESS(access, unused, GB->Elements[ElementIndex].Layout);
 		GlobalShaderInputs_DescSet.ShouldRecreate.store(true);
 		return TAPI_SUCCESS;
 	}

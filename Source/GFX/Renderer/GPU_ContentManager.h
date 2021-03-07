@@ -95,9 +95,11 @@ namespace GFX_API {
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
 			GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
 		virtual void Unload_GlobalBuffer(GFXHandle BUFFER_ID) = 0;
-		virtual TAPIResult Create_GlobalTexture(const char* TEXTURE_NAME, bool isSampledTexture, unsigned int BINDINDEX, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
+		virtual TAPIResult Create_GlobalTexture(const char* TEXTURE_NAME, bool isSampledTexture, unsigned int BINDINDEX, unsigned int TextureCount, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
 			GFX_API::GFXHandle& GlobalTextureHandle) = 0;
-		virtual TAPIResult SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
+		virtual TAPIResult SetGlobal_SampledTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int TextureIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
+			GFX_API::IMAGE_ACCESS access) = 0; 
+		virtual TAPIResult SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int TextureIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
 			GFX_API::IMAGE_ACCESS access) = 0;
 
 

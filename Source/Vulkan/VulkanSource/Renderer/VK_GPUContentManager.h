@@ -101,9 +101,11 @@ namespace Vulkan {
 		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
 			GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) override;
 		virtual void Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) override;
-		virtual TAPIResult Create_GlobalTexture(const char* TEXTURE_NAME, bool isSamledTexture, unsigned int BINDINDEX, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
+		virtual TAPIResult Create_GlobalTexture(const char* TEXTURE_NAME, bool isSamledTexture, unsigned int BINDINDEX, unsigned int TextureCount, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
 			GFX_API::GFXHandle& GlobalTextureHandle) override;
-		virtual TAPIResult SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
+		virtual TAPIResult SetGlobal_SampledTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int TextureIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
+			GFX_API::IMAGE_ACCESS access) override;
+		virtual TAPIResult SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int TextureIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
 			GFX_API::IMAGE_ACCESS access) override;
 
 

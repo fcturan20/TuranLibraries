@@ -913,7 +913,7 @@ namespace Vulkan {
 		}
 		return size;
 	}
-	TAPIResult GPU_ContentManager::Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
+	TAPIResult GPU_ContentManager::Create_SamplingType(unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
 		GFX_API::TEXTURE_MIPMAPFILTER MINFILTER, GFX_API::TEXTURE_MIPMAPFILTER MAGFILTER, GFX_API::TEXTURE_WRAPPING WRAPPING_WIDTH,
 		GFX_API::TEXTURE_WRAPPING WRAPPING_HEIGHT, GFX_API::TEXTURE_WRAPPING WRAPPING_DEPTH, GFX_API::GFXHandle& SamplingTypeHandle) {
 		VkSamplerCreateInfo s_ci = {};
@@ -1188,10 +1188,10 @@ namespace Vulkan {
 	TAPIResult GPU_ContentManager::Create_Texture(const GFX_API::Texture_Description& TEXTURE_ASSET, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& TextureHandle) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Create_Texture() should support mipmaps!", false);
 		VK_Texture* TEXTURE = new VK_Texture;
-		TEXTURE->CHANNELs = TEXTURE_ASSET.Properties.CHANNEL_TYPE;
+		TEXTURE->CHANNELs = TEXTURE_ASSET.CHANNEL_TYPE;
 		TEXTURE->HEIGHT = TEXTURE_ASSET.HEIGHT;
 		TEXTURE->WIDTH = TEXTURE_ASSET.WIDTH;
-		TEXTURE->DATA_SIZE = TEXTURE_ASSET.WIDTH * TEXTURE_ASSET.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(TEXTURE_ASSET.Properties.CHANNEL_TYPE);
+		TEXTURE->DATA_SIZE = TEXTURE_ASSET.WIDTH * TEXTURE_ASSET.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(TEXTURE_ASSET.CHANNEL_TYPE);
 		TEXTURE->USAGE = TEXTURE_ASSET.USAGE;
 		TEXTURE->Block.MemAllocIndex = MemoryTypeIndex;
 
@@ -1203,7 +1203,7 @@ namespace Vulkan {
 			im_ci.extent.width = TEXTURE->WIDTH;
 			im_ci.extent.height = TEXTURE->HEIGHT;
 			im_ci.extent.depth = 1;
-			if (TEXTURE_ASSET.Properties.DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
+			if (TEXTURE_ASSET.DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
 				im_ci.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 				im_ci.arrayLayers = 6;
 			}
@@ -1212,7 +1212,7 @@ namespace Vulkan {
 				im_ci.arrayLayers = 1;
 			}
 			im_ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE->CHANNELs);
-			im_ci.imageType = Find_VkImageType(TEXTURE_ASSET.Properties.DIMENSION);
+			im_ci.imageType = Find_VkImageType(TEXTURE_ASSET.DIMENSION);
 			im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			im_ci.mipLevels = 1;
 			im_ci.pNext = nullptr;
@@ -1224,7 +1224,7 @@ namespace Vulkan {
 			}
 			im_ci.pQueueFamilyIndices = VKGPU->AllQueueFamilies;
 			im_ci.queueFamilyIndexCount = VKGPU->QUEUEs.size();
-			im_ci.tiling = Find_VkTiling(TEXTURE_ASSET.Properties.DATAORDER);
+			im_ci.tiling = Find_VkTiling(TEXTURE_ASSET.DATAORDER);
 			im_ci.usage = Find_VKImageUsage_forVKTexture(*TEXTURE);
 			im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
@@ -1249,7 +1249,7 @@ namespace Vulkan {
 			ci.pNext = nullptr;
 
 			ci.image = TEXTURE->Image;
-			if (TEXTURE_ASSET.Properties.DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
+			if (TEXTURE_ASSET.DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
 				ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE;
 				ci.subresourceRange.layerCount = 6;
 			}

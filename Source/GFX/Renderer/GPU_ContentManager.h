@@ -60,7 +60,7 @@ namespace GFX_API {
 		virtual void Destroy_AllResources() = 0;
 
 
-		virtual TAPIResult Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs dimension, unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
+		virtual TAPIResult Create_SamplingType(unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
 			GFX_API::TEXTURE_MIPMAPFILTER MINFILTER, GFX_API::TEXTURE_MIPMAPFILTER MAGFILTER, GFX_API::TEXTURE_WRAPPING WRAPPING_WIDTH,
 			GFX_API::TEXTURE_WRAPPING WRAPPING_HEIGHT, GFX_API::TEXTURE_WRAPPING WRAPPING_DEPTH, GFX_API::GFXHandle& SamplingTypeHandle) = 0;
 

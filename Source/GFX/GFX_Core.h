@@ -28,13 +28,13 @@ namespace GFX_API {
 		IMGUI_Core* IMGUI_o;
 		TuranAPI::Threading::JobSystem* JobSys;
 
-		virtual bool GetTextureTypeLimits(const GFX_API::Texture_Properties& Properties, GFX_API::TEXTUREUSAGEFLAG UsageFlag, unsigned int GPUIndex,
-			unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) = 0;
+		virtual bool GetTextureTypeLimits(GFX_API::TEXTURE_DIMENSIONs dims, GFX_API::TEXTURE_ORDER dataorder, GFX_API::TEXTURE_CHANNELs channeltype, GFX_API::TEXTUREUSAGEFLAG usageflag,
+			unsigned int GPUIndex, unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) = 0;
 		virtual void GetSupportedAllocations_ofTexture(const GFX_API::Texture_Description& TEXTURE_desc, unsigned int GPUIndex, unsigned int& SupportedMemoryTypesBitset) = 0;
 		//Window Operations
 
 		//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
-		virtual GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) = 0;
+		virtual GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Description& SwapchainTextureProperties) = 0;
 		virtual void Change_Window_Resolution(GFXHandle WindowHandle, unsigned int width, unsigned int height) = 0;
 		//Get window's current frame's (which will be shown after GFXRENDERER->Run()) index
 		virtual unsigned char Get_WindowFrameIndex(GFX_API::GFXHandle WindowHandle) = 0;

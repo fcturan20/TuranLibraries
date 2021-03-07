@@ -12,11 +12,9 @@ void Create_RTSlotSet_forFirstDrawPass(unsigned int WIDTH, unsigned int HEIGHT, 
 	DEPTH_desc.WIDTH = WIDTH;
 	DEPTH_desc.HEIGHT = HEIGHT;
 	DEPTH_desc.USAGE.isRenderableTo = true;
-	DEPTH_desc.Properties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8;
-	DEPTH_desc.Properties.DATAORDER = GFX_API::TEXTURE_ORDER::SWIZZLE;
-	DEPTH_desc.Properties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
-	DEPTH_desc.Properties.MIPMAP_FILTERING = GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP;
-	DEPTH_desc.Properties.WRAPPING = GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
+	DEPTH_desc.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D24S8;
+	DEPTH_desc.DATAORDER = GFX_API::TEXTURE_ORDER::SWIZZLE;
+	DEPTH_desc.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
 	if (GFXContentManager->Create_Texture(DEPTH_desc, 0, DepthRT) != TAPI_SUCCESS) {
 		LOG_CRASHING_TAPI("Creation of the depth RT has failed!");
 	}
@@ -83,7 +81,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		WindowDesc.SWAPCHAINUSAGEs.isRandomlyWrittenTo = true;
 		WindowDesc.SWAPCHAINUSAGEs.isSampledReadOnly = true;
 		WindowDesc.resize_cb = WindowResizeCallback;
-		GFX_API::Texture_Properties SwapchainProperties;
+		GFX_API::Texture_Description SwapchainProperties;
 		AlitaWindowHandle = GFX->CreateWindow(WindowDesc, AlitaSwapchains, SwapchainProperties);
 	}
 	
@@ -104,7 +102,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	GFX_API::GFXHandle FIRSTSAMPLINGTYPE_ID, AlitaTexture, GokuBlackTexture;
 	unsigned int AlitaSize = 0, AlitaOffset = 0, GokuBlackSize = 0, GokuBlackOffset = 0;
 	{
-		if (GFXContentManager->Create_SamplingType(GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D, 0, 0, GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP,
+		if (GFXContentManager->Create_SamplingType(0, 0, GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP,
 			GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT,
 			GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, FIRSTSAMPLINGTYPE_ID) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Creation of sampling type has failed, so application has!");
@@ -120,7 +118,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		if (GFXContentManager->Create_Texture(alita_desc, 0, AlitaTexture) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Alita texture creation has failed!");
 		}
-		AlitaSize = alita_desc.WIDTH * alita_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(alita_desc.Properties.CHANNEL_TYPE);
+		AlitaSize = alita_desc.WIDTH * alita_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(alita_desc.CHANNEL_TYPE);
 		AlitaOffset = 944;
 		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, ALITADATA, AlitaSize, AlitaOffset) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading the Alita texture has failed!");
@@ -140,7 +138,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		if (GFXContentManager->Create_Texture(gokublack_desc, 0, GokuBlackTexture) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Goku Black texture creation has failed!");
 		}
-		GokuBlackSize = gokublack_desc.WIDTH * gokublack_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(gokublack_desc.Properties.CHANNEL_TYPE);
+		GokuBlackSize = gokublack_desc.WIDTH * gokublack_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(gokublack_desc.CHANNEL_TYPE);
 		GokuBlackOffset = AlitaOffset + AlitaSize;
 		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, GOKUBLACKDATA, GokuBlackSize, GokuBlackOffset) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading the Goku Black texture has failed!");

@@ -22,13 +22,13 @@ namespace Vulkan {
 		void Save_Monitors(vector<GFX_API::MonitorDescription>& Monitors);
 
 		virtual void Check_Errors() override;
-		virtual bool GetTextureTypeLimits(const GFX_API::Texture_Properties& Properties, GFX_API::TEXTUREUSAGEFLAG UsageFlag, unsigned int GPUIndex,
-			unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) override;
+		virtual bool GetTextureTypeLimits(GFX_API::TEXTURE_DIMENSIONs dims, GFX_API::TEXTURE_ORDER dataorder, GFX_API::TEXTURE_CHANNELs channeltype, GFX_API::TEXTUREUSAGEFLAG usageflag,
+			unsigned int GPUIndex, unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) override;
 		virtual void GetSupportedAllocations_ofTexture(const GFX_API::Texture_Description& TEXTURE_desc, unsigned int GPUIndex, 
 			unsigned int& SupportedMemoryTypesBitset) override;
 		//Window Operations
 
-		virtual GFX_API::GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) override;
+		virtual GFX_API::GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Description& SwapchainTextureProperties) override;
 		virtual void Change_Window_Resolution(GFX_API::GFXHandle Window, unsigned int width, unsigned int height) override;
 		virtual unsigned char Get_WindowFrameIndex(GFX_API::GFXHandle WindowHandle) override;
 		vector<GFX_API::GFXHandle>& Get_WindowHandles();

@@ -528,7 +528,7 @@ namespace Vulkan {
 		}
 		return true;
 	}
-	GFX_API::GFXHandle Vulkan_Core::CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Properties& SwapchainTextureProperties) {
+	GFX_API::GFXHandle Vulkan_Core::CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Description& SwapchainTextureProperties) {
 		LOG_STATUS_TAPI("Window creation has started!");
 		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
 		
@@ -647,13 +647,13 @@ namespace Vulkan {
 	vector<GFX_API::GFXHandle>& Vulkan_Core::Get_WindowHandles() {
 		return WINDOWs;
 	}
-	bool Vulkan_Core::GetTextureTypeLimits(const GFX_API::Texture_Properties& Properties, GFX_API::TEXTUREUSAGEFLAG UsageFlag, unsigned int GPUIndex,
-		unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) {
+	bool Vulkan_Core::GetTextureTypeLimits(GFX_API::TEXTURE_DIMENSIONs dims, GFX_API::TEXTURE_ORDER dataorder, GFX_API::TEXTURE_CHANNELs channeltype, 
+		GFX_API::TEXTUREUSAGEFLAG usageflag, unsigned int GPUIndex, unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) {
 		GPU* VKGPU = GFXHandleConverter(GPU*, DEVICE_GPUs[GPUIndex]);
 
 		VkImageFormatProperties props;
-		if (vkGetPhysicalDeviceImageFormatProperties(VKGPU->Physical_Device, Find_VkFormat_byTEXTURECHANNELs(Properties.CHANNEL_TYPE), 
-			Find_VkImageType(Properties.DIMENSION), Find_VkTiling(Properties.DATAORDER), Find_VKImageUsage_forGFXTextureDesc(UsageFlag, Properties.CHANNEL_TYPE), 
+		if (vkGetPhysicalDeviceImageFormatProperties(VKGPU->Physical_Device, Find_VkFormat_byTEXTURECHANNELs(channeltype),
+			Find_VkImageType(dims), Find_VkTiling(dataorder), Find_VKImageUsage_forGFXTextureDesc(usageflag, channeltype),
 			0, &props) != VK_SUCCESS) {
 			LOG_ERROR_TAPI("GFX->GetTextureTypeLimits() has failed!");
 			return false;
@@ -674,8 +674,8 @@ namespace Vulkan {
 		im_ci.extent.height = TEXTURE.HEIGHT;
 		im_ci.extent.depth = 1;
 		im_ci.flags = 0;
-		im_ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE.Properties.CHANNEL_TYPE);
-		im_ci.imageType = Find_VkImageType(TEXTURE.Properties.DIMENSION);
+		im_ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE.CHANNEL_TYPE);
+		im_ci.imageType = Find_VkImageType(TEXTURE.DIMENSION);
 		im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		im_ci.mipLevels = 1;
 		im_ci.pNext = nullptr;
@@ -689,8 +689,8 @@ namespace Vulkan {
 		}
 		im_ci.pQueueFamilyIndices = VKGPU->AllQueueFamilies;
 		im_ci.queueFamilyIndexCount = VKGPU->QUEUEs.size();
-		im_ci.tiling = Find_VkTiling(TEXTURE.Properties.DATAORDER);
-		im_ci.usage = Find_VKImageUsage_forGFXTextureDesc(TEXTURE.USAGE, TEXTURE.Properties.CHANNEL_TYPE);
+		im_ci.tiling = Find_VkTiling(TEXTURE.DATAORDER);
+		im_ci.usage = Find_VKImageUsage_forGFXTextureDesc(TEXTURE.USAGE, TEXTURE.CHANNEL_TYPE);
 		im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
 

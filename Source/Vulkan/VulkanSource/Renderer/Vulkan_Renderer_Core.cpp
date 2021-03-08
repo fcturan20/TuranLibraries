@@ -1059,8 +1059,27 @@ namespace Vulkan {
 		finalinfo.info = Copy_i;
 		DATAs->BUFBUFCopies.push_back(GFX->JobSys->GetThisThreadIndex(), finalinfo);
 	}
+	unsigned int Find_TextureLayer_fromGFXCUBEFACE(GFX_API::CUBEFACE cubeface) {
+		switch (cubeface)
+		{
+		case GFX_API::CUBEFACE::FRONT:
+			return 0;
+		case GFX_API::CUBEFACE::BACK:
+			return 1;
+		case GFX_API::CUBEFACE::LEFT:
+			return 2;
+		case GFX_API::CUBEFACE::RIGHT:
+			return 3;
+		case GFX_API::CUBEFACE::TOP:
+			return 4;
+		case GFX_API::CUBEFACE::BOTTOM:
+			return 5;
+		default:
+			LOG_CRASHING_TAPI("Find_TextureLayer_fromGFXCUBEFACE() in Vulkan backend doesn't support this type of CubeFace!");
+		}
+	}
 	void Renderer::CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
-		GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion, unsigned int TargetTextureLayer) {
+		GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion, unsigned int TargetMipLevel, GFX_API::CUBEFACE TargetCubeMapFace) {
 		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
 		VkDeviceSize finaloffset = static_cast<VkDeviceSize>(SourceBuffer_offset);
 		VK_BUFtoIMinfo x;
@@ -1076,13 +1095,13 @@ namespace Vulkan {
 			x.BufferImageCopy.imageExtent.height = TargetTextureRegion.Height;
 		}
 		else {
-			x.BufferImageCopy.imageExtent.height = TEXTURE->HEIGHT;
+			x.BufferImageCopy.imageExtent.height = std::floor(TEXTURE->HEIGHT / std::pow(2, TargetMipLevel));
 		}
 		if (TargetTextureRegion.Width) {
 			x.BufferImageCopy.imageExtent.width = TargetTextureRegion.Width;
 		}
 		else {
-			x.BufferImageCopy.imageExtent.width = TEXTURE->WIDTH;
+			x.BufferImageCopy.imageExtent.width = std::floor(TEXTURE->WIDTH / std::pow(2, TargetMipLevel));
 		}
 		x.BufferImageCopy.imageOffset.x = TargetTextureRegion.WidthOffset;
 		x.BufferImageCopy.imageOffset.y = TargetTextureRegion.HeightOffset;
@@ -1096,9 +1115,14 @@ namespace Vulkan {
 		else {
 			x.BufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
-		x.BufferImageCopy.imageSubresource.baseArrayLayer = TargetTextureLayer;
+		if (TEXTURE->DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
+			x.BufferImageCopy.imageSubresource.baseArrayLayer = Find_TextureLayer_fromGFXCUBEFACE(TargetCubeMapFace);
+		}
+		else {
+			x.BufferImageCopy.imageSubresource.baseArrayLayer = 0;
+		}
 		x.BufferImageCopy.imageSubresource.layerCount = 1;
-		x.BufferImageCopy.imageSubresource.mipLevel = 0;
+		x.BufferImageCopy.imageSubresource.mipLevel = TargetMipLevel;
 		x.TargetImage = TEXTURE->Image;
 		FindBufferOBJ_byBufType(SourceBuffer_Handle, SourceBufferTYPE, x.SourceBuffer, finaloffset);
 		x.BufferImageCopy.bufferOffset = finaloffset;
@@ -1110,8 +1134,8 @@ namespace Vulkan {
 		VK_TPCopyDatas* DATAs = GFXHandleConverter(VK_TPCopyDatas*, TP->TransferDatas);
 		DATAs->BUFIMCopies.push_back(GFX->JobSys->GetThisThreadIndex(), x);
 	}
-	void Renderer::CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle,
-		unsigned int SourceTextureLayer, uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset, unsigned int TargetTextureLayer) {
+	void Renderer::CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle, uvec3 SourceTextureOffset,
+		uvec3 CopySize, uvec3 TargetTextureOffset, unsigned int SourceMipLevel, unsigned int TargetMipLevel, GFX_API::CUBEFACE SourceCubeMapFace, GFX_API::CUBEFACE TargetCubeMapFace) {
 		VK_Texture* SourceIm = GFXHandleConverter(VK_Texture*, SourceTextureHandle);
 		VK_Texture* TargetIm = GFXHandleConverter(VK_Texture*, TargetTextureHandle);
 		VK_IMtoIMinfo x;
@@ -1135,10 +1159,20 @@ namespace Vulkan {
 			copy_i.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			copy_i.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
-		copy_i.dstSubresource.baseArrayLayer = TargetTextureLayer;
-		copy_i.srcSubresource.baseArrayLayer = SourceTextureLayer;
+		if (TargetIm->DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
+			copy_i.dstSubresource.baseArrayLayer = Find_TextureLayer_fromGFXCUBEFACE(TargetCubeMapFace);
+		}
+		else {
+			copy_i.dstSubresource.baseArrayLayer = 0;
+		}
+		if (SourceIm->DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
+			copy_i.srcSubresource.baseArrayLayer = Find_TextureLayer_fromGFXCUBEFACE(SourceCubeMapFace);
+		}
+		else {
+			copy_i.srcSubresource.baseArrayLayer = 0;
+		}
 		copy_i.dstSubresource.layerCount = 1; copy_i.srcSubresource.layerCount = 1;
-		copy_i.dstSubresource.mipLevel = 0; copy_i.srcSubresource.mipLevel = 0;
+		copy_i.dstSubresource.mipLevel = TargetMipLevel; copy_i.srcSubresource.mipLevel = SourceMipLevel;
 		
 		copy_i.extent.width = CopySize.x;
 		copy_i.extent.height = CopySize.y;
@@ -1152,8 +1186,8 @@ namespace Vulkan {
 		DATAs->IMIMCopies.push_back(GFX->JobSys->GetThisThreadIndex(), x);
 	}
 
-	void Renderer::ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
-		, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int LayerIndex, GFX_API::GFXHandle BarrierTPHandle) {
+	void Renderer::ImageBarrier(GFX_API::GFXHandle BarrierTPHandle, GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
+		, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int TargetMipLevel, GFX_API::CUBEFACE TargetCubeMapFace) {
 		VK_Texture* Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
 		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, BarrierTPHandle);
 		if (TP->TYPE != GFX_API::TRANFERPASS_TYPE::TP_BARRIER) {
@@ -1176,12 +1210,22 @@ namespace Vulkan {
 		else {
 			im_bi.Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
-		//Mipmap settings, but mipmap is not supported right now
-		LOG_NOTCODED_TAPI("Mipmapping isn't coded, so subresourceRange mipmap settings aren't set either!", false);
-		im_bi.Barrier.subresourceRange.baseArrayLayer = LayerIndex;
+		if (Texture->DIMENSION == GFX_API::TEXTURE_DIMENSIONs::TEXTURE_CUBE) {
+			im_bi.Barrier.subresourceRange.baseArrayLayer = Find_TextureLayer_fromGFXCUBEFACE(TargetCubeMapFace);
+		}
+		else {
+			im_bi.Barrier.subresourceRange.baseArrayLayer = 0;
+		}
 		im_bi.Barrier.subresourceRange.layerCount = 1;
 		im_bi.Barrier.subresourceRange.levelCount = 1;
-		im_bi.Barrier.subresourceRange.baseMipLevel = 0;
+		if (TargetMipLevel == UINT32_MAX) {
+			im_bi.Barrier.subresourceRange.baseMipLevel = 0;
+			im_bi.Barrier.subresourceRange.levelCount = static_cast<uint32_t>(Texture->MIPCOUNT);
+		}
+		else {
+			im_bi.Barrier.subresourceRange.baseMipLevel = TargetMipLevel;
+			im_bi.Barrier.subresourceRange.levelCount = 1;
+		}
 		im_bi.Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		im_bi.Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		im_bi.Barrier.pNext = nullptr;

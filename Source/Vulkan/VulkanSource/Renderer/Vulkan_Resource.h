@@ -16,8 +16,10 @@ namespace Vulkan {
 
 	struct VK_API VK_Texture {
 		unsigned int WIDTH, HEIGHT, DATA_SIZE;
+		unsigned char MIPCOUNT;
 		GFX_API::TEXTURE_CHANNELs CHANNELs;
 		GFX_API::TEXTUREUSAGEFLAG USAGE;
+		GFX_API::TEXTURE_DIMENSIONs DIMENSION;
 
 		VkImage Image = {};
 		VkImageView ImageView = {};

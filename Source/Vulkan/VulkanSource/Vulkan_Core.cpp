@@ -491,6 +491,7 @@ namespace Vulkan {
 			SWAPCHAINTEXTURE->HEIGHT = HEIGHT;
 			SWAPCHAINTEXTURE->DATA_SIZE = SWAPCHAINTEXTURE->WIDTH * SWAPCHAINTEXTURE->HEIGHT * 4;
 			SWAPCHAINTEXTURE->Image = SWPCHN_IMGs[vkim_index];
+			SWAPCHAINTEXTURE->MIPCOUNT = 1;
 			SWAPCHAINTEXTURE->USAGE.isCopiableFrom = true;
 			SWAPCHAINTEXTURE->USAGE.isCopiableTo = true;
 			SWAPCHAINTEXTURE->USAGE.isRenderableTo = true;
@@ -614,6 +615,13 @@ namespace Vulkan {
 		}
 		Vulkan_Window->Swapchain_Textures[0] = SwapchainTextureHandles[0];
 		Vulkan_Window->Swapchain_Textures[1] = SwapchainTextureHandles[1];
+		SwapchainTextureProperties.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_BGRA8UNORM;
+		SwapchainTextureProperties.DATAORDER = GFX_API::TEXTURE_ORDER::SWIZZLE;
+		SwapchainTextureProperties.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
+		SwapchainTextureProperties.HEIGHT = Vulkan_Window->LASTHEIGHT;
+		SwapchainTextureProperties.WIDTH = Vulkan_Window->LASTWIDTH;
+		SwapchainTextureProperties.MIPCOUNT = 1;
+		SwapchainTextureProperties.USAGE = Desc.SWAPCHAINUSAGEs;
 
 		//Create presentation wait semaphores
 		//We are creating 3 semaphores because if 2+ frames combined is faster than vertical blank, there is tearing!

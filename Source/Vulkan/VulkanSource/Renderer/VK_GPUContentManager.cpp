@@ -1186,7 +1186,10 @@ namespace Vulkan {
 
 
 	TAPIResult GPU_ContentManager::Create_Texture(const GFX_API::Texture_Description& TEXTURE_ASSET, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& TextureHandle) {
-		LOG_NOTCODED_TAPI("GFXContentManager->Create_Texture() should support mipmaps!", false);
+		if (TEXTURE_ASSET.MIPCOUNT > std::floor(std::log2(std::max(TEXTURE_ASSET.WIDTH, TEXTURE_ASSET.HEIGHT))) + 1 || !TEXTURE_ASSET.MIPCOUNT) {
+			LOG_ERROR_TAPI("GFXContentManager->Create_Texture() has failed because mip count of the texture is wrong!");
+			return TAPI_FAIL;
+		}
 		VK_Texture* TEXTURE = new VK_Texture;
 		TEXTURE->CHANNELs = TEXTURE_ASSET.CHANNEL_TYPE;
 		TEXTURE->HEIGHT = TEXTURE_ASSET.HEIGHT;
@@ -1194,6 +1197,8 @@ namespace Vulkan {
 		TEXTURE->DATA_SIZE = TEXTURE_ASSET.WIDTH * TEXTURE_ASSET.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(TEXTURE_ASSET.CHANNEL_TYPE);
 		TEXTURE->USAGE = TEXTURE_ASSET.USAGE;
 		TEXTURE->Block.MemAllocIndex = MemoryTypeIndex;
+		TEXTURE->DIMENSION = TEXTURE_ASSET.DIMENSION;
+		TEXTURE->MIPCOUNT = TEXTURE_ASSET.MIPCOUNT;
 
 
 		//Create VkImage
@@ -1214,7 +1219,7 @@ namespace Vulkan {
 			im_ci.format = Find_VkFormat_byTEXTURECHANNELs(TEXTURE->CHANNELs);
 			im_ci.imageType = Find_VkImageType(TEXTURE_ASSET.DIMENSION);
 			im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			im_ci.mipLevels = 1;
+			im_ci.mipLevels = static_cast<uint32_t>(TEXTURE_ASSET.MIPCOUNT);
 			im_ci.pNext = nullptr;
 			if (VKGPU->QUEUEs.size() > 1) {
 				im_ci.sharingMode = VK_SHARING_MODE_CONCURRENT;

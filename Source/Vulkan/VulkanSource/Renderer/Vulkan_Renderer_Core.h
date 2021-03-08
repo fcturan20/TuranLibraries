@@ -47,11 +47,13 @@ namespace Vulkan {
 			GFX_API::GFXHandle TargetBuffer_Handle, GFX_API::BUFFER_TYPE TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) override;
 		//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 		virtual void CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
-			GFX_API::GFXHandle TextureHandle, unsigned int SourceTextureLayer, GFX_API::BoxRegion TargetTextureRegion, unsigned int TargetTextureLayer) override;
-		virtual void CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle,
-			unsigned int SourceTextureLayer, uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset, unsigned int TargetTextureLayer) override;
-		virtual void ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
-			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int LayerIndex, GFX_API::GFXHandle BarrierTPHandle) override;
+			GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion, unsigned int TargetMipLevel,
+			GFX_API::CUBEFACE TargetCubeMapFace = GFX_API::CUBEFACE::FRONT) override;
+		virtual void CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle, uvec3 SourceTextureOffset,
+			uvec3 CopySize, uvec3 TargetTextureOffset, unsigned int SourceMipLevel, unsigned int TargetMipLevel, GFX_API::CUBEFACE SourceCubeMapFace = GFX_API::CUBEFACE::FRONT, 
+			GFX_API::CUBEFACE TargetCubeMapFace = GFX_API::CUBEFACE::FRONT) override;
+		virtual void ImageBarrier(GFX_API::GFXHandle BarrierTPHandle, GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
+			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int TargetMipLevel = UINT32_MAX, GFX_API::CUBEFACE TargetCubeMapFace = GFX_API::CUBEFACE::FRONT) override;
 		virtual void ChangeDrawPass_RTSlotSet(GFX_API::GFXHandle DrawPassHandle, GFX_API::GFXHandle RTSlotSetHandle) override;
 
 	};

@@ -71,15 +71,20 @@ namespace GFX_API {
 		virtual void CopyBuffer_toBuffer(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE, 
 			GFX_API::GFXHandle TargetBuffer_Handle, GFX_API::BUFFER_TYPE TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) = 0;
 		//If TargetTexture_CopyXXX is 0, it's converted to size of the texture in that dimension
+		//If your texture is a cubemap, you should use TargetCubeMapFace to specify which face you're copying to
 		virtual void CopyBuffer_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE,
-			GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion, unsigned int TargetTextureLayer) = 0;
+			GFX_API::GFXHandle TextureHandle, unsigned int SourceBuffer_offset, GFX_API::BoxRegion TargetTextureRegion, unsigned int TargetMipLevel,
+			GFX_API::CUBEFACE TargetCubeMapFace = GFX_API::CUBEFACE::FRONT) = 0;
 		//This function copies CopySize amount of data from Source to Target
 		//Which means texture channels and layouts should match for a bugless copy
-		virtual void CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle,
-			unsigned int SourceTextureLayer, uvec3 SourceTextureOffset, uvec3 CopySize, uvec3 TargetTextureOffset, unsigned int TargetTextureLayer) = 0;
-		//If your texture is an array texture or a cubemap, you should use LayerIndex to specify the texture you're gonna use barrier for.
-		virtual void ImageBarrier(GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
-			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int LayerIndex, GFX_API::GFXHandle BarrierTPHandle) = 0;
+		//If either (or both) of your texture is a cubemap, you should use xxxCubeMapFace argument to specify the face.
+		virtual void CopyImage_toImage(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceTextureHandle, GFX_API::GFXHandle TargetTextureHandle, uvec3 SourceTextureOffset,
+			uvec3 CopySize, uvec3 TargetTextureOffset, unsigned int SourceMipLevel, unsigned int TargetMipLevel, GFX_API::CUBEFACE SourceCubeMapFace = GFX_API::CUBEFACE::FRONT,
+			GFX_API::CUBEFACE TargetCubeMapFace = GFX_API::CUBEFACE::FRONT) = 0;
+		//If you don't want to target to a specific mip level (you want all mips to transition), you don't have to specify TargetMipLevel
+		//If your texture is a cubemap, you should use TargetCubeMapFace to specify the texture you're gonna use barrier for.
+		virtual void ImageBarrier(GFX_API::GFXHandle BarrierTPHandle, GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
+			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int TargetMipLevel = UINT32_MAX, GFX_API::CUBEFACE TargetCubeMapFace = GFX_API::CUBEFACE::FRONT) = 0;
 		virtual void ChangeDrawPass_RTSlotSet(GFX_API::GFXHandle DrawPassHandle, GFX_API::GFXHandle RTSlotSetHandle) = 0;
 
 

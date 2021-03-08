@@ -33,6 +33,15 @@ namespace GFX_API {
 	GFXAPI unsigned int Get_UNIFORMTYPEs_SIZEinbytes(const DATA_TYPE& uniform);
 	GFXAPI const char* Find_UNIFORM_VARTYPE_Name(DATA_TYPE uniform_var_type);
 
+	enum class CUBEFACE : unsigned char {
+		FRONT = 0,
+		BACK = 1,
+		LEFT,
+		RIGHT,
+		TOP,
+		BOTTOM
+	};
+
 	enum class OPERATION_TYPE : unsigned char {
 		READ_ONLY,
 		WRITE_ONLY,
@@ -405,6 +414,7 @@ namespace GFX_API {
 	public:
 		//Texture_Properties Properties;
 		unsigned int WIDTH, HEIGHT;
+		unsigned char MIPCOUNT = 1;
 		TEXTURE_DIMENSIONs DIMENSION = TEXTURE_DIMENSIONs::TEXTURE_2D;
 		TEXTURE_CHANNELs CHANNEL_TYPE = TEXTURE_CHANNELs::API_TEXTURE_RGB8UB;
 		TEXTURE_ORDER DATAORDER = TEXTURE_ORDER::SWIZZLE;
@@ -451,5 +461,4 @@ namespace GFX_API {
 		GFXWindowResizeCallback resize_cb = nullptr;
 		void* UserPointer = nullptr;
 	};
-
 }

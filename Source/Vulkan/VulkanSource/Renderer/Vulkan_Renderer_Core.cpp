@@ -49,7 +49,7 @@ namespace Vulkan {
 		if (flag.TRANSFERCMD) {
 			return PassType::TP;
 		}
-		LOG_NOTCODED_TAPI("You set WaitInfo->Stage to a stage that isn't supported right now by FindWaitedTPType!", true);
+		LOG_CRASHING_TAPI("You set WaitInfo->Stage to a stage that isn't supported right now by FindWaitedTPType!", true);
 		return PassType::ERROR;
 	}
 	bool Renderer::Check_WaitHandles() {
@@ -115,7 +115,7 @@ namespace Vulkan {
 						return false;
 					}
 					default:
-						LOG_NOTCODED_TAPI("Finding a Waited TP Type has failed, so Check Wait Handle has failed!", true);
+						LOG_CRASHING_TAPI("Finding a Waited TP Type has failed, so Check Wait Handle has failed!", true);
 						return false;
 				}
 			}
@@ -168,7 +168,7 @@ namespace Vulkan {
 					LOG_CRASHING_TAPI("Finding a TPType has failed, so Check Wait Handle too!");
 					return false;
 				default:
-					LOG_NOTCODED_TAPI("TP Type is not supported for now, so Check Wait Handle failed too!", true);
+					LOG_CRASHING_TAPI("TP Type is not supported for now, so Check Wait Handle failed too!", true);
 					return false;
 				}
 			}
@@ -237,7 +237,7 @@ namespace Vulkan {
 					}
 					default:
 					{
-						LOG_NOTCODED_TAPI("TP Type is not supported for now, so Check Wait Handle failed too!", true);
+						LOG_CRASHING_TAPI("TP Type is not supported for now, so Check Wait Handle failed too!", true);
 						return false;
 					}
 				}
@@ -575,7 +575,7 @@ namespace Vulkan {
 			TRANSFERPASS->TransferDatas = new VK_TPCopyDatas;
 			break;
 		default:
-			LOG_NOTCODED_TAPI("VulkanRenderer: Create_TransferPass() has failed because this type of TP creation isn't supported!", true);
+			LOG_CRASHING_TAPI("VulkanRenderer: Create_TransferPass() has failed because this type of TP creation isn't supported!", true);
 			return TAPI_NOTCODED;
 		}
 
@@ -715,7 +715,7 @@ namespace Vulkan {
 					}
 					break;
 					default:
-						LOG_NOTCODED_TAPI("VulkanRenderer: CurrentFrame_WorkloadAnalysis() doesn't support this type of transfer pass type!", true);
+						LOG_CRASHING_TAPI("VulkanRenderer: CurrentFrame_WorkloadAnalysis() doesn't support this type of transfer pass type!", true);
 						break;
 					}
 				}
@@ -747,7 +747,7 @@ namespace Vulkan {
 				}
 				break;
 				default:
-					LOG_NOTCODED_TAPI("Specified Pass Type isn't coded yet to pass as a Branch!", true);
+					LOG_CRASHING_TAPI("Specified Pass Type isn't coded yet to pass as a Branch!", true);
 				}
 			}
 		}
@@ -1039,7 +1039,7 @@ namespace Vulkan {
 			}
 			break;
 		default:
-			LOG_NOTCODED_TAPI("FindBufferOBJ_byBufType() doesn't support this type of buffer!", true);
+			LOG_CRASHING_TAPI("FindBufferOBJ_byBufType() doesn't support this type of buffer!", true);
 		}
 	}
 	void Renderer::CopyBuffer_toBuffer(GFX_API::GFXHandle TransferPassHandle, GFX_API::GFXHandle SourceBuffer_Handle, GFX_API::BUFFER_TYPE SourceBufferTYPE, 

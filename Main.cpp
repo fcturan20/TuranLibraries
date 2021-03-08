@@ -86,10 +86,11 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	}
 	
 	//Create Global Shader Inputs before the RenderGraph Construction
+	/*
 	GFX_API::GFXHandle FirstGlobalBuffer, FirstGlobalTexture;
 	GFXContentManager->Create_GlobalBuffer("CameraData", 256, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
 		3, FirstGlobalBuffer);
-	GFXContentManager->Create_GlobalTexture("FirstGlobTexture", true, 0, 2, GFX_API::Create_ShaderStageFlag(false, true, false, false, false), FirstGlobalTexture);
+	GFXContentManager->Create_GlobalTexture("FirstGlobTexture", true, 0, 2, GFX_API::Create_ShaderStageFlag(false, true, false, false, false), FirstGlobalTexture);*/
 
 
 	GFX_API::GFXHandle StagingBuffer;
@@ -98,92 +99,6 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	}
 
 
-	//Create and upload first sampled texture in host visible memory
-	GFX_API::GFXHandle FIRSTSAMPLINGTYPE_ID, AlitaTexture, GokuBlackTexture;
-	unsigned int AlitaSize = 0, AlitaOffset = 0, GokuBlackSize = 0, GokuBlackOffset = 0;
-	{
-		if (GFXContentManager->Create_SamplingType(0, 20, GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP,
-			GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT,
-			GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, FIRSTSAMPLINGTYPE_ID) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Creation of sampling type has failed, so application has!");
-		}
-
-		GFX_API::Texture_Description alita_desc;
-		void* ALITADATA = nullptr;
-		if (TuranEditor::Texture_Loader::Import_Texture("C:/Users/furka/Pictures/Wallpapers/Thumbnail.png", alita_desc, ALITADATA) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Alita Texture import has failed!");
-		}
-
-		alita_desc.MIPCOUNT = 3;
-		alita_desc.USAGE.isSampledReadOnly = true;
-		if (GFXContentManager->Create_Texture(alita_desc, 0, AlitaTexture) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Alita texture creation has failed!");
-		}
-		AlitaSize = alita_desc.WIDTH * alita_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(alita_desc.CHANNEL_TYPE);
-		AlitaOffset = 944;
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, ALITADATA, AlitaSize, AlitaOffset) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Uploading the Alita texture has failed!");
-		}
-
-
-
-
-		GFX_API::Texture_Description gokublack_desc;
-		void* GOKUBLACKDATA = nullptr;
-		if (TuranEditor::Texture_Loader::Import_Texture("C:/Users/furka/Pictures/Wallpapers/Goku Black SSRose.jpg", gokublack_desc, GOKUBLACKDATA) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Goku Black Texture import has failed!");
-		}
-
-		gokublack_desc.MIPCOUNT = 1;
-		gokublack_desc.USAGE.isSampledReadOnly = true;
-		if (GFXContentManager->Create_Texture(gokublack_desc, 0, GokuBlackTexture) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Goku Black texture creation has failed!");
-		}
-		GokuBlackSize = gokublack_desc.WIDTH * gokublack_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(gokublack_desc.CHANNEL_TYPE);
-		GokuBlackOffset = AlitaOffset + AlitaSize;
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, GOKUBLACKDATA, GokuBlackSize, GokuBlackOffset) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Uploading the Goku Black texture has failed!");
-		}
-		delete GOKUBLACKDATA;
-
-		struct RGBA8UB_DATATYPE {
-			unsigned char r;
-			unsigned char g;
-			unsigned char b;
-			unsigned char a;
-		};
-		LOG_STATUS_TAPI(std::to_string(sizeof(RGBA8UB_DATATYPE)));
-		//Create a mip level for Alita Texture
-		bool* AlitaMip1Data = new bool[AlitaSize / 4]{false};
-		for (unsigned int w = 0; w < 960; w++) {
-			for (unsigned int h = 0; h < 540; h++) {
-				RGBA8UB_DATATYPE* Alita_Mip0 = (RGBA8UB_DATATYPE*)ALITADATA;
-				RGBA8UB_DATATYPE* Alita_Mip1 = (RGBA8UB_DATATYPE*)AlitaMip1Data;
-				RGBA8UB_DATATYPE Mip0_Samples[4]{ Alita_Mip0[(h * 2 * 1920) + (w * 2)], Alita_Mip0[(((h * 2) + 1) * 1920) + (w * 2)],
-				Alita_Mip0[h * 2 * 1920 + ((w * 2) + 1)], Alita_Mip0[(((h * 2) + 1) * 1920) + ((w * 2) + 1)] };
-				RGBA8UB_DATATYPE& Mip1_Target = Alita_Mip1[h * 960 + w];
-				vec4 temp(0.0f);
-				for (unsigned char sampleindex = 0; sampleindex < 4; sampleindex++) {
-					temp.r += float(Mip0_Samples[sampleindex].r) / 4.0f;
-					temp.g += float(Mip0_Samples[sampleindex].g) / 4.0f;
-					temp.b += float(Mip0_Samples[sampleindex].b) / 4.0f;
-					temp.a += float(Mip0_Samples[sampleindex].a) / 4.0f;
-				}
-				Mip1_Target.r = temp.r;
-				Mip1_Target.g = temp.g;
-				Mip1_Target.b = temp.b;
-				Mip1_Target.a = temp.a;
-			}
-		}
-
-		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, AlitaMip1Data, AlitaSize / 4, GokuBlackOffset + GokuBlackSize) != TAPI_SUCCESS) {
-			LOG_CRASHING_TAPI("Uploading Alita Texture's Mip1 has failed!");
-		}
-		delete ALITADATA;
-		delete AlitaMip1Data;
-	}
-	GFXContentManager->SetGlobal_SampledTexture(FirstGlobalTexture, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
-	GFXContentManager->SetGlobal_SampledTexture(FirstGlobalTexture, 1, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
 
 
 	//RenderGraph Construction
@@ -327,6 +242,93 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 
 
 
+	//Create and upload first sampled texture in host visible memory
+	GFX_API::GFXHandle FIRSTSAMPLINGTYPE_ID, AlitaTexture, GokuBlackTexture;
+	unsigned int AlitaSize = 0, AlitaOffset = 0, GokuBlackSize = 0, GokuBlackOffset = 0;
+	{
+		if (GFXContentManager->Create_SamplingType(0, 20, GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP,
+			GFX_API::TEXTURE_MIPMAPFILTER::API_TEXTURE_NEAREST_FROM_1MIP, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT,
+			GFX_API::TEXTURE_WRAPPING::API_TEXTURE_REPEAT, FIRSTSAMPLINGTYPE_ID) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Creation of sampling type has failed, so application has!");
+		}
+
+		GFX_API::Texture_Description alita_desc;
+		void* ALITADATA = nullptr;
+		if (TuranEditor::Texture_Loader::Import_Texture("C:/Users/furka/Pictures/Wallpapers/Thumbnail.png", alita_desc, ALITADATA) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Alita Texture import has failed!");
+		}
+
+		alita_desc.MIPCOUNT = 3;
+		alita_desc.USAGE.isSampledReadOnly = true;
+		if (GFXContentManager->Create_Texture(alita_desc, 0, AlitaTexture) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Alita texture creation has failed!");
+		}
+		AlitaSize = alita_desc.WIDTH * alita_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(alita_desc.CHANNEL_TYPE);
+		AlitaOffset = 944;
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, ALITADATA, AlitaSize, AlitaOffset) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading the Alita texture has failed!");
+		}
+
+
+
+
+		GFX_API::Texture_Description gokublack_desc;
+		void* GOKUBLACKDATA = nullptr;
+		if (TuranEditor::Texture_Loader::Import_Texture("C:/Users/furka/Pictures/Wallpapers/Goku Black SSRose.jpg", gokublack_desc, GOKUBLACKDATA) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Goku Black Texture import has failed!");
+		}
+
+		gokublack_desc.MIPCOUNT = 1;
+		gokublack_desc.USAGE.isSampledReadOnly = true;
+		if (GFXContentManager->Create_Texture(gokublack_desc, 0, GokuBlackTexture) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Goku Black texture creation has failed!");
+		}
+		GokuBlackSize = gokublack_desc.WIDTH * gokublack_desc.HEIGHT * GFX_API::GetByteSizeOf_TextureChannels(gokublack_desc.CHANNEL_TYPE);
+		GokuBlackOffset = AlitaOffset + AlitaSize;
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, GOKUBLACKDATA, GokuBlackSize, GokuBlackOffset) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading the Goku Black texture has failed!");
+		}
+		delete GOKUBLACKDATA;
+
+		struct RGBA8UB_DATATYPE {
+			unsigned char r;
+			unsigned char g;
+			unsigned char b;
+			unsigned char a;
+		};
+		LOG_STATUS_TAPI(std::to_string(sizeof(RGBA8UB_DATATYPE)));
+		//Create a mip level for Alita Texture
+		bool* AlitaMip1Data = new bool[AlitaSize / 4]{ false };
+		for (unsigned int w = 0; w < 960; w++) {
+			for (unsigned int h = 0; h < 540; h++) {
+				RGBA8UB_DATATYPE* Alita_Mip0 = (RGBA8UB_DATATYPE*)ALITADATA;
+				RGBA8UB_DATATYPE* Alita_Mip1 = (RGBA8UB_DATATYPE*)AlitaMip1Data;
+				RGBA8UB_DATATYPE Mip0_Samples[4]{ Alita_Mip0[(h * 2 * 1920) + (w * 2)], Alita_Mip0[(((h * 2) + 1) * 1920) + (w * 2)],
+				Alita_Mip0[h * 2 * 1920 + ((w * 2) + 1)], Alita_Mip0[(((h * 2) + 1) * 1920) + ((w * 2) + 1)] };
+				RGBA8UB_DATATYPE& Mip1_Target = Alita_Mip1[h * 960 + w];
+				vec4 temp(0.0f);
+				for (unsigned char sampleindex = 0; sampleindex < 4; sampleindex++) {
+					temp.r += float(Mip0_Samples[sampleindex].r) / 4.0f;
+					temp.g += float(Mip0_Samples[sampleindex].g) / 4.0f;
+					temp.b += float(Mip0_Samples[sampleindex].b) / 4.0f;
+					temp.a += float(Mip0_Samples[sampleindex].a) / 4.0f;
+				}
+				Mip1_Target.r = temp.r;
+				Mip1_Target.g = temp.g;
+				Mip1_Target.b = temp.b;
+				Mip1_Target.a = temp.a;
+			}
+		}
+
+		if (GFXContentManager->Upload_toBuffer(StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, AlitaMip1Data, AlitaSize / 4, GokuBlackOffset + GokuBlackSize) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Uploading Alita Texture's Mip1 has failed!");
+		}
+		delete ALITADATA;
+		delete AlitaMip1Data;
+	}
+
+
+
 
 	//Create and Link Texture Display Material Type/Instance
 	GFX_API::GFXHandle TEXTUREDISPLAY_MATTYPE, TEXTUREDISPLAY_MATINST;
@@ -352,10 +354,10 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		{
 			GFX_API::ShaderInput_Description first_desc;
 			first_desc.BINDINGPOINT = 0;
-			first_desc.ELEMENTCOUNT = 1;
-			first_desc.NAME = "FirstSampledTexture";
+			first_desc.ELEMENTCOUNT = 2;
+			first_desc.NAME = "SampledTextures";
 			first_desc.SHADERSTAGEs.FRAGMENTSHADER = true;
-			first_desc.TYPE = GFX_API::SHADERINPUT_TYPE::IMAGE_G;
+			first_desc.TYPE = GFX_API::SHADERINPUT_TYPE::SAMPLER_G;
 			MATTYPE.MATERIALTYPEDATA.push_back(first_desc);
 		}
 		MATTYPE.ATTRIBUTELAYOUT_ID = MESH_VAL;
@@ -389,11 +391,15 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		matrixes[1] = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		matrixes[2] = mat4(mat3(matrixes[1]));	//For Skybox
 		matrixes[3] = glm::perspective(glm::radians(45.0f), 1280.0f / 720.0f, 0.1f, 10000.0f);
-
+		/*
 		if (GFXContentManager->Upload_toBuffer(FirstGlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, &matrixes, 256, 0) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading the world matrix data has failed!");
-		}
+		}*/
 	}
+	GFXContentManager->SetMaterial_SampledTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
+	GFXContentManager->SetMaterial_SampledTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, 1, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
+
+
 
 	GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, AlitaTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::TRANSFER_DIST);
 	GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, GokuBlackTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::TRANSFER_DIST);
@@ -424,14 +430,6 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	while (MainWindow->isWindowOpen()) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 		
-		if (i % 2) {
-			GFXContentManager->SetGlobal_SampledTexture(FirstGlobalTexture, 1, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
-			//GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATTYPE, true, true, 0, 0, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
-		}
-		else {
-			GFXContentManager->SetGlobal_SampledTexture(FirstGlobalTexture, 1, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
-			//GFXContentManager->SetMaterial_ImageTexture(TEXTUREDISPLAY_MATTYPE, true, true, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE);
-		}
 		IMGUI_RUNWINDOWS();
 		if (!isWindowResized) {
 			GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, AlitaSwapchains[GFX->Get_WindowFrameIndex(AlitaWindowHandle)], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE);

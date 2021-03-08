@@ -661,18 +661,16 @@ namespace Vulkan {
 						texDescType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 					}
 					for (unsigned int ElementIndex = 0; ElementIndex < tex->ElementCount; ElementIndex++) {
+						if (!tex->Elements[ElementIndex].Texture) {
+							continue;
+						}
 						VkWriteDescriptorSet info = {};
 						info.descriptorCount = 1;
 						info.dstArrayElement = ElementIndex;
 						info.dstBinding = tex->BINDINGPOINT;
 						info.dstSet = GlobalShaderInputs_DescSet.Set;
 						VkDescriptorImageInfo* desciminfo = new VkDescriptorImageInfo;
-						if (tex->Elements[ElementIndex].Texture) {
-							desciminfo->imageView = tex->Elements[ElementIndex].Texture->ImageView;
-						}
-						else {
-							desciminfo->imageView = VK_NULL_HANDLE;
-						}
+						desciminfo->imageView = tex->Elements[ElementIndex].Texture->ImageView;
 						info.descriptorType = texDescType;
 						desciminfo->imageLayout = tex->Elements[ElementIndex].Layout;
 						desciminfo->sampler = tex->Elements[ElementIndex].Sampler;
@@ -778,17 +776,30 @@ namespace Vulkan {
 					}
 				}
 
-				if (bindings.size()) {
-					VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
-					DescSetLayout_ci.flags = 0;
-					DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-					DescSetLayout_ci.pNext = nullptr;
-					DescSetLayout_ci.bindingCount = bindings.size();
-					DescSetLayout_ci.pBindings = bindings.data();
-					if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &DescSetLayout_ci, nullptr, &GlobalShaderInputs_DescSet.Layout) != VK_SUCCESS) {
-						LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
-						return;
-					}
+				//If there is no global buffer/texture, create a global texture and bind it
+				if (!bindings.size()) {
+					GFX_API::GFXHandle x;
+					Create_GlobalTexture("DefaultGlobalTexture", true, 0, 1, GFX_API::Create_ShaderStageFlag(false, true, false, false, false), x);
+					SAMPLED_COUNT++;
+
+					bindings.push_back(VkDescriptorSetLayoutBinding());
+					VkDescriptorSetLayoutBinding& targetbinding = bindings[bindings.size() - 1];
+					targetbinding.binding = 0;
+					targetbinding.descriptorCount = 1;
+					targetbinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+					targetbinding.pImmutableSamplers = VK_NULL_HANDLE;
+					targetbinding.stageFlags = Find_VkShaderStages(GFX_API::Create_ShaderStageFlag(false, true, false, false, false));
+				}
+
+				VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
+				DescSetLayout_ci.flags = 0;
+				DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				DescSetLayout_ci.pNext = nullptr;
+				DescSetLayout_ci.bindingCount = bindings.size();
+				DescSetLayout_ci.pBindings = bindings.data();
+				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &DescSetLayout_ci, nullptr, &GlobalShaderInputs_DescSet.Layout) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
+					return;
 				}
 			}
 

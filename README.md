@@ -13,6 +13,6 @@ This project is a Vulkan backend for Turan Engine's (Non-DLL, Non-STL version) G
 
 # How to track changes
 1) For Vulkan Backend's Completed Tasks: https://share.clickup.com/l/h/6-50820492-1/62179be39c72e34
-2) For Vulkan Backend's Uncompleted Tasks: https://share.clickup.com/l/h/4ee11-15/02ea89bd13b5c58
+2) For Vulkan Backend's Uncompleted Tasks: https://share.clickup.com/l/h/4ee11-8/403c48f003c7e45
 3) For GFX API's Completed Tasks: https://share.clickup.com/l/h/6-50821024-1/346593dac7bb7f0
 4) For GFX API's Uncompleted Tasks: https://share.clickup.com/l/h/6-48864560-1/c539508b3b99631

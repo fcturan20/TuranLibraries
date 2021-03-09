@@ -424,10 +424,9 @@ namespace GFX_API {
 
 
 	struct GFXAPI MemoryType {
-		const SUBALLOCATEBUFFERTYPEs HEAPTYPE;
-		const unsigned int MemoryTypeIndex;
+		SUBALLOCATEBUFFERTYPEs HEAPTYPE;
+		unsigned int MemoryTypeIndex = UINT32_MAX;
 		unsigned int AllocationSize = 0;
-		MemoryType(SUBALLOCATEBUFFERTYPEs HEAP, unsigned int MemoryTypeIndex);
 	};
 
 	struct GFXAPI MonitorDescription {
@@ -441,13 +440,19 @@ namespace GFX_API {
 	struct GFXAPI GPUDescription {
 	public:
 		string MODEL;
-		uint32_t API_VERSION;
-		uint32_t DRIVER_VERSION;
+		uint32_t API_VERSION, DRIVER_VERSION;
 		GPU_TYPEs GPU_TYPE;
 		bool is_GraphicOperations_Supported = false, is_ComputeOperations_Supported = false, is_TransferOperations_Supported = false;
 		vector<MemoryType> MEMTYPEs;
 		uint64_t DEVICELOCAL_MaxMemorySize, HOSTVISIBLE_MaxMemorySize, FASTHOSTVISIBLE_MaxMemorySize, READBACK_MaxMemorySize;
-		bool isSupported_SeperateDepthStencilLayouts = false, isSupported_SeperateRTSlotBlending = false;
+		bool isSupported_SeperateDepthStencilLayouts = false, isSupported_SeperateRTSlotBlending = false,
+			isSupported_NonUniformShaderInputIndexing = false;
+		//These limits are maximum count of usable resources in a shader stage (VS, FS etc.)
+		//Don't forget that sum of the accesses in a shader stage shouldn't exceed MaxUsableResources_perStage!
+		uint32_t MaxSampledTexture_perStage = 0, MaxImageTexture_perStage = 0, MaxUniformBuffer_perStage = 0, MaxStorageBuffer_perStage = 0, MaxUsableResources_perStage = 0;
+		//These limits are maximum count of defined resources in material linking (including global buffers and textures)
+		//That means; at specified shader input type-> all global shader inputs + general shader inputs + per instance shader inputs shouldn't exceed the related limit
+		uint32_t MaxShaderInput_SampledTexture = 0, MaxShaderInput_ImageTexture = 0, MaxShaderInput_UniformBuffer = 0, MaxShaderInput_StorageBuffer = 0;
 	};
 
 	typedef void (*GFXWindowResizeCallback) (GFX_API::GFXHandle WindowHandle, void* UserPointer, unsigned int WIDTH, unsigned int HEIGHT, GFX_API::GFXHandle* SwapchainTextureHandles);

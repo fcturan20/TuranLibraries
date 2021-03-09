@@ -24,7 +24,7 @@ namespace Vulkan {
 		Check_Computer_Specs(GPUs);
 	}
 
-	TAPIResult Vulkan_Core::Start_SecondStage(unsigned char GPUIndex, const vector<GFX_API::MemoryType>& MEMORYTYPEs, bool Active_dearIMGUI){
+	TAPIResult Vulkan_Core::Start_SecondStage(unsigned char GPUIndex, GPUSecondStage& Info, bool Active_dearIMGUI){
 		GPU_TO_RENDER = DEVICE_GPUs[GPUIndex];
 		//Some basic algorithms accesses some of the GPU's datas
 		//Because GFX API doesn't support multi-GPU, just give the GPU Handle to VK_States
@@ -32,8 +32,8 @@ namespace Vulkan {
 		GPU* VKGPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
 		VK_States.GPU_TO_RENDER = VKGPU; 
 
-		for (unsigned int MemTypeIndex = 0; MemTypeIndex < MEMORYTYPEs.size(); MemTypeIndex++) {
-			const GFX_API::MemoryType& MemType = MEMORYTYPEs[MemTypeIndex];
+		for (unsigned int MemTypeIndex = 0; MemTypeIndex < Info.MEMORYTYPEs.size(); MemTypeIndex++) {
+			const GFX_API::MemoryType& MemType = Info.MEMORYTYPEs[MemTypeIndex];
 			VKGPU->ALLOCs[MemType.MemoryTypeIndex].FullSize = MemType.AllocationSize;
 		}
 
@@ -102,7 +102,7 @@ namespace Vulkan {
 		for (unsigned int i = 0; i < extension_count; i++) {
 			VK_States.Supported_InstanceExtensionList.push_back(SupportedExtensions[i]);
 		}
-		VK_States.Chech_InstanceExtensions();
+		VK_States.Check_InstanceExtensions();
 
 		//CHECK SUPPORTED LAYERS
 		vkEnumerateInstanceLayerProperties(&VK_States.Supported_LayerNumber, nullptr);
@@ -194,7 +194,9 @@ namespace Vulkan {
 			}
 			if (isDeviceLocal) {
 				if (isHostVisible && isHostCoherent) {
-					GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE, GPUdesc.MEMTYPEs.size());
+					GFX_API::MemoryType MEMTYPE;
+					MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE;
+					MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
 					GPUdesc.MEMTYPEs.push_back(MEMTYPE);
 					VK_MemoryAllocation alloc;
 					alloc.MemoryTypeIndex = MemoryTypeIndex;
@@ -204,7 +206,9 @@ namespace Vulkan {
 					LOG_STATUS_TAPI("Found FAST HOST VISIBLE BIT! Size: " + to_string(GPUdesc.FASTHOSTVISIBLE_MaxMemorySize));
 				}
 				else {
-					GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL, GPUdesc.MEMTYPEs.size());
+					GFX_API::MemoryType MEMTYPE;
+					MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
+					MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
 					GPUdesc.MEMTYPEs.push_back(MEMTYPE);
 					VK_MemoryAllocation alloc;
 					alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
@@ -216,7 +220,9 @@ namespace Vulkan {
 			}
 			else if (isHostVisible && isHostCoherent) {
 				if (isHostCached) {
-					GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK, GPUdesc.MEMTYPEs.size());
+					GFX_API::MemoryType MEMTYPE;
+					MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK;
+					MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
 					GPUdesc.MEMTYPEs.push_back(MEMTYPE);
 					VK_MemoryAllocation alloc;
 					alloc.MemoryTypeIndex = MemoryTypeIndex;
@@ -226,7 +232,9 @@ namespace Vulkan {
 					LOG_STATUS_TAPI("Found READBACK BIT! Size: " + to_string(GPUdesc.READBACK_MaxMemorySize));
 				}
 				else {
-					GFX_API::MemoryType MEMTYPE(GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE, GPUdesc.MEMTYPEs.size());
+					GFX_API::MemoryType MEMTYPE;
+					MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE;
+					MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
 					GPUdesc.MEMTYPEs.push_back(MEMTYPE);
 					VK_MemoryAllocation alloc;
 					alloc.MemoryTypeIndex = MemoryTypeIndex;
@@ -359,9 +367,10 @@ namespace Vulkan {
 			Logical_Device_CreationInfo.flags = 0;
 			Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
 			Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
-			VK_States.Check_DeviceExtensions(VKGPU);
-			VK_States.Check_DeviceFeatures(VKGPU, GPUdesc);
-
+			VK_States.Activate_DeviceExtensions(VKGPU);
+			//This is to destroy datas of extending features
+			DeviceExtendedFeatures extendedfeatures;
+			VK_States.Activate_DeviceFeatures(VKGPU, GPUdesc, Logical_Device_CreationInfo, extendedfeatures);
 
 			Logical_Device_CreationInfo.enabledExtensionCount = VKGPU->Active_DeviceExtensions.size();
 			Logical_Device_CreationInfo.ppEnabledExtensionNames = VKGPU->Active_DeviceExtensions.data();
@@ -380,6 +389,9 @@ namespace Vulkan {
 				VKGPU->AllQueueFamilies[QueueIndex] = VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex;
 			}
 			LOG_STATUS_TAPI("Vulkan created a Logical Device!");
+
+			VK_States.Check_DeviceLimits(VKGPU, GPUdesc);
+
 
 			GPUdescs.push_back(GPUdesc);
 			DEVICE_GPUs.push_back(VKGPU);

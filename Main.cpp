@@ -86,11 +86,11 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	}
 	
 	//Create Global Shader Inputs before the RenderGraph Construction
-	/*
+	
 	GFX_API::GFXHandle FirstGlobalBuffer, FirstGlobalTexture;
 	GFXContentManager->Create_GlobalBuffer("CameraData", 256, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
 		3, FirstGlobalBuffer);
-	GFXContentManager->Create_GlobalTexture("FirstGlobTexture", true, 0, 2, GFX_API::Create_ShaderStageFlag(false, true, false, false, false), FirstGlobalTexture);*/
+	GFXContentManager->Create_GlobalTexture("FirstGlobTexture", true, 0, 2, GFX_API::Create_ShaderStageFlag(false, true, false, false, false), FirstGlobalTexture);
 
 
 	GFX_API::GFXHandle StagingBuffer;
@@ -391,10 +391,10 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		matrixes[1] = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		matrixes[2] = mat4(mat3(matrixes[1]));	//For Skybox
 		matrixes[3] = glm::perspective(glm::radians(45.0f), 1280.0f / 720.0f, 0.1f, 10000.0f);
-		/*
+		
 		if (GFXContentManager->Upload_toBuffer(FirstGlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, &matrixes, 256, 0) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading the world matrix data has failed!");
-		}*/
+		}
 	}
 	GFXContentManager->SetMaterial_SampledTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
 	GFXContentManager->SetMaterial_SampledTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, 1, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);

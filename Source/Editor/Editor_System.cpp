@@ -26,7 +26,14 @@ namespace TuranEditor {
 		GPUs[0].MEMTYPEs[0].AllocationSize = ALLOCSIZE;
 		GPUs[0].MEMTYPEs[3].AllocationSize = ALLOCSIZE;
 
-		VK->Start_SecondStage(0, GPUs[0].MEMTYPEs, true);
+		Vulkan::GPUSecondStage SecondStage;
+		SecondStage.MEMORYTYPEs = GPUs[0].MEMTYPEs;
+		SecondStage.MaterialCount = 100;
+		SecondStage.MaterialRelated_ImageTexture = 100;
+		SecondStage.MaterialRelated_SampledTexture = 100;
+		SecondStage.MaterialRelated_StorageBuffer = 100;
+		SecondStage.MaterialRelated_UniformBuffer = 100;
+		VK->Start_SecondStage(0, SecondStage, true);
 	}
 	Editor_System::~Editor_System() {
 		delete GFX;

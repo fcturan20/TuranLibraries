@@ -412,7 +412,7 @@ namespace Vulkan {
 		if(slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
 			VK_DEPTHSTENCILSLOT* depthslot = slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT;
 			DS_Attach = new VkAttachmentReference;
-			VKGPU->Fill_DepthAttachmentReference(*DS_Attach, slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT, 
+			VKGPU->ExtensionRelatedDatas.Fill_DepthAttachmentReference(*DS_Attach, slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT, 
 				depthslot->RT->CHANNELs, slotset->DEPTH_OPTYPE, slotset->STENCIL_OPTYPE);
 		}
 
@@ -530,7 +530,7 @@ namespace Vulkan {
 			}
 			if (VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
 				VkAttachmentDescription DepthDesc;
-				VKGPU->Fill_DepthAttachmentDescription(DepthDesc, VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT);
+				VKGPU->ExtensionRelatedDatas.Fill_DepthAttachmentDescription(DepthDesc, VKDrawPass->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT);
 				AttachmentDescs.push_back(DepthDesc);
 			}
 			

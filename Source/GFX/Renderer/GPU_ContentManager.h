@@ -43,14 +43,13 @@ namespace GFX_API {
 
 	How does Material System works?
 	1) All of the shader inputs is divided into 3 categories: Global, Material Type (General), Material Instance (Per Instance)
-	2) Array of the shader inputs aren't supported for now
-	3) General and Per Instance shader inputs should be set with SetMaterial_XXX() functions
-	4) Related SetMaterial_XXX() function of a shader input can only be called once per frame, second one (or concurrent one) will fail
-	5) That means you can change 2 different shader inputs in the same frame, but you can't change the same shader inputs twice in a frame
-	6) Globals are only uniform and storage buffers for now (Set = 0 in SPIR-V shaders) and can be accessible from all materials
-	7) Material Type (General) ones are only accessible by material instances that are instantiated by the same Material Type (Set = 1 in SPIR-V shaders)
-	8) Material Instance ones are material instance specific (Set = 2 in SPIR-V shaders)
-
+	2) General and Per Instance shader inputs should be set with SetMaterial_XXX() functions
+	3) Related SetMaterial_XXX() function of a shader input can only be called once per frame, second one (or concurrent one) will fail
+	4) That means you can change 2 different shader inputs in the same frame, but you can't change the same shader inputs twice in a frame
+	5) Globals are only uniform and storage buffers for now (Set = 0 in SPIR-V shaders) and can be accessible from all materials
+	6) Material Type (General) ones are only accessible by material instances that are instantiated by the same Material Type (Set = 1 in SPIR-V shaders)
+	7) Material Instance ones are material instance specific (Set = 2 in SPIR-V shaders)
+	8) There are 4 types of shader inputs: SampledTexture, ImageTexture, UniformBuffer, StorageBuffer (same as Khronos)
 	*/
 	class GFXAPI GPU_ContentManager {
 	protected:

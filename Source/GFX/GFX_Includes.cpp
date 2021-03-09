@@ -229,6 +229,4 @@ namespace GFX_API {
 		isSampledReadOnly = false;
 	}
 
-
-	MemoryType::MemoryType(SUBALLOCATEBUFFERTYPEs HEAP, unsigned int MTIndex) : HEAPTYPE(HEAP), MemoryTypeIndex(MTIndex){}
 }

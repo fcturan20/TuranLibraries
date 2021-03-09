@@ -7,7 +7,7 @@
 #include <vulkan/vulkan.h>
 
 #define VK_API
-#define VULKAN_DEBUGGING
+//#define VULKAN_DEBUGGING
 
 namespace Vulkan {
 	//Initializes as everything is false
@@ -76,6 +76,23 @@ namespace Vulkan {
 
 	//Forward declarations for struct that will be used in Vulkan Versioning/Extension system
 	struct VK_API VK_DEPTHSTENCILSLOT;
+	//Some features needs extensions and needs to be chained while creating Vulkan Logical Device
+	//Chained structs are stored here, which are deleted after GPU creation
+	struct VK_API DeviceExtendedFeatures {
+		VkPhysicalDeviceDescriptorIndexingFeatures DescIndexingFeatures = {};
+	};
+	struct VK_API DeviceExtensions {
+		//Swapchain
+		bool SwapchainDisplay = true;
+
+		//Seperated Depth Stencil
+		bool SeperatedDepthStencilLayouts = false;
+		void Fill_DepthAttachmentReference(VkAttachmentReference& Ref, unsigned int index,
+			GFX_API::TEXTURE_CHANNELs channels, GFX_API::OPERATION_TYPE DEPTHOPTYPE, GFX_API::OPERATION_TYPE STENCILOPTYPE);
+		void Fill_DepthAttachmentDescription(VkAttachmentDescription& Desc, VK_DEPTHSTENCILSLOT* DepthSlot);
+
+		bool DescriptorIndexing = false;
+	};
 	struct VK_API GPU {
 		VkPhysicalDevice Physical_Device = {};
 		VkPhysicalDeviceProperties Device_Properties = {};
@@ -102,12 +119,14 @@ namespace Vulkan {
 		VK_QUEUE* Find_BestQueue(const VK_QUEUEFLAG& Branch);
 		bool DoesQueue_Support(const VK_QUEUE* QUEUE, const VK_QUEUEFLAG& FLAG);
 
-
-		//Extension Related Functions
-		bool SeperatedDepthStencilLayouts = false, SwapchainDisplay = true;
-		void Fill_DepthAttachmentReference(VkAttachmentReference& Ref, unsigned int index, 
-			GFX_API::TEXTURE_CHANNELs channels, GFX_API::OPERATION_TYPE DEPTHOPTYPE, GFX_API::OPERATION_TYPE STENCILOPTYPE);
-		void Fill_DepthAttachmentDescription(VkAttachmentDescription& Desc, VK_DEPTHSTENCILSLOT* DepthSlot);
+		DeviceExtensions ExtensionRelatedDatas;
+	};
+	struct VK_API GPUSecondStage {
+		vector<GFX_API::MemoryType> MEMORYTYPEs;
+		//You have to specify sum of how much shader inputs you're gonna use for materials (General and Per Instance)
+		uint32_t MaterialRelated_SampledTexture = 0, MaterialRelated_ImageTexture = 0, MaterialRelated_UniformBuffer = 0, MaterialRelated_StorageBuffer = 0;
+		//You have to specify how much shader input categories you're gonna use (material types that have general shader inputs + material instances that have per instance shader inputs)
+		uint32_t MaterialCount = 0;
 	};
 
 	struct VK_API MONITOR {
@@ -157,10 +176,11 @@ namespace Vulkan {
 		//Required Extensions are defined here
 		//Check if Required Extension Names are supported!
 		//Returns true if all of the required extensions are supported!
-		void Chech_InstanceExtensions();
+		void Check_InstanceExtensions();
 		//Same for Device
-		void Check_DeviceExtensions(GPU* Vulkan_GPU);
-		void Check_DeviceFeatures(GPU* Vulkan_GPU, GFX_API::GPUDescription& GPUDesc);
+		void Activate_DeviceExtensions(GPU* Vulkan_GPU);
+		void Activate_DeviceFeatures(GPU* Vulkan_GPU, GFX_API::GPUDescription& GPUDesc, VkDeviceCreateInfo& dev_ci, DeviceExtendedFeatures& dev_ftrs);
+		void Check_DeviceLimits(GPU* Vulkan_GPU, GFX_API::GPUDescription& GPUDesc);
 
 		static VKAPI_ATTR VkBool32 VKAPI_CALL VK_DebugCallback(
 			VkDebugUtilsMessageSeverityFlagBitsEXT Message_Severity,
@@ -173,7 +193,7 @@ namespace Vulkan {
 		PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT();
 
 		//Instance Extension Related
-		bool isActive_SurfaceKHR = false, isActive_GetPhysicalDeviceProperties2KHR = false;
+		bool isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = false;
 	};
 
 #define GFXHandleConverter(ConvertType, Handle) static_cast<ConvertType>((void*)Handle)

@@ -50,7 +50,7 @@ namespace Vulkan {
 
 		Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSystem);
 		//All of the sizes should be in bytes
-		TAPIResult Start_SecondStage(unsigned char GPUIndex, const vector<GFX_API::MemoryType>& Allocations, bool Activate_dearIMGUI);
+		TAPIResult Start_SecondStage(unsigned char GPUIndex, GPUSecondStage& Info, bool Activate_dearIMGUI);
 		virtual ~Vulkan_Core();
 	};
 

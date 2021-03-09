@@ -1,4 +1,5 @@
 #include "Vulkan_Includes.h"
+#define VK_NO_PROTOTYPES 1
 #include "Renderer/Vulkan_Resource.h"
 #include <numeric>
 #define VKGPU ((Vulkan::GPU*)GFX->GPU_TO_RENDER)
@@ -79,7 +80,7 @@ namespace Vulkan {
 	}
 
 
-	void GPU::Fill_DepthAttachmentReference(VkAttachmentReference& Ref, unsigned int index, GFX_API::TEXTURE_CHANNELs channels, GFX_API::OPERATION_TYPE DEPTHOPTYPE, GFX_API::OPERATION_TYPE STENCILOPTYPE) {
+	void DeviceExtensions::Fill_DepthAttachmentReference(VkAttachmentReference& Ref, unsigned int index, GFX_API::TEXTURE_CHANNELs channels, GFX_API::OPERATION_TYPE DEPTHOPTYPE, GFX_API::OPERATION_TYPE STENCILOPTYPE) {
 		Ref.attachment = index;
 		if (SeperatedDepthStencilLayouts) {
 			if (channels == GFX_API::TEXTURE_CHANNELs::API_TEXTURE_D32) {
@@ -144,7 +145,7 @@ namespace Vulkan {
 			}
 		}
 	}
-	void GPU::Fill_DepthAttachmentDescription(VkAttachmentDescription& Desc, VK_DEPTHSTENCILSLOT* DepthSlot) {
+	void DeviceExtensions::Fill_DepthAttachmentDescription(VkAttachmentDescription& Desc, VK_DEPTHSTENCILSLOT* DepthSlot) {
 		Desc = {};
 		Desc.format = Find_VkFormat_byTEXTURECHANNELs(DepthSlot->RT->CHANNELs);
 		Desc.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -213,7 +214,7 @@ namespace Vulkan {
 		LOG_WARNING_TAPI("Extension: " + std::string(ExtensionName) + " is not supported by the GPU!");
 		return false;
 	}
-	void Vulkan_States::Chech_InstanceExtensions() {
+	void Vulkan_States::Check_InstanceExtensions() {
 		uint32_t glfwExtensionCount = 0;
 		const char** glfwExtensions;
 		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -246,14 +247,16 @@ namespace Vulkan {
 		if ((Application_Info.apiVersion == VK_API_VERSION_1_0 && 
 			IsExtensionSupported(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, Supported_InstanceExtensionList)
 			) || Application_Info.apiVersion != VK_API_VERSION_1_0){
-			isActive_GetPhysicalDeviceProperties2KHR = true;
+			isSupported_PhysicalDeviceProperties2 = true;
 			if (Application_Info.apiVersion == VK_API_VERSION_1_0) {
 				Active_InstanceExtensionNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 			}
 		}
 	}
 
-	void Vulkan_States::Check_DeviceExtensions(GPU* Vulkan_GPU) {
+	//Some features needs device extensions, so check if they're supported here
+	//After finding supported device features, activate them in Activate_DeviceFeatures
+	void Vulkan_States::Activate_DeviceExtensions(GPU* Vulkan_GPU) {
 		//GET SUPPORTED DEVICE EXTENSIONS
 		uint32_t extensionCount;
 		vkEnumerateDeviceExtensionProperties(Vulkan_GPU->Physical_Device, nullptr, &extensionCount, nullptr);
@@ -263,7 +266,7 @@ namespace Vulkan {
 		//Check Seperate_DepthStencil
 		if (Application_Info.apiVersion == VK_API_VERSION_1_0 || Application_Info.apiVersion == VK_API_VERSION_1_1) {
 			if(IsExtensionSupported(VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME, Vulkan_GPU->Supported_DeviceExtensions)){
-				Vulkan_GPU->SeperatedDepthStencilLayouts = true;
+				Vulkan_GPU->ExtensionRelatedDatas.SeperatedDepthStencilLayouts = true;
 				Vulkan_GPU->Active_DeviceExtensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
 				if (Application_Info.apiVersion == VK_API_VERSION_1_0) {
 					Vulkan_GPU->Active_DeviceExtensions.push_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
@@ -272,24 +275,122 @@ namespace Vulkan {
 			}
 		}
 		else {
-			Vulkan_GPU->SeperatedDepthStencilLayouts = true;
+			Vulkan_GPU->ExtensionRelatedDatas.SeperatedDepthStencilLayouts = true;
 		}
 
 		if (!IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME, Vulkan_GPU->Supported_DeviceExtensions)) {
 			LOG_WARNING_TAPI("Current GPU doesn't support to display a swapchain, so you shouldn't use any window related functionality such as: GFXRENDERER->Create_WindowPass, GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
-			Vulkan_GPU->SwapchainDisplay = false;
+			Vulkan_GPU->ExtensionRelatedDatas.SwapchainDisplay = false;
 		}
 		else {
 			Vulkan_GPU->Active_DeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		}
+
+
+		//Check Descriptor Indexing
+		//First check Maintenance3 and PhysicalDeviceProperties2 for Vulkan 1.0
+		if (Application_Info.apiVersion == VK_API_VERSION_1_0) {
+			if (IsExtensionSupported(VK_KHR_MAINTENANCE3_EXTENSION_NAME, Vulkan_GPU->Supported_DeviceExtensions) && isSupported_PhysicalDeviceProperties2) {
+				Vulkan_GPU->Active_DeviceExtensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
+				if (IsExtensionSupported(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, Vulkan_GPU->Supported_DeviceExtensions)) {
+					Vulkan_GPU->Active_DeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+					Vulkan_GPU->ExtensionRelatedDatas.DescriptorIndexing = true;
+				}
+			}
+		}
+		//Maintenance3 and PhysicalDeviceProperties2 is core in 1.1, so check only Descriptor Indexing
+		else {
+			//If API is 1.1, check extension
+			if (Application_Info.apiVersion == VK_API_VERSION_1_1) {
+				if (IsExtensionSupported(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, Vulkan_GPU->Supported_DeviceExtensions)) {
+					Vulkan_GPU->Active_DeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+					Vulkan_GPU->ExtensionRelatedDatas.DescriptorIndexing = true;
+				}
+			}
+			else {
+				Vulkan_GPU->ExtensionRelatedDatas.DescriptorIndexing = true;
+			}
+		}
+
+
+
 	}
-	void Vulkan_States::Check_DeviceFeatures(GPU* Vulkan_GPU, GFX_API::GPUDescription& GPUDesc) {
+	void Vulkan_States::Activate_DeviceFeatures(GPU* Vulkan_GPU, GFX_API::GPUDescription& GPUDesc, VkDeviceCreateInfo& dev_ci, DeviceExtendedFeatures& dev_ftrs) {
+		const void*& dev_ci_Next = dev_ci.pNext;
+		void** extending_Next = nullptr;
+
+
 		//Check for seperate RTSlot blending
 		if (Vulkan_GPU->Supported_Features.independentBlend) {
 			Vulkan_GPU->Active_Features.independentBlend = VK_TRUE;
 			GPUDesc.isSupported_SeperateRTSlotBlending = true;
 		}
+
+		//Activate Descriptor Indexing Features
+		if(Vulkan_GPU->ExtensionRelatedDatas.DescriptorIndexing){
+			dev_ftrs.DescIndexingFeatures.descriptorBindingPartiallyBound = true;
+			dev_ftrs.DescIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.runtimeDescriptorArray = VK_FALSE;
+			dev_ftrs.DescIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.shaderStorageImageArrayNonUniformIndexing = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.pNext = nullptr;
+			dev_ftrs.DescIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+
+			if (extending_Next) {
+				*extending_Next = &dev_ftrs.DescIndexingFeatures;
+				extending_Next = &dev_ftrs.DescIndexingFeatures.pNext;
+			}
+			else {
+				dev_ci_Next = &dev_ftrs.DescIndexingFeatures;
+				extending_Next = &dev_ftrs.DescIndexingFeatures.pNext;
+			}
+		}
 	}
+	//It is safe to use logical device here, because it is already created
+	void Vulkan_States::Check_DeviceLimits(GPU* Vulkan_GPU, GFX_API::GPUDescription& GPUDesc) {
+		//Check Descriptor Limits
+		{
+			if (Vulkan_GPU->ExtensionRelatedDatas.DescriptorIndexing) {
+				VkPhysicalDeviceDescriptorIndexingProperties* descindexinglimits = new VkPhysicalDeviceDescriptorIndexingProperties{};
+				descindexinglimits->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
+				VkPhysicalDeviceProperties2 devprops2;
+				devprops2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+				devprops2.pNext = descindexinglimits;
+				vkGetPhysicalDeviceProperties2(Vulkan_GPU->Physical_Device, &devprops2);
+
+				GPUDesc.MaxImageTexture_perStage = descindexinglimits->maxPerStageDescriptorUpdateAfterBindStorageImages;
+				GPUDesc.MaxSampledTexture_perStage = descindexinglimits->maxPerStageDescriptorUpdateAfterBindSampledImages;
+				GPUDesc.MaxUniformBuffer_perStage = descindexinglimits->maxPerStageDescriptorUpdateAfterBindUniformBuffers;
+				GPUDesc.MaxStorageBuffer_perStage = descindexinglimits->maxPerStageDescriptorUpdateAfterBindStorageBuffers;
+				GPUDesc.MaxUsableResources_perStage = descindexinglimits->maxPerStageUpdateAfterBindResources;
+
+				GPUDesc.MaxShaderInput_SampledTexture = descindexinglimits->maxDescriptorSetUpdateAfterBindSampledImages;
+				GPUDesc.MaxShaderInput_ImageTexture = descindexinglimits->maxDescriptorSetUpdateAfterBindStorageImages;
+				GPUDesc.MaxShaderInput_UniformBuffer = descindexinglimits->maxDescriptorSetUpdateAfterBindUniformBuffers;
+				GPUDesc.MaxShaderInput_StorageBuffer = descindexinglimits->maxDescriptorSetUpdateAfterBindStorageBuffers;
+				delete descindexinglimits;
+			}
+			else {
+				GPUDesc.MaxImageTexture_perStage = Vulkan_GPU->Device_Properties.limits.maxPerStageDescriptorStorageImages;
+				GPUDesc.MaxSampledTexture_perStage = Vulkan_GPU->Device_Properties.limits.maxPerStageDescriptorSampledImages;
+				GPUDesc.MaxUniformBuffer_perStage = Vulkan_GPU->Device_Properties.limits.maxPerStageDescriptorUniformBuffers;
+				GPUDesc.MaxStorageBuffer_perStage = Vulkan_GPU->Device_Properties.limits.maxPerStageDescriptorStorageBuffers;
+				GPUDesc.MaxUsableResources_perStage = Vulkan_GPU->Device_Properties.limits.maxPerStageResources;
+
+				GPUDesc.MaxShaderInput_SampledTexture = Vulkan_GPU->Device_Properties.limits.maxDescriptorSetSampledImages;
+				GPUDesc.MaxShaderInput_ImageTexture = Vulkan_GPU->Device_Properties.limits.maxDescriptorSetStorageImages;
+				GPUDesc.MaxShaderInput_UniformBuffer = Vulkan_GPU->Device_Properties.limits.maxDescriptorSetUniformBuffers;
+				GPUDesc.MaxShaderInput_StorageBuffer = Vulkan_GPU->Device_Properties.limits.maxDescriptorSetStorageBuffers;
+			}
+		}
+	}
+
 	VK_MemoryAllocation::VK_MemoryAllocation() : Allocated_Blocks(*GFX->JobSys) {
 
 	}

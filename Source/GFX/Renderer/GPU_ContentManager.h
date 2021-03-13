@@ -46,10 +46,11 @@ namespace GFX_API {
 	2) General and Per Instance shader inputs should be set with SetMaterial_XXX() functions
 	3) Related SetMaterial_XXX() function of a shader input can only be called once per frame, second one (or concurrent one) will fail
 	4) That means you can change 2 different shader inputs in the same frame, but you can't change the same shader inputs twice in a frame
-	5) Globals are only uniform and storage buffers for now (Set = 0 in SPIR-V shaders) and can be accessible from all materials
-	6) Material Type (General) ones are only accessible by material instances that are instantiated by the same Material Type (Set = 1 in SPIR-V shaders)
-	7) Material Instance ones are material instance specific (Set = 2 in SPIR-V shaders)
+	5) Depending on your GPU's "Descriptor Indexing" support, global shader input handling differs.
+	6) Material Type (General) ones are only accessible by material instances that are instantiated by the same Material Type
+	7) Material Instance ones are material instance specific
 	8) There are 4 types of shader inputs: SampledTexture, ImageTexture, UniformBuffer, StorageBuffer (same as Khronos)
+	9) Please read "Resources_README.md" for details
 	*/
 	class GFXAPI GPU_ContentManager {
 	protected:
@@ -91,15 +92,13 @@ namespace GFX_API {
 			unsigned int DataSize, unsigned int TargetOffset) = 0;
 		virtual void Delete_Texture(GFXHandle TEXTUREHANDLE, bool isUsedLastFrame) = 0;
 
-		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform,
+		virtual TAPIResult Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, bool isUniform,
 			GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) = 0;
 		virtual void Unload_GlobalBuffer(GFXHandle BUFFER_ID) = 0;
-		virtual TAPIResult Create_GlobalTexture(const char* TEXTURE_NAME, bool isSampledTexture, unsigned int BINDINDEX, unsigned int TextureCount, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
-			GFX_API::GFXHandle& GlobalTextureHandle) = 0;
-		virtual TAPIResult SetGlobal_SampledTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int TextureIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
+		virtual TAPIResult SetGlobalBuffer(bool isUniformBuffer, unsigned int ElementIndex, bool isUsedLastFrame, GFX_API::GFXHandle BufferHandle, unsigned int BufferOffset,
+			unsigned int BoundDataSize) = 0;
+		virtual TAPIResult SetGlobalTexture(bool isSampledTexture, unsigned int ElementIndex, bool isUsedLastFrame, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
 			GFX_API::IMAGE_ACCESS access) = 0; 
-		virtual TAPIResult SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int TextureIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
-			GFX_API::IMAGE_ACCESS access) = 0;
 
 
 		//Return handle to reference in GFX!
@@ -116,12 +115,10 @@ namespace GFX_API {
 		virtual void Delete_MaterialInst(GFXHandle ID) = 0;
 		//If isMaterialType is false, MaterialType_orInstance input will be proccessed as MaterialInstance handle
 		//IsUsedRecently means is the material type/instance used in last two frames. This is necessary for Vulkan synchronization process.
-		virtual TAPIResult SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
-			GFX_API::GFXHandle TargetBufferHandle, unsigned int ELEMENTINDEX, GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset, unsigned int BoundDataSize) = 0;
-		virtual TAPIResult SetMaterial_SampledTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
-			unsigned int ELEMENTINDEX, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) = 0;
-		virtual TAPIResult SetMaterial_ImageTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
-			unsigned int ELEMENTINDEX, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) = 0;
+		virtual TAPIResult SetMaterialBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+			GFX_API::GFXHandle TargetBufferHandle, bool isUniformBufferShaderInput, GFX_API::BUFFER_TYPE TYPE, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize) = 0;
+		virtual TAPIResult SetMaterialTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+			GFX_API::GFXHandle TextureHandle, bool isSampledTexture, unsigned int ELEMENTINDEX, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) = 0;
 
 
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) = 0;

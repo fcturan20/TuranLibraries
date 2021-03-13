@@ -33,6 +33,23 @@ namespace TuranEditor {
 		SecondStage.MaterialRelated_SampledTexture = 100;
 		SecondStage.MaterialRelated_StorageBuffer = 100;
 		SecondStage.MaterialRelated_UniformBuffer = 100;
+
+		SecondStage.GlobalBuffers[0].BINDINGPOINT = 0;
+		SecondStage.GlobalBuffers[0].ELEMENTCOUNT = 1;
+		SecondStage.GlobalBuffers[0].TYPE = GFX_API::SHADERINPUT_TYPE::SBUFFER_G;
+
+		SecondStage.GlobalBuffers[1].BINDINGPOINT = 1;
+		SecondStage.GlobalBuffers[1].ELEMENTCOUNT = 1;
+		SecondStage.GlobalBuffers[1].TYPE = GFX_API::SHADERINPUT_TYPE::UBUFFER_G;
+
+		SecondStage.GlobalTextures[0].BINDINGPOINT = 0;
+		SecondStage.GlobalTextures[0].ELEMENTCOUNT = 1;
+		SecondStage.GlobalTextures[0].TYPE = GFX_API::SHADERINPUT_TYPE::IMAGE_G;
+
+		SecondStage.GlobalTextures[1].BINDINGPOINT = 1;
+		SecondStage.GlobalTextures[1].ELEMENTCOUNT = 1;
+		SecondStage.GlobalTextures[1].TYPE = GFX_API::SHADERINPUT_TYPE::SAMPLER_G;
+
 		VK->Start_SecondStage(0, SecondStage, true);
 	}
 	Editor_System::~Editor_System() {

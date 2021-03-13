@@ -80,21 +80,24 @@ namespace Vulkan {
 						vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeObj);
 						if (*DrawCall.PerInstanceSet) {
 							if (*DrawCall.GeneralSet) {
-								VkDescriptorSet Sets[3] = { VKContentManager->GlobalShaderInputs_DescSet.Set, *DrawCall.GeneralSet, *DrawCall.PerInstanceSet };
-								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 3, Sets, 0, nullptr);
+								VkDescriptorSet Sets[4] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set,
+									*DrawCall.GeneralSet, *DrawCall.PerInstanceSet };
+								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 4, Sets, 0, nullptr);
 							}
 							else {
-								VkDescriptorSet Sets[2] = { VKContentManager->GlobalShaderInputs_DescSet.Set, *DrawCall.PerInstanceSet };
-								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 2, Sets, 0, nullptr);
+								VkDescriptorSet Sets[3] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set,
+									*DrawCall.PerInstanceSet };
+								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 3, Sets, 0, nullptr);
 							}
 						}
 						else if (*DrawCall.GeneralSet) {
-							VkDescriptorSet Sets[2] = { VKContentManager->GlobalShaderInputs_DescSet.Set, *DrawCall.GeneralSet };
-							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 2, Sets, 0, nullptr);
+							VkDescriptorSet Sets[3] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set,
+									*DrawCall.GeneralSet };
+							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 3, Sets, 0, nullptr);
 						}
 						else {
-							VkDescriptorSet Sets[1] = { VKContentManager->GlobalShaderInputs_DescSet.Set };
-							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 1, Sets, 0, nullptr);
+							VkDescriptorSet Sets[2] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set };
+							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 2, Sets, 0, nullptr);
 						}
 						if (DrawCall.VBuffer != VK_NULL_HANDLE) {
 							vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VOffset);
@@ -129,20 +132,24 @@ namespace Vulkan {
 						vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeObj);
 						if (*DrawCall.PerInstanceSet) {
 							if (*DrawCall.GeneralSet) {
-								VkDescriptorSet Sets[3] = { VKContentManager->GlobalShaderInputs_DescSet.Set, *DrawCall.GeneralSet, *DrawCall.PerInstanceSet };
-								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 3, Sets, 0, nullptr);
+								VkDescriptorSet Sets[4] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set, 
+									*DrawCall.GeneralSet, *DrawCall.PerInstanceSet };
+								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 4, Sets, 0, nullptr);
 							}
 							else {
-								VkDescriptorSet Sets[2] = { VKContentManager->GlobalShaderInputs_DescSet.Set, *DrawCall.PerInstanceSet };
-								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 2, Sets, 0, nullptr);
+								VkDescriptorSet Sets[3] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set,
+									*DrawCall.PerInstanceSet };
+								vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 3, Sets, 0, nullptr);
 							}
 						}
 						else if(*DrawCall.GeneralSet){
-							VkDescriptorSet Sets[2] = { VKContentManager->GlobalShaderInputs_DescSet.Set, *DrawCall.GeneralSet };
-							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 2, Sets, 0, nullptr);
+							VkDescriptorSet Sets[3] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set,
+									*DrawCall.GeneralSet };
+							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 3, Sets, 0, nullptr);
 						}
 						else {
-							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 1, &VKContentManager->GlobalShaderInputs_DescSet.Set, 0, nullptr);
+							VkDescriptorSet Sets[2] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set };
+							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, DrawCall.MatTypeLayout, 0, 2, Sets, 0, nullptr);
 						}
 						if (DrawCall.VBuffer != VK_NULL_HANDLE) {
 							vkCmdBindVertexBuffers(CB, 0, 1, &DrawCall.VBuffer, &DrawCall.VBOffset);

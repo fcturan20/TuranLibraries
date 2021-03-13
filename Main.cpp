@@ -88,9 +88,11 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	//Create Global Shader Inputs before the RenderGraph Construction
 	
 	GFX_API::GFXHandle FirstGlobalBuffer, FirstGlobalTexture;
-	GFXContentManager->Create_GlobalBuffer("CameraData", 256, 1, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
+	GFXContentManager->Create_GlobalBuffer("CameraData", 256, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
 		3, FirstGlobalBuffer);
-	GFXContentManager->Create_GlobalTexture("FirstGlobTexture", true, 0, 2, GFX_API::Create_ShaderStageFlag(false, true, false, false, false), FirstGlobalTexture);
+	if (GFXContentManager->SetGlobalBuffer(true, 0, false, FirstGlobalBuffer, 0, 256) != TAPI_SUCCESS) {
+		LOG_CRASHING_TAPI("Failed to set global buffer!");
+	}
 
 
 	GFX_API::GFXHandle StagingBuffer;
@@ -327,6 +329,10 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		delete AlitaMip1Data;
 	}
 
+	if (GFXContentManager->SetGlobalTexture(true, 0, false, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY) != TAPI_SUCCESS) {
+		LOG_CRASHING_TAPI("Setting a global texture has failed!");
+	}
+
 
 
 
@@ -396,8 +402,8 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			LOG_CRASHING_TAPI("Uploading the world matrix data has failed!");
 		}
 	}
-	GFXContentManager->SetMaterial_SampledTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, 0, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
-	GFXContentManager->SetMaterial_SampledTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, 1, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
+	GFXContentManager->SetMaterialTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, AlitaTexture, true, 0, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
+	GFXContentManager->SetMaterialTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, GokuBlackTexture, true, 1, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
 
 
 
@@ -430,6 +436,14 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	while (MainWindow->isWindowOpen()) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
 		
+		if (i % 2) {
+			GFXContentManager->SetGlobalTexture(true, 0, true, AlitaTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
+		}
+		else {
+			if (GFXContentManager->SetGlobalTexture(true, 0, true, GokuBlackTexture, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY) != TAPI_SUCCESS) {
+				LOG_CRASHING_TAPI("WTF!?");
+			}
+		}
 		IMGUI_RUNWINDOWS();
 		if (!isWindowResized) {
 			GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, AlitaSwapchains[GFX->Get_WindowFrameIndex(AlitaWindowHandle)], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE);

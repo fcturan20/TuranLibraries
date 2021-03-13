@@ -4,13 +4,9 @@
 #define VKRENDERER ((Vulkan::Renderer*)GFXRENDERER)
 #define VKGPU (((Vulkan::Vulkan_Core*)GFX)->VK_States.GPU_TO_RENDER)
 
-#define MAXDESCSETCOUNT_PERPOOL 100
-#define MAXUBUFFERCOUNT_PERPOOL 100
-#define MAXSBUFFERCOUNT_PERPOOL 100
-#define MAXSAMPLERCOUNT_PERPOOL 100
-#define MAXIMAGECOUNT_PERPOOL	100
 
 namespace Vulkan {
+	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
 	VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage) {
 		VkBuffer buffer;
 
@@ -32,10 +28,50 @@ namespace Vulkan {
 		}
 		return buffer;
 	}
-	GPU_ContentManager::GPU_ContentManager() : MESHBUFFERs(*GFX->JobSys), INDEXBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
+	unsigned int Find_MeaningfulDescriptorPoolSize(unsigned int needed_descriptorcount, DescType DescType) {
+		unsigned int Supported_MaxDescCount = 0;
+		switch (DescType) {
+		case Vulkan::DescType::IMAGE:
+			Supported_MaxDescCount = VKGPU->ExtensionRelatedDatas.MaxDesc_ImageTexture;
+			break;
+		case Vulkan::DescType::SAMPLER:
+			Supported_MaxDescCount = VKGPU->ExtensionRelatedDatas.MaxDesc_SampledTexture;
+			break;
+		case Vulkan::DescType::UBUFFER:
+			Supported_MaxDescCount = VKGPU->ExtensionRelatedDatas.MaxDesc_UniformBuffer;
+			break;
+		case Vulkan::DescType::SBUFFER:
+			Supported_MaxDescCount = VKGPU->ExtensionRelatedDatas.MaxDesc_StorageBuffer;
+			break;
+		default:
+			LOG_CRASHING_TAPI("Find_MeaningfulDescriptorPoolSize() doesn't support this type of DescType!");
+			break;
+		}
+		const unsigned int FragmentationPreventingDescCount = ((Supported_MaxDescCount / 100) * 10);
+		if (needed_descriptorcount == Supported_MaxDescCount) {
+			return Supported_MaxDescCount;
+		}
+		if (needed_descriptorcount > Supported_MaxDescCount) {
+			LOG_CRASHING_TAPI("You want more shader input than your GPU supports, so maximum count that your GPU supports has returned!");
+			return Supported_MaxDescCount;
+		}
+		if (needed_descriptorcount > (Supported_MaxDescCount * 2) / 5){
+			if (needed_descriptorcount < Supported_MaxDescCount / 2) {
+				return needed_descriptorcount * 2;
+			}
+			if (needed_descriptorcount < (Supported_MaxDescCount * 4) / 5) {
+				return needed_descriptorcount + FragmentationPreventingDescCount;
+			}
+			return needed_descriptorcount;
+		}
+		return needed_descriptorcount * 2 + FragmentationPreventingDescCount;
+	}
+	GPU_ContentManager::GPU_ContentManager(unsigned int MaxDesc_SampledTexture, unsigned int MaxDesc_ImageTexture, unsigned int MaxDesc_UniformBuffer, unsigned int MaxDesc_StorageBuffer, 
+		unsigned int MaxDesc_Set, const GFX_API::ShaderInput_Description* GlobalBufferDescs, const GFX_API::ShaderInput_Description* GlobalTextureDescs) : 
+		MESHBUFFERs(*GFX->JobSys), INDEXBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
 		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys), STAGINGBUFFERs(*GFX->JobSys),
 		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys), IRT_SLOTSETs(*GFX->JobSys),
-		DeleteTextureList(*GFX->JobSys), NextFrameDeleteTextureCalls(*GFX->JobSys), GLOBALTEXTUREs(*GFX->JobSys){
+		DeleteTextureList(*GFX->JobSys), NextFrameDeleteTextureCalls(*GFX->JobSys){
 
 		//Do memory allocations
 		for (unsigned int allocindex = 0; allocindex < VKGPU->ALLOCs.size(); allocindex++) {
@@ -89,19 +125,23 @@ namespace Vulkan {
 		//Material Related Descriptor Pool Creation
 		{
 			VkDescriptorPoolCreateInfo dp_ci = {};
+			VkDescriptorPoolSize SIZEs[4];
+			SIZEs[0].descriptorCount = Find_MeaningfulDescriptorPoolSize(MaxDesc_ImageTexture, DescType::IMAGE);
+			SIZEs[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			SIZEs[1].descriptorCount = Find_MeaningfulDescriptorPoolSize(MaxDesc_StorageBuffer, DescType::SBUFFER);
+			SIZEs[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			SIZEs[2].descriptorCount = Find_MeaningfulDescriptorPoolSize(MaxDesc_UniformBuffer, DescType::UBUFFER);
+			SIZEs[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			SIZEs[3].descriptorCount = Find_MeaningfulDescriptorPoolSize(MaxDesc_SampledTexture, DescType::SAMPLER);
+			SIZEs[3].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			dp_ci.maxSets = MaxDesc_Set;
 			dp_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-			dp_ci.maxSets = MAXDESCSETCOUNT_PERPOOL;
+			//If descriptor indexing is supported, global descriptor set is only updated (not freed)
+			if (VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+				dp_ci.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+			}
 			dp_ci.pNext = nullptr;
 			dp_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			VkDescriptorPoolSize SIZEs[4];
-			SIZEs[0].descriptorCount = MAXIMAGECOUNT_PERPOOL;
-			SIZEs[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			SIZEs[1].descriptorCount = MAXSBUFFERCOUNT_PERPOOL;
-			SIZEs[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-			SIZEs[2].descriptorCount = MAXUBUFFERCOUNT_PERPOOL;
-			SIZEs[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			SIZEs[3].descriptorCount = MAXSAMPLERCOUNT_PERPOOL;
-			SIZEs[3].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
 			dp_ci.poolSizeCount = 4;
 			dp_ci.pPoolSizes = SIZEs;
@@ -110,11 +150,244 @@ namespace Vulkan {
 				return;
 			}
 
-			MaterialRelated_DescPool.REMAINING_IMAGE.DirectStore(MAXIMAGECOUNT_PERPOOL);
-			MaterialRelated_DescPool.REMAINING_SAMPLER.DirectStore(MAXSAMPLERCOUNT_PERPOOL);
-			MaterialRelated_DescPool.REMAINING_SBUFFER.DirectStore(MAXSBUFFERCOUNT_PERPOOL);
-			MaterialRelated_DescPool.REMAINING_UBUFFER.DirectStore(MAXUBUFFERCOUNT_PERPOOL);
-			MaterialRelated_DescPool.REMAINING_SET.DirectStore(MAXDESCSETCOUNT_PERPOOL);
+			MaterialRelated_DescPool.REMAINING_IMAGE.DirectStore(MaxDesc_ImageTexture);
+			MaterialRelated_DescPool.REMAINING_SAMPLER.DirectStore(MaxDesc_SampledTexture);
+			MaterialRelated_DescPool.REMAINING_SBUFFER.DirectStore(MaxDesc_StorageBuffer);
+			MaterialRelated_DescPool.REMAINING_UBUFFER.DirectStore(MaxDesc_UniformBuffer);
+			MaterialRelated_DescPool.REMAINING_SET.DirectStore(MaxDesc_Set);
+		}
+
+
+		//Create Descriptor Pool and Descriptor Set Layout for Global Shader Inputs
+		{
+			unsigned int UBUFFER_COUNT = 0, SBUFFER_COUNT = 0, SAMPLER_COUNT = 0, IMAGE_COUNT = 0;
+			if (GlobalBufferDescs[0].TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_G) {
+				UBUFFER_COUNT = GlobalBufferDescs[0].ELEMENTCOUNT;
+				SBUFFER_COUNT = GlobalBufferDescs[1].ELEMENTCOUNT;
+			}
+			else {
+				UBUFFER_COUNT = GlobalBufferDescs[1].ELEMENTCOUNT;
+				SBUFFER_COUNT = GlobalBufferDescs[0].ELEMENTCOUNT;
+			}
+			if (GlobalTextureDescs[0].TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_G) {
+				SAMPLER_COUNT = GlobalTextureDescs[0].ELEMENTCOUNT;
+				IMAGE_COUNT = GlobalTextureDescs[1].ELEMENTCOUNT;
+			}
+			else {
+				SAMPLER_COUNT = GlobalTextureDescs[1].ELEMENTCOUNT;
+				IMAGE_COUNT = GlobalTextureDescs[0].ELEMENTCOUNT;
+			}
+
+			//Create Descriptor Pool
+			{
+				//Descriptor Pool and Descriptor Set creation
+				//Create a descriptor pool that has 2 times of sum of counts above!
+				vector<VkDescriptorPoolSize> poolsizes;
+				if (UBUFFER_COUNT > 0) {
+					VkDescriptorPoolSize UDescCount;
+					UDescCount.descriptorCount = UBUFFER_COUNT * 2;
+					UDescCount.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+					poolsizes.push_back(UDescCount);
+				}
+				if (SBUFFER_COUNT > 0) {
+					VkDescriptorPoolSize SDescCount;
+					SDescCount.descriptorCount = SBUFFER_COUNT * 2;
+					SDescCount.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+					poolsizes.push_back(SDescCount);
+				}
+				if (SAMPLER_COUNT > 0) {
+					VkDescriptorPoolSize SampledCount;
+					SampledCount.descriptorCount = SAMPLER_COUNT * 2;
+					SampledCount.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+					poolsizes.push_back(SampledCount);
+				}
+				if (IMAGE_COUNT > 0) {
+					VkDescriptorPoolSize ImageCount;
+					ImageCount.descriptorCount = IMAGE_COUNT * 2;
+					ImageCount.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+					poolsizes.push_back(ImageCount);
+				}
+
+				if (!poolsizes.size()) {
+					VkDescriptorPoolSize defaultsamplersize;
+					defaultsamplersize.descriptorCount = 1;
+					defaultsamplersize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+					poolsizes.push_back(defaultsamplersize);
+
+					VkDescriptorPoolSize defaultubuffersize;
+					defaultubuffersize.descriptorCount = 1;
+					defaultubuffersize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+					poolsizes.push_back(defaultubuffersize);
+				}
+
+				VkDescriptorPoolCreateInfo descpool_ci = {};
+				descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+				descpool_ci.maxSets = 4;
+				descpool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+				if (VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+					descpool_ci.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+				}
+				descpool_ci.pPoolSizes = poolsizes.data();
+				descpool_ci.poolSizeCount = poolsizes.size();
+				descpool_ci.pNext = nullptr;
+				if (vkCreateDescriptorPool(VKGPU->Logical_Device, &descpool_ci, nullptr, &GlobalShaderInputs_DescPool) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("Vulkan Global Descriptor Pool Creation has failed!");
+				}
+			}
+
+			//Create Global Buffer Descriptor Set Layout
+			{
+				VkDescriptorSetLayoutBinding binding[2];
+				binding[0].binding = 0;
+				binding[0].descriptorCount = GlobalBufferDescs[0].ELEMENTCOUNT;
+				binding[0].descriptorType = Find_VkDescType_byMATDATATYPE(GlobalBufferDescs[0].TYPE);
+				binding[0].pImmutableSamplers = nullptr;
+				binding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+				binding[1].binding = 1;
+				binding[1].descriptorCount = GlobalBufferDescs[1].ELEMENTCOUNT;
+				binding[1].descriptorType = Find_VkDescType_byMATDATATYPE(GlobalBufferDescs[1].TYPE);
+				binding[1].pImmutableSamplers = nullptr;
+				binding[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+				VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
+				VkDescriptorSetLayoutBindingFlagsCreateInfo descindexing_ci = {};
+				VkDescriptorBindingFlags ext_flags[2] = { VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT ,
+				VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
+				if (VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+					descindexing_ci.bindingCount = 2;
+					descindexing_ci.pBindingFlags = ext_flags;
+					descindexing_ci.pNext = nullptr;
+					descindexing_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+					DescSetLayout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+					DescSetLayout_ci.pNext = &descindexing_ci;
+				}
+				DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				DescSetLayout_ci.bindingCount = 2;
+				DescSetLayout_ci.pBindings = binding;
+				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &DescSetLayout_ci, nullptr, &GlobalBuffers_DescSet.Layout) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
+					return;
+				}
+			}
+
+			//Create Global Texture Descriptor Set Layout
+			{
+				VkDescriptorSetLayoutBinding binding[2];
+				binding[0].binding = 0;
+				binding[0].descriptorCount = GlobalTextureDescs[0].ELEMENTCOUNT;
+				binding[0].descriptorType = Find_VkDescType_byMATDATATYPE(GlobalTextureDescs[0].TYPE);
+				binding[0].pImmutableSamplers = nullptr;
+				binding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+				binding[1].binding = 1;
+				binding[1].descriptorCount = GlobalTextureDescs[1].ELEMENTCOUNT;
+				binding[1].descriptorType = Find_VkDescType_byMATDATATYPE(GlobalTextureDescs[1].TYPE);
+				binding[1].pImmutableSamplers = nullptr;
+				binding[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+				VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
+				VkDescriptorSetLayoutBindingFlagsCreateInfo descindexing_ci = {};
+				VkDescriptorBindingFlags ext_flags[2] = { VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT ,
+				VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
+				if (VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+					descindexing_ci.bindingCount = 2;
+					descindexing_ci.pBindingFlags = ext_flags;
+					descindexing_ci.pNext = nullptr;
+					descindexing_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+					DescSetLayout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+					DescSetLayout_ci.pNext = &descindexing_ci;
+				}
+				DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				DescSetLayout_ci.bindingCount = 2;
+				DescSetLayout_ci.pBindings = binding;
+				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &DescSetLayout_ci, nullptr, &GlobalTextures_DescSet.Layout) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
+					return;
+				}
+			}
+
+			//Create Global Buffer Descriptor Sets
+			{
+				VkDescriptorSetVariableDescriptorCountAllocateInfo variabledescscount_info = {};
+				VkDescriptorSetAllocateInfo descset_ai = {};
+				if (VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+					variabledescscount_info.descriptorSetCount = 2;
+					uint32_t ElementCounts[2]{ GlobalBufferDescs[1].ELEMENTCOUNT, GlobalBufferDescs[1].ELEMENTCOUNT };
+					variabledescscount_info.pDescriptorCounts = ElementCounts;
+					variabledescscount_info.pNext = nullptr;
+					variabledescscount_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+					descset_ai.descriptorPool = GlobalShaderInputs_DescPool;
+				}
+				descset_ai.pNext = &variabledescscount_info;
+				descset_ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				descset_ai.descriptorSetCount = 2;
+				VkDescriptorSetLayout SetLayouts[2]{ GlobalBuffers_DescSet.Layout, GlobalBuffers_DescSet.Layout };
+				descset_ai.pSetLayouts = SetLayouts;
+				VkDescriptorSet Sets[2];
+				if (vkAllocateDescriptorSets(VKGPU->Logical_Device, &descset_ai, Sets) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("CreateandUpdate_GlobalDescSet() has failed at vkAllocateDescriptorSets()!");
+				}
+				UnboundGlobalBufferDescSet = Sets[0];
+				GlobalBuffers_DescSet.Set = Sets[1];
+			}
+
+			//Create Global Texture Descriptor Sets
+			{
+				VkDescriptorSetVariableDescriptorCountAllocateInfo variabledescscount_info = {};
+				VkDescriptorSetAllocateInfo descset_ai = {};
+				if (VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+					variabledescscount_info.descriptorSetCount = 2;
+					uint32_t ElementCounts[2]{ GlobalTextureDescs[1].ELEMENTCOUNT, GlobalTextureDescs[1].ELEMENTCOUNT };
+					variabledescscount_info.pDescriptorCounts = ElementCounts;
+					variabledescscount_info.pNext = nullptr;
+					variabledescscount_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+					descset_ai.descriptorPool = GlobalShaderInputs_DescPool;
+				}
+				descset_ai.pNext = &variabledescscount_info;
+				descset_ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				descset_ai.descriptorSetCount = 2;
+				VkDescriptorSetLayout SetLayouts[2]{ GlobalTextures_DescSet.Layout, GlobalTextures_DescSet.Layout };
+				descset_ai.pSetLayouts = SetLayouts;
+				VkDescriptorSet Sets[2];
+				if (vkAllocateDescriptorSets(VKGPU->Logical_Device, &descset_ai, Sets) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("CreateandUpdate_GlobalDescSet() has failed at vkAllocateDescriptorSets()!");
+				}
+				UnboundGlobalTextureDescSet = Sets[0];
+				GlobalTextures_DescSet.Set = Sets[1];
+			}
+
+			//Fill Global Buffer Descriptor Set
+			{
+				VK_Descriptor* BufferFinalDescs = new VK_Descriptor[2];
+				BufferFinalDescs[0].ElementCount = GlobalBufferDescs[0].ELEMENTCOUNT;
+				BufferFinalDescs[0].Elements = new VK_DescBufferElement[GlobalBufferDescs[0].ELEMENTCOUNT];
+				BufferFinalDescs[0].Type = Find_DescType_byGFXShaderInputType(GlobalBufferDescs[0].TYPE);
+				BufferFinalDescs[1].ElementCount = GlobalBufferDescs[1].ELEMENTCOUNT;
+				BufferFinalDescs[1].Elements = new VK_DescBufferElement[GlobalBufferDescs[1].ELEMENTCOUNT];
+				BufferFinalDescs[1].Type = Find_DescType_byGFXShaderInputType(GlobalBufferDescs[1].TYPE);
+
+				GlobalBuffers_DescSet.DescCount = UBUFFER_COUNT + SBUFFER_COUNT;
+				GlobalBuffers_DescSet.DescUBuffersCount = 1;
+				GlobalBuffers_DescSet.DescSBuffersCount = 1;
+				GlobalBuffers_DescSet.Descs = BufferFinalDescs;
+			}
+
+			//Fill Global Texture Descriptor Set
+			{
+				VK_Descriptor* TextureFinalDescs = new VK_Descriptor[2];
+				TextureFinalDescs[0].ElementCount = GlobalTextureDescs[0].ELEMENTCOUNT;
+				TextureFinalDescs[0].Elements = new VK_DescImageElement[GlobalTextureDescs[0].ELEMENTCOUNT];
+				TextureFinalDescs[0].Type = Find_DescType_byGFXShaderInputType(GlobalTextureDescs[0].TYPE);
+				TextureFinalDescs[1].ElementCount = GlobalTextureDescs[1].ELEMENTCOUNT;
+				TextureFinalDescs[1].Elements = new VK_DescImageElement[GlobalTextureDescs[1].ELEMENTCOUNT];
+				TextureFinalDescs[1].Type = Find_DescType_byGFXShaderInputType(GlobalTextureDescs[1].TYPE);
+
+				GlobalTextures_DescSet.DescCount = IMAGE_COUNT + SAMPLER_COUNT;
+				GlobalTextures_DescSet.DescUBuffersCount = 1;
+				GlobalTextures_DescSet.DescSBuffersCount = 1;
+				GlobalTextures_DescSet.Descs = TextureFinalDescs;
+			}
 		}
 	}
 	GPU_ContentManager::~GPU_ContentManager() {
@@ -296,11 +569,110 @@ namespace Vulkan {
 		}
 		//Destroy Global Buffer related Descriptor Datas
 		{
-			vkDestroyDescriptorPool(VKGPU->Logical_Device, GlobalBuffers_DescPool, nullptr);
-			vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, GlobalShaderInputs_DescSet.Layout, nullptr);
+			vkDestroyDescriptorPool(VKGPU->Logical_Device, GlobalShaderInputs_DescPool, nullptr);
+			vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, GlobalBuffers_DescSet.Layout, nullptr);
+			vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, GlobalTextures_DescSet.Layout, nullptr);
 		}
 	}
 
+	void Update_GlobalDescSet_DescIndexing(VK_DescSet& Set, VkDescriptorPool Pool) {
+		//Update Descriptor Sets
+		{
+			vector<VkWriteDescriptorSet> UpdateInfos;
+
+			for (unsigned int BindingIndex = 0; BindingIndex < 2; BindingIndex++) {
+				VK_Descriptor& Desc = Set.Descs[BindingIndex];
+				if (Desc.Type == DescType::IMAGE || Desc.Type == DescType::SAMPLER) {
+					for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
+						VK_DescImageElement& im = GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[DescElementIndex];
+						if (im.IsUpdated.load() == 255) {
+							continue;
+						}
+						im.IsUpdated.store(0);
+
+						VkWriteDescriptorSet UpdateInfo = {};
+						UpdateInfo.descriptorCount = 1;
+						UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+						UpdateInfo.dstArrayElement = DescElementIndex;
+						UpdateInfo.dstBinding = BindingIndex;
+						UpdateInfo.dstSet = Set.Set;
+						UpdateInfo.pImageInfo = &im.info;
+						UpdateInfo.pNext = nullptr;
+						UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+						UpdateInfos.push_back(UpdateInfo);
+					}
+				}
+				else {
+					for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
+						VK_DescBufferElement& buf = GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[DescElementIndex];
+						if (buf.IsUpdated.load() == 255) {
+							continue;
+						}
+						buf.IsUpdated.store(0);
+
+						VkWriteDescriptorSet UpdateInfo = {};
+						UpdateInfo.descriptorCount = 1;
+						UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+						UpdateInfo.dstArrayElement = DescElementIndex;
+						UpdateInfo.dstBinding = BindingIndex;
+						UpdateInfo.dstSet = Set.Set;
+						UpdateInfo.pBufferInfo = &buf.Info;
+						UpdateInfo.pNext = nullptr;
+						UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+						UpdateInfos.push_back(UpdateInfo);
+					}
+				}
+			}
+
+			vkUpdateDescriptorSets(VKGPU->Logical_Device, UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
+		}
+	}
+	void Update_GlobalDescSet_NonDescIndexing(VK_DescSet& Set, VkDescriptorPool Pool) {
+		//Update Descriptor Sets
+		{
+			vector<VkWriteDescriptorSet> UpdateInfos;
+
+			for (unsigned int BindingIndex = 0; BindingIndex < 2; BindingIndex++) {
+				VK_Descriptor& Desc = Set.Descs[BindingIndex];
+				if (Desc.Type == DescType::IMAGE || Desc.Type == DescType::SAMPLER) {
+					for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
+						VK_DescImageElement& im = GFXHandleConverter(VK_DescImageElement*, Desc.Elements)[DescElementIndex];
+						im.IsUpdated.store(0);
+
+						VkWriteDescriptorSet UpdateInfo = {};
+						UpdateInfo.descriptorCount = 1;
+						UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+						UpdateInfo.dstArrayElement = DescElementIndex;
+						UpdateInfo.dstBinding = BindingIndex;
+						UpdateInfo.dstSet = Set.Set;
+						UpdateInfo.pImageInfo = &im.info;
+						UpdateInfo.pNext = nullptr;
+						UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+						UpdateInfos.push_back(UpdateInfo);
+					}
+				}
+				else {
+					for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
+						VK_DescBufferElement& buf = GFXHandleConverter(VK_DescBufferElement*, Desc.Elements)[DescElementIndex];
+						buf.IsUpdated.store(0);
+
+						VkWriteDescriptorSet UpdateInfo = {};
+						UpdateInfo.descriptorCount = 1;
+						UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+						UpdateInfo.dstArrayElement = DescElementIndex;
+						UpdateInfo.dstBinding = BindingIndex;
+						UpdateInfo.dstSet = Set.Set;
+						UpdateInfo.pBufferInfo = &buf.Info;
+						UpdateInfo.pNext = nullptr;
+						UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+						UpdateInfos.push_back(UpdateInfo);
+					}
+				}
+			}
+
+			vkUpdateDescriptorSets(VKGPU->Logical_Device, UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
+		}
+	}
 	void CopyDescriptorSets(VK_DescSet& Set, vector<VkCopyDescriptorSet>& CopyVector, vector<VkDescriptorSet*>& CopyTargetSets) {
 		for (unsigned int DescIndex = 0; DescIndex < Set.DescCount; DescIndex++) {
 			VkCopyDescriptorSet copyinfo;
@@ -324,14 +696,29 @@ namespace Vulkan {
 		const unsigned char FrameIndex = VKRENDERER->GetCurrentFrameIndex();
 
 		//Manage Global Descriptor Set
-		if (UnboundGlobalDescSet != VK_NULL_HANDLE) {
-			vkFreeDescriptorSets(VKGPU->Logical_Device, GlobalBuffers_DescPool, 1, &UnboundGlobalDescSet);
-			UnboundGlobalDescSet = VK_NULL_HANDLE;
+		if (GlobalBuffers_DescSet.ShouldRecreate.load()){
+			VkDescriptorSet backSet = UnboundGlobalBufferDescSet;
+			UnboundGlobalBufferDescSet = GlobalBuffers_DescSet.Set;
+			GlobalBuffers_DescSet.Set = backSet;
+			GlobalBuffers_DescSet.ShouldRecreate.store(false);
 		}
-		if(GlobalShaderInputs_DescSet.ShouldRecreate.load()){
-			UnboundGlobalDescSet = GlobalShaderInputs_DescSet.Set;
-			GlobalShaderInputs_DescSet.Set = VK_NULL_HANDLE;
-			CreateandUpdate_GlobalDescSet();
+		if (VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+			Update_GlobalDescSet_DescIndexing(GlobalBuffers_DescSet, GlobalShaderInputs_DescPool);
+		}
+		else {
+			Update_GlobalDescSet_NonDescIndexing(GlobalBuffers_DescSet, GlobalShaderInputs_DescPool);
+		}
+		if (GlobalTextures_DescSet.ShouldRecreate.load()) {
+			VkDescriptorSet backSet = UnboundGlobalTextureDescSet;
+			UnboundGlobalTextureDescSet = GlobalTextures_DescSet.Set;
+			GlobalTextures_DescSet.Set = backSet;
+			GlobalTextures_DescSet.ShouldRecreate.store(false);
+		}
+		if (VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+			Update_GlobalDescSet_DescIndexing(GlobalTextures_DescSet, GlobalShaderInputs_DescPool);
+		}
+		else {
+			Update_GlobalDescSet_NonDescIndexing(GlobalTextures_DescSet, GlobalShaderInputs_DescPool);
 		}
 
 		//Manage Material Related Descriptor Sets
@@ -607,246 +994,38 @@ namespace Vulkan {
 
 
 	}
-	void GPU_ContentManager::CreateandUpdate_GlobalDescSet() {
-		//Descriptor Set allocation
-		{
-			VkDescriptorSetAllocateInfo descset_ai = {};
-			descset_ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			descset_ai.pNext = nullptr;
-			descset_ai.descriptorPool = GlobalBuffers_DescPool;
-			descset_ai.descriptorSetCount = 1;
-			descset_ai.pSetLayouts = &GlobalShaderInputs_DescSet.Layout;
-			if (vkAllocateDescriptorSets(VKGPU->Logical_Device, &descset_ai, &GlobalShaderInputs_DescSet.Set) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("CreateandUpdate_GlobalDescSet() has failed at vkAllocateDescriptorSets()!");
-			}
-		}
-		//Update Descriptor Set
-		{
-			vector<VkWriteDescriptorSet> UpdateInfos;
-			vector<VkDescriptorBufferInfo*> DeleteBufferInfoList;
-			vector<VkDescriptorImageInfo*> DeleteImageInfoList;
-
-			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-				for (unsigned int i = 0; i < GLOBALBUFFERs.size(ThreadID); i++) {
-					VK_GlobalBuffer* buf = GLOBALBUFFERs.get(ThreadID, i);
-					VkWriteDescriptorSet info = {};
-					info.descriptorCount = 1;
-					if (buf->isUniform) {
-						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-					}
-					else {
-						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-					}
-					info.dstArrayElement = 0;
-					info.dstBinding = buf->BINDINGPOINT;
-					info.dstSet = GlobalShaderInputs_DescSet.Set;
-					VkDescriptorBufferInfo* descbufinfo = new VkDescriptorBufferInfo;
-					VkBuffer nonobj; VkDeviceSize nonoffset;
-					descbufinfo->buffer = VKGPU->ALLOCs[buf->Block.MemAllocIndex].Buffer;
-					descbufinfo->offset = buf->Block.Offset;
-					descbufinfo->range = static_cast<VkDeviceSize>(buf->DATA_SIZE);
-					info.pBufferInfo = descbufinfo;
-					info.pNext = nullptr;
-					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					DeleteBufferInfoList.push_back(descbufinfo);
-					UpdateInfos.push_back(info);
-				}
-				for (unsigned int i = 0; i < GLOBALTEXTUREs.size(ThreadID); i++) {
-					VK_GlobalTexture* tex = GLOBALTEXTUREs.get(ThreadID, i);
-					VkDescriptorType texDescType;
-					if (tex->isSampledTexture) {
-						texDescType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-					}
-					else {
-						texDescType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-					}
-					for (unsigned int ElementIndex = 0; ElementIndex < tex->ElementCount; ElementIndex++) {
-						if (!tex->Elements[ElementIndex].Texture) {
-							continue;
-						}
-						VkWriteDescriptorSet info = {};
-						info.descriptorCount = 1;
-						info.dstArrayElement = ElementIndex;
-						info.dstBinding = tex->BINDINGPOINT;
-						info.dstSet = GlobalShaderInputs_DescSet.Set;
-						VkDescriptorImageInfo* desciminfo = new VkDescriptorImageInfo;
-						desciminfo->imageView = tex->Elements[ElementIndex].Texture->ImageView;
-						info.descriptorType = texDescType;
-						desciminfo->imageLayout = tex->Elements[ElementIndex].Layout;
-						desciminfo->sampler = tex->Elements[ElementIndex].Sampler;
-						info.pImageInfo = desciminfo;
-						info.pNext = nullptr;
-						info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-						DeleteImageInfoList.push_back(desciminfo);
-						UpdateInfos.push_back(info);
-					}
-				}
-			}
-
-			vkUpdateDescriptorSets(VKGPU->Logical_Device, UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
-
-			for (unsigned int DeleteIndex = 0; DeleteIndex < DeleteBufferInfoList.size(); DeleteIndex++) {
-				delete DeleteBufferInfoList[DeleteIndex];
-			}
-			for (unsigned int DeleteIndex = 0; DeleteIndex < DeleteImageInfoList.size(); DeleteIndex++) {
-				delete DeleteImageInfoList[DeleteIndex];
-			}
-		}
-	}
 
 	void GPU_ContentManager::Resource_Finalizations() {
-		//Create Descriptor Pool for Global Shader Inputs and Create Descriptor Set for them
-		{
-			std::unique_lock<std::mutex> GlobalBufferLocker;
-			GLOBALBUFFERs.PauseAllOperations(GlobalBufferLocker);
-			std::unique_lock<std::mutex> GlobalTextureLocker;
-			GLOBALTEXTUREs.PauseAllOperations(GlobalTextureLocker);
-			vector<unsigned int> BINDINDEXes;
-
-
-			//Descriptor Set Layout creation
-			unsigned int UNIFORMBUFFER_COUNT = 0, STORAGEBUFFER_COUNT = 0, SAMPLED_COUNT = 0, IMAGE_COUNT = 0;
-			{
-				vector<VkDescriptorSetLayoutBinding> bindings;
-				for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-					for (unsigned int i = 0; i < GLOBALBUFFERs.size(ThreadID); i++) {
-						VK_GlobalBuffer* globbuf = GLOBALBUFFERs.get(ThreadID, i);
-
-						//Check if the binding point is already used
-						for (unsigned int SearchIndex = 0; SearchIndex < BINDINDEXes.size(); SearchIndex++) {
-							if (BINDINDEXes[SearchIndex] == globbuf->BINDINGPOINT) {
-								LOG_CRASHING_TAPI("There are colliding global shader input (global buffer/texture) binding indexes!");
-								return;
-							}
-						}
-						BINDINDEXes.push_back(globbuf->BINDINGPOINT);
-
-
-						bindings.push_back(VkDescriptorSetLayoutBinding());
-						bindings[i].binding = globbuf->BINDINGPOINT;
-						bindings[i].descriptorCount = 1;
-						if (globbuf->isUniform) {
-							bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-						}
-						else {
-							bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-						}
-						bindings[i].pImmutableSamplers = VK_NULL_HANDLE;
-						bindings[i].stageFlags = Find_VkShaderStages(globbuf->ACCESSED_STAGEs);
-						//Buffer Type Counting
-						switch (bindings[i].descriptorType) {
-						case VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-						case VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-							STORAGEBUFFER_COUNT++;
-							break;
-						case VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-						case VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-							UNIFORMBUFFER_COUNT++;
-							break;
-						}
+		//If Descriptor Indexing isn't supported, check if any global descriptor isn't set before!
+		if (!VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+			for (unsigned char BindingIndex = 0; BindingIndex < 2; BindingIndex++) {
+				VK_Descriptor& BufferBinding = GlobalBuffers_DescSet.Descs[BindingIndex];
+				for (unsigned int ElementIndex = 0; ElementIndex < BufferBinding.ElementCount; ElementIndex++) {
+					VK_DescBufferElement& element = GFXHandleConverter(VK_DescBufferElement*, BufferBinding.Elements)[ElementIndex];
+					if (element.IsUpdated.load() == 255) {
+						LOG_CRASHING_TAPI("You have to use SetGlobalBuffer() for element index: " + to_string(ElementIndex));
+						return;
 					}
 				}
-
-				for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
-					for (unsigned int i = 0; i < GLOBALTEXTUREs.size(ThreadID); i++) {
-						VK_GlobalTexture* gt = GLOBALTEXTUREs.get(ThreadID, i);
-						
-						for (unsigned int SearchIndex = 0; SearchIndex < BINDINDEXes.size(); SearchIndex++) {
-							if (BINDINDEXes[SearchIndex] == gt->BINDINGPOINT) {
-								LOG_CRASHING_TAPI("There are colliding global shader input (global buffer/texture) binding indexes!");
-								return;
-							}
-						}
-
-
-						bindings.push_back(VkDescriptorSetLayoutBinding());
-						VkDescriptorSetLayoutBinding& targetbinding = bindings[bindings.size() - 1];
-						targetbinding.binding = gt->BINDINGPOINT;
-						targetbinding.descriptorCount = gt->ElementCount;
-						if (gt->isSampledTexture) {
-							targetbinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-							SAMPLED_COUNT += gt->ElementCount;
-						}
-						else {
-							targetbinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-							IMAGE_COUNT += gt->ElementCount;
-						}
-						targetbinding.pImmutableSamplers = VK_NULL_HANDLE;
-						targetbinding.stageFlags = Find_VkShaderStages(gt->ACCESSED_STAGEs);
-					}
-				}
-
-				//If there is no global buffer/texture, create a global texture and bind it
-				if (!bindings.size()) {
-					GFX_API::GFXHandle x;
-					Create_GlobalTexture("DefaultGlobalTexture", true, 0, 1, GFX_API::Create_ShaderStageFlag(false, true, false, false, false), x);
-					SAMPLED_COUNT++;
-
-					bindings.push_back(VkDescriptorSetLayoutBinding());
-					VkDescriptorSetLayoutBinding& targetbinding = bindings[bindings.size() - 1];
-					targetbinding.binding = 0;
-					targetbinding.descriptorCount = 1;
-					targetbinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-					targetbinding.pImmutableSamplers = VK_NULL_HANDLE;
-					targetbinding.stageFlags = Find_VkShaderStages(GFX_API::Create_ShaderStageFlag(false, true, false, false, false));
-				}
-
-				VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
-				DescSetLayout_ci.flags = 0;
-				DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-				DescSetLayout_ci.pNext = nullptr;
-				DescSetLayout_ci.bindingCount = bindings.size();
-				DescSetLayout_ci.pBindings = bindings.data();
-				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &DescSetLayout_ci, nullptr, &GlobalShaderInputs_DescSet.Layout) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
-					return;
-				}
-			}
-
-			//Descriptor Pool and Descriptor Set creation
-			//Create a descriptor pool that has 2 times of sum of counts above!
-			vector<VkDescriptorPoolSize> poolsizes;
-			if (UNIFORMBUFFER_COUNT > 0) {
-				VkDescriptorPoolSize UDescCount;
-				UDescCount.descriptorCount = UNIFORMBUFFER_COUNT * 2;
-				UDescCount.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				poolsizes.push_back(UDescCount);
-			}
-			if (STORAGEBUFFER_COUNT > 0) {
-				VkDescriptorPoolSize SDescCount;
-				SDescCount.descriptorCount = STORAGEBUFFER_COUNT * 2;
-				SDescCount.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				poolsizes.push_back(SDescCount);
-			}
-			if (SAMPLED_COUNT > 0) {
-				VkDescriptorPoolSize SampledCount;
-				SampledCount.descriptorCount = SAMPLED_COUNT * 2;
-				SampledCount.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				poolsizes.push_back(SampledCount);
-			}
-			if (IMAGE_COUNT > 0) {
-				VkDescriptorPoolSize ImageCount;
-				ImageCount.descriptorCount = IMAGE_COUNT * 2;
-				ImageCount.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				poolsizes.push_back(ImageCount);
-			}
-			if (poolsizes.size()) {
-				VkDescriptorPoolCreateInfo descpool_ci = {};
-				descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-				descpool_ci.maxSets = 2;
-				descpool_ci.pPoolSizes = poolsizes.data();
-				descpool_ci.poolSizeCount = poolsizes.size();
-				descpool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-				descpool_ci.pNext = nullptr;
-				if (poolsizes.size()) {
-					if (vkCreateDescriptorPool(VKGPU->Logical_Device, &descpool_ci, nullptr, &GlobalBuffers_DescPool) != VK_SUCCESS) {
-						LOG_CRASHING_TAPI("Create_RenderGraphResources() has failed at vkCreateDescriptorPool()!");
+				VK_Descriptor& TextureBinding = GlobalTextures_DescSet.Descs[BindingIndex];
+				for (unsigned int ElementIndex = 0; ElementIndex < TextureBinding.ElementCount; ElementIndex++) {
+					VK_DescImageElement& element = GFXHandleConverter(VK_DescImageElement*, TextureBinding.Elements)[ElementIndex];
+					if (element.IsUpdated.load() == 255) {
+						LOG_CRASHING_TAPI("You have to use SetGlobalTexture() for element index: " + to_string(ElementIndex));
+						return;
 					}
 				}
 			}
-			CreateandUpdate_GlobalDescSet();
 		}
-
+		
+		if (VKGPU->ExtensionRelatedDatas.DescriptorIndexing) {
+			Update_GlobalDescSet_DescIndexing(GlobalBuffers_DescSet, GlobalShaderInputs_DescPool);
+			Update_GlobalDescSet_DescIndexing(GlobalTextures_DescSet, GlobalShaderInputs_DescPool);
+		}
+		else {
+			Update_GlobalDescSet_NonDescIndexing(GlobalBuffers_DescSet, GlobalShaderInputs_DescPool);
+			Update_GlobalDescSet_NonDescIndexing(GlobalTextures_DescSet, GlobalShaderInputs_DescPool);
+		}
 	}
 	
 	TAPIResult GPU_ContentManager::Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, MemoryBlock& Block) {
@@ -1319,8 +1498,8 @@ namespace Vulkan {
 	}
 
 
-	TAPIResult GPU_ContentManager::Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int BINDINDEX, bool isUniform, 
-		GFX_API::SHADERSTAGEs_FLAG AccessableStages, unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) {
+	TAPIResult GPU_ContentManager::Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, bool isUniform, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
+		unsigned int MemoryTypeIndex, GFX_API::GFXHandle& GlobalBufferHandle) {
 		if (VKRENDERER->Is_ConstructingRenderGraph() || VKRENDERER->FrameGraphs->BranchCount) {
 			LOG_ERROR_TAPI("GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)! Please create your global buffers before render graph construction.");
 			return TAPI_WRONGTIMING;
@@ -1346,7 +1525,6 @@ namespace Vulkan {
 		vkDestroyBuffer(VKGPU->Logical_Device, obj, nullptr);
 		
 		GB->ACCESSED_STAGEs = AccessableStages;
-		GB->BINDINGPOINT = BINDINDEX;
 		GB->DATA_SIZE = DATA_SIZE;
 		GB->isUniform = isUniform;
 
@@ -1357,58 +1535,74 @@ namespace Vulkan {
 	void GPU_ContentManager::Unload_GlobalBuffer(GFX_API::GFXHandle BUFFER_ID) {
 		LOG_NOTCODED_TAPI("GFXContentManager->Unload_GlobalBuffer() isn't coded!", true);
 	}
-	TAPIResult GPU_ContentManager::Create_GlobalTexture(const char* TEXTURE_NAME, bool isSampledTexture, unsigned int BINDINDEX, unsigned int TextureCount, GFX_API::SHADERSTAGEs_FLAG AccessableStages,
-		GFX_API::GFXHandle& GlobalTextureHandle) {
-		//It is possible to add a synchronization and check BINDINDEX, but it is not necessary for now
+	TAPIResult GPU_ContentManager::SetGlobalBuffer(bool isUniformBuffer, unsigned int ElementIndex, bool isUsedLastFrame, GFX_API::GFXHandle BufferHandle, unsigned int BufferOffset,
+		unsigned int BoundDataSize) {
+		DescType intendedDescType = (isUniformBuffer) ? DescType::UBUFFER : DescType::SBUFFER;
+		VK_DescBufferElement* element = nullptr;
+		for (unsigned char i = 0; i < 2; i++) {
+			if (GlobalBuffers_DescSet.Descs[i].Type == intendedDescType) {
+				if (GlobalBuffers_DescSet.Descs[i].ElementCount <= ElementIndex) {
+					LOG_ERROR_TAPI("SetGlobalBuffer() has failed because ElementIndex isn't smaller than ElementCount of the GlobalBuffer!");
+					return TAPI_FAIL;
+				}
+				element = &GFXHandleConverter(VK_DescBufferElement*, GlobalBuffers_DescSet.Descs[i].Elements)[ElementIndex];
+			}
+		}
 
-		if (!TextureCount) {
-			LOG_ERROR_TAPI("Create_GlobalTexture() has failed because TextureCount is zero!");
-			return TAPI_FAIL;
+		unsigned char x = 0;
+		if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
+			if (x != 255) {
+				LOG_ERROR_TAPI("You already changed the global buffer this frame, second or concurrent one will fail!");
+				return TAPI_WRONGTIMING;
+			}
+			//If value is 255, this means global buffer isn't set before so try to set it again!
+			if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
+				LOG_ERROR_TAPI("You already changed the global buffer this frame, second or concurrent one will fail!");
+				return TAPI_WRONGTIMING;
+			}
 		}
-		VK_GlobalTexture* Descriptor = new VK_GlobalTexture;
-		Descriptor->ACCESSED_STAGEs = AccessableStages;
-		Descriptor->BINDINGPOINT = BINDINDEX;
-		Descriptor->isSampledTexture = isSampledTexture;
-		Descriptor->Elements = new VK_GlobalTextureElement[TextureCount];
-		Descriptor->ElementCount = TextureCount;
-		GLOBALTEXTUREs.push_back(GFX->JobSys->GetThisThreadIndex(), Descriptor);
-		GlobalTextureHandle = Descriptor;
+		VkDeviceSize finaloffset = static_cast<VkDeviceSize>(BufferOffset);
+		FindBufferOBJ_byBufType(BufferHandle, GFX_API::BUFFER_TYPE::GLOBAL, element->Info.buffer, finaloffset);
+		element->Info.offset = finaloffset;
+		element->Info.range = static_cast<VkDeviceSize>(BoundDataSize);
+		if (isUsedLastFrame) {
+			GlobalBuffers_DescSet.ShouldRecreate.store(true);
+		}
 		return TAPI_SUCCESS;
 	}
-	TAPIResult GPU_ContentManager::SetGlobal_SampledTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int ElementIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
+	TAPIResult GPU_ContentManager::SetGlobalTexture(bool isSampledTexture, unsigned int ElementIndex, bool isUsedLastFrame, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
 		GFX_API::IMAGE_ACCESS access) {
-		VK_GlobalTexture* GB = GFXHandleConverter(VK_GlobalTexture*, GlobalTextureHandle);
-		if (!GB->isSampledTexture) {
-			LOG_ERROR_TAPI("SetGlobal_SampledTexture() has failed because global texture is image texture!");
-			return TAPI_FAIL;
+		DescType intendedDescType = (isSampledTexture) ? DescType::SAMPLER : DescType::IMAGE;
+		VK_DescImageElement* element = nullptr;
+		for (unsigned char i = 0; i < 2; i++) {
+			if (GlobalTextures_DescSet.Descs[i].Type == intendedDescType) {
+				if (GlobalTextures_DescSet.Descs[i].ElementCount <= ElementIndex) {
+					LOG_ERROR_TAPI("SetGlobalTexture() has failed because ElementIndex isn't smaller than TextureCount of the GlobalTexture!");
+					return TAPI_FAIL;
+				}
+				element = &GFXHandleConverter(VK_DescImageElement*, GlobalTextures_DescSet.Descs[i].Elements)[ElementIndex];
+			}
 		}
-		if (ElementIndex >= GB->ElementCount) {
-			LOG_ERROR_TAPI("SetGlobal_SampledTexture() has failed because ElementIndex isn't smaller than TextureCount of the GlobalTexture!");
-			return TAPI_FAIL;
+
+		unsigned char x = 0;
+		if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
+			if (x != 255) {
+				LOG_ERROR_TAPI("You already changed the global texture this frame, second or concurrent one will fail!");
+				return TAPI_WRONGTIMING;
+			}
+			//If value is 255, this means global texture isn't set before so try to set it again!
+			if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
+				LOG_ERROR_TAPI("You already changed the global texture this frame, second or concurrent one will fail!");
+				return TAPI_WRONGTIMING;
+			}
 		}
-		GB->Elements[ElementIndex].Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
-		GB->Elements[ElementIndex].Sampler = GFXHandleConverter(VK_Sampler*, SamplingType)->Sampler;
+		element->info.imageView = GFXHandleConverter(VK_Texture*, TextureHandle)->ImageView;
+		element->info.sampler = GFXHandleConverter(VK_Sampler*, SamplingType)->Sampler;
 		VkAccessFlags unused;
-		Find_AccessPattern_byIMAGEACCESS(access, unused, GB->Elements[ElementIndex].Layout);
-		GlobalShaderInputs_DescSet.ShouldRecreate.store(true);
-		return TAPI_SUCCESS;
-	}
-	TAPIResult GPU_ContentManager::SetGlobal_ImageTexture(GFX_API::GFXHandle GlobalTextureHandle, unsigned int ElementIndex, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType,
-		GFX_API::IMAGE_ACCESS access) {
-		VK_GlobalTexture* GB = GFXHandleConverter(VK_GlobalTexture*, GlobalTextureHandle);
-		if (GB->isSampledTexture) {
-			LOG_ERROR_TAPI("SetGlobal_ImageTexture() has failed because global texture is sampled texture!");
-			return TAPI_FAIL;
+		Find_AccessPattern_byIMAGEACCESS(access, unused, element->info.imageLayout);
+		if (isUsedLastFrame) {
+			GlobalTextures_DescSet.ShouldRecreate.store(true);
 		}
-		if (ElementIndex >= GB->ElementCount) {
-			LOG_ERROR_TAPI("SetGlobal_ImageTexture() has failed because ElementIndex isn't smaller than TextureCount of the GlobalTexture!");
-			return TAPI_FAIL;
-		}
-		GB->Elements[ElementIndex].Texture = GFXHandleConverter(VK_Texture*, TextureHandle);
-		GB->Elements[ElementIndex].Sampler = GFXHandleConverter(VK_Sampler*, SamplingType)->Sampler;
-		VkAccessFlags unused;
-		Find_AccessPattern_byIMAGEACCESS(access, unused, GB->Elements[ElementIndex].Layout);
-		GlobalShaderInputs_DescSet.ShouldRecreate.store(true);
 		return TAPI_SUCCESS;
 	}
 
@@ -1880,15 +2074,15 @@ namespace Vulkan {
 				pl_ci.pNext = nullptr;
 				pl_ci.flags = 0;
 				
-				VkDescriptorSetLayout descsetlays[3] = { GlobalShaderInputs_DescSet.Layout, VK_NULL_HANDLE, VK_NULL_HANDLE };
-				pl_ci.setLayoutCount = 1;
+				VkDescriptorSetLayout descsetlays[4] = { GlobalBuffers_DescSet.Layout, GlobalTextures_DescSet.Layout, VK_NULL_HANDLE, VK_NULL_HANDLE };
+				pl_ci.setLayoutCount = 2;
 				if (VKPipeline->General_DescSet.Layout != VK_NULL_HANDLE) {
+					descsetlays[pl_ci.setLayoutCount] = VKPipeline->General_DescSet.Layout;
 					pl_ci.setLayoutCount++;
-					descsetlays[1] = VKPipeline->General_DescSet.Layout;
 				}
 				if (VKPipeline->Instance_DescSet.Layout != VK_NULL_HANDLE) {
+					descsetlays[pl_ci.setLayoutCount] = VKPipeline->Instance_DescSet.Layout;
 					pl_ci.setLayoutCount++;
-					descsetlays[pl_ci.setLayoutCount - 1] = VKPipeline->Instance_DescSet.Layout;
 				}
 				pl_ci.pSetLayouts = descsetlays;
 				//Don't support for now!
@@ -2029,9 +2223,8 @@ namespace Vulkan {
 	void GPU_ContentManager::Delete_MaterialInst(GFX_API::GFXHandle Asset_ID) {
 		LOG_CRASHING_TAPI("Delete_MaterialInst() isn't coded yet!");
 	}
-	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
-	TAPIResult GPU_ContentManager::SetMaterial_UniformBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
-		GFX_API::GFXHandle TargetBufferHandle, unsigned int ELEMENTINDEX, GFX_API::BUFFER_TYPE BufferType, unsigned int TargetOffset, unsigned int BoundDataSize) {
+	TAPIResult GPU_ContentManager::SetMaterialBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+		GFX_API::GFXHandle TargetBufferHandle, bool isUniformBuffer, GFX_API::BUFFER_TYPE TYPE, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize) {
 		
 		VK_DescSet* Set = nullptr;
 		if (isMaterialType) {
@@ -2052,35 +2245,43 @@ namespace Vulkan {
 			return TAPI_FAIL;
 		}
 		VK_Descriptor& Descriptor = Set->Descs[BINDINDEX];
-		if (Descriptor.Type != DescType::UBUFFER) {
-			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input (isn't pointing to an uniform buffer!)");
+		if ((isUniformBuffer && Descriptor.Type != DescType::UBUFFER) ||
+			(!isUniformBuffer && Descriptor.Type != DescType::SBUFFER)) {
+			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input!");
 			return TAPI_FAIL;
 		}
 		if (ELEMENTINDEX >= Descriptor.ElementCount) {
-			LOG_ERROR_TAPI("You gave SetMaterial_UniformBuffer() an overflowing ELEMENTINDEX!");
+			LOG_ERROR_TAPI("You gave SetMaterialBuffer() an overflowing ELEMENTINDEX!");
 			return TAPI_FAIL;
 		}
 		VK_DescBufferElement& DescElement =	GFXHandleConverter(VK_DescBufferElement*, Descriptor.Elements)[ELEMENTINDEX];
 
-
-		if (TargetOffset % VKGPU->Device_Properties.limits.minUniformBufferOffsetAlignment) {
-			LOG_WARNING_TAPI("This TargetOffset in SetMaterial_UniformBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + to_string(VKGPU->Device_Properties.limits.minUniformBufferOffsetAlignment));
+		//Check alignment offset
+		VkDeviceSize reqalignmentoffset = (isUniformBuffer) ? VKGPU->Device_Properties.limits.minUniformBufferOffsetAlignment : VKGPU->Device_Properties.limits.minStorageBufferOffsetAlignment;
+		if (TargetOffset % reqalignmentoffset) {
+			LOG_WARNING_TAPI("This TargetOffset in SetMaterialBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + to_string(reqalignmentoffset));
 		}
-		bool x = 0, y = 1;
-		if (!DescElement.IsUpdated.compare_exchange_strong(x, y)) {
-			LOG_ERROR_TAPI("You already set the uniform buffer, you can't change it at the same frame!");
-			return TAPI_WRONGTIMING;
+
+		unsigned char x = 0;
+		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+			if (x != 255) {
+				LOG_ERROR_TAPI("You already set shader input buffer, you can't change it at the same frame!");
+				return TAPI_WRONGTIMING;
+			}
+			//If value is 255, this means this shader input isn't set before. So try again!
+			if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+				LOG_ERROR_TAPI("You already set shader input buffer, you can't change it at the same frame!");
+				return TAPI_WRONGTIMING;
+			}
 		}
 		VkDeviceSize FinalOffset = static_cast<VkDeviceSize>(TargetOffset);
-		switch (BufferType) {
+		switch (TYPE) {
 		case GFX_API::BUFFER_TYPE::STAGING:
-		{
-			MemoryBlock* StagingBuf = GFXHandleConverter(MemoryBlock*, TargetBufferHandle);
-			FindBufferOBJ_byBufType(TargetBufferHandle, BufferType, DescElement.Info.buffer, FinalOffset);
-		}
+		case GFX_API::BUFFER_TYPE::GLOBAL:
+			FindBufferOBJ_byBufType(TargetBufferHandle, TYPE, DescElement.Info.buffer, FinalOffset);
 		break;
 		default:
-			LOG_NOTCODED_TAPI("SetMaterial_UniformBuffer() doesn't support this type of target buffers right now!", true);
+			LOG_NOTCODED_TAPI("SetMaterial_UniformBuffer() doesn't support this type of target buffers!", true);
 			return TAPI_NOTCODED;
 		}
 		DescElement.Info.offset = FinalOffset;
@@ -2099,8 +2300,8 @@ namespace Vulkan {
 		}
 		return TAPI_SUCCESS;
 	}
-	TAPIResult GPU_ContentManager::SetMaterial_SampledTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
-		unsigned int ELEMENTINDEX, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
+	TAPIResult GPU_ContentManager::SetMaterialTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+		GFX_API::GFXHandle TextureHandle, bool isSampledTexture, unsigned int ELEMENTINDEX, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
 		VK_DescSet* Set = nullptr;
 		if (isMaterialType) {
 			VK_GraphicsPipeline* PSO = GFXHandleConverter(VK_GraphicsPipeline*, MaterialType_orInstance);
@@ -2120,78 +2321,30 @@ namespace Vulkan {
 			return TAPI_FAIL;
 		}
 		VK_Descriptor& Descriptor = Set->Descs[BINDINDEX];
-		if (Descriptor.Type != DescType::SAMPLER) {
-			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input (isn't pointing to an sampler texture!)");
+		if ((isSampledTexture && Descriptor.Type != DescType::SAMPLER) || 
+			(!isSampledTexture && Descriptor.Type != DescType::IMAGE)) {
+			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input!");
 			return TAPI_FAIL;
 		}
 		if (ELEMENTINDEX >= Descriptor.ElementCount) {
-			LOG_ERROR_TAPI("You gave SetMaterial_ImageTexture() an overflowing ELEMENTINDEX!");
+			LOG_ERROR_TAPI("You gave SetMaterialTexture() an overflowing ELEMENTINDEX!");
 			return TAPI_FAIL;
 		}
 		VK_DescImageElement& DescElement = GFXHandleConverter(VK_DescImageElement*, Descriptor.Elements)[ELEMENTINDEX];
 
 
 		VK_Sampler* Sampler = GFXHandleConverter(VK_Sampler*, SamplingType);
-		bool x = false, y = true;
-		if (!DescElement.IsUpdated.compare_exchange_strong(x, y)) {
-			return TAPI_WRONGTIMING;
-		}
-		VkAccessFlags unused;
-		Find_AccessPattern_byIMAGEACCESS(usage, unused, DescElement.info.imageLayout);
-		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
-		DescElement.info.imageView = TEXTURE->ImageView;
-		DescElement.info.sampler = Sampler->Sampler;
-
-		VK_DescSetUpdateCall call;
-		call.Set = Set;
-		call.BindingIndex = BINDINDEX;
-		call.ElementIndex = ELEMENTINDEX;
-		if (isUsedRecently) {
-			call.Set->ShouldRecreate.store(1);
-			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
-		}
-		else {
-			DescSets_toJustUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
-		}
-		return TAPI_SUCCESS;
-	}
-	TAPIResult GPU_ContentManager::SetMaterial_ImageTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
-		unsigned int ELEMENTINDEX, GFX_API::GFXHandle TextureHandle, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
-		VK_DescSet* Set = nullptr;
-		if (isMaterialType) {
-			VK_GraphicsPipeline* PSO = GFXHandleConverter(VK_GraphicsPipeline*, MaterialType_orInstance);
-			Set = &PSO->General_DescSet;
-		}
-		else {
-			VK_PipelineInstance* PSO = GFXHandleConverter(VK_PipelineInstance*, MaterialType_orInstance);
-			Set = &PSO->DescSet;
-		}
-
-		if (!Set->DescCount) {
-			LOG_ERROR_TAPI("Given Material Type/Instance doesn't have any shader input to set!");
-			return TAPI_FAIL;
-		}
-		if (BINDINDEX >= Set->DescCount) {
-			LOG_ERROR_TAPI("BINDINDEX is exceeding the shader input count in the Material Type/Instance");
-			return TAPI_FAIL;
-		}
-		VK_Descriptor& Descriptor = Set->Descs[BINDINDEX];
-		if (Descriptor.Type != DescType::IMAGE) {
-			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input (isn't pointing to an image texture!)");
-			return TAPI_FAIL;
-		}
-		if (ELEMENTINDEX >= Descriptor.ElementCount) {
-			LOG_ERROR_TAPI("You gave SetMaterial_ImageTexture() an overflowing ELEMENTINDEX!");
-			return TAPI_FAIL;
-		}
-		VK_DescImageElement& DescElement = GFXHandleConverter(VK_DescImageElement*, Descriptor.Elements)[ELEMENTINDEX];
-
-
-
-		VK_Sampler* Sampler = GFXHandleConverter(VK_Sampler*, SamplingType);
-		bool x = false, y = true;
-		if (!DescElement.IsUpdated.compare_exchange_strong(x, y)) {
-			return TAPI_WRONGTIMING;
+		unsigned char x = 0;
+		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+			if (x != 255) {
+				LOG_ERROR_TAPI("You already set shader input texture, you can't change it at the same frame!");
+				return TAPI_WRONGTIMING;
+			}
+			//If value is 255, this means this shader input isn't set before. So try again!
+			if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+				LOG_ERROR_TAPI("You already set shader input texture, you can't change it at the same frame!");
+				return TAPI_WRONGTIMING;
+			}
 		}
 		VkAccessFlags unused;
 		Find_AccessPattern_byIMAGEACCESS(usage, unused, DescElement.info.imageLayout);

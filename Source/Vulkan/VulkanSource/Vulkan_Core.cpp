@@ -1,6 +1,7 @@
 #include "Vulkan_Core.h"
 #include "TuranAPI/Logger_Core.h"
 #define VKRENDERER ((Renderer*)GFX->RENDERER)
+#define VKContentManager ((GPU_ContentManager*)GFX->ContentManager)
 
 namespace Vulkan {
 	Vulkan_Core::Vulkan_Core(vector<GFX_API::MonitorDescription>& Monitors, vector<GFX_API::GPUDescription>& GPUs, TuranAPI::Threading::JobSystem* JobSystem) : GFX_Core(Monitors, GPUs, JobSystem) {
@@ -24,22 +25,57 @@ namespace Vulkan {
 		Check_Computer_Specs(GPUs);
 	}
 
-	TAPIResult Vulkan_Core::Start_SecondStage(unsigned char GPUIndex, GPUSecondStage& Info, bool Active_dearIMGUI){
+	TAPIResult Vulkan_Core::Start_SecondStage(unsigned char GPUIndex, GPUSecondStage& Info, bool Active_dearIMGUI) {
 		GPU_TO_RENDER = DEVICE_GPUs[GPUIndex];
 		//Some basic algorithms accesses some of the GPU's datas
 		//Because GFX API doesn't support multi-GPU, just give the GPU Handle to VK_States
 		//Because everything in Vulkan API accesses this VK_States
 		GPU* VKGPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
-		VK_States.GPU_TO_RENDER = VKGPU; 
+		VK_States.GPU_TO_RENDER = VKGPU;
 
 		for (unsigned int MemTypeIndex = 0; MemTypeIndex < Info.MEMORYTYPEs.size(); MemTypeIndex++) {
 			const GFX_API::MemoryType& MemType = Info.MEMORYTYPEs[MemTypeIndex];
 			VKGPU->ALLOCs[MemType.MemoryTypeIndex].FullSize = MemType.AllocationSize;
 		}
 
-	
+		if (Info.GlobalBuffers[1].BINDINGPOINT < Info.GlobalBuffers[0].BINDINGPOINT) {
+			GFX_API::ShaderInput_Description desc = Info.GlobalBuffers[0];
+			Info.GlobalBuffers[0] = Info.GlobalBuffers[1];
+			Info.GlobalBuffers[1] = desc;
+		}
+		if (Info.GlobalBuffers[1].BINDINGPOINT == Info.GlobalBuffers[0].BINDINGPOINT || Info.GlobalBuffers[1].TYPE == Info.GlobalBuffers[0].TYPE) {
+			LOG_CRASHING_TAPI("Binding points of global buffer descriptions has the same value, they should be different!");
+			return TAPI_FAIL;
+		}
+		if ((Info.GlobalBuffers[0].TYPE != GFX_API::SHADERINPUT_TYPE::UBUFFER_G && Info.GlobalBuffers[0].TYPE != GFX_API::SHADERINPUT_TYPE::SBUFFER_G) || 
+			(Info.GlobalBuffers[1].TYPE != GFX_API::SHADERINPUT_TYPE::UBUFFER_G && Info.GlobalBuffers[1].TYPE != GFX_API::SHADERINPUT_TYPE::SBUFFER_G)) {
+			LOG_CRASHING_TAPI("One of the global buffer descriptions has a type that isn't either UBUFFER_G or SBUFFER_G!");
+			return TAPI_FAIL;
+		}
+
+		if (Info.GlobalTextures[1].BINDINGPOINT < Info.GlobalTextures[0].BINDINGPOINT) {
+			GFX_API::ShaderInput_Description desc = Info.GlobalTextures[0];
+			Info.GlobalTextures[0] = Info.GlobalTextures[1];
+			Info.GlobalTextures[1] = desc;
+		}
+		if (Info.GlobalTextures[1].BINDINGPOINT == Info.GlobalTextures[0].BINDINGPOINT || Info.GlobalTextures[1].TYPE == Info.GlobalTextures[0].TYPE) {
+			LOG_CRASHING_TAPI("Binding points of global texture descriptions has the same value, they should be different!");
+			return TAPI_FAIL;
+		}
+		if ((Info.GlobalTextures[0].TYPE != GFX_API::SHADERINPUT_TYPE::IMAGE_G && Info.GlobalTextures[0].TYPE != GFX_API::SHADERINPUT_TYPE::SAMPLER_G) ||
+			(Info.GlobalTextures[1].TYPE != GFX_API::SHADERINPUT_TYPE::IMAGE_G && Info.GlobalTextures[1].TYPE != GFX_API::SHADERINPUT_TYPE::SAMPLER_G)) {
+			LOG_CRASHING_TAPI("One of the global buffer descriptions has a type that isn't either SAMPLER_G or IMAGE_G!");
+			return TAPI_FAIL;
+		}
+
+
+
+
 		GFXRENDERER = new Vulkan::Renderer;
-		ContentManager = new Vulkan::GPU_ContentManager;
+		ContentManager = new Vulkan::GPU_ContentManager(Info.MaterialRelated_SampledTexture, Info.MaterialRelated_ImageTexture, 
+			Info.MaterialRelated_UniformBuffer, Info.MaterialRelated_StorageBuffer, Info.MaterialCount, Info.GlobalBuffers, Info.GlobalTextures);
+
+		
 
 		IMGUI_o = new GFX_API::IMGUI_Core;
 		VK_IMGUI = new IMGUI_VK;

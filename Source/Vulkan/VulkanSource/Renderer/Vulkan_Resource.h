@@ -97,39 +97,21 @@ namespace Vulkan {
 
 
 	struct VK_API VK_GlobalBuffer {
-		VkDeviceSize DATA_SIZE, BINDINGPOINT;
+		VkDeviceSize DATA_SIZE;
 		MemoryBlock Block;
 		bool isUniform;
 		GFX_API::SHADERSTAGEs_FLAG ACCESSED_STAGEs;
 	};
-	struct VK_API VK_GlobalTextureElement {
-		VK_Texture* Texture = nullptr;
-		VkImageLayout Layout = VK_IMAGE_LAYOUT_UNDEFINED;
-		VkSampler Sampler = VK_NULL_HANDLE;
-	};
-	struct VK_API VK_GlobalTexture {
-		VkDeviceSize BINDINGPOINT;
-		bool isSampledTexture;
-		GFX_API::SHADERSTAGEs_FLAG ACCESSED_STAGEs;
-		unsigned int ElementCount;
-		VK_GlobalTextureElement* Elements;
-	};
 
-	enum class DescType : unsigned char {
-		IMAGE,
-		SAMPLER,
-		UBUFFER,
-		SBUFFER
-	};
 	struct VK_API VK_DescBufferElement {
-		VkDescriptorBufferInfo Info;
-		std::atomic<bool> IsUpdated;
+		VkDescriptorBufferInfo Info = {};
+		std::atomic<unsigned char> IsUpdated = 255;
 		VK_DescBufferElement();
 		VK_DescBufferElement(const VK_DescBufferElement& copyDesc);
 	};
 	struct VK_API VK_DescImageElement {
 		VkDescriptorImageInfo info = {};
-		std::atomic_bool IsUpdated;
+		std::atomic<unsigned char> IsUpdated = 255;
 		VK_DescImageElement();
 		VK_DescImageElement(const VK_DescImageElement& copyDesc);
 	};

@@ -7,7 +7,7 @@
 #include <vulkan/vulkan.h>
 
 #define VK_API
-//#define VULKAN_DEBUGGING
+#define VULKAN_DEBUGGING
 
 namespace Vulkan {
 	//Initializes as everything is false
@@ -91,7 +91,10 @@ namespace Vulkan {
 			GFX_API::TEXTURE_CHANNELs channels, GFX_API::OPERATION_TYPE DEPTHOPTYPE, GFX_API::OPERATION_TYPE STENCILOPTYPE);
 		void Fill_DepthAttachmentDescription(VkAttachmentDescription& Desc, VK_DEPTHSTENCILSLOT* DepthSlot);
 
+
 		bool DescriptorIndexing = false;
+		unsigned int MaxDesc_SampledTexture = 0, MaxDesc_ImageTexture = 0, MaxDesc_UniformBuffer = 0, MaxDesc_StorageBuffer = 0;
+		void Fill_CreateDescriptorPool();
 	};
 	struct VK_API GPU {
 		VkPhysicalDevice Physical_Device = {};
@@ -123,10 +126,13 @@ namespace Vulkan {
 	};
 	struct VK_API GPUSecondStage {
 		vector<GFX_API::MemoryType> MEMORYTYPEs;
-		//You have to specify sum of how much shader inputs you're gonna use for materials (General and Per Instance)
+		//You have to specify max sum of how much shader inputs you're gonna use for materials (General and Per Instance)
 		uint32_t MaterialRelated_SampledTexture = 0, MaterialRelated_ImageTexture = 0, MaterialRelated_UniformBuffer = 0, MaterialRelated_StorageBuffer = 0;
-		//You have to specify how much shader input categories you're gonna use (material types that have general shader inputs + material instances that have per instance shader inputs)
+		//You have to specify how much shader input categories you're gonna use max (material types that have general shader inputs + material instances that have per instance shader inputs)
 		uint32_t MaterialCount = 0;
+
+		//You should fill these datas according to the Resources_README.md in GFX/Renderer
+		GFX_API::ShaderInput_Description GlobalBuffers[2], GlobalTextures[2];
 	};
 
 	struct VK_API MONITOR {
@@ -195,6 +201,12 @@ namespace Vulkan {
 		//Instance Extension Related
 		bool isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = false;
 	};
+	enum class DescType : unsigned char {
+		IMAGE,
+		SAMPLER,
+		UBUFFER,
+		SBUFFER
+	};
 
 #define GFXHandleConverter(ConvertType, Handle) static_cast<ConvertType>((void*)Handle)
 
@@ -219,4 +231,6 @@ namespace Vulkan {
 	VK_API VkBlendFactor Find_BlendFactor_byGFXBlendFactor(GFX_API::BLEND_FACTOR factor);
 	VK_API void Fill_ComponentMapping_byCHANNELs(GFX_API::TEXTURE_CHANNELs channels, VkComponentMapping& mapping);
 	VK_API void Find_SubpassAccessPattern(GFX_API::SUBPASS_ACCESS access, bool isSource, VkPipelineStageFlags& stageflag, VkAccessFlags& accessflag);
+	VK_API DescType Find_DescType_byGFXShaderInputType(GFX_API::SHADERINPUT_TYPE type);
+	VK_API VkDescriptorType Find_VkDescType_byDescTypeCategoryless(DescType type);
 }

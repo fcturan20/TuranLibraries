@@ -328,13 +328,14 @@ namespace Vulkan {
 
 		//Activate Descriptor Indexing Features
 		if(Vulkan_GPU->ExtensionRelatedDatas.DescriptorIndexing){
-			dev_ftrs.DescIndexingFeatures.descriptorBindingPartiallyBound = true;
+			dev_ftrs.DescIndexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
 			dev_ftrs.DescIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
 			dev_ftrs.DescIndexingFeatures.descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE;
 			dev_ftrs.DescIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = VK_TRUE;
 			dev_ftrs.DescIndexingFeatures.descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE;
 			dev_ftrs.DescIndexingFeatures.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
-			dev_ftrs.DescIndexingFeatures.runtimeDescriptorArray = VK_FALSE;
+			dev_ftrs.DescIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
+			dev_ftrs.DescIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
 			dev_ftrs.DescIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 			dev_ftrs.DescIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
 			dev_ftrs.DescIndexingFeatures.shaderStorageImageArrayNonUniformIndexing = VK_TRUE;
@@ -374,6 +375,11 @@ namespace Vulkan {
 				GPUDesc.MaxShaderInput_ImageTexture = descindexinglimits->maxDescriptorSetUpdateAfterBindStorageImages;
 				GPUDesc.MaxShaderInput_UniformBuffer = descindexinglimits->maxDescriptorSetUpdateAfterBindUniformBuffers;
 				GPUDesc.MaxShaderInput_StorageBuffer = descindexinglimits->maxDescriptorSetUpdateAfterBindStorageBuffers;
+
+				Vulkan_GPU->ExtensionRelatedDatas.MaxDesc_SampledTexture = descindexinglimits->maxDescriptorSetUpdateAfterBindSampledImages;
+				Vulkan_GPU->ExtensionRelatedDatas.MaxDesc_ImageTexture = descindexinglimits->maxDescriptorSetUpdateAfterBindStorageImages;
+				Vulkan_GPU->ExtensionRelatedDatas.MaxDesc_StorageBuffer = descindexinglimits->maxDescriptorSetUpdateAfterBindStorageBuffers;
+				Vulkan_GPU->ExtensionRelatedDatas.MaxDesc_UniformBuffer = descindexinglimits->maxDescriptorSetUpdateAfterBindUniformBuffers;
 				delete descindexinglimits;
 			}
 			else {
@@ -387,6 +393,11 @@ namespace Vulkan {
 				GPUDesc.MaxShaderInput_ImageTexture = Vulkan_GPU->Device_Properties.limits.maxDescriptorSetStorageImages;
 				GPUDesc.MaxShaderInput_UniformBuffer = Vulkan_GPU->Device_Properties.limits.maxDescriptorSetUniformBuffers;
 				GPUDesc.MaxShaderInput_StorageBuffer = Vulkan_GPU->Device_Properties.limits.maxDescriptorSetStorageBuffers;
+
+				Vulkan_GPU->ExtensionRelatedDatas.MaxDesc_SampledTexture = Vulkan_GPU->Device_Properties.limits.maxPerStageDescriptorSampledImages;
+				Vulkan_GPU->ExtensionRelatedDatas.MaxDesc_ImageTexture = Vulkan_GPU->Device_Properties.limits.maxPerStageDescriptorStorageImages;
+				Vulkan_GPU->ExtensionRelatedDatas.MaxDesc_StorageBuffer = Vulkan_GPU->Device_Properties.limits.maxPerStageDescriptorStorageBuffers;
+				Vulkan_GPU->ExtensionRelatedDatas.MaxDesc_UniformBuffer = Vulkan_GPU->Device_Properties.limits.maxPerStageDescriptorUniformBuffers;
 			}
 		}
 	}
@@ -458,11 +469,6 @@ namespace Vulkan {
 		return func;
 	}
 
-
-	void Fill_DepthAttachmentReference(VkAttachmentReference& Ref, unsigned int index, VK_DEPTHSTENCILSLOT* DepthSlot) {
-
-	}
-	
 
 	const char* Vulkan_States::Convert_VendorID_toaString(uint32_t VendorID) {
 		switch (VendorID) {
@@ -578,6 +584,22 @@ namespace Vulkan {
 			LOG_CRASHING_TAPI("Find_VkDescType_byMATDATATYPE() doesn't support this type of SHADERINPUT_TYPE!");
 		}
 		return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+	}
+	VkDescriptorType Find_VkDescType_byDescTypeCategoryless(DescType type) {
+		switch (type)
+		{
+		case Vulkan::DescType::IMAGE:
+			return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		case Vulkan::DescType::SAMPLER:
+			return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		case Vulkan::DescType::UBUFFER:
+			return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		case Vulkan::DescType::SBUFFER:
+			return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		default:
+			LOG_CRASHING_TAPI("Find_VkDescType_byDescTypeCategoryless() doesn't support this type!");
+			return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+		}
 	}
 
 	VkSamplerAddressMode Find_AddressMode_byWRAPPING(GFX_API::TEXTURE_WRAPPING Wrapping) {
@@ -1004,6 +1026,26 @@ namespace Vulkan {
 			break;
 		default:
 			break;
+		}
+	}
+	VK_API DescType Find_DescType_byGFXShaderInputType(GFX_API::SHADERINPUT_TYPE dtype) {
+		switch (dtype)
+		{
+		case GFX_API::SHADERINPUT_TYPE::SAMPLER_PI:
+		case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
+			return DescType::SAMPLER;
+		case GFX_API::SHADERINPUT_TYPE::IMAGE_PI:
+		case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
+			return DescType::IMAGE;
+		case GFX_API::SHADERINPUT_TYPE::UBUFFER_PI:
+		case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
+			return DescType::UBUFFER;
+		case GFX_API::SHADERINPUT_TYPE::SBUFFER_PI:
+		case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
+			return DescType::SBUFFER;
+		default:
+			LOG_CRASHING_TAPI("Find_DescType_byGFXShaderInputType() doesn't support this type!");
+			return DescType::SAMPLER;
 		}
 	}
 

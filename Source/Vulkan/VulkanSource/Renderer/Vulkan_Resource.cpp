@@ -203,7 +203,7 @@ namespace Vulkan {
 		}
 	}
 
-	VK_DescImageElement::VK_DescImageElement() : IsUpdated(0), info(){
+	VK_DescImageElement::VK_DescImageElement() {
 		info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		info.imageView = VK_NULL_HANDLE;
 		info.sampler = VK_NULL_HANDLE;
@@ -211,7 +211,7 @@ namespace Vulkan {
 	VK_DescImageElement::VK_DescImageElement(const VK_DescImageElement& copydesc) : IsUpdated(copydesc.IsUpdated.load()), info(copydesc.info){
 
 	}
-	VK_DescBufferElement::VK_DescBufferElement() : IsUpdated(0), Info() {
+	VK_DescBufferElement::VK_DescBufferElement() {
 		Info.buffer = VK_NULL_HANDLE;
 		Info.offset = UINT64_MAX;
 		Info.range = UINT64_MAX;

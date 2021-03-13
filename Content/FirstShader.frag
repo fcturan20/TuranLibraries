@@ -3,7 +3,7 @@ layout(location = 0) in vec2 TextCoord;
 
 layout(location = 0) out vec4 outColor;
 
-layout(binding = 0, set = 1) uniform usampler2D SampledTextures[2];
+layout(binding = 1, set = 1) uniform usampler2D SampledTextures[];
 
 
 void main() {

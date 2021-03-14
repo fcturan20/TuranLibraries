@@ -17,10 +17,12 @@ namespace TuranEditor {
 			RGBA8UB_IM.DATAORDER = GFX_API::TEXTURE_ORDER::SWIZZLE;
 			RGBA8UB_IM.USAGE.isRenderableTo = true;
 
+			LOG_CRASHING_TAPI("Before GetTextureTypeLimits()");
 			unsigned int MAXWIDTH = 0, MAXHEIGHT = 0, MAXDEPTH = 0, MAXMIPLEVEL = 0, BitSet = 0;
 			if (GFX->GetTextureTypeLimits(RGBA8UB_IM.DIMENSION, RGBA8UB_IM.DATAORDER, RGBA8UB_IM.CHANNEL_TYPE, RGBA8UB_IM.USAGE, 0, MAXWIDTH, MAXHEIGHT, MAXDEPTH, MAXMIPLEVEL)) {
-				GFX->GetSupportedAllocations_ofTexture(RGBA8UB_IM, 0, BitSet);
+				//GFX->GetSupportedAllocations_ofTexture(RGBA8UB_IM, 0, BitSet);
 			}
+			LOG_CRASHING_TAPI("After GetTextureTypeLimits()");
 
 		}
 		GPUs[0].MEMTYPEs[0].AllocationSize = ALLOCSIZE;
@@ -50,7 +52,7 @@ namespace TuranEditor {
 		SecondStage.GlobalTextures[1].ELEMENTCOUNT = 1;
 		SecondStage.GlobalTextures[1].TYPE = GFX_API::SHADERINPUT_TYPE::SAMPLER_G;
 
-		VK->Start_SecondStage(0, SecondStage, true);
+		VK->Start_SecondStage(0, SecondStage, false);
 	}
 	Editor_System::~Editor_System() {
 		delete GFX;

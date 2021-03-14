@@ -300,7 +300,7 @@ namespace Vulkan {
 	struct VK_Submit {
 		vector<VkPipelineStageFlags> WaitSemaphoreStages;
 		vector<unsigned char> WaitSemaphoreIndexes;
-		unsigned char SignalSemaphoreIndex, CBIndex = 255;
+		unsigned char SignalSemaphoreIndex = 255, CBIndex = 255;
 		//Index + 1
 		vector<unsigned char> BranchIndexes;
 		VK_QUEUE* Run_Queue = nullptr;

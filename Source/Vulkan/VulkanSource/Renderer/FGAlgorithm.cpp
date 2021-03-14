@@ -1010,6 +1010,7 @@ namespace Vulkan {
 				return;
 			}
 
+
 			VK_Semaphore data;
 			data.isUsed = false;
 			data.SPHandle = NewSemaphore;
@@ -1394,10 +1395,20 @@ namespace Vulkan {
 						Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 					}
 				}
-				else {
-					Submit->WaitSemaphoreIndexes.push_back(LFDBranch.AttachedSubmit->SignalSemaphoreIndex);
-					//This is laziness but there is gonna probably a little gain while searching for a more "tight" one cost more 
-					Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+				else if(LFDBranch.AttachedSubmit)
+				{
+					bool isAddedPreviously = false;
+					for (unsigned int SemaphoreIndexSearchIndex = 0; SemaphoreIndexSearchIndex < Submit->WaitSemaphoreIndexes.size(); SemaphoreIndexSearchIndex++) {
+						if (LFDBranch.AttachedSubmit->SignalSemaphoreIndex == Submit->WaitSemaphoreIndexes[SemaphoreIndexSearchIndex]) {
+							isAddedPreviously = true;
+							break;
+						}
+					}
+					if (!isAddedPreviously) {
+						Submit->WaitSemaphoreIndexes.push_back(LFDBranch.AttachedSubmit->SignalSemaphoreIndex);
+						//This is laziness but there is gonna probably a little gain while searching for a more "tight" one cost more 
+						Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+					}
 				}
 			}
 			//Find Penultimate Window Pass only branches that current submit depends on and get their signal semaphores to wait
@@ -1405,35 +1416,55 @@ namespace Vulkan {
 				const VK_RGBranch* PenultimateWPBranch = MainBranch.PenultimateSwapchainBranches[PenultimateBIndex];
 				VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, PenultimateWPBranch->CorePasses[0].Handle);
 				for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[0].size(); WindowIndex++) {
-					Submit->WaitSemaphoreIndexes.push_back(
-						WP-> WindowCalls[0][WindowIndex].Window->PresentationWaitSemaphoreIndexes[0]
-					);
-					Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+					bool isAddedPreviously = false;
+					for (unsigned int SemaphoreIndexSearchIndex = 0; SemaphoreIndexSearchIndex < Submit->WaitSemaphoreIndexes.size(); SemaphoreIndexSearchIndex++) {
+						if (WP->WindowCalls[0][WindowIndex].Window->PresentationWaitSemaphoreIndexes[0] == Submit->WaitSemaphoreIndexes[SemaphoreIndexSearchIndex]) {
+							isAddedPreviously = true;
+							break;
+						}
+					}
+					if (!isAddedPreviously) {
+						Submit->WaitSemaphoreIndexes.push_back(
+							WP->WindowCalls[0][WindowIndex].Window->PresentationWaitSemaphoreIndexes[0]
+						);
+						Submit->WaitSemaphoreStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+					}
 				}
 			}
 			//Find Current Frame dependent submits and get their signal semaphores to wait
 			for (unsigned char CFDBIndex = 0; CFDBIndex < MainBranch.CFDynamicDependents.size(); CFDBIndex++) {
 				const VK_RGBranch* CFDBranch = &Current_FrameGraph->FrameGraphTree[MainBranch.CFDynamicDependents[CFDBIndex]];
-				Submit->WaitSemaphoreIndexes.push_back(CFDBranch->AttachedSubmit->SignalSemaphoreIndex);
-				//This is laziness but there is gonna probably a little gain while searching for a more "tight" one cost more
-				VkPipelineStageFlags flag = 0;
-				if (CFDBranch->CFNeeded_QueueSpecs.is_TRANSFERsupported) {
-					flag |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+				bool isAddedPreviously = false;
+				for (unsigned int SemaphoreIndexSearchIndex = 0; SemaphoreIndexSearchIndex < Submit->WaitSemaphoreIndexes.size(); SemaphoreIndexSearchIndex++) {
+					if (CFDBranch->AttachedSubmit->SignalSemaphoreIndex == Submit->WaitSemaphoreIndexes[SemaphoreIndexSearchIndex]) {
+						isAddedPreviously = true;
+						break;
+					}
 				}
-				if (CFDBranch->CFNeeded_QueueSpecs.is_COMPUTEsupported) {
-					flag |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+				if (!isAddedPreviously) {
+					Submit->WaitSemaphoreIndexes.push_back(CFDBranch->AttachedSubmit->SignalSemaphoreIndex);
+					//This is laziness but there is gonna probably a little gain while searching for a more "tight" one cost more
+					VkPipelineStageFlags flag = 0;
+					if (CFDBranch->CFNeeded_QueueSpecs.is_TRANSFERsupported) {
+						flag |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+					}
+					if (CFDBranch->CFNeeded_QueueSpecs.is_COMPUTEsupported) {
+						flag |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+					}
+					if (CFDBranch->CFNeeded_QueueSpecs.is_GRAPHICSsupported) {
+						flag |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+					}
+					if (!CFDBranch->CFNeeded_QueueSpecs.is_COMPUTEsupported &&
+						!CFDBranch->CFNeeded_QueueSpecs.is_GRAPHICSsupported &&
+						!CFDBranch->CFNeeded_QueueSpecs.is_PRESENTATIONsupported &&
+						!CFDBranch->CFNeeded_QueueSpecs.is_TRANSFERsupported) {
+						flag |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+					}
+
+					Submit->WaitSemaphoreStages.push_back(flag);
 				}
-				if (CFDBranch->CFNeeded_QueueSpecs.is_GRAPHICSsupported) {
-					flag |= VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
-				}
-				if (!CFDBranch->CFNeeded_QueueSpecs.is_COMPUTEsupported &&
-					!CFDBranch->CFNeeded_QueueSpecs.is_GRAPHICSsupported &&
-					!CFDBranch->CFNeeded_QueueSpecs.is_PRESENTATIONsupported &&
-					!CFDBranch->CFNeeded_QueueSpecs.is_TRANSFERsupported) {
-					flag |= VK_PIPELINE_STAGE_TRANSFER_BIT;
-				}
-				
-				Submit->WaitSemaphoreStages.push_back(flag);
+
 			}
 		}
 	}

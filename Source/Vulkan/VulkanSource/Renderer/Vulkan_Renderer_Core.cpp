@@ -282,7 +282,7 @@ namespace Vulkan {
 				cp_ci_g.queueFamilyIndex = VKGPU->QUEUEs[QUEUEIndex].QueueFamilyIndex;
 				cp_ci_g.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 				cp_ci_g.pNext = nullptr;
-
+				
 				if (vkCreateCommandPool(VKGPU->Logical_Device, &cp_ci_g, nullptr, &VKGPU->QUEUEs[QUEUEIndex].CommandPools[i].CPHandle) != VK_SUCCESS) {
 					LOG_CRASHING_TAPI("VulkanCore: Logical Device Setup has failed at vkCreateCommandPool()!");
 					return;
@@ -339,7 +339,6 @@ namespace Vulkan {
 			VKCORE->VK_IMGUI->UploadFontTextures();
 			VKCORE->VK_IMGUI->NewFrame();
 		}
-
 	}
 	
 	unsigned char Renderer::Get_FrameIndex(bool is_LastFrame) {

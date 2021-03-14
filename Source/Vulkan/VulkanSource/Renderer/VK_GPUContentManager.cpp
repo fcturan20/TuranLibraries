@@ -116,6 +116,7 @@ namespace Vulkan {
 				return;
 			}
 		}
+		LOG_STATUS_TAPI("After memory allocations!");
 
 		UnboundDescSetImageCount = 0;
 		UnboundDescSetSamplerCount = 0;
@@ -694,6 +695,7 @@ namespace Vulkan {
 	}
 	void GPU_ContentManager::Apply_ResourceChanges() {
 		const unsigned char FrameIndex = VKRENDERER->GetCurrentFrameIndex();
+		
 
 		//Manage Global Descriptor Set
 		if (GlobalBuffers_DescSet.ShouldRecreate.load()){

@@ -69,9 +69,10 @@ namespace Vulkan {
 		}
 
 
-
+		LOG_STATUS_TAPI("Before creating Renderer!");
 
 		GFXRENDERER = new Vulkan::Renderer;
+		LOG_STATUS_TAPI("Before creating GPU ContentManager!");
 		ContentManager = new Vulkan::GPU_ContentManager(Info.MaterialRelated_SampledTexture, Info.MaterialRelated_ImageTexture, 
 			Info.MaterialRelated_UniformBuffer, Info.MaterialRelated_StorageBuffer, Info.MaterialCount, Info.GlobalBuffers, Info.GlobalTextures);
 
@@ -287,7 +288,7 @@ namespace Vulkan {
 		for (unsigned int queuefamily_index = 0; queuefamily_index < VKGPU->QueueFamilyProperties.size(); queuefamily_index++) {
 			VkQueueFamilyProperties* QueueFamily = &VKGPU->QueueFamilyProperties[queuefamily_index];
 			VK_QUEUE VKQUEUE;
-			VKQUEUE.QueueFamilyIndex = queuefamily_index;
+			VKQUEUE.QueueFamilyIndex = static_cast<uint32_t>(queuefamily_index);
 			if (QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 				GPUdesc.is_GraphicOperations_Supported = true;
 				VKQUEUE.SupportFlag.is_GRAPHICSsupported = true;
@@ -381,9 +382,9 @@ namespace Vulkan {
 
 			Analize_PhysicalDeviceMemoryProperties(VKGPU, GPUdesc);
 			Analize_Queues(VKGPU, GPUdesc);
+			LOG_STATUS_TAPI("Analized Queues");
 
-
-			vector<VkDeviceQueueCreateInfo> QueueCreationInfos;
+			vector<VkDeviceQueueCreateInfo> QueueCreationInfos(0);
 			//Queue Creation Processes
 			float QueuePriority = 1.0f;
 			for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
@@ -404,6 +405,7 @@ namespace Vulkan {
 			Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
 			Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
 			VK_States.Activate_DeviceExtensions(VKGPU);
+			LOG_STATUS_TAPI("Activated Device Extensions");
 			//This is to destroy datas of extending features
 			DeviceExtendedFeatures extendedfeatures;
 			VK_States.Activate_DeviceFeatures(VKGPU, GPUdesc, Logical_Device_CreationInfo, extendedfeatures);
@@ -414,23 +416,34 @@ namespace Vulkan {
 
 			Logical_Device_CreationInfo.enabledLayerCount = 0;
 
-			if (vkCreateDevice(VKGPU->Physical_Device, &Logical_Device_CreationInfo, nullptr, &VKGPU->Logical_Device) != VK_SUCCESS) {
-				LOG_CRASHING_TAPI("Vulkan failed to create a Logical Device!");
-				return;
+			if (VKGPU->Device_Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+				if (vkCreateDevice(VKGPU->Physical_Device, &Logical_Device_CreationInfo, nullptr, &VKGPU->Logical_Device) != VK_SUCCESS) {
+					LOG_CRASHING_TAPI("Vulkan failed to create a Logical Device!");
+					return;
+				}
+				LOG_CRASHING_TAPI("After vkCreateDevice()");
+
+				VKGPU->AllQueueFamilies = new uint32_t[VKGPU->QUEUEs.size()];
+				for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+					LOG_CRASHING_TAPI("Queue Feature Score: " + to_string(VKGPU->QUEUEs[QueueIndex].QueueFeatureScore));
+					vkGetDeviceQueue(VKGPU->Logical_Device, VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &VKGPU->QUEUEs[QueueIndex].Queue);
+					LOG_CRASHING_TAPI("After vkGetDeviceQueue() " + to_string(QueueIndex));
+					VKGPU->AllQueueFamilies[QueueIndex] = VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex;
+				}
+				LOG_CRASHING_TAPI("After vkGetDeviceQueue()");
+				LOG_STATUS_TAPI("Vulkan created a Logical Device!");
+
+				VK_States.Check_DeviceLimits(VKGPU, GPUdesc);
+				LOG_CRASHING_TAPI("After Check_DeviceLimits()");
+
+				GPUdescs.push_back(GPUdesc);
+				DEVICE_GPUs.push_back(VKGPU);
+			}
+			else {
+				LOG_WARNING_TAPI("RenderDoc doesn't support to create multiple vkDevices, so Device object isn't created for non-Discrete GPUs!");
 			}
 
-			VKGPU->AllQueueFamilies = new uint32_t[VKGPU->QUEUEs.size()];
-			for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
-				vkGetDeviceQueue(VKGPU->Logical_Device, VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &VKGPU->QUEUEs[QueueIndex].Queue);
-				VKGPU->AllQueueFamilies[QueueIndex] = VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex;
-			}
-			LOG_STATUS_TAPI("Vulkan created a Logical Device!");
 
-			VK_States.Check_DeviceLimits(VKGPU, GPUdesc);
-
-
-			GPUdescs.push_back(GPUdesc);
-			DEVICE_GPUs.push_back(VKGPU);
 		}
 
 		LOG_STATUS_TAPI("Finished checking Computer Specifications!");
@@ -707,6 +720,7 @@ namespace Vulkan {
 		GFX_API::TEXTUREUSAGEFLAG usageflag, unsigned int GPUIndex, unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) {
 		GPU* VKGPU = GFXHandleConverter(GPU*, DEVICE_GPUs[GPUIndex]);
 
+		LOG_CRASHING_TAPI("Before vkGetPhysicalDeviceImageFormatProperties()!");
 		VkImageFormatProperties props;
 		if (vkGetPhysicalDeviceImageFormatProperties(VKGPU->Physical_Device, Find_VkFormat_byTEXTURECHANNELs(channeltype),
 			Find_VkImageType(dims), Find_VkTiling(dataorder), Find_VKImageUsage_forGFXTextureDesc(usageflag, channeltype),
@@ -714,6 +728,7 @@ namespace Vulkan {
 			LOG_ERROR_TAPI("GFX->GetTextureTypeLimits() has failed!");
 			return false;
 		}
+		LOG_CRASHING_TAPI("After vkGetPhysicalDeviceImageFormatProperties()!");
 		MAXWIDTH = props.maxExtent.width;
 		MAXHEIGHT = props.maxExtent.height;
 		MAXDEPTH = props.maxExtent.depth;
@@ -750,15 +765,19 @@ namespace Vulkan {
 		im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
 
+		LOG_CRASHING_TAPI("Before vkCreateImage()!");
 		VkImage Imageobj;
 		if (vkCreateImage(VKGPU->Logical_Device, &im_ci, nullptr, &Imageobj) != VK_SUCCESS) {
 			LOG_ERROR_TAPI("GFX->IsTextureSupported() has failed in vkCreateImage()!");
 			return;
 		}
+		LOG_CRASHING_TAPI("After vkCreateImage()!");
 
 		VkMemoryRequirements req;
 		vkGetImageMemoryRequirements(VKGPU->Logical_Device, Imageobj, &req);
+		LOG_CRASHING_TAPI("After vkGetImageMemoryRequirements()!");
 		vkDestroyImage(VKGPU->Logical_Device, Imageobj, nullptr);
+		LOG_CRASHING_TAPI("After vkDestroyImage()!");
 		bool isFound = false;
 		for (unsigned int GFXMemoryTypeIndex = 0; GFXMemoryTypeIndex < VKGPU->ALLOCs.size(); GFXMemoryTypeIndex++) {
 			VK_MemoryAllocation& ALLOC = VKGPU->ALLOCs[GFXMemoryTypeIndex];

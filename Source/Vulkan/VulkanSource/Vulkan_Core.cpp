@@ -418,23 +418,23 @@ namespace Vulkan {
 
 			if (VKGPU->Device_Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
 				if (vkCreateDevice(VKGPU->Physical_Device, &Logical_Device_CreationInfo, nullptr, &VKGPU->Logical_Device) != VK_SUCCESS) {
-					LOG_CRASHING_TAPI("Vulkan failed to create a Logical Device!");
+					LOG_STATUS_TAPI("Vulkan failed to create a Logical Device!");
 					return;
 				}
-				LOG_CRASHING_TAPI("After vkCreateDevice()");
+				LOG_STATUS_TAPI("After vkCreateDevice()");
 
 				VKGPU->AllQueueFamilies = new uint32_t[VKGPU->QUEUEs.size()];
 				for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
-					LOG_CRASHING_TAPI("Queue Feature Score: " + to_string(VKGPU->QUEUEs[QueueIndex].QueueFeatureScore));
+					LOG_STATUS_TAPI("Queue Feature Score: " + to_string(VKGPU->QUEUEs[QueueIndex].QueueFeatureScore));
 					vkGetDeviceQueue(VKGPU->Logical_Device, VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &VKGPU->QUEUEs[QueueIndex].Queue);
-					LOG_CRASHING_TAPI("After vkGetDeviceQueue() " + to_string(QueueIndex));
+					LOG_STATUS_TAPI("After vkGetDeviceQueue() " + to_string(QueueIndex));
 					VKGPU->AllQueueFamilies[QueueIndex] = VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex;
 				}
-				LOG_CRASHING_TAPI("After vkGetDeviceQueue()");
+				LOG_STATUS_TAPI("After vkGetDeviceQueue()");
 				LOG_STATUS_TAPI("Vulkan created a Logical Device!");
 
 				VK_States.Check_DeviceLimits(VKGPU, GPUdesc);
-				LOG_CRASHING_TAPI("After Check_DeviceLimits()");
+				LOG_STATUS_TAPI("After Check_DeviceLimits()");
 
 				GPUdescs.push_back(GPUdesc);
 				DEVICE_GPUs.push_back(VKGPU);
@@ -710,9 +710,6 @@ namespace Vulkan {
 		WINDOWs.push_back(Vulkan_Window);
 		return Vulkan_Window;
 	}
-	unsigned char Vulkan_Core::Get_WindowFrameIndex(GFX_API::GFXHandle WindowHandle) {
-		return GFXHandleConverter(WINDOW*, WindowHandle)->CurrentFrameSWPCHNIndex;
-	}
 	vector<GFX_API::GFXHandle>& Vulkan_Core::Get_WindowHandles() {
 		return WINDOWs;
 	}
@@ -720,7 +717,7 @@ namespace Vulkan {
 		GFX_API::TEXTUREUSAGEFLAG usageflag, unsigned int GPUIndex, unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) {
 		GPU* VKGPU = GFXHandleConverter(GPU*, DEVICE_GPUs[GPUIndex]);
 
-		LOG_CRASHING_TAPI("Before vkGetPhysicalDeviceImageFormatProperties()!");
+		LOG_STATUS_TAPI("Before vkGetPhysicalDeviceImageFormatProperties()!");
 		VkImageFormatProperties props;
 		if (vkGetPhysicalDeviceImageFormatProperties(VKGPU->Physical_Device, Find_VkFormat_byTEXTURECHANNELs(channeltype),
 			Find_VkImageType(dims), Find_VkTiling(dataorder), Find_VKImageUsage_forGFXTextureDesc(usageflag, channeltype),
@@ -728,7 +725,7 @@ namespace Vulkan {
 			LOG_ERROR_TAPI("GFX->GetTextureTypeLimits() has failed!");
 			return false;
 		}
-		LOG_CRASHING_TAPI("After vkGetPhysicalDeviceImageFormatProperties()!");
+		LOG_STATUS_TAPI("After vkGetPhysicalDeviceImageFormatProperties()!");
 		MAXWIDTH = props.maxExtent.width;
 		MAXHEIGHT = props.maxExtent.height;
 		MAXDEPTH = props.maxExtent.depth;
@@ -765,19 +762,19 @@ namespace Vulkan {
 		im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
 
-		LOG_CRASHING_TAPI("Before vkCreateImage()!");
+		LOG_STATUS_TAPI("Before vkCreateImage()!");
 		VkImage Imageobj;
 		if (vkCreateImage(VKGPU->Logical_Device, &im_ci, nullptr, &Imageobj) != VK_SUCCESS) {
 			LOG_ERROR_TAPI("GFX->IsTextureSupported() has failed in vkCreateImage()!");
 			return;
 		}
-		LOG_CRASHING_TAPI("After vkCreateImage()!");
+		LOG_STATUS_TAPI("After vkCreateImage()!");
 
 		VkMemoryRequirements req;
 		vkGetImageMemoryRequirements(VKGPU->Logical_Device, Imageobj, &req);
-		LOG_CRASHING_TAPI("After vkGetImageMemoryRequirements()!");
+		LOG_STATUS_TAPI("After vkGetImageMemoryRequirements()!");
 		vkDestroyImage(VKGPU->Logical_Device, Imageobj, nullptr);
-		LOG_CRASHING_TAPI("After vkDestroyImage()!");
+		LOG_STATUS_TAPI("After vkDestroyImage()!");
 		bool isFound = false;
 		for (unsigned int GFXMemoryTypeIndex = 0; GFXMemoryTypeIndex < VKGPU->ALLOCs.size(); GFXMemoryTypeIndex++) {
 			VK_MemoryAllocation& ALLOC = VKGPU->ALLOCs[GFXMemoryTypeIndex];
@@ -898,11 +895,12 @@ namespace Vulkan {
 
 				VKWINDOW->LASTHEIGHT = VKWINDOW->NEWHEIGHT;
 				VKWINDOW->LASTWIDTH = VKWINDOW->NEWWIDTH;
-				VKWINDOW->Swapchain_Textures[0] = swpchntextures[0];
-				VKWINDOW->Swapchain_Textures[1] = swpchntextures[1];
+				//When you resize window at Frame1, user'd have to track swapchain texture state if I don't do this here
+				//So please don't touch!
+				VKWINDOW->Swapchain_Textures[0] = GFXRENDERER->GetCurrentFrameIndex() ? swpchntextures[1] : swpchntextures[0];
+				VKWINDOW->Swapchain_Textures[1] = GFXRENDERER->GetCurrentFrameIndex() ? swpchntextures[0] : swpchntextures[1];
 				VKWINDOW->Window_SwapChain = swpchn;
 				VKWINDOW->CurrentFrameSWPCHNIndex = 0;
-				LOG_NOTCODED_TAPI("Destroy swapchain mechanism should destroy last swapchain textures next frame because of RTSlotSet compatibility testing!", false);
 				VKWINDOW->resize_cb(VKWINDOW, VKWINDOW->UserPTR, VKWINDOW->NEWWIDTH, VKWINDOW->NEWHEIGHT, VKWINDOW->Swapchain_Textures);
 				delete swpchntextures;
 			}

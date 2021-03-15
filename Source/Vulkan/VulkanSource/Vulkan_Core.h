@@ -30,7 +30,6 @@ namespace Vulkan {
 
 		virtual GFX_API::GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Description& SwapchainTextureProperties) override;
 		virtual void Change_Window_Resolution(GFX_API::GFXHandle Window, unsigned int width, unsigned int height) override;
-		virtual unsigned char Get_WindowFrameIndex(GFX_API::GFXHandle WindowHandle) override;
 		vector<GFX_API::GFXHandle>& Get_WindowHandles();
 
 		//Input (Keyboard-Controller) Operations

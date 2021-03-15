@@ -1497,6 +1497,16 @@ namespace Vulkan {
 		else {
 			DeleteTextureList.push_back(GFX->JobSys->GetThisThreadIndex(), Texture);
 		}
+
+		std::unique_lock<std::mutex> Locker;
+		TEXTUREs.PauseAllOperations(Locker);
+		for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+			for (unsigned int i = 0; i < TEXTUREs.size(ThreadID); i++) {
+				if (Texture == TEXTUREs.get(ThreadID, i)) {
+					TEXTUREs.erase(ThreadID, i);
+				}
+			}
+		}
 	}
 
 

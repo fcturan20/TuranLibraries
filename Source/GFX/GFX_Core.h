@@ -36,8 +36,6 @@ namespace GFX_API {
 		//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
 		virtual GFXHandle CreateWindow(const GFX_API::WindowDescription& Desc, GFX_API::GFXHandle* SwapchainTextureHandles, GFX_API::Texture_Description& SwapchainTextureProperties) = 0;
 		virtual void Change_Window_Resolution(GFXHandle WindowHandle, unsigned int width, unsigned int height) = 0;
-		//Get window's current frame's (which will be shown after GFXRENDERER->Run()) index
-		virtual unsigned char Get_WindowFrameIndex(GFX_API::GFXHandle WindowHandle) = 0;
 
 
 		virtual void Take_Inputs() = 0;

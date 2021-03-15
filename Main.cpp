@@ -56,13 +56,14 @@ void WindowResizeCallback(GFX_API::GFXHandle WindowHandle, void* UserPointer, un
 	GFX_API::GFXHandle NewSlotSetID, NewDepthRT;
 	Create_RTSlotSet_forFirstDrawPass(WIDTH, HEIGHT, NewSlotSetID, NewDepthRT);
 	GFXRENDERER->ChangeDrawPass_RTSlotSet(FIRSTDRAWPASS_ID, NewSlotSetID);
-	//GFXContentManager->Delete_RTSlotSet(RTSlotSet_ID);
-	//GFXContentManager->Delete_Texture(DEPTHRT, true);
+	GFXContentManager->Delete_RTSlotSet(RTSlotSet_ID);
+	//Application stalls while resizing window, so lastframe false is valid
+	GFXContentManager->Delete_Texture(DEPTHRT, false);
 	DEPTHRT = NewDepthRT;
 	RTSlotSet_ID = NewSlotSetID;
-	GFXRENDERER->ImageBarrier(BarrierAfterUpload_ID, DEPTHRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::DEPTHREADWRITE_STENCILREAD);
-	GFXRENDERER->ImageBarrier(BarrierAfterUpload_ID, AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE);
-	GFXRENDERER->ImageBarrier(BarrierAfterUpload_ID, AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE);
+	GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, DEPTHRT, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::DEPTHREADWRITE_STENCILREAD);
+	GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, AlitaSwapchains[0], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE);
+	GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, AlitaSwapchains[1], GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE);
 
 	isWindowResized = true;
 }
@@ -446,13 +447,13 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		}
 		IMGUI_RUNWINDOWS();
 		if (!isWindowResized) {
-			GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, AlitaSwapchains[GFX->Get_WindowFrameIndex(AlitaWindowHandle)], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE);
+			GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE);
 		}
 		else {
 			isWindowResized = false;
 		}
 		GFXRENDERER->DrawDirect(VERTEXBUFFER_ID, INDEXBUFFER_ID, 0, 0, 0, 1, 0, TEXTUREDISPLAY_MATINST, WorldSubpassID);
-		GFXRENDERER->ImageBarrier(BarrierAfterDraw_ID, AlitaSwapchains[GFX->Get_WindowFrameIndex(AlitaWindowHandle)], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY);
+		GFXRENDERER->ImageBarrier(BarrierAfterDraw_ID, AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE, GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY);
 		GFXRENDERER->SwapBuffers(AlitaWindowHandle, WP_ID);
 		GFXRENDERER->Run();
 

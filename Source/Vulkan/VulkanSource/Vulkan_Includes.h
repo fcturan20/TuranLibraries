@@ -230,7 +230,7 @@ namespace Vulkan {
 	VK_API VkBlendOp Find_BlendOp_byGFXBlendMode(GFX_API::BLEND_MODE mode);
 	VK_API VkBlendFactor Find_BlendFactor_byGFXBlendFactor(GFX_API::BLEND_FACTOR factor);
 	VK_API void Fill_ComponentMapping_byCHANNELs(GFX_API::TEXTURE_CHANNELs channels, VkComponentMapping& mapping);
-	VK_API void Find_SubpassAccessPattern(GFX_API::SUBPASS_ACCESS access, bool isSource, VkPipelineStageFlags& stageflag, VkAccessFlags& accessflag);
+	VK_API void Find_SubpassAccessPattern(GFX_API::SUBDRAWPASS_ACCESS access, bool isSource, VkPipelineStageFlags& stageflag, VkAccessFlags& accessflag);
 	VK_API DescType Find_DescType_byGFXShaderInputType(GFX_API::SHADERINPUT_TYPE type);
 	VK_API VkDescriptorType Find_VkDescType_byDescTypeCategoryless(DescType type);
 }

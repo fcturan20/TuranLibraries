@@ -71,7 +71,7 @@ namespace Vulkan {
 		MESHBUFFERs(*GFX->JobSys), INDEXBUFFERs(*GFX->JobSys), TEXTUREs(*GFX->JobSys), GLOBALBUFFERs(*GFX->JobSys), SHADERSOURCEs(*GFX->JobSys),
 		SHADERPROGRAMs(*GFX->JobSys), SHADERPINSTANCEs(*GFX->JobSys), VERTEXATTRIBLAYOUTs(*GFX->JobSys), RT_SLOTSETs(*GFX->JobSys), STAGINGBUFFERs(*GFX->JobSys),
 		DescSets_toCreateUpdate(*GFX->JobSys), DescSets_toCreate(*GFX->JobSys), DescSets_toJustUpdate(*GFX->JobSys), SAMPLERs(*GFX->JobSys), IRT_SLOTSETs(*GFX->JobSys),
-		DeleteTextureList(*GFX->JobSys), NextFrameDeleteTextureCalls(*GFX->JobSys){
+		DeleteTextureList(*GFX->JobSys), NextFrameDeleteTextureCalls(*GFX->JobSys), COMPUTETYPEs(*GFX->JobSys), COMPUTEINSTANCEs(*GFX->JobSys){
 
 		//Do memory allocations
 		for (unsigned int allocindex = 0; allocindex < VKGPU->ALLOCs.size(); allocindex++) {
@@ -426,6 +426,37 @@ namespace Vulkan {
 			}
 			InstanceLocker.unlock();
 		}
+		//Destroy Compute Types and Instances
+		{
+			std::unique_lock<std::mutex> Locker;
+			COMPUTETYPEs.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int MatTypeIndex = 0; MatTypeIndex < COMPUTETYPEs.size(ThreadID); MatTypeIndex++) {
+					VK_ComputePipeline* PSO = GFXHandleConverter(VK_ComputePipeline*, COMPUTETYPEs.get(ThreadID, MatTypeIndex));
+					vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, PSO->General_DescSet.Layout, nullptr);
+					vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, PSO->Instance_DescSet.Layout, nullptr);
+					delete[] PSO->General_DescSet.Descs;
+					vkDestroyPipelineLayout(VKGPU->Logical_Device, PSO->PipelineLayout, nullptr);
+					vkDestroyPipeline(VKGPU->Logical_Device, PSO->PipelineObject, nullptr);
+					delete PSO;
+				}
+				COMPUTETYPEs.clear(ThreadID);
+			}
+			Locker.unlock();
+
+			std::unique_lock<std::mutex> InstanceLocker;
+			COMPUTEINSTANCEs.PauseAllOperations(InstanceLocker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int MatInstIndex = 0; MatInstIndex < COMPUTEINSTANCEs.size(ThreadID); MatInstIndex++) {
+					VK_ComputeInstance* PSO = GFXHandleConverter(VK_ComputeInstance*, COMPUTEINSTANCEs.get(ThreadID, MatInstIndex));
+					vkDestroyDescriptorSetLayout(VKGPU->Logical_Device, PSO->DescSet.Layout, nullptr);
+					delete[] PSO->DescSet.Descs;
+					delete PSO;
+				}
+				COMPUTEINSTANCEs.clear(ThreadID);
+			}
+			InstanceLocker.unlock();
+		}
 
 		//There is no need to free each descriptor set, just destroy pool
 		if (MaterialRelated_DescPool.pool != VK_NULL_HANDLE) {
@@ -563,7 +594,7 @@ namespace Vulkan {
 					VK_Texture* Texture = TEXTUREs.get(ThreadID, i);
 					vkDestroyImageView(VKGPU->Logical_Device, Texture->ImageView, nullptr);
 					vkDestroyImage(VKGPU->Logical_Device, Texture->Image, nullptr);
-					delete Texture; 
+					delete Texture;
 				}
 				TEXTUREs.clear(ThreadID);
 			}
@@ -1152,6 +1183,262 @@ namespace Vulkan {
 		DescSets_toCreate.push_back(GFX->JobSys->GetThisThreadIndex(), Set);
 		return true;
 	}
+	//General DescriptorSet Layout Creation
+	bool GPU_ContentManager::VKDescSet_PipelineLayoutCreation(const vector<GFX_API::ShaderInput_Description>& inputdescs, VK_DescSet& GeneralDescSet, VK_DescSet& InstanceDescSet, VkPipelineLayout* layout) {
+		//General DescSet creation
+		{
+			vector<VkDescriptorSetLayoutBinding> bindings;
+			for (unsigned int i = 0; i < inputdescs.size(); i++) {
+				const GFX_API::ShaderInput_Description& gfxdesc = inputdescs[i];
+				if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_G ||
+					gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_G ||
+					gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_G ||
+					gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_G)) {
+					continue;
+				}
+
+				unsigned int BP = gfxdesc.BINDINGPOINT;
+				for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
+					if (BP == bindings[bpsearchindex].binding) {
+						LOG_ERROR_TAPI("VKDescSet_PipelineLayoutCreation() has failed because there are colliding binding points!");
+						return false;
+					}
+				}
+
+				if (!gfxdesc.ELEMENTCOUNT) {
+					LOG_ERROR_TAPI("VKDescSet_PipelineLayoutCreation() has failed because one of the shader inputs have 0 element count!");
+					return false;
+				}
+
+				VkDescriptorSetLayoutBinding bn = {};
+				bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
+				bn.pImmutableSamplers = VK_NULL_HANDLE;
+				bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
+				bn.descriptorCount = gfxdesc.ELEMENTCOUNT;
+				bn.binding = BP;
+				bindings.push_back(bn);
+
+				GeneralDescSet.DescCount++;
+				switch (gfxdesc.TYPE) {
+				case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
+					GeneralDescSet.DescImagesCount += gfxdesc.ELEMENTCOUNT;
+					break;
+				case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
+					GeneralDescSet.DescSamplersCount += gfxdesc.ELEMENTCOUNT;
+					break;
+				case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
+					GeneralDescSet.DescUBuffersCount += gfxdesc.ELEMENTCOUNT;
+					break;
+				case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
+					GeneralDescSet.DescSBuffersCount += gfxdesc.ELEMENTCOUNT;
+					break;
+				}
+			}
+
+			if (GeneralDescSet.DescCount) {
+				GeneralDescSet.Descs = new VK_Descriptor[GeneralDescSet.DescCount];
+				for (unsigned int i = 0; i < inputdescs.size(); i++) {
+					const GFX_API::ShaderInput_Description& gfxdesc = inputdescs[i];
+					if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_G ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_G ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_G ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_G)) {
+						continue;
+					}
+					if (gfxdesc.BINDINGPOINT >= GeneralDescSet.DescCount) {
+						LOG_ERROR_TAPI("One of your General shaderinputs uses a binding point that is exceeding the number of general shaderinputs. You have to use a binding point that's lower than size of the general shader inputs!");
+						return false;
+					}
+
+					VK_Descriptor& vkdesc = GeneralDescSet.Descs[gfxdesc.BINDINGPOINT];
+					switch (gfxdesc.TYPE) {
+					case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
+					{
+						vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
+						vkdesc.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
+						vkdesc.Type = DescType::IMAGE;
+					}
+					break;
+					case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
+					{
+						vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
+						vkdesc.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
+						vkdesc.Type = DescType::SAMPLER;
+					}
+					break;
+					case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
+					{
+						vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
+						vkdesc.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
+						vkdesc.Type = DescType::UBUFFER;
+					}
+					break;
+					case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
+					{
+						vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
+						vkdesc.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
+						vkdesc.Type = DescType::SBUFFER;
+					}
+					break;
+					}
+				}
+				GeneralDescSet.ShouldRecreate.store(0);
+			}
+
+			if (bindings.size()) {
+				VkDescriptorSetLayoutCreateInfo ci = {};
+				ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				ci.pNext = nullptr;
+				ci.flags = 0;
+				ci.bindingCount = bindings.size();
+				ci.pBindings = bindings.data();
+
+				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &GeneralDescSet.Layout) != VK_SUCCESS) {
+					LOG_ERROR_TAPI("VKDescSet_PipelineLayoutCreation() has failed at General DescriptorSetLayout Creation vkCreateDescriptorSetLayout()");
+					return false;
+				}
+			}
+		}
+
+		//Instance DescriptorSet Layout Creation
+		{
+			vector<VkDescriptorSetLayoutBinding> bindings;
+			for (unsigned int i = 0; i < inputdescs.size(); i++) {
+				const GFX_API::ShaderInput_Description& gfxdesc = inputdescs[i];
+
+				if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_PI ||
+					gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_PI ||
+					gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_PI ||
+					gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_PI)) {
+					continue;
+				}
+				unsigned int BP = gfxdesc.BINDINGPOINT;
+				for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
+					if (BP == bindings[bpsearchindex].binding) {
+						LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
+						return false;
+					}
+				}
+				VkDescriptorSetLayoutBinding bn = {};
+				bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
+				bn.pImmutableSamplers = VK_NULL_HANDLE;
+				bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
+				bn.descriptorCount = 1;		//I don't support array descriptors for now!
+				bn.binding = BP;
+				bindings.push_back(bn);
+
+				InstanceDescSet.DescCount++;
+				switch (gfxdesc.TYPE) {
+				case GFX_API::SHADERINPUT_TYPE::IMAGE_PI:
+				{
+					InstanceDescSet.DescImagesCount += gfxdesc.ELEMENTCOUNT;
+				}
+				break;
+				case GFX_API::SHADERINPUT_TYPE::SAMPLER_PI:
+				{
+					InstanceDescSet.DescSamplersCount += gfxdesc.ELEMENTCOUNT;
+				}
+				break;
+				case GFX_API::SHADERINPUT_TYPE::UBUFFER_PI:
+				{
+					InstanceDescSet.DescUBuffersCount += gfxdesc.ELEMENTCOUNT;
+				}
+				break;
+				case GFX_API::SHADERINPUT_TYPE::SBUFFER_PI:
+				{
+					InstanceDescSet.DescSBuffersCount += gfxdesc.ELEMENTCOUNT;
+				}
+				break;
+				}
+			}
+
+			if (InstanceDescSet.DescCount) {
+				InstanceDescSet.Descs = new VK_Descriptor[InstanceDescSet.DescCount];
+				for (unsigned int i = 0; i < inputdescs.size(); i++) {
+					const GFX_API::ShaderInput_Description& gfxdesc = inputdescs[i];
+					if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_PI ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_PI ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_PI ||
+						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_PI)) {
+						continue;
+					}
+
+					if (gfxdesc.BINDINGPOINT >= InstanceDescSet.DescCount) {
+						LOG_ERROR_TAPI("One of your Material Data Descriptors (Per Instance) uses a binding point that is exceeding the number of Material Data Descriptors (Per Instance). You have to use a binding point that's lower than size of the Material Data Descriptors (Per Instance)!");
+						return false;
+					}
+
+					//We don't need to create each descriptor's array elements
+					VK_Descriptor& vkdesc = InstanceDescSet.Descs[gfxdesc.BINDINGPOINT];
+					vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
+					switch (gfxdesc.TYPE) {
+					case GFX_API::SHADERINPUT_TYPE::IMAGE_PI:
+						vkdesc.Type = DescType::IMAGE;
+						break;
+					case GFX_API::SHADERINPUT_TYPE::SAMPLER_PI:
+						vkdesc.Type = DescType::SAMPLER;
+						break;
+					case GFX_API::SHADERINPUT_TYPE::UBUFFER_PI:
+						vkdesc.Type = DescType::UBUFFER;
+						break;
+					case GFX_API::SHADERINPUT_TYPE::SBUFFER_PI:
+						vkdesc.Type = DescType::SBUFFER;
+						break;
+					}
+				}
+				InstanceDescSet.ShouldRecreate.store(0);
+			}
+
+			if (bindings.size()) {
+				VkDescriptorSetLayoutCreateInfo ci = {};
+				ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				ci.pNext = nullptr;
+				ci.flags = 0;
+				ci.bindingCount = bindings.size();
+				ci.pBindings = bindings.data();
+
+				if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &InstanceDescSet.Layout) != VK_SUCCESS) {
+					LOG_ERROR_TAPI("Link_MaterialType() has failed at Instance DesciptorSetLayout Creation vkCreateDescriptorSetLayout()");
+					return false;
+				}
+			}
+		}
+
+		//General DescriptorSet Creation
+		if (!Create_DescSet(&GeneralDescSet)) {
+			LOG_ERROR_TAPI("Descriptor pool is full, that means you should expand its size!");
+			return false;
+		}
+
+		//Pipeline Layout Creation
+		{
+			VkPipelineLayoutCreateInfo pl_ci = {};
+			pl_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			pl_ci.pNext = nullptr;
+			pl_ci.flags = 0;
+
+			VkDescriptorSetLayout descsetlays[4] = { GlobalBuffers_DescSet.Layout, GlobalTextures_DescSet.Layout, VK_NULL_HANDLE, VK_NULL_HANDLE };
+			pl_ci.setLayoutCount = 2;
+			if (GeneralDescSet.Layout != VK_NULL_HANDLE) {
+				descsetlays[pl_ci.setLayoutCount] = GeneralDescSet.Layout;
+				pl_ci.setLayoutCount++;
+			}
+			if (InstanceDescSet.Layout != VK_NULL_HANDLE) {
+				descsetlays[pl_ci.setLayoutCount] = InstanceDescSet.Layout;
+				pl_ci.setLayoutCount++;
+			}
+			pl_ci.pSetLayouts = descsetlays;
+			//Don't support for now!
+			pl_ci.pushConstantRangeCount = 0;
+			pl_ci.pPushConstantRanges = nullptr;
+
+			if (vkCreatePipelineLayout(VKGPU->Logical_Device, &pl_ci, nullptr, layout) != VK_SUCCESS) {
+				LOG_ERROR_TAPI("Link_MaterialType() failed at vkCreatePipelineLayout()!");
+				return false;
+			}
+		}
+		return true;
+	}
 
 	TAPIResult GPU_ContentManager::Create_VertexAttributeLayout(const vector<GFX_API::DATA_TYPE>& Attributes, GFX_API::VERTEXLIST_TYPEs listtype, GFX_API::GFXHandle& Handle) {
 		VK_VertexAttribLayout* Layout = new VK_VertexAttribLayout;
@@ -1643,9 +1930,99 @@ namespace Vulkan {
 	void GPU_ContentManager::Delete_ShaderSource(GFX_API::GFXHandle ASSET_ID) {
 		LOG_NOTCODED_TAPI("VK::Unload_GlobalBuffer isn't coded!", true);
 	}
-	TAPIResult GPU_ContentManager::Compile_ComputeShader(GFX_API::ComputeShader_Resource* SHADER, GFX_API::GFXHandle* Handles, unsigned int Count) {
-		LOG_NOTCODED_TAPI("VK::Compile_ComputeShader isn't coded!", true);
-		return TAPI_NOTCODED;
+	TAPIResult GPU_ContentManager::Create_ComputeType(GFX_API::ComputeShader_Resource* SHADER, GFX_API::GFXHandle& ComputeTypeHandle) {
+		VkComputePipelineCreateInfo cp_ci = {};
+
+		VkShaderModule shader_module = VK_NULL_HANDLE;
+		VkShaderModuleCreateInfo sm_ci = {};
+		sm_ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		sm_ci.flags = 0;
+		sm_ci.pNext = nullptr;
+		sm_ci.pCode = reinterpret_cast<const uint32_t*>(SHADER->SOURCE_CODE);
+		sm_ci.codeSize = static_cast<size_t>(SHADER->CODE_SIZE);
+		if (vkCreateShaderModule(VKGPU->Logical_Device, &sm_ci, nullptr, &shader_module) != VK_SUCCESS) {
+			LOG_ERROR_TAPI("Compile_ComputeShader() has failed at vkCreateShaderModule!");
+			return TAPI_FAIL;
+		}
+
+		VK_ComputePipeline* VKPipeline = new VK_ComputePipeline;
+
+		if (!VKDescSet_PipelineLayoutCreation(SHADER->SHADERINPUT_DESCs, VKPipeline->General_DescSet, VKPipeline->Instance_DescSet, &VKPipeline->PipelineLayout)) {
+			LOG_ERROR_TAPI("Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
+			delete VKPipeline;
+			return TAPI_FAIL;
+		}
+
+		//VkPipeline creation
+		{
+			cp_ci.stage.flags = 0;
+			cp_ci.stage.module = shader_module;
+			cp_ci.stage.pName = "main";
+			cp_ci.stage.pNext = nullptr;
+			cp_ci.stage.pSpecializationInfo = nullptr;
+			cp_ci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+			cp_ci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			cp_ci.basePipelineHandle = VK_NULL_HANDLE;
+			cp_ci.basePipelineIndex = -1;
+			cp_ci.flags = 0;
+			cp_ci.layout = VKPipeline->PipelineLayout;
+			cp_ci.pNext = nullptr;
+			cp_ci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+			if (vkCreateComputePipelines(VKGPU->Logical_Device, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &VKPipeline->PipelineObject) != VK_SUCCESS) {
+				LOG_ERROR_TAPI("Compile_ComputeShader() has failed at vkCreateComputePipelines!");
+				delete VKPipeline;
+				return TAPI_FAIL;
+			}
+		}
+		vkDestroyShaderModule(VKGPU->Logical_Device, shader_module, nullptr);
+
+		ComputeTypeHandle = VKPipeline;
+		COMPUTETYPEs.push_back(GFX->JobSys->GetThisThreadIndex(), VKPipeline);
+		return TAPI_SUCCESS;
+	}
+	TAPIResult GPU_ContentManager::Create_ComputeInstance(GFX_API::GFXHandle ComputeType, GFX_API::GFXHandle& ComputeInstHandle) {
+		VK_ComputePipeline* VKPipeline = GFXHandleConverter(VK_ComputePipeline*, ComputeType);
+		
+		VK_ComputeInstance* instance = new VK_ComputeInstance;
+		instance->PROGRAM = VKPipeline;
+
+		instance->DescSet.Layout = VKPipeline->Instance_DescSet.Layout;
+		instance->DescSet.ShouldRecreate.store(0);
+		instance->DescSet.DescImagesCount = VKPipeline->Instance_DescSet.DescImagesCount;
+		instance->DescSet.DescSamplersCount = VKPipeline->Instance_DescSet.DescSamplersCount;
+		instance->DescSet.DescSBuffersCount = VKPipeline->Instance_DescSet.DescSBuffersCount;
+		instance->DescSet.DescUBuffersCount = VKPipeline->Instance_DescSet.DescUBuffersCount;
+		instance->DescSet.DescCount = VKPipeline->Instance_DescSet.DescCount;
+
+		if (instance->DescSet.DescCount) {
+			instance->DescSet.Descs = new VK_Descriptor[instance->DescSet.DescCount];
+
+			for (unsigned int i = 0; i < instance->DescSet.DescCount; i++) {
+				VK_Descriptor& desc = instance->DescSet.Descs[i];
+				desc.ElementCount = VKPipeline->Instance_DescSet.Descs[i].ElementCount;
+				desc.Type = VKPipeline->Instance_DescSet.Descs[i].Type;
+				switch (desc.Type)
+				{
+				case DescType::IMAGE:
+				case DescType::SAMPLER:
+					desc.Elements = new VK_DescImageElement[desc.ElementCount];
+				case DescType::SBUFFER:
+				case DescType::UBUFFER:
+					desc.Elements = new VK_DescBufferElement[desc.ElementCount];
+				}
+			}
+
+			if (!Create_DescSet(&instance->DescSet)) {
+				LOG_ERROR_TAPI("You probably exceed one of the limits you specified at GFX initialization process! Create_ComputeInstance() has failed!");
+				delete[] instance->DescSet.Descs;
+				delete instance;
+				return TAPI_FAIL;
+			}
+		}
+
+		ComputeInstHandle = instance;
+		COMPUTEINSTANCEs.push_back(GFX->JobSys->GetThisThreadIndex(), instance);
+		return TAPI_SUCCESS;
 	}
 	void GPU_ContentManager::Delete_ComputeShader(GFX_API::GFXHandle ASSET_ID){
 		LOG_NOTCODED_TAPI("VK::Delete_ComputeShader isn't coded!", true);
@@ -1852,260 +2229,10 @@ namespace Vulkan {
 			Dynamic_States.pDynamicStates = DynamicStatesList.data();
 		}
 
-		//Material Data related creations
-		{
-			//General DescriptorSet Layout Creation
-			{
-				vector<VkDescriptorSetLayoutBinding> bindings;
-				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
-					const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-					if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_G ||
-						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_G ||
-						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_G ||
-						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_G)) {
-						continue;
-					}
-
-					unsigned int BP = gfxdesc.BINDINGPOINT;
-					for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
-						if (BP == bindings[bpsearchindex].binding) {
-							LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
-							return TAPI_FAIL;
-						}
-					}
-
-					if (!gfxdesc.ELEMENTCOUNT) {
-						LOG_ERROR_TAPI("Link_MaterialType() has failed because one of the shader inputs have 0 element count!");
-						return TAPI_FAIL;
-					}
-
-					VkDescriptorSetLayoutBinding bn = {};
-					bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
-					bn.pImmutableSamplers = VK_NULL_HANDLE;
-					bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
-					bn.descriptorCount = gfxdesc.ELEMENTCOUNT;
-					bn.binding = BP;
-					bindings.push_back(bn);
-
-					VKPipeline->General_DescSet.DescCount++;
-					switch (gfxdesc.TYPE) {
-					case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
-						VKPipeline->General_DescSet.DescImagesCount += gfxdesc.ELEMENTCOUNT;
-					break;
-					case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
-						VKPipeline->General_DescSet.DescSamplersCount += gfxdesc.ELEMENTCOUNT;
-					break;
-					case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
-						VKPipeline->General_DescSet.DescUBuffersCount += gfxdesc.ELEMENTCOUNT;
-					break;
-					case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
-						VKPipeline->General_DescSet.DescSBuffersCount += gfxdesc.ELEMENTCOUNT;
-					break;
-					}
-				}
-
-				if (VKPipeline->General_DescSet.DescCount) {
-					VKPipeline->General_DescSet.Descs = new VK_Descriptor[VKPipeline->General_DescSet.DescCount];
-					for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
-						const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-						if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_G ||
-							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_G ||
-							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_G ||
-							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_G)) {
-							continue;
-						}
-						if (gfxdesc.BINDINGPOINT >= VKPipeline->General_DescSet.DescCount) {
-							LOG_ERROR_TAPI("One of your Material Data Descriptors (General) uses a binding point that is exceeding the number of Material Data Descriptors (General). You have to use a binding point that's lower than size of the Material Data Descriptors (General)!");
-							return TAPI_FAIL;
-						}
-
-						VK_Descriptor& vkdesc = VKPipeline->General_DescSet.Descs[gfxdesc.BINDINGPOINT];
-						switch (gfxdesc.TYPE) {
-						case GFX_API::SHADERINPUT_TYPE::IMAGE_G:
-						{
-							vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
-							vkdesc.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
-							vkdesc.Type = DescType::IMAGE;
-						}
-						break;
-						case GFX_API::SHADERINPUT_TYPE::SAMPLER_G:
-						{
-							vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
-							vkdesc.Elements = new VK_DescImageElement[gfxdesc.ELEMENTCOUNT];
-							vkdesc.Type = DescType::SAMPLER;
-						}
-						break;
-						case GFX_API::SHADERINPUT_TYPE::UBUFFER_G:
-						{
-							vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
-							vkdesc.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
-							vkdesc.Type = DescType::UBUFFER;
-						}
-						break;
-						case GFX_API::SHADERINPUT_TYPE::SBUFFER_G:
-						{
-							vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
-							vkdesc.Elements = new VK_DescBufferElement[gfxdesc.ELEMENTCOUNT];
-							vkdesc.Type = DescType::SBUFFER;
-						}
-						break;
-						}
-					}
-					VKPipeline->General_DescSet.ShouldRecreate.store(0);
-				}
-
-				if (bindings.size()) {
-					VkDescriptorSetLayoutCreateInfo ci = {};
-					ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-					ci.pNext = nullptr;
-					ci.flags = 0;
-					ci.bindingCount = bindings.size();
-					ci.pBindings = bindings.data();
-
-					if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &VKPipeline->General_DescSet.Layout) != VK_SUCCESS) {
-						LOG_ERROR_TAPI("Link_MaterialType() has failed at General DescriptorSetLayout Creation vkCreateDescriptorSetLayout()");
-						return TAPI_FAIL;
-					}
-				}
-			}
-
-			//Instance DescriptorSet Layout Creation
-			{
-				vector<VkDescriptorSetLayoutBinding> bindings;
-				for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
-					const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-
-					if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_PI ||
-						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_PI ||
-						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_PI ||
-						gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_PI)) {
-						continue;
-					}
-					unsigned int BP = gfxdesc.BINDINGPOINT;
-					for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
-						if (BP == bindings[bpsearchindex].binding) {
-							LOG_ERROR_TAPI("Link_MaterialType() has failed because there are colliding binding points!");
-							return TAPI_FAIL;
-						}
-					}
-					VkDescriptorSetLayoutBinding bn = {};
-					bn.stageFlags = Find_VkShaderStages(gfxdesc.SHADERSTAGEs);
-					bn.pImmutableSamplers = VK_NULL_HANDLE;
-					bn.descriptorType = Find_VkDescType_byMATDATATYPE(gfxdesc.TYPE);
-					bn.descriptorCount = 1;		//I don't support array descriptors for now!
-					bn.binding = BP;
-					bindings.push_back(bn);
-
-					VKPipeline->Instance_DescSet.DescCount++;
-					switch (gfxdesc.TYPE) {
-					case GFX_API::SHADERINPUT_TYPE::IMAGE_PI:
-					{
-						VKPipeline->Instance_DescSet.DescImagesCount += gfxdesc.ELEMENTCOUNT;
-					}
-					break;
-					case GFX_API::SHADERINPUT_TYPE::SAMPLER_PI:
-					{
-						VKPipeline->Instance_DescSet.DescSamplersCount += gfxdesc.ELEMENTCOUNT;
-					}
-					break;
-					case GFX_API::SHADERINPUT_TYPE::UBUFFER_PI:
-					{
-						VKPipeline->Instance_DescSet.DescUBuffersCount += gfxdesc.ELEMENTCOUNT;
-					}
-					break;
-					case GFX_API::SHADERINPUT_TYPE::SBUFFER_PI:
-					{
-						VKPipeline->Instance_DescSet.DescSBuffersCount += gfxdesc.ELEMENTCOUNT;
-					}
-					break;
-					}
-				}
-
-				if (VKPipeline->Instance_DescSet.DescCount) {
-					VKPipeline->Instance_DescSet.Descs = new VK_Descriptor[VKPipeline->Instance_DescSet.DescCount];
-					for (unsigned int i = 0; i < MATTYPE_ASSET.MATERIALTYPEDATA.size(); i++) {
-						const GFX_API::ShaderInput_Description& gfxdesc = MATTYPE_ASSET.MATERIALTYPEDATA[i];
-						if (!(gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::IMAGE_PI ||
-							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SAMPLER_PI ||
-							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::SBUFFER_PI ||
-							gfxdesc.TYPE == GFX_API::SHADERINPUT_TYPE::UBUFFER_PI)) {
-							continue;
-						}
-
-						if (gfxdesc.BINDINGPOINT >= VKPipeline->Instance_DescSet.DescCount) {
-							LOG_ERROR_TAPI("One of your Material Data Descriptors (Per Instance) uses a binding point that is exceeding the number of Material Data Descriptors (Per Instance). You have to use a binding point that's lower than size of the Material Data Descriptors (Per Instance)!");
-							return TAPI_FAIL;
-						}
-
-						//We don't need to create each descriptor's array elements
-						VK_Descriptor& vkdesc = VKPipeline->Instance_DescSet.Descs[gfxdesc.BINDINGPOINT];
-						vkdesc.ElementCount = gfxdesc.ELEMENTCOUNT;
-						switch (gfxdesc.TYPE) {
-						case GFX_API::SHADERINPUT_TYPE::IMAGE_PI:
-							vkdesc.Type = DescType::IMAGE;
-						break;
-						case GFX_API::SHADERINPUT_TYPE::SAMPLER_PI:
-							vkdesc.Type = DescType::SAMPLER;
-						break;
-						case GFX_API::SHADERINPUT_TYPE::UBUFFER_PI:
-							vkdesc.Type = DescType::UBUFFER;
-						break;
-						case GFX_API::SHADERINPUT_TYPE::SBUFFER_PI:
-							vkdesc.Type = DescType::SBUFFER;
-						break;
-						}
-					}
-					VKPipeline->Instance_DescSet.ShouldRecreate.store(0);
-				}
-
-				if (bindings.size()) {
-					VkDescriptorSetLayoutCreateInfo ci = {};
-					ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-					ci.pNext = nullptr;
-					ci.flags = 0;
-					ci.bindingCount = bindings.size();
-					ci.pBindings = bindings.data();
-
-					if (vkCreateDescriptorSetLayout(VKGPU->Logical_Device, &ci, nullptr, &VKPipeline->Instance_DescSet.Layout) != VK_SUCCESS) {
-						LOG_ERROR_TAPI("Link_MaterialType() has failed at Instance DesciptorSetLayout Creation vkCreateDescriptorSetLayout()");
-						return TAPI_FAIL;
-					}
-				}
-			}
-			
-			//General DescriptorSet Creation
-			if (!Create_DescSet(&VKPipeline->General_DescSet)) {
-				LOG_ERROR_TAPI("Descriptor pool is full, that means you should expand its size!");
-				return TAPI_FAIL;
-			}
-
-			//Pipeline Layout Creation
-			{
-				VkPipelineLayoutCreateInfo pl_ci = {};
-				pl_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-				pl_ci.pNext = nullptr;
-				pl_ci.flags = 0;
-				
-				VkDescriptorSetLayout descsetlays[4] = { GlobalBuffers_DescSet.Layout, GlobalTextures_DescSet.Layout, VK_NULL_HANDLE, VK_NULL_HANDLE };
-				pl_ci.setLayoutCount = 2;
-				if (VKPipeline->General_DescSet.Layout != VK_NULL_HANDLE) {
-					descsetlays[pl_ci.setLayoutCount] = VKPipeline->General_DescSet.Layout;
-					pl_ci.setLayoutCount++;
-				}
-				if (VKPipeline->Instance_DescSet.Layout != VK_NULL_HANDLE) {
-					descsetlays[pl_ci.setLayoutCount] = VKPipeline->Instance_DescSet.Layout;
-					pl_ci.setLayoutCount++;
-				}
-				pl_ci.pSetLayouts = descsetlays;
-				//Don't support for now!
-				pl_ci.pushConstantRangeCount = 0;
-				pl_ci.pPushConstantRanges = nullptr;
-
-				if (vkCreatePipelineLayout(Vulkan_GPU->Logical_Device, &pl_ci, nullptr, &VKPipeline->PipelineLayout) != VK_SUCCESS) {
-					LOG_ERROR_TAPI("Link_MaterialType() failed at vkCreatePipelineLayout()!");
-					return TAPI_FAIL;
-				}
-			}
+		if (!VKDescSet_PipelineLayoutCreation(MATTYPE_ASSET.MATERIALTYPEDATA, VKPipeline->General_DescSet, VKPipeline->Instance_DescSet, &VKPipeline->PipelineLayout)) {
+			LOG_ERROR_TAPI("Link_MaterialType() has failed at VKDescSet_PipelineLayoutCreation!");
+			delete VKPipeline;
+			return TAPI_FAIL;
 		}
 
 		VkPipelineDepthStencilStateCreateInfo depth_state = {};
@@ -2340,6 +2467,147 @@ namespace Vulkan {
 		}
 		if (ELEMENTINDEX >= Descriptor.ElementCount) {
 			LOG_ERROR_TAPI("You gave SetMaterialTexture() an overflowing ELEMENTINDEX!");
+			return TAPI_FAIL;
+		}
+		VK_DescImageElement& DescElement = GFXHandleConverter(VK_DescImageElement*, Descriptor.Elements)[ELEMENTINDEX];
+
+
+		VK_Sampler* Sampler = GFXHandleConverter(VK_Sampler*, SamplingType);
+		unsigned char x = 0;
+		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+			if (x != 255) {
+				LOG_ERROR_TAPI("You already set shader input texture, you can't change it at the same frame!");
+				return TAPI_WRONGTIMING;
+			}
+			//If value is 255, this means this shader input isn't set before. So try again!
+			if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+				LOG_ERROR_TAPI("You already set shader input texture, you can't change it at the same frame!");
+				return TAPI_WRONGTIMING;
+			}
+		}
+		VkAccessFlags unused;
+		Find_AccessPattern_byIMAGEACCESS(usage, unused, DescElement.info.imageLayout);
+		VK_Texture* TEXTURE = GFXHandleConverter(VK_Texture*, TextureHandle);
+		DescElement.info.imageView = TEXTURE->ImageView;
+		DescElement.info.sampler = Sampler->Sampler;
+
+		VK_DescSetUpdateCall call;
+		call.Set = Set;
+		call.BindingIndex = BINDINDEX;
+		call.ElementIndex = ELEMENTINDEX;
+		if (isUsedRecently) {
+			call.Set->ShouldRecreate.store(1);
+			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		else {
+			DescSets_toJustUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		return TAPI_SUCCESS;
+	}
+	TAPIResult GPU_ContentManager::SetComputeBuffer(GFX_API::GFXHandle ComputeType_orInstance, bool isComputeType, bool isUsedRecently, unsigned int BINDINDEX, GFX_API::GFXHandle TargetBufferHandle,
+		bool isUniformBufferShaderInput, GFX_API::BUFFER_TYPE TYPE, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize) {
+		VK_DescSet* Set = nullptr;
+		if (isComputeType) {
+			VK_ComputePipeline* PSO = GFXHandleConverter(VK_ComputePipeline*, ComputeType_orInstance);
+			Set = &PSO->General_DescSet;
+		}
+		else {
+			VK_ComputeInstance* PSO = GFXHandleConverter(VK_ComputeInstance*, ComputeType_orInstance);
+			Set = &PSO->DescSet;
+		}
+
+		if (!Set->DescCount) {
+			LOG_ERROR_TAPI("Given Compute Type/Instance doesn't have any shader input to set!");
+			return TAPI_FAIL;
+		}
+		if (BINDINDEX >= Set->DescCount) {
+			LOG_ERROR_TAPI("BINDINDEX is exceeding the shader input count in the Compute Type/Instance");
+			return TAPI_FAIL;
+		}
+		VK_Descriptor& Descriptor = Set->Descs[BINDINDEX];
+		if ((isUniformBufferShaderInput && Descriptor.Type != DescType::UBUFFER) ||
+			(!isUniformBufferShaderInput && Descriptor.Type != DescType::SBUFFER)) {
+			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input!");
+			return TAPI_FAIL;
+		}
+		if (ELEMENTINDEX >= Descriptor.ElementCount) {
+			LOG_ERROR_TAPI("You gave SetComputeBuffer() an overflowing ELEMENTINDEX!");
+			return TAPI_FAIL;
+		}
+		VK_DescBufferElement& DescElement = GFXHandleConverter(VK_DescBufferElement*, Descriptor.Elements)[ELEMENTINDEX];
+
+		//Check alignment offset
+		VkDeviceSize reqalignmentoffset = (isUniformBufferShaderInput) ? VKGPU->Device_Properties.limits.minUniformBufferOffsetAlignment : VKGPU->Device_Properties.limits.minStorageBufferOffsetAlignment;
+		if (TargetOffset % reqalignmentoffset) {
+			LOG_WARNING_TAPI("This TargetOffset in SetComputeBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + to_string(reqalignmentoffset));
+		}
+
+		unsigned char x = 0;
+		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+			if (x != 255) {
+				LOG_ERROR_TAPI("You already set shader input buffer, you can't change it at the same frame!");
+				return TAPI_WRONGTIMING;
+			}
+			//If value is 255, this means this shader input isn't set before. So try again!
+			if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+				LOG_ERROR_TAPI("You already set shader input buffer, you can't change it at the same frame!");
+				return TAPI_WRONGTIMING;
+			}
+		}
+		VkDeviceSize FinalOffset = static_cast<VkDeviceSize>(TargetOffset);
+		switch (TYPE) {
+		case GFX_API::BUFFER_TYPE::STAGING:
+		case GFX_API::BUFFER_TYPE::GLOBAL:
+			FindBufferOBJ_byBufType(TargetBufferHandle, TYPE, DescElement.Info.buffer, FinalOffset);
+			break;
+		default:
+			LOG_NOTCODED_TAPI("SetComputeBuffer() doesn't support this type of target buffers!", true);
+			return TAPI_NOTCODED;
+		}
+		DescElement.Info.offset = FinalOffset;
+		DescElement.Info.range = static_cast<VkDeviceSize>(BoundDataSize);
+		DescElement.IsUpdated.store(1);
+		VK_DescSetUpdateCall call;
+		call.Set = Set;
+		call.BindingIndex = BINDINDEX;
+		call.ElementIndex = ELEMENTINDEX;
+		if (isUsedRecently) {
+			call.Set->ShouldRecreate.store(1);
+			DescSets_toCreateUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		else {
+			DescSets_toJustUpdate.push_back(GFX->JobSys->GetThisThreadIndex(), call);
+		}
+		return TAPI_SUCCESS;
+	}
+	TAPIResult GPU_ContentManager::SetComputeTexture(GFX_API::GFXHandle ComputeType_orInstance, bool isComputeType, bool isUsedRecently, unsigned int BINDINDEX,
+		GFX_API::GFXHandle TextureHandle, bool isSampledTexture, unsigned int ELEMENTINDEX, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) {
+		VK_DescSet* Set = nullptr;
+		if (isComputeType) {
+			VK_ComputePipeline* PSO = GFXHandleConverter(VK_ComputePipeline*, ComputeType_orInstance);
+			Set = &PSO->General_DescSet;
+		}
+		else {
+			VK_ComputeInstance* PSO = GFXHandleConverter(VK_ComputeInstance*, ComputeType_orInstance);
+			Set = &PSO->DescSet;
+		}
+
+		if (!Set->DescCount) {
+			LOG_ERROR_TAPI("Given Compute Type/Instance doesn't have any shader input to set!");
+			return TAPI_FAIL;
+		}
+		if (BINDINDEX >= Set->DescCount) {
+			LOG_ERROR_TAPI("BINDINDEX is exceeding the shader input count in the Compute Type/Instance");
+			return TAPI_FAIL;
+		}
+		VK_Descriptor& Descriptor = Set->Descs[BINDINDEX];
+		if ((isSampledTexture && Descriptor.Type != DescType::SAMPLER) ||
+			(!isSampledTexture && Descriptor.Type != DescType::IMAGE)) {
+			LOG_ERROR_TAPI("BINDINDEX is pointing to some other type of shader input!");
+			return TAPI_FAIL;
+		}
+		if (ELEMENTINDEX >= Descriptor.ElementCount) {
+			LOG_ERROR_TAPI("You gave SetComputeTexture() an overflowing ELEMENTINDEX!");
 			return TAPI_FAIL;
 		}
 		VK_DescImageElement& DescElement = GFXHandleConverter(VK_DescImageElement*, Descriptor.Elements)[ELEMENTINDEX];

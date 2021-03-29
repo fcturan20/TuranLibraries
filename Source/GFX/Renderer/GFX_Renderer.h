@@ -32,7 +32,8 @@ namespace GFX_API {
 		virtual void Destroy_RenderGraph() = 0;
 		//SubDrawPassIDs is used to return created SubDrawPasses IDs and DrawPass ID
 		//SubDrawPassIDs argument array's order is in the order of passed SubDrawPass_Description vector
-		virtual TAPIResult Create_DrawPass(const vector<SubDrawPass_Description>& SubDrawPasses, GFXHandle RTSLOTSET_ID, const vector<GFX_API::PassWait_Description>& WAITs, const char* NAME, vector<GFXHandle>& SubDrawPassIDs, GFXHandle& DPHandle) = 0;
+		virtual TAPIResult Create_DrawPass(const vector<SubDrawPass_Description>& SubDrawPasses, GFXHandle RTSLOTSET_ID, const vector<GFX_API::PassWait_Description>& WAITs, 
+			const char* NAME, vector<GFXHandle>& SubDrawPassIDs, GFXHandle& DPHandle) = 0;
 		/*
 		* There are 4 types of TransferPasses and each type only support its type of GFXContentManager command: Barrier, Copy, Upload, Download
 		* Barrier means passes waits for the given resources (also image usage changes may happen that may change layout of the image)
@@ -56,6 +57,9 @@ namespace GFX_API {
 		*/
 		virtual TAPIResult Create_TransferPass(const vector<PassWait_Description>& WaitDescriptions, const TRANFERPASS_TYPE& TP_TYPE, const string& NAME, GFX_API::GFXHandle& TPHandle) = 0;
 		virtual TAPIResult Create_WindowPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, const string& NAME, GFX_API::GFXHandle& WindowPassHandle) = 0;
+
+		virtual TAPIResult Create_ComputePass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, unsigned int SubComputePassCount,
+			const string& NAME, GFX_API::GFXHandle& CPHandle) = 0;
 
 		//Rendering Functions
 
@@ -86,7 +90,7 @@ namespace GFX_API {
 		virtual void ImageBarrier(GFX_API::GFXHandle BarrierTPHandle, GFX_API::GFXHandle TextureHandle, const GFX_API::IMAGE_ACCESS& LAST_ACCESS
 			, const GFX_API::IMAGE_ACCESS& NEXT_ACCESS, unsigned int TargetMipLevel = UINT32_MAX, GFX_API::CUBEFACE TargetCubeMapFace = GFX_API::CUBEFACE::FRONT) = 0;
 		virtual void ChangeDrawPass_RTSlotSet(GFX_API::GFXHandle DrawPassHandle, GFX_API::GFXHandle RTSlotSetHandle) = 0;
-
+		virtual void Dispatch_Compute(GFX_API::GFXHandle ComputePassHandle, GFX_API::GFXHandle ComputeInstanceHandle, unsigned int SubComputePassIndex, uvec3 DispatchSize) = 0;
 
 
 		unsigned char GetCurrentFrameIndex();

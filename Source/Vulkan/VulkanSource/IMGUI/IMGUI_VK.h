@@ -11,5 +11,6 @@ namespace Vulkan {
 		//Creates command pool/buffer and sends font textures
 		void UploadFontTextures();
 		void Destroy_IMGUIResources();
+		static void DisplayTexture(GFX_API::GFXHandle TextureHandle, const unsigned int& Display_WIDTH, const unsigned int& Display_HEIGHT, bool should_Flip_Vertically);
 	};
 }

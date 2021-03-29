@@ -46,13 +46,12 @@ namespace GFX_API {
 	};
 	//Don't forget to inherite a SlotSet with GFXRenderer->Inherite_RTSlotSet() and pass the handle to BASESLOTSET
 	//If you set BASESLOTSET as a Base Slot Set, it is Undefined Behaviour!
-	//WaitedStage specifies which shader stage are you waiting to finish from the previous Subpass of the same DrawPass
-	//ContinueStage specifies which shader stage is gonna continue executing after WaitedStage has finished
+	//WaitOp specifies which shader stage are you waiting to finish from the previous Subpass of the same DrawPass
+	//ContinueOp specifies which shader stage is gonna continue executing after WaitedStage has finished
 	struct GFXAPI SubDrawPass_Description {
 	public:
 		GFXHandle INHERITEDSLOTSET;
 		unsigned char SubDrawPass_Index;
-		SUBPASS_ACCESS WaitOp, ContinueOp;
+		SUBDRAWPASS_ACCESS WaitOp, ContinueOp;
 	};
-
 }

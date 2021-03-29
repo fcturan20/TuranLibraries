@@ -15,6 +15,8 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_ShaderSource*> SHADERSOURCEs;
 		TuranAPI::Threading::TLVector<VK_GraphicsPipeline*> SHADERPROGRAMs;
 		TuranAPI::Threading::TLVector<VK_PipelineInstance*> SHADERPINSTANCEs;
+		TuranAPI::Threading::TLVector<VK_ComputePipeline*> COMPUTETYPEs;
+		TuranAPI::Threading::TLVector<VK_ComputeInstance*> COMPUTEINSTANCEs;
 		TuranAPI::Threading::TLVector<VK_Sampler*> SAMPLERs;
 		TuranAPI::Threading::TLVector<VK_VertexAttribLayout*> VERTEXATTRIBLAYOUTs;
 		TuranAPI::Threading::TLVector<VK_RTSLOTSET*> RT_SLOTSETs;
@@ -45,6 +47,8 @@ namespace Vulkan {
 		VkDescriptorSet UnboundGlobalBufferDescSet, UnboundGlobalTextureDescSet; //These won't be deleted, just as a back buffer
 		VK_DescSet GlobalBuffers_DescSet, GlobalTextures_DescSet;
 		bool Create_DescSet(VK_DescSet* Set);
+		//Don't call this function outside of LinkMaterialType and Create_ComputeType!
+		bool VKDescSet_PipelineLayoutCreation(const vector<GFX_API::ShaderInput_Description>& inputdescs, VK_DescSet& GeneralDescSet, VK_DescSet& InstanceDescSet, VkPipelineLayout* layout);
 		//Create Global descriptor sets
 		void Resource_Finalizations();
 
@@ -110,7 +114,8 @@ namespace Vulkan {
 
 		virtual TAPIResult Compile_ShaderSource(const GFX_API::ShaderSource_Resource* SHADER, GFX_API::GFXHandle& ShaderSourceHandle) override;
 		virtual void Delete_ShaderSource(GFX_API::GFXHandle ASSET_ID) override;
-		virtual TAPIResult Compile_ComputeShader(GFX_API::ComputeShader_Resource* SHADER, GFX_API::GFXHandle* Handles, unsigned int Count) override;
+		virtual TAPIResult Create_ComputeType(GFX_API::ComputeShader_Resource* SHADER, GFX_API::GFXHandle& ComputeTypeHandle) override;
+		virtual TAPIResult Create_ComputeInstance(GFX_API::GFXHandle ComputeType, GFX_API::GFXHandle& ComputeInstanceHandle) override;
 		virtual void Delete_ComputeShader(GFX_API::GFXHandle ASSET_ID) override;
 		virtual TAPIResult Link_MaterialType(const GFX_API::Material_Type& MATTYPE_ASSET, GFX_API::GFXHandle& MaterialHandle) override;
 		virtual void Delete_MaterialType(GFX_API::GFXHandle Asset_ID) override;
@@ -119,6 +124,10 @@ namespace Vulkan {
 		virtual TAPIResult SetMaterialBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
 			GFX_API::GFXHandle TargetBufferHandle, bool isUniformBuffer, GFX_API::BUFFER_TYPE TYPE, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize) override;
 		virtual TAPIResult SetMaterialTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+			GFX_API::GFXHandle TextureHandle, bool isSampledTexture, unsigned int ELEMENTINDEX, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) override;
+		virtual TAPIResult SetComputeBuffer(GFX_API::GFXHandle ComputeType_orInstance, bool isComputeType, bool isUsedRecently, unsigned int BINDINDEX,
+			GFX_API::GFXHandle TargetBufferHandle, bool isUniformBufferShaderInput, GFX_API::BUFFER_TYPE TYPE, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize) override;
+		virtual TAPIResult SetComputeTexture(GFX_API::GFXHandle ComputeType_orInstance, bool isComputeType, bool isUsedRecently, unsigned int BINDINDEX,
 			GFX_API::GFXHandle TextureHandle, bool isSampledTexture, unsigned int ELEMENTINDEX, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) override;
 
 		virtual TAPIResult Create_RTSlotset(const vector<GFX_API::RTSLOT_Description>& Descriptions, GFX_API::GFXHandle& RTSlotSetHandle) override;

@@ -226,6 +226,39 @@ namespace Vulkan {
 			}
 		}
 		break;
+		case PassType::CP:
+		{
+			VK_ComputePass* CP = GFXHandleConverter(VK_ComputePass*, CurrentPass->Handle);
+			bool isdependencyfound = false;
+			for (unsigned char WaitIndex = 0; WaitIndex < CP->WAITs.size(); WaitIndex++) {
+				if (*CP->WAITs[WaitIndex].WaitedPass == LastPass->Handle) {
+					isdependencyfound = true;
+					vkCmdPipelineBarrier(CB, Find_VkPipelineStages(CP->WAITs[WaitIndex].WaitedStage), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+						0, nullptr, 0, nullptr, 0, nullptr);
+					break;
+				}
+			}
+
+			if (!isdependencyfound) {
+				switch (LastPass->TYPE) {
+				case PassType::DP:
+					vkCmdPipelineBarrier(CB, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+						0, nullptr, 0, nullptr, 0, nullptr);
+					break;
+				case PassType::TP:
+					vkCmdPipelineBarrier(CB, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+						0, nullptr, 0, nullptr, 0, nullptr);
+					break;
+				case PassType::CP:
+					vkCmdPipelineBarrier(CB, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+						0, nullptr, 0, nullptr, 0, nullptr);
+					break;
+				default:
+					LOG_NOTCODED_TAPI("This type of barrier isn't supported to set in wait barrier for now!", true);
+				}
+			}
+		}
+		break;
 		default:
 			LOG_NOTCODED_TAPI("This pass type isn't coded for recording yet!", true);
 		}
@@ -294,6 +327,64 @@ namespace Vulkan {
 			}
 		}
 	}
+
+	void Record_ComputePass(VkCommandBuffer CB, VK_ComputePass* CP) {
+		for (unsigned int SPIndex = 0; SPIndex < CP->Subpasses.size(); SPIndex++) {
+			VK_SubComputePass& SP = CP->Subpasses[SPIndex];
+			std::unique_lock<std::mutex> Locker;
+			SP.Dispatches.PauseAllOperations(Locker);
+			for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+				for (unsigned int DispatchIndex = 0; DispatchIndex < SP.Dispatches.size(ThreadID); DispatchIndex++) {
+					VK_DispatchCall& dc = SP.Dispatches.get(ThreadID, DispatchIndex);
+					vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_COMPUTE, dc.Pipeline);
+					if (*dc.InstanceSet) {
+						if (*dc.GeneralSet) {
+							VkDescriptorSet Sets[4] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set,
+								* dc.GeneralSet, * dc.InstanceSet };
+							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_COMPUTE, dc.Layout, 0, 4, Sets, 0, nullptr);
+						}
+						else {
+							VkDescriptorSet Sets[3] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set,
+								* dc.InstanceSet };
+							vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_COMPUTE, dc.Layout, 0, 3, Sets, 0, nullptr);
+						}
+					}
+					else if (*dc.GeneralSet) {
+						VkDescriptorSet Sets[3] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set,
+								* dc.GeneralSet };
+						vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_COMPUTE, dc.Layout, 0, 3, Sets, 0, nullptr);
+					}
+					else {
+						VkDescriptorSet Sets[2] = { VKContentManager->GlobalBuffers_DescSet.Set, VKContentManager->GlobalTextures_DescSet.Set };
+						vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_COMPUTE, dc.Layout, 0, 2, Sets, 0, nullptr);
+					}
+					vkCmdDispatch(CB, dc.DispatchSize.x, dc.DispatchSize.y, dc.DispatchSize.z);
+				}
+				SP.Dispatches.clear(ThreadID);
+			}
+			{
+				vector<VkBufferMemoryBarrier> Buf_MBs;
+				std::unique_lock<std::mutex> BufferLocker;
+				SP.Barriers_AfterSubpassExecutions.BufferBarriers.PauseAllOperations(BufferLocker);
+				vector<VkImageMemoryBarrier> Im_MBs;
+				std::unique_lock<std::mutex> ImLocker;
+				SP.Barriers_AfterSubpassExecutions.TextureBarriers.PauseAllOperations(ImLocker);
+				for (unsigned int ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+					for (unsigned int BarrierIndex = 0; BarrierIndex < SP.Barriers_AfterSubpassExecutions.BufferBarriers.size(ThreadID); BarrierIndex++) {
+						VK_BufBarrierInfo& buf_i = SP.Barriers_AfterSubpassExecutions.BufferBarriers.get(ThreadID, BarrierIndex);
+						Buf_MBs.push_back(buf_i.Barrier);
+					}
+					for (unsigned int BarrierIndex = 0; BarrierIndex < SP.Barriers_AfterSubpassExecutions.TextureBarriers.size(ThreadID); BarrierIndex++) {
+						VK_ImBarrierInfo& im_i = SP.Barriers_AfterSubpassExecutions.TextureBarriers.get(ThreadID, BarrierIndex);
+						Im_MBs.push_back(im_i.Barrier);
+					}
+				}
+				vkCmdPipelineBarrier(CB, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 
+					Buf_MBs.size(), Buf_MBs.data(), Im_MBs.size(), Im_MBs.data());
+			}
+		}
+	}
+
 	void RecordRGBranchCalls(VK_RGBranch& Branch, VkCommandBuffer CB) {
 		unsigned char PassElementIndex = 0;
 		VK_BranchPass* LastPass = nullptr;
@@ -342,6 +433,9 @@ namespace Vulkan {
 			break;
 			case PassType::WP:
 				LOG_CRASHING_TAPI("This shouldn't happen, it should've been returned early!");
+				break;
+			case PassType::CP:
+				Record_ComputePass(CB, GFXHandleConverter(VK_ComputePass*, CurrentPass->Handle));
 				break;
 			default:
 				LOG_NOTCODED_TAPI("This pass type isn't coded for recording yet!", true);

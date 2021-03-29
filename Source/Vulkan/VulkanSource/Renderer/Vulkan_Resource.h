@@ -154,17 +154,26 @@ namespace Vulkan {
 	};
 	struct VK_API VK_PipelineInstance {
 		VK_GraphicsPipeline* PROGRAM;
-
 		VK_DescSet DescSet;
 	};
 	struct VK_API VK_Sampler {
 		VkSampler Sampler;
 	};
+	struct VK_API VK_ComputePipeline {
+		VkPipeline PipelineObject;
+		VkPipelineLayout PipelineLayout;
+		VK_DescSet General_DescSet, Instance_DescSet;
+	};
+	struct VK_API VK_ComputeInstance {
+		VK_ComputePipeline* PROGRAM;
+		VK_DescSet DescSet;
+	};
 
 
 
 
-	//RenderNodes
+								//RENDER NODEs
+
 
 	enum class PassType : unsigned char {
 		ERROR = 0,
@@ -173,9 +182,10 @@ namespace Vulkan {
 		CP = 3,
 		WP = 4,
 	};
-	struct VK_ImDownloadInfo {
-		VK_Texture* IMAGE;
-	};
+
+
+
+	//TRANSFER PASS
 
 	struct VK_BUFtoIMinfo {
 		VkImage TargetImage;
@@ -207,6 +217,7 @@ namespace Vulkan {
 		TuranAPI::Threading::TLVector<VK_ImBarrierInfo> TextureBarriers;
 		TuranAPI::Threading::TLVector<VK_BufBarrierInfo> BufferBarriers;
 		VK_TPBarrierDatas();
+		VK_TPBarrierDatas(const VK_TPBarrierDatas& copyfrom);
 	};
 
 	struct VK_TransferPass {
@@ -215,6 +226,31 @@ namespace Vulkan {
 		GFX_API::TRANFERPASS_TYPE TYPE;
 		string NAME;
 	};
+
+	//COMPUTE PASS
+
+	struct VK_DispatchCall {
+		VkPipelineLayout Layout = VK_NULL_HANDLE;
+		VkPipeline Pipeline = VK_NULL_HANDLE;
+		VkDescriptorSet* GeneralSet = nullptr, *InstanceSet = nullptr;
+		uvec3 DispatchSize;
+	};
+
+	struct VK_SubComputePass {
+		VK_TPBarrierDatas Barriers_AfterSubpassExecutions;
+		TuranAPI::Threading::TLVector<VK_DispatchCall> Dispatches;
+		VK_SubComputePass();
+		bool isThereWorkload();
+	};
+
+	struct VK_ComputePass {
+		vector<VK_SubComputePass> Subpasses;
+		atomic_bool SubPassList_Updated = false;
+		vector<GFX_API::PassWait_Description> WAITs;
+		string NAME;
+	};
+
+	//DRAW PASS
 
 	struct VK_NonIndexedDrawCall {
 		VkBuffer VBuffer;
@@ -258,6 +294,8 @@ namespace Vulkan {
 		GFX_API::BoxRegion RenderRegion;
 		vector<GFX_API::PassWait_Description> WAITs;
 	};
+
+	//WINDOW PASS
 
 	struct VK_API VK_WindowCall {
 		WINDOW* Window;

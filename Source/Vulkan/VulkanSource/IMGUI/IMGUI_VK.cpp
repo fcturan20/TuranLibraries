@@ -128,4 +128,15 @@ namespace Vulkan {
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
 	}
+
+	void IMGUI_VK::DisplayTexture(GFX_API::GFXHandle TextureHandle, const unsigned int& Display_WIDTH, const unsigned int& Display_HEIGHT, bool should_Flip_Vertically) {
+		VK_Texture* im = GFXHandleConverter(VK_Texture*, TextureHandle);
+		
+		if (should_Flip_Vertically) {
+			ImGui::Image((ImTextureID)(intptr_t)im->Image, ImVec2(Display_WIDTH, Display_HEIGHT), ImVec2(0, 1), ImVec2(1, 0));
+		}
+		else {
+			ImGui::Image((ImTextureID)(intptr_t)im->Image, ImVec2(Display_WIDTH, Display_HEIGHT));
+		}
+	}
 }

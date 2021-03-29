@@ -148,6 +148,9 @@ namespace Vulkan {
 			case PassType::WP:
 				std::cout << "Execution Order: " + to_string(GPIndex) + " and WP Name: " + GFXHandleConverter(VK_WindowPass*, Pass.Handle)->NAME << std::endl;
 				break;
+			case PassType::CP:
+				std::cout << "Execution Order: " + to_string(GPIndex) + " and CP Name: " + GFXHandleConverter(VK_ComputePass*, Pass.Handle)->NAME << std::endl;
+				break;
 			default:
 				LOG_NOTCODED_TAPI("PrintRBSpecs() is not coded for this type of Pass!", true);
 				break;
@@ -647,7 +650,7 @@ namespace Vulkan {
 			return;
 		}
 	}
-	void Create_FrameGraphs(const vector<VK_DrawPass*>& DrawPasses, const vector<VK_TransferPass*>& TransferPasses, const vector<VK_WindowPass*>& WindowPasses, VK_FrameGraph* FrameGraphs) {
+	void Create_FrameGraphs(const vector<VK_DrawPass*>& DrawPasses, const vector<VK_TransferPass*>& TransferPasses, const vector<VK_WindowPass*>& WindowPasses, const vector<VK_ComputePass*>& ComputePasses, VK_FrameGraph* FrameGraphs) {
 		TURAN_PROFILE_SCOPE_MCS("Create_FrameGraphs()");
 		vector<VK_GeneralPass> AllPasses;
 		vector<VK_RenderingPath*> RPs;
@@ -684,6 +687,16 @@ namespace Vulkan {
 				GP.Handle = TP;
 				GP.WAITs = &TP->WAITs;
 				GP.PASSNAME = &TP->NAME;
+				AllPasses.push_back(GP);
+			}
+			//Do the same thing to the CPs too
+			for (unsigned char CPIndex = 0; CPIndex < ComputePasses.size(); CPIndex++) {
+				VK_ComputePass* CP = ComputePasses[CPIndex];
+				VK_GeneralPass GP;
+				GP.TYPE = PassType::CP;
+				GP.Handle = CP;
+				GP.WAITs = &CP->WAITs;
+				GP.PASSNAME = &CP->NAME;
 				AllPasses.push_back(GP);
 			}
 			for (unsigned char DPIndex = 0; DPIndex < DrawPasses.size(); DPIndex++) {
@@ -741,6 +754,25 @@ namespace Vulkan {
 				}
 				else {
 					PushBack_ToGPLinkedList(&AllPasses[TPIndex + DrawPasses.size() + WindowPasses.size()], GPHeader);
+				}
+			}
+			for (unsigned char CPIndex = 0; CPIndex < ComputePasses.size(); CPIndex++) {
+				VK_ComputePass* CP = ComputePasses[CPIndex];
+				//Check if it is root CP and if it is not, then pass it to the RPless_passes
+				bool is_RootCP = false;
+				if (CP->WAITs.size() == 0) {
+					is_RootCP = true;
+				}
+				for (unsigned char WaitIndex = 0; WaitIndex < CP->WAITs.size(); WaitIndex++) {
+					if (!CP->WAITs[WaitIndex].WaitLastFramesPass && FindWaitedPassType(CP->WAITs[WaitIndex].WaitedStage) != PassType::WP) {
+						is_RootCP = false;
+					}
+				}
+				if (is_RootCP) {
+					Create_NewRP(&AllPasses[CPIndex + DrawPasses.size() + WindowPasses.size() + TransferPasses.size()], RPs);
+				}
+				else {
+					PushBack_ToGPLinkedList(&AllPasses[CPIndex + DrawPasses.size() + WindowPasses.size() + TransferPasses.size()], GPHeader);
 				}
 			}
 
@@ -812,6 +844,12 @@ namespace Vulkan {
 							}
 							break;
 							case PassType::WP:
+							{
+								Branch.CorePasses[PassIndex].Handle = GP->Handle;
+								Branch.CorePasses[PassIndex].TYPE = GP->TYPE;
+							}
+							break;
+							case PassType::CP:
 							{
 								Branch.CorePasses[PassIndex].Handle = GP->Handle;
 								Branch.CorePasses[PassIndex].TYPE = GP->TYPE;
@@ -1081,18 +1119,9 @@ namespace Vulkan {
 	void CreateSubmit_ForRGB(VK_FrameGraph* CurrentFG, unsigned char BranchIndex, VK_FrameGraph* LastFG, VK_QUEUE* AttachQueue, vector<unsigned char>& SubmitlessBranches, unsigned char& NumberofSubmitless_RGBs) {
 		VK_RGBranch& MainBranch = CurrentFG->FrameGraphTree[BranchIndex];
 		VK_Submit* NewSubmit = new VK_Submit;
-		NewSubmit->Run_Queue = AttachQueue;
-		if (!MainBranch.DynamicLaterExecutes.size()) {
-			NewSubmit->is_EndSubmit = true;
-			NewSubmit->is_Ended = true;
-		}
-		//End Submit should be called to deactivate this submit!
-		else {
-			AttachQueue->ActiveSubmits.push_back(NewSubmit);
-		}
-		CurrentFG->CurrentFrameSubmits.push_back(NewSubmit);
 
 		//Merge Barrier TP only branches
+		bool isBarrierTPOnly_andMerged = false;
 		if (!MainBranch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported) {
 			for (unsigned char CFDBVectorIndex = 0; CFDBVectorIndex < MainBranch.CFDynamicDependents.size(); CFDBVectorIndex++) {
 				unsigned char CFDBIndex = MainBranch.CFDynamicDependents[CFDBVectorIndex];
@@ -1103,6 +1132,11 @@ namespace Vulkan {
 					NewSubmit->BranchIndexes.push_back(CFDBIndex + 1);
 					CFDBranch.AttachedSubmit = NewSubmit;
 					EraseFromSubmitlessList(CFDBIndex, SubmitlessBranches, NumberofSubmitless_RGBs);
+					isBarrierTPOnly_andMerged = true;
+					MainBranch.CFNeeded_QueueSpecs.is_COMPUTEsupported |= CFDBranch.CFNeeded_QueueSpecs.is_COMPUTEsupported;
+					MainBranch.CFNeeded_QueueSpecs.is_GRAPHICSsupported |= CFDBranch.CFNeeded_QueueSpecs.is_GRAPHICSsupported;
+					MainBranch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported |= CFDBranch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported;
+					MainBranch.CFNeeded_QueueSpecs.is_TRANSFERsupported |= CFDBranch.CFNeeded_QueueSpecs.is_TRANSFERsupported;
 					continue;
 				}
 				else {
@@ -1110,6 +1144,20 @@ namespace Vulkan {
 				}
 			}
 		}
+		//If main branch is Barrier TP Only, other branches that main branch depends on should be used to select the eun queue
+		if (isBarrierTPOnly_andMerged) {
+			AttachQueue = FindAvailableQueue(MainBranch.CFNeeded_QueueSpecs);
+		}
+		NewSubmit->Run_Queue = AttachQueue;
+		if (!MainBranch.DynamicLaterExecutes.size()) {
+			NewSubmit->is_EndSubmit = true;
+			NewSubmit->is_Ended = true;
+		}
+		//End Submit should be called to deactivate this submit!
+		else {
+			AttachQueue->ActiveSubmits.push_back(NewSubmit);
+		}
+		CurrentFG->CurrentFrameSubmits.push_back(NewSubmit);
 
 		//Attach the main branch to new submit
 		NewSubmit->BranchIndexes.push_back(BranchIndex + 1);

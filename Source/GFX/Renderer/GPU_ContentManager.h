@@ -105,7 +105,8 @@ namespace GFX_API {
 		virtual TAPIResult Compile_ShaderSource(const GFX_API::ShaderSource_Resource* SHADER, GFX_API::GFXHandle& ShaderSourceHandle) = 0;
 		virtual void Delete_ShaderSource(GFXHandle ID) = 0;
 		//Return handle to reference in GFX!
-		virtual TAPIResult Compile_ComputeShader(GFX_API::ComputeShader_Resource* SHADER, GFX_API::GFXHandle* Handles, unsigned int Count) = 0;
+		virtual TAPIResult Create_ComputeType(GFX_API::ComputeShader_Resource* SHADER, GFX_API::GFXHandle& ComputeTypeHandle) = 0;
+		virtual TAPIResult Create_ComputeInstance(GFX_API::GFXHandle ComputeType, GFX_API::GFXHandle& ComputeInstanceHandle) = 0;
 		virtual void Delete_ComputeShader(GFXHandle ID) = 0;
 		//Return handle to reference in GFX!
 		virtual TAPIResult Link_MaterialType(const GFX_API::Material_Type& MATTYPE_ASSET, GFX_API::GFXHandle& MaterialHandle) = 0;
@@ -114,10 +115,16 @@ namespace GFX_API {
 		virtual TAPIResult Create_MaterialInst(GFX_API::GFXHandle MaterialType, GFX_API::GFXHandle& MaterialInstHandle) = 0;
 		virtual void Delete_MaterialInst(GFXHandle ID) = 0;
 		//If isMaterialType is false, MaterialType_orInstance input will be proccessed as MaterialInstance handle
-		//IsUsedRecently means is the material type/instance used in last two frames. This is necessary for Vulkan synchronization process.
+		//IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
 		virtual TAPIResult SetMaterialBuffer(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
 			GFX_API::GFXHandle TargetBufferHandle, bool isUniformBufferShaderInput, GFX_API::BUFFER_TYPE TYPE, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize) = 0;
 		virtual TAPIResult SetMaterialTexture(GFX_API::GFXHandle MaterialType_orInstance, bool isMaterialType, bool isUsedRecently, unsigned int BINDINDEX,
+			GFX_API::GFXHandle TextureHandle, bool isSampledTexture, unsigned int ELEMENTINDEX, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) = 0;
+		//If isComputeType is false, ComputeType_orInstance input will be proccessed as ComputeInstance handle
+		//IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
+		virtual TAPIResult SetComputeBuffer(GFX_API::GFXHandle ComputeType_orInstance, bool isComputeType, bool isUsedRecently, unsigned int BINDINDEX,
+			GFX_API::GFXHandle TargetBufferHandle, bool isUniformBufferShaderInput, GFX_API::BUFFER_TYPE TYPE, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize) = 0;
+		virtual TAPIResult SetComputeTexture(GFX_API::GFXHandle ComputeType_orInstance, bool isComputeType, bool isUsedRecently, unsigned int BINDINDEX,
 			GFX_API::GFXHandle TextureHandle, bool isSampledTexture, unsigned int ELEMENTINDEX, GFX_API::GFXHandle SamplingType, GFX_API::IMAGE_ACCESS usage) = 0;
 
 

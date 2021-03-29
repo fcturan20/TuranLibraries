@@ -166,6 +166,12 @@ namespace TuranAPI {
 				PerThreadVectors = new std::vector<T>[JobSys.GetThreadCount()];
 				ThreadCount = JobSys.GetThreadCount();
 			}
+			TLVector(const TLVector<T>& copyfrom) {
+				PerThreadVectors->resize(copyfrom.ThreadCount);
+				for (unsigned char ThreadID = 0; ThreadID < copyfrom.ThreadCount; ThreadID++) {
+					PerThreadVectors[ThreadID] = copyfrom.PerThreadVectors[ThreadID];
+				}
+			}
 			T& get(unsigned char ThreadID, unsigned int ElementIndex) {
 				return PerThreadVectors[ThreadID][ElementIndex];
 			}

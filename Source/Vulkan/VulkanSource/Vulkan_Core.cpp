@@ -80,6 +80,8 @@ namespace Vulkan {
 
 		IMGUI_o = new GFX_API::IMGUI_Core;
 		VK_IMGUI = new IMGUI_VK;
+		IMGUI_o->Display_Texture = VK_IMGUI->DisplayTexture;
+
 
 		LOG_STATUS_TAPI("VulkanCore: Vulkan systems are started!");
 		return TAPI_SUCCESS;
@@ -793,13 +795,15 @@ namespace Vulkan {
 	void Vulkan_Core::Destroy_GFX_Resources() {
 		GPU* Vulkan_GPU = GFXHandleConverter(GPU*, GPU_TO_RENDER);
 
+		vkDeviceWaitIdle(Vulkan_GPU->Logical_Device);
+		//Destroy dear IMGUI
+		VK_IMGUI->Destroy_IMGUIResources();
 		VkDescriptorPool IMGUIPOOL = ((Renderer*)RENDERER)->IMGUIPOOL;
 		delete (Renderer*)RENDERER;
 		delete (GPU_ContentManager*)ContentManager;
-		//Destroy dear IMGUI
-		VK_IMGUI->Destroy_IMGUIResources();
 		vkDestroyDescriptorPool(Vulkan_GPU->Logical_Device, IMGUIPOOL, nullptr);
 
+		vector<VkSurfaceKHR> Destroy_SurfaceOBJs;
 		//Close windows and delete related datas
 		for (unsigned int WindowIndex = 0; WindowIndex < WINDOWs.size(); WindowIndex++) {
 			WINDOW* window = GFXHandleConverter(WINDOW*, WINDOWs[WindowIndex]);
@@ -809,8 +813,8 @@ namespace Vulkan {
 			vkDestroyImageView(Vulkan_GPU->Logical_Device, Texture1->ImageView, nullptr);
 
 			vkDestroySwapchainKHR(Vulkan_GPU->Logical_Device, window->Window_SwapChain, nullptr);
-			vkDestroySurfaceKHR(VK_States.Vulkan_Instance, window->Window_Surface, nullptr);
-			glfwDestroyWindow(window->GLFW_WINDOW);
+			Destroy_SurfaceOBJs.push_back(window->Window_Surface);
+			//delete window;
 		}
 
 		//Free the allocated memories
@@ -842,6 +846,11 @@ namespace Vulkan {
 		if (VK_States.Debug_Messenger) {
 			VK_States.vkDestroyDebugUtilsMessengerEXT()(VK_States.Vulkan_Instance, VK_States.Debug_Messenger, nullptr);
 		}
+
+		for (unsigned int SurfaceOBJIndex = 0; SurfaceOBJIndex < Destroy_SurfaceOBJs.size(); SurfaceOBJIndex++) {
+			vkDestroySurfaceKHR(VK_States.Vulkan_Instance, Destroy_SurfaceOBJs[SurfaceOBJIndex], nullptr);
+		}
+
 		vkDestroyInstance(VK_States.Vulkan_Instance, nullptr);
 
 		glfwTerminate();

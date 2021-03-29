@@ -2,7 +2,8 @@
 using namespace TuranEditor;
 
 //Useful rendergraph handles to use later
-GFX_API::GFXHandle DEPTHRT, FIRSTDRAWPASS_ID, WorldSubpassID, IMGUISubpassID, WP_ID, BarrierBeforeUpload_ID, UploadTP_ID, BarrierAfterUpload_ID, BarrierAfterDraw_ID, RTSlotSet_ID;
+GFX_API::GFXHandle DEPTHRT, FIRSTDRAWPASS_ID, WorldSubpassID, IMGUISubpassID, WP_ID, BarrierBeforeUpload_ID, UploadTP_ID, BarrierAfterUpload_ID, BarrierAfterDraw_ID, RTSlotSet_ID,
+	FirstCP_ID;
 //Window handles
 GFX_API::GFXHandle AlitaSwapchains[2], AlitaWindowHandle;
 
@@ -88,13 +89,16 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	
 	//Create Global Shader Inputs before the RenderGraph Construction
 	
-	GFX_API::GFXHandle FirstGlobalBuffer, FirstGlobalTexture;
-	GFXContentManager->Create_GlobalBuffer("CameraData", 256, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false),
-		3, FirstGlobalBuffer);
-	if (GFXContentManager->SetGlobalBuffer(true, 0, false, FirstGlobalBuffer, 0, 256) != TAPI_SUCCESS) {
-		LOG_CRASHING_TAPI("Failed to set global buffer!");
+	GFX_API::GFXHandle Raster_GlobalBuffer;
+	GFXContentManager->Create_GlobalBuffer("CameraData", 256, true, GFX_API::Create_ShaderStageFlag(true, false, false, false, false, false),
+		3, Raster_GlobalBuffer);
+	if (GFXContentManager->SetGlobalBuffer(true, 0, false, Raster_GlobalBuffer, 0, 256) != TAPI_SUCCESS) {
+		LOG_CRASHING_TAPI("Failed to set Raster global buffer!");
 	}
 
+
+	GFX_API::GFXHandle RT_GlobalBuffer, RT_GlobalTexture;
+	GFXContentManager->Create_GlobalBuffer("RT_CameraandLight", 8096, true, GFX_API::Create_ShaderStageFlag(false, false, false, false, false, true), 3, RT_GlobalBuffer);
 
 	GFX_API::GFXHandle StagingBuffer;
 	if (GFXContentManager->Create_StagingBuffer(1024 * 1024 * 50, 3, StagingBuffer) != TAPI_SUCCESS) {
@@ -146,6 +150,18 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 
 			GFXRENDERER->Create_TransferPass({ Upload_dep, WP_dep }, GFX_API::TRANFERPASS_TYPE::TP_BARRIER, "BarrierAfterUpload", BarrierAfterUpload_ID);
 		}
+		
+		{
+			GFX_API::PassWait_Description BarrierAfterUpload_dep;
+			BarrierAfterUpload_dep.WaitedPass = &BarrierAfterUpload_ID;
+			BarrierAfterUpload_dep.WaitedStage.TRANSFERCMD = true;
+			BarrierAfterUpload_dep.WaitLastFramesPass = false;
+
+			if (GFXRENDERER->Create_ComputePass({ BarrierAfterUpload_dep }, 3, "FirstCompute", FirstCP_ID) != TAPI_SUCCESS) {
+				LOG_CRASHING_TAPI("First Compute Pass creation has failed!");
+			}
+		}
+
 
 		//Create RTs, Base RTSlotSet and the inherited one!
 		GFX_API::GFXHandle ISlotSetID;
@@ -172,17 +188,17 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			GFX_API::SubDrawPass_Description IMGUISubpass_desc;
 			IMGUISubpass_desc.INHERITEDSLOTSET = ISlotSetID;
 			IMGUISubpass_desc.SubDrawPass_Index = 1;
-			IMGUISubpass_desc.WaitOp = GFX_API::SUBPASS_ACCESS::LATE_Z_READWRITE;
-			IMGUISubpass_desc.ContinueOp = GFX_API::SUBPASS_ACCESS::FRAGMENTRT_WRITEONLY;
+			IMGUISubpass_desc.WaitOp = GFX_API::SUBDRAWPASS_ACCESS::LATE_Z_READWRITE;
+			IMGUISubpass_desc.ContinueOp = GFX_API::SUBDRAWPASS_ACCESS::FRAGMENTRT_WRITEONLY;
 			vector<GFX_API::SubDrawPass_Description> DESCS{ WorldSubpass_desc, IMGUISubpass_desc };
 			vector<GFX_API::GFXHandle> SPs_ofFIRSTDP;
 
 
-			GFX_API::PassWait_Description FirstBarrierTP_dep;
-			FirstBarrierTP_dep.WaitedPass = &BarrierAfterUpload_ID;
-			FirstBarrierTP_dep.WaitedStage.TRANSFERCMD = true;
-			FirstBarrierTP_dep.WaitLastFramesPass = false;
-			GFXRENDERER->Create_DrawPass(DESCS, RTSlotSet_ID, { FirstBarrierTP_dep }, "FirstDP", SPs_ofFIRSTDP, FIRSTDRAWPASS_ID);
+			GFX_API::PassWait_Description BarrierAfterUpload_dep;
+			BarrierAfterUpload_dep.WaitedPass = &BarrierAfterUpload_ID;
+			BarrierAfterUpload_dep.WaitedStage.TRANSFERCMD = true;
+			BarrierAfterUpload_dep.WaitLastFramesPass = false;
+			GFXRENDERER->Create_DrawPass(DESCS, RTSlotSet_ID, { BarrierAfterUpload_dep }, "FirstDP", SPs_ofFIRSTDP, FIRSTDRAWPASS_ID);
 			WorldSubpassID = SPs_ofFIRSTDP[0];
 			IMGUISubpassID = SPs_ofFIRSTDP[1];
 		}
@@ -193,7 +209,12 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 			DP_dep.WaitedPass = &FIRSTDRAWPASS_ID;
 			DP_dep.WaitedStage.COLORRTOUTPUT = true;
 			DP_dep.WaitLastFramesPass = false;
-			GFXRENDERER->Create_TransferPass({ DP_dep }, GFX_API::TRANFERPASS_TYPE::TP_BARRIER, "Final Barrier TP", BarrierAfterDraw_ID);
+
+			GFX_API::PassWait_Description Compute_dep;
+			Compute_dep.WaitedPass = &FirstCP_ID;
+			Compute_dep.WaitedStage.COMPUTE = true;
+			Compute_dep.WaitLastFramesPass = false;
+			GFXRENDERER->Create_TransferPass({ DP_dep, Compute_dep }, GFX_API::TRANFERPASS_TYPE::TP_BARRIER, "Final Barrier TP", BarrierAfterDraw_ID);
 		}
 
 		//Create Window Pass
@@ -399,7 +420,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 		matrixes[2] = mat4(mat3(matrixes[1]));	//For Skybox
 		matrixes[3] = glm::perspective(glm::radians(45.0f), 1280.0f / 720.0f, 0.1f, 10000.0f);
 		
-		if (GFXContentManager->Upload_toBuffer(FirstGlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, &matrixes, 256, 0) != TAPI_SUCCESS) {
+		if (GFXContentManager->Upload_toBuffer(Raster_GlobalBuffer, GFX_API::BUFFER_TYPE::GLOBAL, &matrixes, 256, 0) != TAPI_SUCCESS) {
 			LOG_CRASHING_TAPI("Uploading the world matrix data has failed!");
 		}
 	}
@@ -407,9 +428,76 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	GFXContentManager->SetMaterialTexture(TEXTUREDISPLAY_MATTYPE, true, false, 0, GokuBlackTexture, true, 1, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEONLY);
 
 
+	GFX_API::GFXHandle COMPUTE_MATTYPE, COMPUTE_MATINST;
+	{
+		unsigned int CS_CODESIZE = 0;
+		char* CS_CODE = (char*)TAPIFILESYSTEM::Read_BinaryFile("C:/dev/VulkanRenderer/Content/FirstCompute.spv", CS_CODESIZE);
+		GFX_API::ComputeShader_Resource Compute_desc;
 
+
+		Compute_desc.LANGUAGE = GFX_API::SHADER_LANGUAGEs::SPIRV;
+		Compute_desc.SOURCE_CODE = CS_CODE; Compute_desc.CODE_SIZE = CS_CODESIZE;
+		{
+			GFX_API::ShaderInput_Description first_desc, second_desc, final_desc;
+			first_desc.BINDINGPOINT = 0;
+			first_desc.ELEMENTCOUNT = 1;
+			first_desc.NAME = "LIGHTs";
+			first_desc.SHADERSTAGEs.COMPUTE = true;
+			first_desc.TYPE = GFX_API::SHADERINPUT_TYPE::UBUFFER_G;
+			Compute_desc.SHADERINPUT_DESCs.push_back(first_desc);
+
+			second_desc.BINDINGPOINT = 1;
+			second_desc.ELEMENTCOUNT = 1;
+			second_desc.NAME = "RAYTRACE_CAMERA";
+			second_desc.SHADERSTAGEs.COMPUTE = true;
+			second_desc.TYPE = GFX_API::SHADERINPUT_TYPE::UBUFFER_G;
+			Compute_desc.SHADERINPUT_DESCs.push_back(second_desc);
+
+			final_desc.BINDINGPOINT = 2;
+			final_desc.ELEMENTCOUNT = 1;
+			final_desc.NAME = "OutputTexture";
+			final_desc.SHADERSTAGEs.COMPUTE = true;
+			final_desc.TYPE = GFX_API::SHADERINPUT_TYPE::IMAGE_G;
+			Compute_desc.SHADERINPUT_DESCs.push_back(final_desc);
+		}
+		if (GFXContentManager->Create_ComputeType(&Compute_desc, COMPUTE_MATTYPE) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("First Compute Type creation has failed!");
+		}
+
+		if (GFXContentManager->Create_ComputeInstance(COMPUTE_MATTYPE, COMPUTE_MATINST) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("First Compute Instance creation has failed!");
+		}
+
+		if (GFXContentManager->SetComputeBuffer(COMPUTE_MATTYPE, true, false, 0, RT_GlobalBuffer, true, GFX_API::BUFFER_TYPE::GLOBAL, 0, 0, 64) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Binding RT Global Buffer as general shader input 0 has failed!");
+		}
+		if (GFXContentManager->SetComputeBuffer(COMPUTE_MATTYPE, true, false, 1, RT_GlobalBuffer, true, GFX_API::BUFFER_TYPE::GLOBAL, 0, 0, 80) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Binding RT Global Buffer as general shader input 1 has failed!");
+		}
+
+		GFX_API::Texture_Description globtext_desc;
+		globtext_desc.CHANNEL_TYPE = GFX_API::TEXTURE_CHANNELs::API_TEXTURE_RGBA32F;
+		globtext_desc.DATAORDER = GFX_API::TEXTURE_ORDER::SWIZZLE;
+		globtext_desc.DIMENSION = GFX_API::TEXTURE_DIMENSIONs::TEXTURE_2D;
+		globtext_desc.HEIGHT = 500;
+		globtext_desc.WIDTH = 500;
+		globtext_desc.MIPCOUNT = 1;
+		globtext_desc.USAGE.isRandomlyWrittenTo = true;
+		globtext_desc.USAGE.isSampledReadOnly = true;
+		if (GFXContentManager->Create_Texture(globtext_desc, 0, RT_GlobalTexture) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("RT Global texture creation has failed!");
+		}
+
+
+		if (GFXContentManager->SetComputeTexture(COMPUTE_MATTYPE, true, false, 2, RT_GlobalTexture, false, 0, FIRSTSAMPLINGTYPE_ID, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE) != TAPI_SUCCESS) {
+			LOG_CRASHING_TAPI("Binding RT Global Texture as general shader input 2 has failed!");
+		}
+	}
+
+	Main_Window* MainWindow = new Main_Window(UploadTP_ID, StagingBuffer, RT_GlobalBuffer, RT_GlobalTexture);
 	GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, AlitaTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::TRANSFER_DIST);
 	GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, GokuBlackTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::TRANSFER_DIST);
+	GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, RT_GlobalTexture, GFX_API::IMAGE_ACCESS::NO_ACCESS, GFX_API::IMAGE_ACCESS::SHADER_SAMPLEWRITE);
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, VERTEXBUFFER_ID, GFX_API::BUFFER_TYPE::VERTEX, 0, 0, sizeof(Vertex) * 4);
 	GFXRENDERER->CopyBuffer_toBuffer(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, INDEXBUFFER_ID, GFX_API::BUFFER_TYPE::INDEX, 80, 0, 24);
 	GFXRENDERER->CopyBuffer_toImage(UploadTP_ID, StagingBuffer, GFX_API::BUFFER_TYPE::STAGING, AlitaTexture, AlitaOffset, { 0,0,0,0,0,0 }, 0);
@@ -432,7 +520,6 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 	GFXRENDERER->Run();
 	Editor_System::Take_Inputs();
 
-	Main_Window* MainWindow = new Main_Window;
 	unsigned int i = 0;
 	while (MainWindow->isWindowOpen()) {
 		TURAN_PROFILE_SCOPE_MCS("Run Loop");
@@ -445,6 +532,7 @@ void FirstMain(TuranAPI::Threading::JobSystem* JobSystem) {
 				LOG_CRASHING_TAPI("WTF!?");
 			}
 		}
+		GFXRENDERER->Dispatch_Compute(FirstCP_ID, COMPUTE_MATINST, 0, uvec3(500, 500, 1));
 		IMGUI_RUNWINDOWS();
 		if (!isWindowResized) {
 			GFXRENDERER->ImageBarrier(BarrierBeforeUpload_ID, AlitaSwapchains[GFXRENDERER->GetCurrentFrameIndex()], GFX_API::IMAGE_ACCESS::SWAPCHAIN_DISPLAY, GFX_API::IMAGE_ACCESS::RTCOLOR_READWRITE);

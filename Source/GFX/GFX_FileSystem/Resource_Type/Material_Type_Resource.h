@@ -29,14 +29,6 @@ namespace GFX_API {
 		SHADERINPUT_TYPE TYPE;
 	};
 
-	/* Used to specify the material instance specific data! The data responsibility's in your hands!
-	* This data is invalid if BINDINGPOINT isn't same with BINDINGPOINT of any MaterialDataDescriptor in the Material_Type
-	*/
-	struct GFXAPI MaterialInstanceData {
-		void* BINDINGPOINT;
-		void* DATA_GFXID;
-	};
-
 
 	class GFXAPI Material_Type {
 	public:
@@ -62,12 +54,9 @@ namespace GFX_API {
 	
 	class GFXAPI ComputeShader_Resource {
 	public:
+		vector<ShaderInput_Description> SHADERINPUT_DESCs;
 		SHADER_LANGUAGEs LANGUAGE;
-		string SOURCE_CODE;
-	};
-
-	class GFXAPI ComputeShader_Instance {
-	public:
-		unsigned int ComputeShader;
+		void* SOURCE_CODE;
+		unsigned int CODE_SIZE;
 	};
 }

@@ -1,6 +1,7 @@
 #include "IMGUI_Core.h"
 #include "Includes/imgui.h"
 #include "Includes/imgui_stdlib.h"
+#include "GFX/GFX_Core.h"
 
 namespace GFX_API {
 	IMGUI_Core::IMGUI_Core() {
@@ -200,9 +201,6 @@ namespace GFX_API {
 		}
 	}
 
-	void IMGUI_Core::Display_Texture(unsigned int TEXTURE_AssetID, const unsigned int& Display_WIDTH, const unsigned int& Display_HEIGHT, bool should_Flip_Vertically) {
-		LOG_NOTCODED_TAPI("Display_Texture isn't coded because Vulkan isn't finished yet!", true);
-	}
 	bool IMGUI_Core::Begin_TabBar() {
 		return ImGui::BeginTabBar("");
 	}
@@ -218,6 +216,19 @@ namespace GFX_API {
 	void IMGUI_Core::Separator() {
 		ImGui::Separator();
 	}
+	vec2 IMGUI_Core::GetLastItemRectMin() {
+		return vec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMin().y);
+	}
+	vec2 IMGUI_Core::GetLastItemRectMax() {
+		return vec2(ImGui::GetItemRectMax().x, ImGui::GetItemRectMax().y);
+	}
+	vec2 IMGUI_Core::GetItemWindowPos() {
+		return vec2(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y);
+	}
+	vec2 IMGUI_Core::GetMouseWindowPos() {
+		return vec2(ImGui::GetMousePos().x, ImGui::GetMousePos().y);
+	}
+
 
 
 

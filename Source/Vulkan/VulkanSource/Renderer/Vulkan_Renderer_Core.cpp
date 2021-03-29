@@ -16,7 +16,7 @@ namespace Vulkan {
 	}
 
 	//Create framegraphs to lower the cost of per frame rendergraph optimization (Pass Culling, Pass Merging, Wait Culling etc) proccess!
-	void Create_FrameGraphs(const vector<VK_DrawPass*>& DrawPasses, const vector<VK_TransferPass*>& TransferPasses, const vector<VK_WindowPass*>& WindowPasses, VK_FrameGraph* FrameGraphs);
+	void Create_FrameGraphs(const vector<VK_DrawPass*>& DrawPasses, const vector<VK_TransferPass*>& TransferPasses, const vector<VK_WindowPass*>& WindowPasses, const vector<VK_ComputePass*>& ComputePasses, VK_FrameGraph* FrameGraphs);
 	//Merge branches into submits that will execute on GPU's Queues
 	//Also link submits (attach signal semaphores to submits and set wait semaphores according to it)
 	void Create_VkSubmits(VK_FrameGraph* CurrentFramegraph, VK_FrameGraph* LastFrameGraph, vector<VK_Semaphore>& Semaphores);
@@ -33,21 +33,28 @@ namespace Vulkan {
 	PassType FindWaitedPassType(GFX_API::SHADERSTAGEs_FLAG flag) {
 		bool SupportedOnes = 0;
 		if (flag.COLORRTOUTPUT || flag.FRAGMENTSHADER || flag.VERTEXSHADER) {
-			if (flag.SWAPCHAINDISPLAY || flag.TRANSFERCMD) {
+			if (flag.SWAPCHAINDISPLAY || flag.TRANSFERCMD || flag.COMPUTE) {
 				LOG_CRASHING_TAPI("You set Wait Info->Stage wrong!");
 				return PassType::ERROR;
 			}
 			return PassType::DP;
 		}
 		if (flag.SWAPCHAINDISPLAY) {
-			if (flag.TRANSFERCMD) {
+			if (flag.TRANSFERCMD || flag.COMPUTE) {
 				LOG_CRASHING_TAPI("You set Wait Info->Stage wrong!");
 				return PassType::ERROR;
 			}
 			return PassType::WP;
 		}
 		if (flag.TRANSFERCMD) {
+			if (flag.COMPUTE) {
+				LOG_CRASHING_TAPI("You set Wait Info->Stage wrong!");
+				return PassType::ERROR;
+			}
 			return PassType::TP;
+		}
+		if (flag.COMPUTE) {
+			return PassType::CP;
 		}
 		LOG_CRASHING_TAPI("You set WaitInfo->Stage to a stage that isn't supported right now by FindWaitedTPType!", true);
 		return PassType::ERROR;
@@ -77,8 +84,8 @@ namespace Vulkan {
 							LOG_ERROR_TAPI("One of the draw passes waits for an draw pass but given pass isn't found!");
 							return false;
 						}
-						break;
 					}
+					break;
 					case PassType::TP:
 					{
 						bool is_Found = false;
@@ -92,8 +99,8 @@ namespace Vulkan {
 							LOG_ERROR_TAPI("One of the draw passes waits for an transfer pass but given pass isn't found!");
 							return false;
 						}
-						break;
 					}
+					break;
 					case PassType::WP:
 					{
 						bool is_Found = false;
@@ -107,8 +114,23 @@ namespace Vulkan {
 							LOG_ERROR_TAPI("One of the draw passes waits for an window pass but given pass isn't found!");
 							return false;
 						}
-						break;
 					}
+					break;
+					case PassType::CP:
+					{
+						bool is_Found = false;
+						for (unsigned int CheckedCP = 0; CheckedCP < ComputePasses.size(); CheckedCP++) {
+							if (*Wait_desc.WaitedPass == ComputePasses[CheckedCP]) {
+								is_Found = true;
+								break;
+							}
+						}
+						if (!is_Found) {
+							LOG_ERROR_TAPI("One of the draw passes waits for a compute pass but given pass isn't found!");
+							return false;
+						}
+					}
+					break;
 					case PassType::ERROR:
 					{
 						LOG_CRASHING_TAPI("Finding a proper TPType has failed, so Check Wait has failed!");
@@ -157,6 +179,21 @@ namespace Vulkan {
 					}
 					if (!is_Found) {
 						LOG_ERROR_TAPI("One of the window passes waits for an transfer pass but given pass isn't found!");
+						return false;
+					}
+				}
+				break;
+				case PassType::CP:
+				{
+					bool is_Found = false;
+					for (unsigned int CheckedCP = 0; CheckedCP < ComputePasses.size(); CheckedCP++) {
+						if (*Wait_desc.WaitedPass == ComputePasses[CheckedCP]) {
+							is_Found = true;
+							break;
+						}
+					}
+					if (!is_Found) {
+						LOG_ERROR_TAPI("One of the window passes waits for a compute pass but given pass isn't found!");
 						return false;
 					}
 				}
@@ -213,8 +250,8 @@ namespace Vulkan {
 							LOG_ERROR_TAPI("One of the transfer passes waits for an transfer pass but given pass isn't found!");
 							return false;
 						}
-						break;
 					}
+					break;
 					case PassType::WP: 
 					{
 						bool is_Found = false;
@@ -228,8 +265,23 @@ namespace Vulkan {
 							LOG_ERROR_TAPI("One of the transfer passes waits for an window pass but given pass isn't found!");
 							return false;
 						}
-						break;
 					}
+					break;
+					case PassType::CP:
+					{
+						bool is_Found = false;
+						for (unsigned int CheckedCP = 0; CheckedCP < ComputePasses.size(); CheckedCP++) {
+							if (*Wait_desc.WaitedPass == ComputePasses[CheckedCP]) {
+								is_Found = true;
+								break;
+							}
+						}
+						if (!is_Found) {
+							LOG_ERROR_TAPI("One of the transfer passes waits for a compute pass but given pass isn't found!");
+							return false;
+						}
+					}
+					break;
 					case PassType::ERROR:
 					{
 						LOG_CRASHING_TAPI("Finding a TPType has failed, so Check Wait Handle too!");
@@ -240,6 +292,92 @@ namespace Vulkan {
 						LOG_CRASHING_TAPI("TP Type is not supported for now, so Check Wait Handle failed too!", true);
 						return false;
 					}
+				}
+
+			}
+		}
+		for (unsigned int CPIndex = 0; CPIndex < ComputePasses.size(); CPIndex++) {
+			VK_ComputePass* CP = ComputePasses[CPIndex];
+			for (unsigned int WaitIndex = 0; WaitIndex < CP->WAITs.size(); WaitIndex++) {
+				GFX_API::PassWait_Description& Wait_desc = CP->WAITs[WaitIndex];
+				if (!(*Wait_desc.WaitedPass)) {
+					LOG_ERROR_TAPI("You forgot to set wait handle of one of the compute passes!");
+					return false;
+				}
+
+				switch (FindWaitedPassType(Wait_desc.WaitedStage)) {
+				case PassType::DP:
+				{
+					bool is_Found = false;
+					for (unsigned int CheckedDP = 0; CheckedDP < DrawPasses.size(); CheckedDP++) {
+						if (*Wait_desc.WaitedPass == DrawPasses[CheckedDP]) {
+							is_Found = true;
+							break;
+						}
+					}
+					if (!is_Found) {
+						std::cout << CP->NAME << std::endl;
+						LOG_ERROR_TAPI("One of the compute passes waits for an draw pass but given pass isn't found!");
+						return false;
+					}
+				}
+				break;
+				case PassType::TP:
+				{
+					VK_TransferPass* currentTP = GFXHandleConverter(VK_TransferPass*, *Wait_desc.WaitedPass);
+					bool is_Found = false;
+					for (unsigned int CheckedTP = 0; CheckedTP < TransferPasses.size(); CheckedTP++) {
+						if (currentTP == TransferPasses[CheckedTP]) {
+							is_Found = true;
+							break;
+						}
+					}
+					if (!is_Found) {
+						LOG_ERROR_TAPI("One of the compute passes waits for a transfer pass but given pass isn't found!");
+						return false;
+					}
+					break;
+				}
+				case PassType::WP:
+				{
+					bool is_Found = false;
+					for (unsigned int CheckedWP = 0; CheckedWP < WindowPasses.size(); CheckedWP++) {
+						if (*Wait_desc.WaitedPass == WindowPasses[CheckedWP]) {
+							is_Found = true;
+							break;
+						}
+					}
+					if (!is_Found) {
+						LOG_ERROR_TAPI("One of the compute passes waits for a window pass but given pass isn't found!");
+						return false;
+					}
+					break;
+				}
+				case PassType::CP:
+				{
+					bool is_Found = false;
+					for (unsigned int CheckedCP = 0; CheckedCP < ComputePasses.size(); CheckedCP++) {
+						if (*Wait_desc.WaitedPass == ComputePasses[CheckedCP]) {
+							is_Found = true;
+							break;
+						}
+					}
+					if (!is_Found) {
+						LOG_ERROR_TAPI("One of the compute passes waits for a compute pass but given pass isn't found!");
+						return false;
+					}
+					break;
+				}
+				case PassType::ERROR:
+				{
+					LOG_CRASHING_TAPI("Finding a TPType has failed, so Check Wait Handle too!");
+					return false;
+				}
+				default:
+				{
+					LOG_CRASHING_TAPI("TP Type is not supported for now, so Check Wait Handle failed too!", true);
+					return false;
+				}
 				}
 
 			}
@@ -264,7 +402,7 @@ namespace Vulkan {
 			}
 		}
 
-		Create_FrameGraphs(DrawPasses, TransferPasses, WindowPasses, FrameGraphs);
+		Create_FrameGraphs(DrawPasses, TransferPasses, WindowPasses, ComputePasses, FrameGraphs);
 
 
 		//Create Command Pool per QUEUE
@@ -389,7 +527,7 @@ namespace Vulkan {
 		}
 		Desc.flags = 0;
 	}
-	void Fill_SubpassStructs(VK_IRTSLOTSET* slotset, GFX_API::SUBPASS_ACCESS WaitedOp, GFX_API::SUBPASS_ACCESS ContinueOp, unsigned char SubpassIndex, VkSubpassDescription& descs, VkSubpassDependency& dependencies) {
+	void Fill_SubpassStructs(VK_IRTSLOTSET* slotset, GFX_API::SUBDRAWPASS_ACCESS WaitedOp, GFX_API::SUBDRAWPASS_ACCESS ContinueOp, unsigned char SubpassIndex, VkSubpassDescription& descs, VkSubpassDependency& dependencies) {
 		VkAttachmentReference* COLOR_ATTACHMENTs = new VkAttachmentReference[slotset->BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT];
 		VkAttachmentReference* DS_Attach = nullptr;
 		
@@ -581,6 +719,17 @@ namespace Vulkan {
 		TransferPasses.push_back(TRANSFERPASS);
 		TPHandle = TRANSFERPASS;
 		return TAPI_SUCCESS;
+	} 
+	TAPIResult Renderer::Create_ComputePass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, unsigned int SubComputePassCount,
+		const string& NAME, GFX_API::GFXHandle& CPHandle) {
+		VK_ComputePass* CP = new VK_ComputePass;
+		CP->WAITs = WaitDescriptions;
+		CP->NAME = NAME;
+
+		CP->Subpasses.resize(SubComputePassCount);
+		ComputePasses.push_back(CP);
+		CPHandle = CP;
+		return TAPI_SUCCESS;
 	}
 	TAPIResult Renderer::Create_WindowPass(const vector<GFX_API::PassWait_Description>& WaitDescriptions, const string& NAME, GFX_API::GFXHandle& WindowPassHandle) {
 		VK_WindowPass* WP = new VK_WindowPass;
@@ -743,6 +892,20 @@ namespace Vulkan {
 						Branch.CFNeeded_QueueSpecs.is_PRESENTATIONsupported = true;
 					}
 
+				}
+				break;
+				case PassType::CP:
+				{
+					VK_ComputePass* CP = GFXHandleConverter(VK_ComputePass*, CorePass->Handle);
+					for (unsigned char SubpassIndex = 0; SubpassIndex < CP->Subpasses.size(); SubpassIndex++) {
+						VK_SubComputePass& SP = CP->Subpasses[SubpassIndex];
+						if (SP.isThereWorkload()) {
+							Branch.CurrentFramePassesIndexes[CurrentFrameIndexesArray_Element] = PassIndex + 1;
+							CurrentFrameIndexesArray_Element++;
+							Branch.CFNeeded_QueueSpecs.is_COMPUTEsupported = true;
+							break;
+						}
+					}
 				}
 				break;
 				default:
@@ -946,7 +1109,6 @@ namespace Vulkan {
 	void FindBufferOBJ_byBufType(const GFX_API::GFXHandle Handle, GFX_API::BUFFER_TYPE TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
 	void Renderer::DrawDirect(GFX_API::GFXHandle VertexBuffer_ID, GFX_API::GFXHandle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
 		unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, GFX_API::GFXHandle MaterialInstance_ID, GFX_API::GFXHandle SubDrawPass_ID) {
-		TURAN_PROFILE_SCOPE_MCS("DrawNonInstanceDirect!");
 		VK_SubDrawPass* SP = GFXHandleConverter(VK_SubDrawPass*, SubDrawPass_ID);
 		if (IndexBuffer_ID) {
 			VK_IndexedDrawCall call;
@@ -1233,6 +1395,21 @@ namespace Vulkan {
 
 		TPDatas->TextureBarriers.push_back(GFX->JobSys->GetThisThreadIndex(), im_bi);
 	}
+	void Renderer::Dispatch_Compute(GFX_API::GFXHandle ComputePassHandle, GFX_API::GFXHandle ComputeInstanceHandle, unsigned int SubComputePassIndex, uvec3 DispatchSize) {
+		VK_ComputePass* CP = GFXHandleConverter(VK_ComputePass*, ComputePassHandle);
+
+		VK_SubComputePass& SP = CP->Subpasses[SubComputePassIndex];
+		VK_DispatchCall dc;
+		dc.DispatchSize = DispatchSize;
+		VK_ComputeInstance* ci = GFXHandleConverter(VK_ComputeInstance*, ComputeInstanceHandle);
+		dc.GeneralSet = &ci->PROGRAM->General_DescSet.Set;
+		dc.InstanceSet = &ci->DescSet.Set;
+		dc.Layout = ci->PROGRAM->PipelineLayout;
+		dc.Pipeline = ci->PROGRAM->PipelineObject;
+		SP.Dispatches.push_back(GFX->JobSys->GetThisThreadIndex(), dc);
+	}
+
+
 	void Renderer::ChangeDrawPass_RTSlotSet(GFX_API::GFXHandle DrawPassHandle, GFX_API::GFXHandle RTSlotSetHandle) {
 		VK_DrawPass* DP = GFXHandleConverter(VK_DrawPass*, DrawPassHandle);
 		VK_RTSLOTSET* slotset = GFXHandleConverter(VK_RTSLOTSET*, RTSlotSetHandle);

@@ -169,6 +169,7 @@ namespace Vulkan {
 	}
 
 
+
 	VK_TPCopyDatas::VK_TPCopyDatas() : BUFBUFCopies(*GFX->JobSys), BUFIMCopies(*GFX->JobSys), IMIMCopies(*GFX->JobSys) {
 
 	}
@@ -176,6 +177,26 @@ namespace Vulkan {
 	VK_TPBarrierDatas::VK_TPBarrierDatas() : BufferBarriers(*GFX->JobSys), TextureBarriers(*GFX->JobSys) {
 
 	}
+
+	VK_TPBarrierDatas::VK_TPBarrierDatas(const VK_TPBarrierDatas& copyfrom) : BufferBarriers(copyfrom.BufferBarriers), TextureBarriers(copyfrom.TextureBarriers){
+
+	}
+
+	VK_SubComputePass::VK_SubComputePass() : Dispatches(*GFX->JobSys) {
+
+	}
+	bool VK_SubComputePass::isThereWorkload() {
+		std::unique_lock<std::mutex> Locker;
+		Dispatches.PauseAllOperations(Locker);
+		for (unsigned char ThreadID = 0; ThreadID < GFX->JobSys->GetThreadCount(); ThreadID++) {
+			if (Dispatches.size(ThreadID)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+
 	VK_SubDrawPass::VK_SubDrawPass() : NonIndexedDrawCalls(*GFX->JobSys), IndexedDrawCalls(*GFX->JobSys) {
 
 	}
@@ -201,6 +222,7 @@ namespace Vulkan {
 				}
 			}
 		}
+		return false;
 	}
 
 	VK_DescImageElement::VK_DescImageElement() {

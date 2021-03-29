@@ -277,9 +277,10 @@ namespace GFX_API {
 		bool COLORRTOUTPUT : 1;
 		bool TRANSFERCMD : 1;
 		bool SWAPCHAINDISPLAY : 1;
+		bool COMPUTE : 1;
 		SHADERSTAGEs_FLAG();
 	};
-	SHADERSTAGEs_FLAG Create_ShaderStageFlag(bool vs, bool fs, bool rt_output, bool transfercmd, bool swpchn_diplay);
+	SHADERSTAGEs_FLAG Create_ShaderStageFlag(bool vs, bool fs, bool rt_output, bool transfercmd, bool swpchn_diplay, bool compute);
 
 	struct GFXAPI TEXTUREUSAGEFLAG {
 		//bool hasMipMaps			: 1;	//I don't support it for now!
@@ -328,7 +329,7 @@ namespace GFX_API {
 		DEPTHREADWRITE_STENCILWRITE
 	};
 
-	enum class SUBPASS_ACCESS : unsigned char {
+	enum class SUBDRAWPASS_ACCESS : unsigned char {
 		ALLCOMMANDS = 0,
 		INDEX_READ,
 		VERTEXATTRIB_READ,
@@ -363,6 +364,7 @@ namespace GFX_API {
 		LATE_Z_WRITEONLY,
 		FRAGMENTRT_WRITEONLY
 	};
+
 
 
 	//Appendix "PI" means per material instance, "G" means material type general

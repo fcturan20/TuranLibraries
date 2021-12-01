@@ -5,3 +5,5 @@ logs.txt
 notcodedpaths.txt
 warnings.txt
 imgui.ini
+.vscode
+build

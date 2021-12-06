@@ -1,20 +1,38 @@
-# GFXVulkanBackend
-This project is a Vulkan backend for Turan Engine's (Non-DLL, Non-STL version) GFX API. Turan Engine's created based on OpenGL but this type of usage limits most of the modern APIs, so I have to re-design all of the Turan Engine's GFX API according to this project. There are some new features too, such as GPU Memory Management and a better RenderGraph.
+## TuranLibraries
 
-# How it works
-1) Because this project is gonna be integrated in Turan Engine's Non-DLL Non-STL version, code architecture is similar. Source/Main.cpp is the entry point and each DLL is in folders called by their names (GFX, Vulkan, TuranAPI etc.). TuranAPI includes Multi-Threading, Logging, Profiling, I/O and Bitset (A nice vector<bool> implementation) libraries; GFX includes general interface for Vulkan backend calls; Vulkan is the place where Vulkan API functions are called; Editor is where user codes an executable.
-2) Asset (Mesh, Shader, Texture etc) importing is handled in Editor/FileSystem. But Vulkan's depth buffer and 3D rendering isn't fully tested yet, so just skip that part.
-3) In Turan Engine, application developer is responsible for defining a RenderGraph to render anything (Except IMGUI for now, but I'm working on it). A RenderGraph is a collection of RenderNodes that is able to run a specific GPU job (Transfer, Rasterize, Compute, Swapchain Display) and has dependencies on each other. That means, you have to create RenderNode(s) to define a RenderGraph. Creating RenderNodes is a little bit complicated, so you should check GFX/Renderer/README.md .
-4) If you want to upload anything to the GPU, you should use GFXContentManager to do so. It is a -as the name suggests- GPU's content manager. It is responsible for copying and deleting resources on GPU. For detailed description, check GFX/Renderer/GPUContentManager.h and GFX/Renderer/Resources_README.md
-5) Turan Engine has a Material system that consists of Material Type and lots of Material Instances of them. So there is nothing like "Bind Shader, Bind Uniform etc.". Material Type is a collection of programmable rasterization pipeline datas such as blending type, depth test type, shaders. Material Instance is a table that stores values of a Material Type's uniforms (Similar to Unreal's Material Instance but there is no optimization for static uniforms etc). You should use GFXRENDERER for your rendering operations, so a draw call is called like "GFXRENDERER->Render_DrawCall()". Draw Calling is highly related to the RenderGraph part, so read GFX/Renderer/README.md
-6) dear IMGUI's integrated in GFX API's itself but dear IMGUI's graphics API related files are integrated in the related API's IMGUI folder. dear IMGUI's default Vulkan backend doesn't 1-1 match with both the RenderGraph algorithm and dear IMGUI requires a default window even on docking branch. So if you activate dear IMGUI at GFX initialization, you should create at least one window and you should specify the drawpass and subdrawpass at the end of construction of the FrameGraph. Detailed instructions are in Vulkan/IMGUI/VKIMGUI_REAMDE.md
-7) You should call GFX->Create_Window() to create a window. Because it creates Swapchain Textures, you should handle textures' layout transitions etc.
-8) GLFW stalls the application when a window's screen position or size changes. There was nothing I could do except than batching all screen size change calls. After you call Take_Inputs(), there will be only one window resize callback for each changed window. How you should code your resize callback functions are in examples.
+    C is a nice language but standard libraries doesn't provide enough functionality and other libraries are either hard to integrate or only a single library. TuranLibraries provides these functionalities while being easy to integrate and fast to compile. All libraries designed to work with CMake and Microsoft vcpkg, so it's recommended to have both of these.
 
+    These libraries are divided into 2 categories for now: TAPI and TGFX. TAPI contains sub-libraries like threading, profiling, logging. TGFX is an abstract library that's derived for each graphics API (Vulkan, D3D12 etc.).
 
+    C standard doesn't support some features like threading which C++ supports. Because of that, all libraries and sub-libraries are defined in C++ while declared as C. So user should use a compiler that supports C++.  Some sub-libraries have dependencies to 3rd party libraries such as Vulkan, GLM and these should be already installed to the system by Microsoft vcpkg.
 
-# How to track changes
-1) For Vulkan Backend's Completed Tasks: https://share.clickup.com/l/h/6-50820492-1/62179be39c72e34
-2) For Vulkan Backend's Uncompleted Tasks: https://share.clickup.com/l/h/4ee11-8/403c48f003c7e45
-3) For GFX API's Completed Tasks: https://share.clickup.com/l/h/6-50821024-1/346593dac7bb7f0
-4) For GFX API's Uncompleted Tasks: https://share.clickup.com/l/h/6-48864560-1/c539508b3b99631
+    Examples is a collection of executable projects that is used to demonstrate all TuranLibraries.
+
+## Table of Contents
+* [How to Build](#how-to-build)
+* [Documentation](#documentation)
+* [Roadmap and Issues](#roadmap)
+
+## How to Build
+
+    You need to install external libraries first to use CMake. Each sub-library has different external dependencies, so please read related library's documentation first. Then you should use CMake to build project for your preferred compiler. Compiler-specific codes are avoided mostly, please report if you have compiler specific issue.
+
+## Documentation
+
+-   Some sub-libraries are so complicated that they need their own documentation, so there is no documentation about a specific sub-library. 
+-   Documentation is hierarchical: TAPI and TGFX have their own documentation in their folders, then they point out each sub-library's documentation. 
+-   If sub-library's documentation is big, it is possible that it also points to another source (web link, pdf etc).
+-   Big documentation files (.md) contains **Table of Contents**. Sections that are written in the file but not added in the table are subject to change soon. Generally such sections are written in hurry not to forget.
+
+-   [*TAPI*](TAPI/TAPI.md)
+-   [*TGFX*](TGFXCORE/TGFX.md)
+
+## Roadmap
+
+    Github Issues and Milestones are used as roadmap alternative and Github Discussion is used as a forum-discussion portal. Please read below to learn how to create reports: 
+-   Each Github Issue should be created with a **Subject** and a **Topic** label, **Status** label will only be added by me.
+-   A **Subject** indicates which library/sub-library is the issue belongs to.
+-   A **Topic** indicates very abstract intention of the issue.
+-   A **Status** indicates what I'm doing about the issue.
+
+5) Turan Engine has a Material system that consists of Material Type and lots of Material Instances of them. So there is nothing like "Bind Shader, Bind Uniform etc.". Material Type is a collection of programmable rasterization pipeline datas such as blending type, depth test type, shaders. Material Instance is a table that stores values of a Material Type's uniforms (Similar to Unreal's Material Instance but there is no optimization for static uniforms etc). 

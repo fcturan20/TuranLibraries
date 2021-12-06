@@ -1,5 +1,5 @@
 # Resources
-    If you want to use GPU, you have to create at least one shader. And you probably want to get output from the shader with a buffer/texture. Each GPU side data/shader is called *Resource* and this documentation is for all of them. 
+If you want to use GPU, you have to create at least one shader. And you probably want to get output from the shader with a buffer/texture. Each GPU side data/shader is called *Resource* and this documentation is for all of them. 
 
 # Table of Contents
 * [Summary](#Summary)
@@ -8,7 +8,7 @@
 * [Material System](#Material-System)
 
 # Summary
-    Because there are lots of resource types, here's a short introduction to resource types:
+Because there are lots of resource types, here's a short introduction to resource types:
 -   *Texture*: All types of images (1-3D, at least one channel). Even though all of them isn't supported for now, every data that GFX APIs accept as image will be supported by the time.
 -   *Buffer*: All of GFX API specific buffers will be supported by the time but for now only 2 types of buffer is supported. A shader-side read-only (uniform in Khronos terminology) buffer and its read-write counterpart.
 -   *Material*: Collection of rasterization pipeline shaders (vertex, fragment etc.) and stores their input/outputs. You have to create an instance of it to run the pipeline.

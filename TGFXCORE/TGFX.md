@@ -1,6 +1,6 @@
 ## TGFX
 
-    An abstract GFX library. Library needs at least one supported graphics API (Vulkan, OpenGL etc.) on the active platform to compile and run. 
+An abstract GFX library. Library needs at least one supported graphics API (Vulkan, OpenGL etc.) on the active platform to compile and run. 
     
 ## Table of Contents
 * [Acronyms](#acronyms)

@@ -1,6 +1,6 @@
 # RenderGraph
 
--   RenderGraph is the way to define your GPU side operations. Modern GFX APIs needs proper synchronization between GPU-CPU and RenderGraph is the best system to define them. Every GPU operation (even resource creation, upload etc) needs to start running at the scheduled time for best performance and minimal bug. To achieve that, this system uses *RenderPass*es to abstract GPU operation types and define execution dependencies between them.
+RenderGraph is the way to define your GPU side operations. Modern GFX APIs needs proper synchronization between GPU-CPU and RenderGraph is the best system to define them. Every GPU operation (even resource creation, upload etc) needs to start running at the scheduled time for best performance and minimal bug. To achieve that, this system uses *RenderPass*es to abstract GPU operation types and define execution dependencies between them.
 
 # Table of Contents
 * [Acronyms](#Acronyms)
@@ -22,12 +22,6 @@
 -   **workload**: Any type of operations that the *Pass* can run.
 
 
-# How-to-Use
-    RenderGraph is essential for Vulkan because shader compilation requires the Subpass that uses the shader, so RenderGraph should be created before compiling-linking shaders. But RenderGraph is a collection of nodes that uses some global buffers and render targets, so render target textures (They can be changed later) and global buffers (They are also required for shader compilation) should be created before. That means your creation progress should be something like this; RT/Global Buffer Creations -> RenderGraph Construction -> Shader compiling/linking.
-RenderGraph should cull nodes that doesn't have any operations. My solution is that if a nodes should be culled, other nodes that depends on this node should inherit the dependencies. Something like;
-Node B waits for Node A's RT output and Node C waits for Node B's vertex shaders. If Node B doesn't have any operation to run, then Node C should wait for Node A's RT output.
-This is a nice approach if you keep worst cases in mind and design around it. But if user thought that Node A and Node C operations will never overlap because of Node B (And this works on his device) and somehow forgot to give operations to Node B; then there maybe some problems. I want to allow users to define these dependencies in a different structure but can't right now.
-
 
 # Summary
 
@@ -35,8 +29,6 @@ This is a nice approach if you keep worst cases in mind and design around it. Bu
 -   Optimizing RG is done in 2 steps; [*Static RG Optimizer*](#Static-RG-Optimizer) and [*Dynamic RG Optimizer*](#Dynamic-RG-Optimizer).
 -   RG can go through only 3 phases in a given frame: *RG Destruction*, *RG Reconstruction* and *RG Execution*. [For more information, check RenderGraph Life-Cycle here.](#RG-Life-Cycle)
 -   There are 4 types of *RenderPass*es; [*Draw Pass*](#Draw-Pass), [*Compute Pass*](#Compute-Pass), [*Transfer Pass*](#Transfer-Pass) and [*Window Pass*](#Window-Pass).
-
-
 
 # Draw Pass
 -   You can use only rasterization pipeline in this *Pass*.

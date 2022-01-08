@@ -1,5 +1,4 @@
 #define TAPI_THREADING_CPP_HELPER
-#include "ThreadedJobCore.h"
 #include <iostream>
 #include <string>
 #include <vector>

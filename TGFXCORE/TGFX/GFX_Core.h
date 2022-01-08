@@ -5,6 +5,7 @@
 #include "GFX_Includes.h"
 #include "GFX_Renderer.h"
 #include "GPU_ContentManager.h"
+#include "GFX_Helper.h"
 #include "IMGUI_Core.h"
 
 

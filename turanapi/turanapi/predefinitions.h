@@ -19,10 +19,13 @@
 #define TURANAPI
 #define TURAN_DEBUGGING
 
-
+#define MAKE_PLUGIN_VERSION_TAPI(major, mid, minor) (((major < 255 ? major : 255) << 16) | \
+((mid < 255 ? mid : 255) << 8) | ((minor < 255 ? minor : 255)))
+#define GET_PLUGIN_VERSION_TAPI_MAJOR(version) (version >> 16)
 
 // Check windows
 #if _WIN32 || _WIN64
+#define T_ENVWINDOWS
 #if _WIN64
 #define T_ENV64BIT
 #else
@@ -49,29 +52,30 @@
 
 #ifdef T_SUPPORTEDPLATFORM
 
-#define TAPIHANDLE(object) typedef struct tapi_dontuse_##object * tapi_##object;
 
 
-//Stop the application and ask the user to close or continue!
-//I'm using this to remind myself there are problems while I'm working on another thing!
-void TURANAPI tapi_breakpoint(const char* Breakpoint_Reason);
+#if defined(_WIN32)
+#include "windows.h"
 
+#if defined(_MSC_VER)
+    //  Microsoft 
+    #define FUNC_DLIB_EXPORT __declspec(dllexport)
+#elif defined(__GNUC__)
+    //  GCC
+    #define FUNC_DLIB_EXPORT __attribute__((visibility("default")))
+#endif
 
-typedef enum tapi_result {
-	tapi_result_SUCCESS = 0,
-	tapi_result_FAIL = 1,
-	tapi_result_NOTCODED = 2,
-	tapi_result_INVALIDARGUMENT = 3,
-	tapi_result_WRONGTIMING = 4	//This means the operation is called at the wrong time!
-} tapi_result;
-
-
-//Some basic functionality to do debugging!
-#define GET_VARIABLE_NAME(Variable) (#Variable)
-#define SLEEP_THREAD(Variable) std::this_thread::sleep_for(std::chrono::seconds(Variable));
-
+    #define DLIB_LOAD_TAPI(dlib_path) LoadLibrary(TEXT(dlib_path))
+    #define DLIB_FUNC_LOAD_TAPI(dlib_var_name, func_name) GetProcAddress(dlib_var_name, func_name)
+    #define DLIB_UNLOAD_TAPI(dlib_var_name) FreeLibrary(dlib_var_name)
+    
+#else
+    #error Dynamic library build is failed because compiler's function export attribute isn't supported. Please go to API_includes.h for more info.
+#endif
 
 
 #else
 #error "Platform isn't supported!"
 #endif
+
+

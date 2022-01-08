@@ -1,5 +1,3 @@
-#include <TAPI\TURANAPI.h>
-#include <TGFX/GFX_Core.h>
 #include <iostream>
 #include <string>
 

@@ -14,11 +14,10 @@ target_compile_definitions(TGFXVulkan PRIVATE
 )
 
 
-find_package(glfw3 3.3)
-find_package(glfw3 CONFIG)
+find_package(glfw3 CONFIG REQUIRED)
 if(GLFW_FOUND OR glfw3_FOUND)
     include_directories(${GLFW_INCLUDE_DIRS})
-    target_link_libraries(TGFXVulkan glfw)
+    target_link_libraries(TGFXVulkan PRIVATE glfw)
 else()
     message ("GLFW isn't found, please be sure to include and link GLFW3 to the project!")
 endif()
@@ -27,10 +26,10 @@ find_package(glm)
 
 find_package(Vulkan REQUIRED)
 if(VULKAN_FOUND)
-include_directories(${Vulkan_INCLUDE_DIRS})
-message(${Vulkan_INCLUDE_DIRS})
-target_link_libraries(TGFXVulkan Vulkan::Vulkan)
+    include_directories(${Vulkan_INCLUDE_DIRS})
+    message(${Vulkan_INCLUDE_DIRS})
+    target_link_libraries(TGFXVulkan PRIVATE Vulkan)
 else()
-message("Vulkan isn't found, please be sure to install Vulkan SDK then include and link Vulkan to the project!")
+    message("Vulkan isn't found, please be sure to install Vulkan SDK then include and link Vulkan to the project!")
 endif()
 

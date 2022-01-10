@@ -238,6 +238,8 @@ FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* reg_sys, unsigned char relo
     aos_virtual->delete_string = &virtual_delete_string;
     aos_virtual->read_string = &virtual_read_string;
 
+    reg_sys->add(ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME, ARRAY_OF_STRINGS_TAPI_VERSION, virmemtype);
+
     return aos;
 }
 

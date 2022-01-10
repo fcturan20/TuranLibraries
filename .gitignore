@@ -7,3 +7,5 @@ warnings.txt
 imgui.ini
 .vscode
 build
+dynamic_libs
+Example_runnables

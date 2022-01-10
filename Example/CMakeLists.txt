@@ -13,6 +13,7 @@ set_target_properties(registry_sys_example PROPERTIES RUNTIME_OUTPUT_DIRECTORY_D
 set_target_properties(registry_sys_example PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
 target_include_directories(registry_sys_example PUBLIC ${CMAKE_SOURCE_DIR}/turanapi)
 target_include_directories(registry_sys_example PUBLIC ${CMAKE_SOURCE_DIR}/TGFXCORE)
+install(TARGETS registry_sys_example RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/Example_runnables)
 
 
 

@@ -1,7 +1,6 @@
-#include "Bitset.h"
-#include <stdio.h>
+#include "bitset_tapi.h"
+#include "registrysys_tapi.h"
 #include <iostream>
-#include <string.h>
 
 
 #define GetBitset(bitset) ((BITSET*)bitset)
@@ -11,13 +10,14 @@ struct BITSET {
 	unsigned int ByteLength;
 };
 
-tapi_bitset tapi_CreateBitset(unsigned int byte_length){
+bitset_tapi* CreateBitset(unsigned int byte_length){
 	BITSET* bitset = new BITSET;
 	bitset->Array = new bool[byte_length];
+    memset(bitset->Array, 0, byte_length);
 	bitset->ByteLength = byte_length;
-	return (tapi_bitset)bitset;
+	return (bitset_tapi*)bitset;
 }
-void tapi_SetBit_True(tapi_bitset set, unsigned int index) {
+void SetBit_True(bitset_tapi* set, unsigned int index) {
 	if (index / 8 > GetBitset(set)->ByteLength - 1) {
 		std::cout << "There is no such bit, maximum bit index: " << (GetBitset(set)->ByteLength * 8) - 1 << std::endl;
 		return;
@@ -26,7 +26,7 @@ void tapi_SetBit_True(tapi_bitset set, unsigned int index) {
 	unsigned int bitindex = (index % 8);
 	byte = (byte | char(1 << bitindex));
 }
-void tapi_SetBit_False(tapi_bitset set, unsigned int index) {
+void SetBit_False(bitset_tapi* set, unsigned int index) {
 	char& byte = ((char*)GetBitset(set)->Array)[index / 8];
 	char bitindex = (index % 8);
 	switch (bitindex) {
@@ -56,15 +56,15 @@ void tapi_SetBit_False(tapi_bitset set, unsigned int index) {
 		break;
 	}
 }
-unsigned char tapi_GetBit_Value(tapi_bitset set, unsigned int index) {
+unsigned char tapi_GetBit_Value(const bitset_tapi* set, unsigned int index) {
 	char byte = ((char*)GetBitset(set)->Array)[index / 8];
 	char bitindex = (index % 8);
 	return byte & (1 << bitindex);
 }
-unsigned int tapi_GetByte_Length(tapi_bitset set) {
+unsigned int tapi_GetByte_Length(const bitset_tapi* set) {
 	return GetBitset(set)->ByteLength;
 }
-unsigned int tapi_GetIndex_FirstTrue(tapi_bitset set) {
+unsigned int tapi_GetIndex_FirstTrue(const bitset_tapi* set) {
 	unsigned int byteindex = 0;
 	for (unsigned int byte_value = 0; byte_value == 0; byteindex++) {
 		byte_value = ((char*)GetBitset(set)->Array)[byteindex];
@@ -78,7 +78,7 @@ unsigned int tapi_GetIndex_FirstTrue(tapi_bitset set) {
 	bitindex--;
 	return (byteindex * 8) + bitindex;
 }
-unsigned int tapi_GetIndex_FirstFalse(tapi_bitset set) {
+unsigned int tapi_GetIndex_FirstFalse(const bitset_tapi* set) {
 	unsigned int byteindex = 0;
 	for (unsigned int byte_value = 255; byte_value == 255; byteindex++) {
 		byte_value = ((char*)GetBitset(set)->Array)[byteindex];
@@ -92,10 +92,10 @@ unsigned int tapi_GetIndex_FirstFalse(tapi_bitset set) {
 	bitindex--;
 	return (byteindex * 8) + bitindex;
 }
-void tapi_Clear(tapi_bitset set, unsigned char zero_or_one) {
+void ClearBitset(bitset_tapi* set, unsigned char zero_or_one) {
 	memset(GetBitset(set)->Array, zero_or_one, GetBitset(set)->ByteLength);
 }
-void tapi_Expand(tapi_bitset set, unsigned int expand_size) {
+void ExpandBitset(bitset_tapi* set, unsigned int expand_size) {
 	bool* new_block = new bool[expand_size + GetBitset(set)->ByteLength];
 	if (new_block) {
 		//This is a little bit redundant because all memory initialized with 0 at start
@@ -116,3 +116,31 @@ void tapi_Expand(tapi_bitset set, unsigned int expand_size) {
 }
 
 
+
+
+typedef struct bitsetsys_tapi_d{
+    bitsetsys_tapi_type* type;
+}bitsetsys_tapi_d;
+extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned char reload){
+    bitsetsys_tapi_type* type = (bitsetsys_tapi_type*)malloc(sizeof(bitsetsys_tapi_type));
+    type->data = (bitsetsys_tapi_d*)malloc(sizeof(bitsetsys_tapi_d));
+    type->funcs = (bitsetsys_tapi*)malloc(sizeof(bitsetsys_tapi));
+    type->data->type = type;
+
+    regsys->add(BITSET_TAPI_PLUGIN_NAME, BITSET_TAPI_PLUGIN_VERSION, type);
+
+    type->funcs->clear_bitset = &ClearBitset;
+    type->funcs->create_bitset = &CreateBitset;
+    type->funcs->expand = &ExpandBitset;
+    type->funcs->getbit_value = &tapi_GetBit_Value;
+    type->funcs->getbyte_length = &tapi_GetByte_Length;
+    type->funcs->getindex_firstfalse = &tapi_GetIndex_FirstFalse;
+    type->funcs->getindex_firsttrue = &tapi_GetIndex_FirstTrue;
+    type->funcs->setbit_false = &SetBit_False;
+    type->funcs->setbit_true = &SetBit_True;
+
+    return type;
+}
+extern "C" FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* regsys, unsigned char reload){
+    
+}

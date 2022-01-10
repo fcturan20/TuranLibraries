@@ -198,6 +198,8 @@ extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* reg_sys, unsigne
 	type->funcs->waitjob_busy = &waitJob_busy;
 	type->funcs->waitjob_empty = &waitJob_empty;
 	
+	reg_sys->add(THREADINGSYS_TAPI_PLUGIN_NAME, THREADINGSYS_TAPI_PLUGIN_VERSION, type);
+
 	return type;
 }
 extern "C" FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* reg_sys, unsigned char reload){

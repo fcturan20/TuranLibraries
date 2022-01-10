@@ -1,13 +1,18 @@
 #include <iostream>
 #include <string>
+#include <windows.h>
 
 #include "turanapi/registrysys_tapi.h"
 #include "turanapi/virtualmemorysys_tapi.h"
 #include "turanapi/unittestsys_tapi.h"
 #include "turanapi/array_of_strings_tapi.h"
 #include "turanapi/threadingsys_tapi.h"
+#include "turanapi/filesys_tapi.h"
+#include "turanapi/logger_tapi.h"
+#include "turanapi/bitset_tapi.h"
+#include "turanapi/profiler_tapi.h"
 
-THREADEDJOBSYS_TAPI_LOAD_TYPE threadingsys = NULL;
+THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadingsys = NULL;
 char stop_char;
 
 unsigned char unittest_func(const char** output_string, void* data){
@@ -23,6 +28,8 @@ void thread_print(){
 	while(stop_char != '1'){
 		printf("This thread index: %u\n", threadingsys->funcs->this_thread_index());
 	}
+	Sleep(2000);
+	printf("Finished thread index: %u\n", threadingsys->funcs->this_thread_index());
 }
 
 int main(){
@@ -58,17 +65,41 @@ int main(){
 
 	auto threadingsysdll = DLIB_LOAD_TAPI("tapi_threadedjobsys.dll");
 	load_plugin_func threadingloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(threadingsysdll, "load_plugin");
-	threadingsys = (THREADEDJOBSYS_TAPI_LOAD_TYPE)threadingloader(sys, 0);
-	printf("This thread index: %u\n", threadingsys->funcs->this_thread_index());
-	for(unsigned int i = 0; i < threadingsys->funcs->thread_count(); i++){
-		threadingsys->funcs->execute_withoutwait(&thread_print);
-	}
+	threadingsys = (THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE)threadingloader(sys, 0);
 	
-	printf("Application is finished!");
+	auto filesysdll = DLIB_LOAD_TAPI("tapi_filesys.dll");
+	load_plugin_func filesysloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(filesysdll, "load_plugin");
+	FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys = (FILESYS_TAPI_PLUGIN_LOAD_TYPE)filesysloader(sys, 0);
+	filesys->funcs->write_textfile("naber?", "first.txt", false);
 	
+	auto loggerdll = DLIB_LOAD_TAPI("tapi_logger.dll");
+	load_plugin_func loggerloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(loggerdll, "load_plugin");
+	LOGGER_TAPI_PLUGIN_LOAD_TYPE loggersys = (LOGGER_TAPI_PLUGIN_LOAD_TYPE)loggerloader(sys, 0);
+	loggersys->funcs->log_status("First log!");
+
+	auto bitsetsysdll = DLIB_LOAD_TAPI("tapi_bitset.dll");
+	load_plugin_func bitsetloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(bitsetsysdll, "load_plugin");
+	BITSET_TAPI_PLUGIN_LOAD_TYPE bitsetsys = (BITSET_TAPI_PLUGIN_LOAD_TYPE)bitsetloader(sys, 0);
+	bitset_tapi* firstbitset = bitsetsys->funcs->create_bitset(100);
+	bitsetsys->funcs->setbit_true(firstbitset, 5);
+	printf("First true bit: %u and bitset size: %u\n", bitsetsys->funcs->getindex_firsttrue(firstbitset), bitsetsys->funcs->getbyte_length(firstbitset));
+
+	auto profilersysdll = DLIB_LOAD_TAPI("tapi_profiler.dll");
+	load_plugin_func profilersysloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(profilersysdll, "load_plugin");
+	PROFILER_TAPI_PLUGIN_LOAD_TYPE profilersys = (PROFILER_TAPI_PLUGIN_LOAD_TYPE)profilersysloader(sys, 0);
+	profiledscope_handle_tapi firstprofiling_handle;
+	unsigned long long firstprofiling_duration = 0;
+	profilersys->funcs->start_profiling(&firstprofiling_handle, "First Profiling", &firstprofiling_duration, 2);
+
+
 	scanf("%c", &stop_char);
 	threadingsys->funcs->wait_all_otherjobs();
-	scanf("%c", &stop_char);
+	Sleep(100);
+	char new_char;
+	scanf(" %c", &new_char);
+	profilersys->funcs->finish_profiling(&firstprofiling_handle, 1);
+	printf("Profiling Duration: %llu\n", firstprofiling_duration);
+	printf("Application is finished!");
 
 	return 1;
 }

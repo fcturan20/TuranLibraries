@@ -1,6 +1,7 @@
 #pragma once
-#define THREADEDJOBSYS_TAPI_PLUGIN_NAME "tapi_threadedjobsys"
-#define THREADEDJOBSYS_TAPI_LOAD_TYPE threadingsys_tapi_type*
+#define THREADINGSYS_TAPI_PLUGIN_NAME "tapi_threadedjobsys"
+#define THREADINGSYS_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0,0,0)
+#define THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadingsys_tapi_type*
 
 /*TuranAPI's C Multi-Threading and Job System Library
 * If you created threads before, you can pass them to the Threader. Threader won't create any other thread.

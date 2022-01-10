@@ -1,6 +1,7 @@
 #include "predefinitions.h"
 #define VIRTUALMEMORY_TAPI_PLUGIN_NAME "tapi_virtualmemsys"
 #define VIRTUALMEMORY_TAPI_PLUGIN_TYPE virtualmemorysys_tapi_type*
+#define VIRTUALMEMORY_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0,0,0)
 
 
 //RegistrySys Documentation: Storing Data for Systems

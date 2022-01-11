@@ -11,17 +11,16 @@
 #include "turanapi/logger_tapi.h"
 #include "turanapi/bitset_tapi.h"
 #include "turanapi/profiler_tapi.h"
+#include "turanapi/allocator_tapi.h"
+
+#include <stdint.h>
 
 THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadingsys = NULL;
 char stop_char;
 
 unsigned char unittest_func(const char** output_string, void* data){
-	*output_string = "evet unittest'teyiz!";
+	*output_string = "Unit test in registry_sys_example has run!";
 	return 0;
-}
-
-void unittest_resultvisualize(unsigned char result, const char* output_string){
-
 }
 
 void thread_print(){
@@ -61,7 +60,7 @@ int main(){
 	printf("%s", aos->virtual_allocator->read_string(first_array, 0));
 	aos->virtual_allocator->change_string(first_array, 0, "FUCK");
 	printf("%s", aos->virtual_allocator->read_string(first_array, 0));
-	unittest->run_tests(0xFFFFFFFF, NULL, &unittest_resultvisualize);
+	unittest->run_tests(0xFFFFFFFF, NULL, NULL);
 
 	auto threadingsysdll = DLIB_LOAD_TAPI("tapi_threadedjobsys.dll");
 	load_plugin_func threadingloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(threadingsysdll, "load_plugin");
@@ -90,6 +89,16 @@ int main(){
 	profiledscope_handle_tapi firstprofiling_handle;
 	unsigned long long firstprofiling_duration = 0;
 	profilersys->funcs->start_profiling(&firstprofiling_handle, "First Profiling", &firstprofiling_duration, 2);
+
+	
+	auto allocatorsysdll = DLIB_LOAD_TAPI("tapi_allocator.dll");
+	load_plugin_func allocatorsysloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(allocatorsysdll, "load_plugin");
+	ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE allocatorsys = (ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE)allocatorsysloader(sys, 0);
+	void* allocation = allocatorsys->end_of_page->malloc(10);
+	__uint128_t sixteen_bytes = 5;
+	//There should be a segmentation error!
+	memcpy(allocation, &sixteen_bytes, sizeof(sixteen_bytes));
+
 
 
 	scanf("%c", &stop_char);

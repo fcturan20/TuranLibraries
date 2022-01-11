@@ -49,3 +49,9 @@ add_library (tapi_profiler SHARED "${CMAKE_SOURCE_DIR}/turanapi/turanapi/profile
 set_target_properties(tapi_profiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 set_target_properties(tapi_profiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
 install(TARGETS tapi_profiler RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
+
+#Allocator System
+add_library (tapi_allocator SHARED "${CMAKE_SOURCE_DIR}/turanapi/turanapi/allocator_tapi.cpp")
+set_target_properties(tapi_allocator PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
+set_target_properties(tapi_allocator PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
+install(TARGETS tapi_allocator RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)

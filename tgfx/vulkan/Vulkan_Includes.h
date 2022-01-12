@@ -16,6 +16,41 @@
 
 //#define VULKAN_DEBUGGING
 
+/*
+struct GFXAPI Texture_Properties {
+	texture_mipmapfilter MIPMAP_FILTERING = texture_mipmapfilter::API_TEXTURE_LINEAR_FROM_1MIP;
+	TEXTURE_WRAPPING WRAPPING = TEXTURE_WRAPPING::API_TEXTURE_REPEAT;
+	Texture_Properties()
+	Texture_Properties(TEXTURE_DIMENSIONs dimension, texture_mipmapfilter mipmap_filtering = texture_mipmapfilter::API_TEXTURE_LINEAR_FROM_1MIP,
+		TEXTURE_WRAPPING wrapping = TEXTURE_WRAPPING::API_TEXTURE_REPEAT, TEXTURE_CHANNELs channel_type = TEXTURE_CHANNELs::API_TEXTURE_RGB8UB, TEXTURE_ORDER = TEXTURE_ORDER::SWIZZLE)
+}*/
+
+/*
+	Texture Resource Specifications:
+		1) You can use textures to just read on GPU (probably for object material rendering), read-write on GPU (using compute shader to write an image), render target (framebuffer attachment)
+		2) Modern APIs let you use a texture in anyway, it's left for your care.
+		But OpenGL doesn't let this situation, you are defining your texture's type in creation proccess
+		So for now, GFXAPI uses Modern APIs' way and you can use a texture in anyway you want
+		But you should use UsageBarrier for this kind of usage and specify it in RenderGraph
+		3) You can't use Staging Buffers to store and access textures, they are just for transfer operations
+*/
+/*
+typedef struct GPUDescription {
+	const char* MODEL;
+	unsigned int API_VERSION, DRIVER_VERSION;
+	tgfx_gpu_types GPU_TYPE;
+	unsigned char is_GraphicOperations_Supported, is_ComputeOperations_Supported, is_TransferOperations_Supported;
+	//const tgfx_memorytype* MEMTYPEs;
+	unsigned char MEMTYPEsCOUNT;
+	unsigned long long DEVICELOCAL_MaxMemorySize, HOSTVISIBLE_MaxMemorySize, FASTHOSTVISIBLE_MaxMemorySize, READBACK_MaxMemorySize;
+	unsigned char isSupported_SeperateDepthStencilLayouts, isSupported_SeperateRTSlotBlending,
+		isSupported_NonUniformShaderInputIndexing;
+	//These limits are maximum count of usable resources in a shader stage (VS, FS etc.)
+	//Don't forget that sum of the accesses in a shader stage shouldn't exceed MaxUsableResources_perStage!
+	unsigned int MaxSampledTexture_perStage, MaxImageTexture_perStage, MaxUniformBuffer_perStage, MaxStorageBuffer_perStage, MaxUsableResources_perStage;
+	unsigned int MaxShaderInput_SampledTexture, MaxShaderInput_ImageTexture, MaxShaderInput_UniformBuffer, MaxShaderInput_StorageBuffer;
+} GPUDescription;
+*/
 
 class Vulkan_Core;
 extern Vulkan_Core* VKCORE;

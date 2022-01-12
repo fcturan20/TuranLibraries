@@ -1,28 +1,26 @@
 #pragma once
-#include "GFX_Includes.h"
+#include "tgfx_forwarddeclarations.h"
+#include "tgfx_structs.h"
 
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
-//This 2 class is to manage windows easier
-typedef struct tgfx_IMGUI_WINDOW {
+//This class is to manage windows easier
+typedef struct imguiwindow_tgfx {
 	unsigned char isWindowOpen;
 	const char* WindowName;
 	void (*RunWindow)();
-} tgfx_IMGUI_WINDOW;
+} imguiwindow_tgfx;
 
-
-typedef struct tgfx_IMGUI_WindowManager {
-	void (*Run_IMGUI_WINDOWs)();
-	void (*Register_WINDOW)(tgfx_IMGUI_WINDOW* WINDOW);
-	void (*Delete_WINDOW)(tgfx_IMGUI_WINDOW* WINDOW);
-} tgfx_IMGUI_WindowManager;
 
 
 typedef struct tgfx_imguicore {
-	tgfx_IMGUI_WindowManager WindowManager;
+    //WINDOW MANAGEMENT
+
+	void (*Run_IMGUI_WINDOWs)();
+	void (*Register_WINDOW)(imguiwindow_tgfx* WINDOW);
+	void (*Delete_WINDOW)(imguiwindow_tgfx* WINDOW);
+
+    //INITIALIZATION
+
 	unsigned char (*Check_IMGUI_Version)();
 	void (*Destroy_IMGUI_Resources)();
 	void (*Set_as_MainViewport)();
@@ -31,6 +29,7 @@ typedef struct tgfx_imguicore {
 	unsigned char (*Show_MetricsWindow)();
 
 	//IMGUI FUNCTIONALITY!
+
 	unsigned char (*Create_Window)(const char* title, unsigned char should_close, unsigned char has_menubar);
 	void (*End_Window)();
 	void (*Text)(const char* text);
@@ -61,29 +60,22 @@ typedef struct tgfx_imguicore {
 	//Returns if any item is selected in the list! Selected item's index is the selected_index's pointer's value!
 	unsigned char (*Selectable_ListBox)(const char* name, int* selected_index, const char* const* item_names);
 	//Display a texture that is in the GPU memory, for example a Render Target or a Texture
-	void (*Display_Texture)(tgfx_texture TextureHandle, unsigned int Display_WIDTH, unsigned int Display_HEIGHT, unsigned char should_Flip_Vertically);
+	void (*Display_Texture)(texture_tgfx_handle TextureHandle, unsigned int Display_WIDTH, unsigned int Display_HEIGHT, unsigned char should_Flip_Vertically);
 	unsigned char (*Begin_TabBar)();
 	void (*End_TabBar)();
 	unsigned char (*Begin_TabItem)(const char* name);
 	void (*End_TabItem)();
 	void (*Separator)();
-	tgfx_vec2 (*GetLastItemRectMin)();
-	tgfx_vec2 (*GetLastItemRectMax)();
-	tgfx_vec2 (*GetItemWindowPos)();
-	tgfx_vec2 (*GetMouseWindowPos)();
+	vec2_tgfx (*GetLastItemRectMin)();
+	vec2_tgfx (*GetLastItemRectMax)();
+	vec2_tgfx (*GetItemWindowPos)();
+	vec2_tgfx (*GetMouseWindowPos)();
 
 	//Add here Unsigned Int, Unsigned Short & Short, Unsigned Char & Char sliders too!
 
 	unsigned char (*Slider_Int)(const char* name, int* data, int min, int max);
 	unsigned char (*Slider_Float)(const char* name, float* data, float min, float max);
-	unsigned char (*Slider_Vec2)(const char* name, tgfx_vec2* data, float min, float max);
-	unsigned char (*Slider_Vec3)(const char* name, tgfx_vec3* data, float min, float max);
-	unsigned char (*Slider_Vec4)(const char* name, tgfx_vec4* data, float min, float max);
-
-
+	unsigned char (*Slider_Vec2)(const char* name, vec2_tgfx* data, float min, float max);
+	unsigned char (*Slider_Vec3)(const char* name, vec3_tgfx* data, float min, float max);
+	unsigned char (*Slider_Vec4)(const char* name, vec4_tgfx* data, float min, float max);
 } tgfx_imguicore;
-
-
-#if defined(__cplusplus)
-}
-#endif

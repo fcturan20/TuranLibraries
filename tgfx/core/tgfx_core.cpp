@@ -1,15 +1,13 @@
 #include "tgfx_core.h"
-#include <turanapi/predefinitions.h>
-#include <turanapi/registrysys_tapi.h>
+#include <predefinitions_tapi.h>
+#include <registrysys_tapi.h>
 #include <assert.h>
 
 
-typedef struct core_tgfx_d{
-    core_tgfx_type* type;
-} core_tgfx_d;
-static core_tgfx_d* core_data;
+static core_tgfx_type* core_type_ptr;
+static registrysys_tapi* core_regsys;
 
-result_tgfx load_backend(backends_tgfx backend, unsigned char is_Multithreaded){
+result_tgfx load_backend(backends_tgfx backend){
     const char* path = nullptr;
 	switch (backend)
 	{
@@ -26,16 +24,14 @@ result_tgfx load_backend(backends_tgfx backend, unsigned char is_Multithreaded){
 
     auto backend_dll = DLIB_LOAD_TAPI(path);
     backend_load_func backendloader = (backend_load_func)DLIB_FUNC_LOAD_TAPI(backend_dll, "backend_load");
-    return backendloader(core_data->type);
+    return backendloader(TGFX_PLUGIN_VERSION, core_type_ptr);
 }
 
 extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned char reload){
     core_tgfx_type* core = (core_tgfx_type*)malloc(sizeof(core_tgfx_type));
-    core->data = (core_tgfx_d*)malloc(sizeof(core_tgfx_d));
     core->api = (core_tgfx*)malloc(sizeof(core_tgfx));
-    core_data = core->data;
-    
-    core->data->type = core;
+    core_type_ptr = core;
+    core_regsys = regsys;
 
     core->api->load_backend = &load_backend;
 

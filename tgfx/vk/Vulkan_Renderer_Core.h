@@ -1,24 +1,21 @@
 #pragma once
 #include "Vulkan_Includes.h"
-#include "Vulkan_Resource.h"
 
-class Renderer {
-public:
-	std::vector<VK_DrawPass*> DrawPasses;
-	std::vector<VK_TransferPass*> TransferPasses;
-	std::vector<VK_WindowPass*> WindowPasses;
-	std::vector<VK_ComputePass*> ComputePasses;
-	VK_FrameGraph FrameGraphs[2];
-	RenderGraphStatus RG_Status = RenderGraphStatus::Invalid;
-	//These are RenderGraph algorithm only structures, so don't need any type or something
-	void* Branches = nullptr, * Submits = nullptr, * Semaphores = nullptr;
-
-
-	VkDescriptorPool IMGUIPOOL = VK_NULL_HANDLE;
+class renderer_public {
+private:
+	std::vector<drawpass_vk*> DrawPasses;
+	std::vector<transferpass_vk*> TransferPasses;
+	std::vector<windowpass_vk*> WindowPasses;
+	std::vector<computepass_vk*> ComputePasses;
 	unsigned char FrameIndex;
+public:
+	inline unsigned char Get_FrameIndex(bool is_LastFrame){
+		return (is_LastFrame) ? ((FrameIndex + 1) % 2) : (FrameIndex);
+	}
+    
+	VkDescriptorPool IMGUIPOOL = VK_NULL_HANDLE;
 
 
-	inline unsigned char Get_FrameIndex(bool is_LastFrame);
 
 	//INHERITANCE
 	Renderer();
@@ -65,5 +62,4 @@ public:
 	static void Dispatch_Compute(tgfx_computepass ComputePassHandle, tgfx_computeshaderinstance CSInstanceHandle,
 		unsigned int SubComputePassIndex, tgfx_uvec3 DispatchSize);
 	static void ChangeDrawPass_RTSlotSet(tgfx_drawpass DrawPassHandle, tgfx_rtslotset RTSlotSetHandle);
-
 };

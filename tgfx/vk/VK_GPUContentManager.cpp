@@ -1029,7 +1029,7 @@ void vk_gpudatamanager::Apply_ResourceChanges() {
 	//Handle RTSlotSet changes by recreating framebuffers of draw passes
 	//by "RTSlotSet changes": DrawPass' slotset is changed to different one or slotset's slots is changed.
 	for (unsigned int DrawPassIndex = 0; DrawPassIndex < VKRENDERER->DrawPasses.size(); DrawPassIndex++) {
-		VK_DrawPass* DP = VKRENDERER->DrawPasses[DrawPassIndex];
+		drawpass_vk* DP = VKRENDERER->DrawPasses[DrawPassIndex];
 		unsigned char ChangeInfo = DP->SlotSetChanged.load();
 		if (ChangeInfo == FrameIndex + 1 || ChangeInfo == 3 || DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.load()) {
 			//This is safe because this FB is used 2 frames ago and CPU already waits for the frame's GPU process to end
@@ -2153,7 +2153,7 @@ tgfx_result vk_gpudatamanager::Link_MaterialType(tgfx_shadersource_list ShaderSo
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	VK_SubDrawPass* Subpass = (VK_SubDrawPass*)Subdrawpass;
-	VK_DrawPass* MainPass = (VK_DrawPass*)Subpass->DrawPass;
+	drawpass_vk* MainPass = (drawpass_vk*)Subpass->DrawPass;
 
 	VK_ShaderSource* VertexSource = nullptr, *FragmentSource = nullptr;
 	unsigned int ShaderSourceCount = 0;

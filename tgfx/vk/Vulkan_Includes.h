@@ -1,13 +1,5 @@
 #pragma once
-#define TAPI_THREADING_CPP_HELPER
-#include <TAPI/TURANAPI.h>
-#include <TGFX/GFX_Core.h>
-#include <glm/glm.hpp>
 
-//Vulkan Libs
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-#include <vulkan/vulkan.h>
 #include <iostream>
 #include <vector>
 #include <mutex>
@@ -52,36 +44,12 @@ typedef struct GPUDescription {
 } GPUDescription;
 */
 
-class Vulkan_Core;
-extern Vulkan_Core* VKCORE;
-class Renderer;
-extern Renderer* VKRENDERER;
-class vk_gpudatamanager;
-extern vk_gpudatamanager* VKContentManager;
-class IMGUI_VK;
-extern IMGUI_VK* VK_IMGUI;
-struct GPU;
-extern GPU* RENDERGPU;
-extern tapi_threadingsystem JobSys;
-class VK_SemaphoreSystem;
-extern VK_SemaphoreSystem* SEMAPHORESYS;
-class VK_FenceSystem;
-extern VK_FenceSystem* FENCESYS;
 
-
-struct VK_Extension {
-	enum class EXTTYPE : unsigned int {
-		UNDEFINED = 0
-	};
-	EXTTYPE TYPE = EXTTYPE::UNDEFINED;
-	void* DATA = nullptr;
-};
 
 static VkInstance Vulkan_Instance;
 static VkApplicationInfo Application_Info;
 static std::vector<VkExtensionProperties> Supported_InstanceExtensionList;
 static std::vector<const char*> Active_InstanceExtensionNames;
-void SetGFXHelperFunctions();
 
 //Extensions
 static bool isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = false;
@@ -90,11 +58,6 @@ static bool isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 =
 struct VK_Texture; struct VK_MemoryAllocation; struct VK_IRTSLOTSET;
 
 struct InitializationSecondStageInfo {
-	GPU* RENDERERGPU;
-	//Global Descriptors Info
-	unsigned int MaxMaterialCount, MaxSumMaterial_SampledTexture, MaxSumMaterial_ImageTexture, MaxSumMaterial_UniformBuffer, MaxSumMaterial_StorageBuffer,
-		GlobalShaderInput_UniformBufferCount, GlobalShaderInput_StorageBufferCount, GlobalShaderInput_SampledTextureCount, GlobalShaderInput_ImageTextureCount;
-	bool shouldActivate_DearIMGUI : 1, isUniformBuffer_Index1 : 1, isSampledTexture_Index1 : 1;
 
 };
 

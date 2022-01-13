@@ -237,11 +237,11 @@ struct VK_TPBarrierDatas {
 	VK_TPBarrierDatas(const VK_TPBarrierDatas& copyfrom);
 };
 
-struct VK_TransferPass : public VK_Pass {
+struct transferpass_vk : public VK_Pass {
 	void* TransferDatas;
 	tgfx_transferpass_type TYPE;
 
-	VK_TransferPass(const char* name, unsigned int WAITSCOUNT);
+	transferpass_vk(const char* name, unsigned int WAITSCOUNT);
 	virtual bool IsWorkloaded() override;
 };
 
@@ -261,11 +261,11 @@ struct VK_SubComputePass {
 	bool isThereWorkload();
 };
 
-struct VK_ComputePass : public VK_Pass {
+struct computepass_vk : public VK_Pass {
 	std::vector<VK_SubComputePass> Subpasses;
 	std::atomic_bool SubPassList_Updated = false;
 
-	VK_ComputePass(const std::string& name, unsigned int WAITSCOUNT);
+	computepass_vk(const std::string& name, unsigned int WAITSCOUNT);
 	virtual bool IsWorkloaded() override;
 };
 
@@ -290,19 +290,19 @@ struct VK_IndexedDrawCall {
 	VkPipelineLayout MatTypeLayout;
 	VkDescriptorSet* GeneralSet, * PerInstanceSet;
 };
-struct VK_DrawPass;
+struct drawpass_vk;
 struct VK_SubDrawPass {
 	unsigned char Binding_Index;
 	bool render_dearIMGUI = false;
 	VK_IRTSLOTSET* SLOTSET;
-	VK_DrawPass* DrawPass;
+	drawpass_vk* DrawPass;
 	tapi_threadlocal_vector<VK_NonIndexedDrawCall> NonIndexedDrawCalls;
 	tapi_threadlocal_vector<VK_IndexedDrawCall> IndexedDrawCalls;
 
 	VK_SubDrawPass();
 	bool isThereWorkload();
 };
-struct VK_DrawPass : public VK_Pass {
+struct drawpass_vk : public VK_Pass {
 	VkRenderPass RenderPassObject;
 	VK_RTSLOTSET* SLOTSET;
 	std::atomic<unsigned char> SlotSetChanged = false;
@@ -311,7 +311,7 @@ struct VK_DrawPass : public VK_Pass {
 	VkFramebuffer FBs[2]{ VK_NULL_HANDLE };
 	tgfx_BoxRegion RenderRegion;
 
-	VK_DrawPass(const std::string& name, unsigned int WAITSCOUNT);
+	drawpass_vk(const std::string& name, unsigned int WAITSCOUNT);
 	virtual bool IsWorkloaded() override;
 };
 
@@ -320,11 +320,11 @@ struct VK_DrawPass : public VK_Pass {
 struct VK_WindowCall {
 	WINDOW* Window;
 };
-struct VK_WindowPass : public VK_Pass {
+struct windowpass_vk : public VK_Pass {
 	//Element 0 is the Penultimate, Element 1 is the Last, Element 2 is the Current buffers.
 	std::vector<VK_WindowCall> WindowCalls[3];
 
-	VK_WindowPass(const std::string& name, unsigned int WAITSCOUNT);
+	windowpass_vk(const std::string& name, unsigned int WAITSCOUNT);
 	virtual bool IsWorkloaded() override;
 };
 

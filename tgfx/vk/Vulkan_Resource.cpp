@@ -6,16 +6,16 @@
 VK_Pass::VK_Pass(const std::string& name, PassType type, unsigned int WAITSCOUNT) : NAME(name), TYPE(type), WAITsCOUNT(WAITSCOUNT), WAITs(new VK_PassWaitDescription[WAITSCOUNT]) {
 
 }
-VK_DrawPass::VK_DrawPass(const std::string& name, unsigned int WAITSCOUNT) : VK_Pass(name, PassType::DP, WAITSCOUNT) {
+drawpass_vk::drawpass_vk(const std::string& name, unsigned int WAITSCOUNT) : VK_Pass(name, PassType::DP, WAITSCOUNT) {
 
 }
-VK_ComputePass::VK_ComputePass(const std::string& name, unsigned int WAITSCOUNT) : VK_Pass(name, PassType::CP, WAITSCOUNT) {
+computepass_vk::computepass_vk(const std::string& name, unsigned int WAITSCOUNT) : VK_Pass(name, PassType::CP, WAITSCOUNT) {
 
 }
-VK_WindowPass::VK_WindowPass(const std::string& name, unsigned int WAITSCOUNT) : VK_Pass(name, PassType::WP, WAITSCOUNT) {
+windowpass_vk::windowpass_vk(const std::string& name, unsigned int WAITSCOUNT) : VK_Pass(name, PassType::WP, WAITSCOUNT) {
 
 }
-VK_TransferPass::VK_TransferPass(const char* name, unsigned int WAITSCOUNT) : VK_Pass(name, PassType::TP, WAITSCOUNT) {
+transferpass_vk::transferpass_vk(const char* name, unsigned int WAITSCOUNT) : VK_Pass(name, PassType::TP, WAITSCOUNT) {
 
 }
 
@@ -211,7 +211,7 @@ VK_DescBufferElement::VK_DescBufferElement() {
 VK_DescBufferElement::VK_DescBufferElement(const VK_DescBufferElement& copyBuf) : IsUpdated(copyBuf.IsUpdated.load()), Info(copyBuf.Info) {
 
 }
-bool VK_TransferPass::IsWorkloaded() {
+bool transferpass_vk::IsWorkloaded() {
 	if (!TransferDatas) {
 		return false;
 	}
@@ -279,7 +279,7 @@ bool VK_TransferPass::IsWorkloaded() {
 	}
 	break;
 	default:
-		LOG(tgfx_result_FAIL, "VK_TransferPass::IsWorkloaded() doesn't support this type of transfer pass type!");
+		LOG(tgfx_result_FAIL, "transferpass_vk::IsWorkloaded() doesn't support this type of transfer pass type!");
 		return false;
 	}
 
@@ -288,7 +288,7 @@ bool VK_TransferPass::IsWorkloaded() {
 
 	return false;
 }
-bool VK_ComputePass::IsWorkloaded() {
+bool computepass_vk::IsWorkloaded() {
 	for (unsigned char SubpassIndex = 0; SubpassIndex < Subpasses.size(); SubpassIndex++) {
 		VK_SubComputePass& SP = Subpasses[SubpassIndex];
 		if (SP.isThereWorkload()) {
@@ -297,13 +297,13 @@ bool VK_ComputePass::IsWorkloaded() {
 	}
 	return false;
 }
-bool VK_WindowPass::IsWorkloaded() {
+bool windowpass_vk::IsWorkloaded() {
 	if (WindowCalls[3].size()) {
 		return true;
 	}
 	return false;
 }
-bool VK_DrawPass::IsWorkloaded() {
+bool drawpass_vk::IsWorkloaded() {
 	for (unsigned char SubpassIndex = 0; SubpassIndex < Subpass_Count; SubpassIndex++) {
 		VK_SubDrawPass& SP = Subpasses[SubpassIndex];
 		if (SP.isThereWorkload()) {

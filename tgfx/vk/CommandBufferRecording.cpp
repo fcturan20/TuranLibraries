@@ -10,7 +10,7 @@
 // Vulkan Render Command Buffer Recordings
 void FindBufferOBJ_byBufType(const tgfx_buffer Handle, tgfx_buffertype TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset);
 
-void Record_RenderPass(VkCommandBuffer CB, VK_DrawPass* DrawPass) {
+void Record_RenderPass(VkCommandBuffer CB, drawpass_vk* DrawPass) {
 	unsigned char FRAMEINDEX = VKRENDERER->GetCurrentFrameIndex();
 
 	VK_RTSLOTs& CF_SLOTs = DrawPass->SLOTSET->PERFRAME_SLOTSETs[FRAMEINDEX];
@@ -169,7 +169,7 @@ void SetBarrier_BetweenBranchPasses(VkCommandBuffer CB, VK_BranchPass* LastPass,
 	switch (CurrentPass->TYPE) {
 	case PassType::DP:
 	{
-		VK_DrawPass* DP = GFXHandleConverter(VK_DrawPass*, CurrentPass->Handle);
+		drawpass_vk* DP = GFXHandleConverter(drawpass_vk*, CurrentPass->Handle);
 		bool isdependencyfound = false;
 		for (unsigned char WaitIndex = 0; WaitIndex < DP->WAITs.size(); WaitIndex++) {
 			if (*DP->WAITs[WaitIndex].WaitedPass == LastPass->Handle) {
@@ -198,7 +198,7 @@ void SetBarrier_BetweenBranchPasses(VkCommandBuffer CB, VK_BranchPass* LastPass,
 	break;
 	case PassType::TP:
 	{
-		VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, CurrentPass->Handle);
+		transferpass_vk* TP = GFXHandleConverter(transferpass_vk*, CurrentPass->Handle);
 		bool isdependencyfound = false;
 		for (unsigned char WaitIndex = 0; WaitIndex < TP->WAITs.size(); WaitIndex++) {
 			if (*TP->WAITs[WaitIndex].WaitedPass == LastPass->Handle) {
@@ -224,7 +224,7 @@ void SetBarrier_BetweenBranchPasses(VkCommandBuffer CB, VK_BranchPass* LastPass,
 	break;
 	case PassType::CP:
 	{
-		VK_ComputePass* CP = GFXHandleConverter(VK_ComputePass*, CurrentPass->Handle);
+		computepass_vk* CP = GFXHandleConverter(computepass_vk*, CurrentPass->Handle);
 		bool isdependencyfound = false;
 		for (unsigned char WaitIndex = 0; WaitIndex < CP->WAITs.size(); WaitIndex++) {
 			if (*CP->WAITs[WaitIndex].WaitedPass == LastPass->Handle) {
@@ -324,7 +324,7 @@ void Record_CopyTP(VkCommandBuffer CB, VK_TPCopyDatas* DATAs) {
 	}
 }
 
-void Record_ComputePass(VkCommandBuffer CB, VK_ComputePass* CP) {
+void Record_ComputePass(VkCommandBuffer CB, computepass_vk* CP) {
 	for (unsigned int SPIndex = 0; SPIndex < CP->Subpasses.size(); SPIndex++) {
 		VK_SubComputePass& SP = CP->Subpasses[SPIndex];
 		std::unique_lock<std::mutex> Locker;
@@ -404,11 +404,11 @@ void RecordRGBranchCalls(VK_RGBranch& Branch, VkCommandBuffer CB) {
 
 		switch (CurrentPass->TYPE) {
 		case PassType::DP:
-			Record_RenderPass(CB, GFXHandleConverter(VK_DrawPass*, CurrentPass->Handle));
+			Record_RenderPass(CB, GFXHandleConverter(drawpass_vk*, CurrentPass->Handle));
 			break;
 		case PassType::TP:
 		{
-			VK_TransferPass* TP = GFXHandleConverter(VK_TransferPass*, CurrentPass->Handle);
+			transferpass_vk* TP = GFXHandleConverter(transferpass_vk*, CurrentPass->Handle);
 			switch (TP->TYPE) {
 			case tgfx_transferpass_type_BARRIER:
 			{
@@ -431,7 +431,7 @@ void RecordRGBranchCalls(VK_RGBranch& Branch, VkCommandBuffer CB) {
 			LOG_CRASHING_TAPI("This shouldn't happen, it should've been returned early!");
 			break;
 		case PassType::CP:
-			Record_ComputePass(CB, GFXHandleConverter(VK_ComputePass*, CurrentPass->Handle));
+			Record_ComputePass(CB, GFXHandleConverter(computepass_vk*, CurrentPass->Handle));
 			break;
 		default:
 			LOG_NOTCODED_TAPI("This pass type isn't coded for recording yet!", true);

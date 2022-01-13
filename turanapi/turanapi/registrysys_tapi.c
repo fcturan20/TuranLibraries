@@ -1,4 +1,4 @@
-#include "predefinitions.h"
+#include "predefinitions_tapi.h"
 #include "registrysys_tapi.h"
 #include "virtualmemorysys_tapi.h"
 #include "stdio.h"

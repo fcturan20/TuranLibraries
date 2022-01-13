@@ -1,3 +1,4 @@
+#pragma once
 #define UNITTEST_TAPI_PLUGIN_NAME "tapi_unittest"
 #define UNITTEST_TAPI_LOAD_TYPE unittestsys_tapi*
 

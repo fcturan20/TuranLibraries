@@ -1,30 +1,21 @@
 #pragma once
-#include "Vulkan_Includes.h"
-#include <TGFX/GFX_Core.h>
-
 #include "Vulkan_Resource.h"
 #include "VK_GPUContentManager.h"
 #include "Vulkan_Renderer_Core.h"
 #include "IMGUI_VK.h"
 
-#include "Main.h"
 
 
 
 
 class Vulkan_Core {
 public:
-	std::vector<GPU*> DEVICE_GPUs;
-	//Instead of checking each window each frame, just check this
-	bool isAnyWindowResized = false;
-
 	//Window Operations
 	std::vector<vkMONITOR*> MONITORs;
 	std::vector<WINDOW*> WINDOWs;
 
 	static bool Create_WindowSwapchain(WINDOW* Vulkan_Window, unsigned int WIDTH, unsigned int HEIGHT, VkSwapchainKHR* SwapchainOBJ, VK_Texture** SwapchainTextureHandles);
 
-	tgfx_core TGFXCORE;
 	//TGFX functions to point
 	static void ChangeWindowResolution(tgfx_window WindowHandle, unsigned int Width, unsigned int Height);
 	static void Initialize_SecondStage(tgfx_initializationsecondstageinfo info);

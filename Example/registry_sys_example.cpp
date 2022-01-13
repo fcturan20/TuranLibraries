@@ -94,10 +94,10 @@ int main(){
 	auto allocatorsysdll = DLIB_LOAD_TAPI("tapi_allocator.dll");
 	load_plugin_func allocatorsysloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(allocatorsysdll, "load_plugin");
 	ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE allocatorsys = (ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE)allocatorsysloader(sys, 0);
-	void* allocation = allocatorsys->end_of_page->malloc(10);
-	__uint128_t sixteen_bytes = 5;
+	void* allocation = allocatorsys->end_of_page->malloc(6);
+	uint64_t eight_bytes = 5;
 	//There should be a segmentation error!
-	memcpy(allocation, &sixteen_bytes, sizeof(sixteen_bytes));
+	memcpy(allocation, &eight_bytes, sizeof(eight_bytes));
 
 
 

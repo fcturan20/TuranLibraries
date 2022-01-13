@@ -1,7 +1,8 @@
+#pragma once
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "predefinitions.h"
+#include "predefinitions_tapi.h"
 
 #define ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME "tapi_array_of_strings_sys"
 #define ARRAY_OF_STRINGS_TAPI_LOAD_TYPE array_of_strings_tapi_type*

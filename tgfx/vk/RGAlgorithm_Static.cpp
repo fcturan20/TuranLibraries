@@ -73,7 +73,7 @@ VK_QUEUEFLAG FindRequiredQueue_ofGP(const VK_Pass* GP) {
 		flag.is_GRAPHICSsupported = true;
 		break;
 	case PassType::TP:
-		if (((VK_TransferPass*)GP)->TYPE == tgfx_transferpass_type_BARRIER) {
+		if (((transferpass_vk*)GP)->TYPE == tgfx_transferpass_type_BARRIER) {
 			//All is false means any queue can call this pass!
 			break;
 		}
@@ -542,7 +542,7 @@ void FindPasses_dependentRPs(VK_PassLinkedList* RPless_passes, std::vector<VK_Re
 		FindPasses_dependentRPs(RPless_passes, RPs);
 	}
 }
-void Create_VkFrameBuffers(VK_DrawPass* DP, unsigned int FrameGraphIndex) {
+void Create_VkFrameBuffers(drawpass_vk* DP, unsigned int FrameGraphIndex) {
 	std::vector<VkImageView> Attachments;
 	for (unsigned int i = 0; i < DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLORSLOTs_COUNT; i++) {
 		VK_Texture* VKTexture = DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLOR_SLOTs[i].RT;
@@ -588,26 +588,26 @@ void Create_FrameGraphs() {
 		//Fill both AllPasses and RPless_passes std::vectors!
 		//Also create root Passes
 		for (unsigned char DPIndex = 0; DPIndex < VKRENDERER->DrawPasses.size(); DPIndex++) {
-			VK_DrawPass* DP = VKRENDERER->DrawPasses[DPIndex];
+			drawpass_vk* DP = VKRENDERER->DrawPasses[DPIndex];
 			AllPasses.push_back(DP);
 		}
 		//Do the same thing to the WPs too
 		for (unsigned char WPIndex = 0; WPIndex < VKRENDERER->WindowPasses.size(); WPIndex++) {
-			VK_WindowPass* WP = VKRENDERER->WindowPasses[WPIndex];
+			windowpass_vk* WP = VKRENDERER->WindowPasses[WPIndex];
 			AllPasses.push_back(WP);
 		}
 		//Do the same thing to the TPs too
 		for (unsigned char TPIndex = 0; TPIndex < VKRENDERER->TransferPasses.size(); TPIndex++) {
-			VK_TransferPass* TP = VKRENDERER->TransferPasses[TPIndex];
+			transferpass_vk* TP = VKRENDERER->TransferPasses[TPIndex];
 			AllPasses.push_back(TP);
 		}
 		//Do the same thing to the CPs too
 		for (unsigned char CPIndex = 0; CPIndex < VKRENDERER->ComputePasses.size(); CPIndex++) {
-			VK_ComputePass* CP = VKRENDERER->ComputePasses[CPIndex];
+			computepass_vk* CP = VKRENDERER->ComputePasses[CPIndex];
 			AllPasses.push_back(CP);
 		}
 		for (unsigned char DPIndex = 0; DPIndex < VKRENDERER->DrawPasses.size(); DPIndex++) {
-			VK_DrawPass* DP = VKRENDERER->DrawPasses[DPIndex];
+			drawpass_vk* DP = VKRENDERER->DrawPasses[DPIndex];
 			//Check if it is root DP and if it is not, then pass it to the RPless_passes
 			bool is_RootDP = false;
 			if (DP->WAITsCOUNT == 0) {
@@ -626,7 +626,7 @@ void Create_FrameGraphs() {
 			}
 		}
 		for (unsigned char WPIndex = 0; WPIndex < VKRENDERER->WindowPasses.size(); WPIndex++) {
-			VK_WindowPass* WP = VKRENDERER->WindowPasses[WPIndex];
+			windowpass_vk* WP = VKRENDERER->WindowPasses[WPIndex];
 			//Check if it is root DP and if it is not, then pass it to the RPless_passes
 			bool is_RootWP = false;
 			if (WP->WAITsCOUNT == 0) {
@@ -645,7 +645,7 @@ void Create_FrameGraphs() {
 			}
 		}
 		for (unsigned char TPIndex = 0; TPIndex < VKRENDERER->TransferPasses.size(); TPIndex++) {
-			VK_TransferPass* TP = VKRENDERER->TransferPasses[TPIndex];
+			transferpass_vk* TP = VKRENDERER->TransferPasses[TPIndex];
 			//Check if it is root TP and if it is not, then pass it to the RPless_passes
 			bool is_RootTP = false;
 			if (TP->WAITsCOUNT == 0) {
@@ -664,7 +664,7 @@ void Create_FrameGraphs() {
 			}
 		}
 		for (unsigned char CPIndex = 0; CPIndex < VKRENDERER->ComputePasses.size(); CPIndex++) {
-			VK_ComputePass* CP = VKRENDERER->ComputePasses[CPIndex];
+			computepass_vk* CP = VKRENDERER->ComputePasses[CPIndex];
 			//Check if it is root CP and if it is not, then pass it to the RPless_passes
 			bool is_RootCP = false;
 			if (CP->WAITsCOUNT == 0) {

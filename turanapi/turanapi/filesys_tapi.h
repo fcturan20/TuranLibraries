@@ -1,4 +1,5 @@
-#include "predefinitions.h"
+#pragma once
+#include "predefinitions_tapi.h"
 #define FILESYS_TAPI_PLUGIN_NAME "tapi_filesys"
 #define FILESYS_TAPI_PLUGIN_VERSION  MAKE_PLUGIN_VERSION_TAPI(0,0,0)
 #define FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys_tapi_type*

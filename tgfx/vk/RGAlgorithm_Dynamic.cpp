@@ -504,7 +504,7 @@ inline void CreateSubmits_Fast(VK_FrameGraph& Current_FrameGraph, VK_FrameGraph&
 			const VK_RGBranch& LFDBranch = LastFrameGraph->FrameGraphTree[MainBranch.LFDynamicDependents[LFDBIndex]];
 			//This is a window pass, so we should access to each Window to get the related semaphores
 			if (LFDBranch.CorePasses[0].TYPE == PassType::WP) {
-				VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, LFDBranch.CorePasses[0].Handle);
+				windowpass_vk* WP = GFXHandleConverter(windowpass_vk*, LFDBranch.CorePasses[0].Handle);
 				for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[1].size(); WindowIndex++) {
 					Submit->WaitSemaphoreIDs.push_back(
 						WP->WindowCalls[1][WindowIndex].Window->PresentationSemaphores[0]
@@ -531,7 +531,7 @@ inline void CreateSubmits_Fast(VK_FrameGraph& Current_FrameGraph, VK_FrameGraph&
 		//Find Penultimate Window Pass only branches that current submit depends on and get their signal semaphores to wait
 		for (unsigned char PenultimateBIndex = 0; PenultimateBIndex < MainBranch.PenultimateSwapchainBranchCount; PenultimateBIndex++) {
 			const VK_RGBranch* PenultimateWPBranch = MainBranch.PenultimateSwapchainBranches[PenultimateBIndex];
-			VK_WindowPass* WP = GFXHandleConverter(VK_WindowPass*, PenultimateWPBranch->CorePasses[0].Handle);
+			windowpass_vk* WP = GFXHandleConverter(windowpass_vk*, PenultimateWPBranch->CorePasses[0].Handle);
 			for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[0].size(); WindowIndex++) {
 				bool isAddedPreviously = false;
 				for (unsigned int SemaphoreIndexSearchIndex = 0; SemaphoreIndexSearchIndex < Submit->WaitSemaphoreIDs.size(); SemaphoreIndexSearchIndex++) {
@@ -840,7 +840,7 @@ void Send_PresentationCommands() {
 
 	//Send displays
 	for (unsigned char WindowPassIndex = 0; WindowPassIndex < VKRENDERER->WindowPasses.size(); WindowPassIndex++) {
-		VK_WindowPass* WP = VKRENDERER->WindowPasses[WindowPassIndex];
+		windowpass_vk* WP = VKRENDERER->WindowPasses[WindowPassIndex];
 		if (!WP->WindowCalls[2].size()) {
 			continue;
 		}
@@ -902,7 +902,7 @@ void RenderGraph_DataShifting() {
 	//Shift all WindowCall buffers of all Window Passes!
 	//Also shift all of the window semaphores
 	for (unsigned char WPIndex = 0; WPIndex < VKRENDERER->WindowPasses.size(); WPIndex++) {
-		VK_WindowPass* WP = VKRENDERER->WindowPasses[WPIndex];
+		windowpass_vk* WP = VKRENDERER->WindowPasses[WPIndex];
 		WP->WindowCalls[0] = WP->WindowCalls[1];
 		WP->WindowCalls[1] = WP->WindowCalls[2];
 		WP->WindowCalls[2].clear();
@@ -920,7 +920,7 @@ void RenderGraph_DataShifting() {
 
 bool Check_WaitHandles() {
 	for (unsigned int DPIndex = 0; DPIndex < VKRENDERER->DrawPasses.size(); DPIndex++) {
-		VK_DrawPass* DP = VKRENDERER->DrawPasses[DPIndex];
+		drawpass_vk* DP = VKRENDERER->DrawPasses[DPIndex];
 		for (unsigned int WaitIndex = 0; WaitIndex < DP->WAITsCOUNT; WaitIndex++) {
 			VK_PassWaitDescription& Wait_desc = DP->WAITs[WaitIndex];
 			if ((*Wait_desc.WaitedPass) == nullptr) {
@@ -1002,7 +1002,7 @@ bool Check_WaitHandles() {
 		}
 	}
 	for (unsigned int WPIndex = 0; WPIndex < VKRENDERER->WindowPasses.size(); WPIndex++) {
-		VK_WindowPass* WP = ((VK_WindowPass*)VKRENDERER->WindowPasses[WPIndex]);
+		windowpass_vk* WP = ((windowpass_vk*)VKRENDERER->WindowPasses[WPIndex]);
 		for (unsigned int WaitIndex = 0; WaitIndex < WP->WAITsCOUNT; WaitIndex++) {
 			VK_PassWaitDescription& Wait_desc = WP->WAITs[WaitIndex];
 			if (!(*Wait_desc.WaitedPass)) {
@@ -1028,7 +1028,7 @@ bool Check_WaitHandles() {
 			break;
 			case PassType::TP:
 			{
-				VK_TransferPass* currentTP = ((VK_TransferPass*)*Wait_desc.WaitedPass);
+				transferpass_vk* currentTP = ((transferpass_vk*)*Wait_desc.WaitedPass);
 				bool is_Found = false;
 				for (unsigned int CheckedTP = 0; CheckedTP < VKRENDERER->TransferPasses.size(); CheckedTP++) {
 					if (currentTP == VKRENDERER->TransferPasses[CheckedTP]) {
@@ -1070,7 +1070,7 @@ bool Check_WaitHandles() {
 		}
 	}
 	for (unsigned int TPIndex = 0; TPIndex < VKRENDERER->TransferPasses.size(); TPIndex++) {
-		VK_TransferPass* TP = VKRENDERER->TransferPasses[TPIndex];
+		transferpass_vk* TP = VKRENDERER->TransferPasses[TPIndex];
 		for (unsigned int WaitIndex = 0; WaitIndex < TP->WAITsCOUNT; WaitIndex++) {
 			VK_PassWaitDescription& Wait_desc = TP->WAITs[WaitIndex];
 			if (!(*Wait_desc.WaitedPass)) {
@@ -1097,7 +1097,7 @@ bool Check_WaitHandles() {
 			break;
 			case PassType::TP:
 			{
-				VK_TransferPass* currentTP = ((VK_TransferPass*)*Wait_desc.WaitedPass);
+				transferpass_vk* currentTP = ((transferpass_vk*)*Wait_desc.WaitedPass);
 				bool is_Found = false;
 				for (unsigned int CheckedTP = 0; CheckedTP < VKRENDERER->TransferPasses.size(); CheckedTP++) {
 					if (currentTP == VKRENDERER->TransferPasses[CheckedTP]) {
@@ -1156,7 +1156,7 @@ bool Check_WaitHandles() {
 		}
 	}
 	for (unsigned int CPIndex = 0; CPIndex < VKRENDERER->ComputePasses.size(); CPIndex++) {
-		VK_ComputePass* CP = VKRENDERER->ComputePasses[CPIndex];
+		computepass_vk* CP = VKRENDERER->ComputePasses[CPIndex];
 		for (unsigned int WaitIndex = 0; WaitIndex < CP->WAITsCOUNT; WaitIndex++) {
 			VK_PassWaitDescription& Wait_desc = CP->WAITs[WaitIndex];
 			if (!(*Wait_desc.WaitedPass)) {
@@ -1183,7 +1183,7 @@ bool Check_WaitHandles() {
 			break;
 			case PassType::TP:
 			{
-				VK_TransferPass* currentTP = ((VK_TransferPass*)*Wait_desc.WaitedPass);
+				transferpass_vk* currentTP = ((transferpass_vk*)*Wait_desc.WaitedPass);
 				bool is_Found = false;
 				for (unsigned int CheckedTP = 0; CheckedTP < VKRENDERER->TransferPasses.size(); CheckedTP++) {
 					if (currentTP == VKRENDERER->TransferPasses[CheckedTP]) {

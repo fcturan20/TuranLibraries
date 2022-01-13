@@ -371,7 +371,7 @@ bool VK_RGBranch::CalculateBranchType() {
 	}
 	//It is either barrier TP only, BusyStart_RenderBranch or BarrierStart_RenderBranch. Of course UNDEFINED is possible (I won't mention that any further).
 	if (FirstWorkloadedPass->TYPE == PassType::TP) {
-		VK_TransferPass* TP = ((VK_TransferPass*)FirstWorkloadedPass);
+		transferpass_vk* TP = ((transferpass_vk*)FirstWorkloadedPass);
 		switch (TP->TYPE)
 		{
 			//It is either barrier TP only or BarrierStart_RenderBranch.
@@ -406,7 +406,7 @@ bool VK_RGBranch::CalculateBranchType() {
 					}
 					//Check if it is Copy TP
 					else if (CurrentWorkloadedPass->TYPE == PassType::TP) {
-						if (((VK_TransferPass*)CurrentWorkloadedPass)->TYPE != tgfx_transferpass_type_BARRIER) {
+						if (((transferpass_vk*)CurrentWorkloadedPass)->TYPE != tgfx_transferpass_type_BARRIER) {
 							isBarrierTpOnly = false;
 						}
 					}

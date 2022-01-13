@@ -1,4 +1,5 @@
-#include "predefinitions.h"
+#pragma once
+#include "predefinitions_tapi.h"
 #define LOGGER_TAPI_PLUGIN_NAME "tapi_logger"
 #define LOGGER_TAPI_PLUGIN_VERSION  MAKE_PLUGIN_VERSION_TAPI(0,0,0)
 #define LOGGER_TAPI_PLUGIN_LOAD_TYPE logger_tapi_type*

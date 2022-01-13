@@ -1,4 +1,5 @@
-#include "predefinitions.h"
+#pragma once
+#include "predefinitions_tapi.h"
 #define PROFILER_TAPI_PLUGIN_NAME "tapi_profiler"
 #define PROFILER_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0,0,0)
 #define PROFILER_TAPI_PLUGIN_LOAD_TYPE profiler_tapi_type*

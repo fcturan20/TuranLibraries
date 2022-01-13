@@ -90,7 +90,7 @@ unsigned char Renderer::Finish_RenderGraphConstruction(tgfx_subdrawpass IMGUI_Su
 		//Initialize IMGUI if it isn't initialized
 		if (IMGUI_Subpass) {
 			//If subdrawpass has only one color slot, return false
-			if (((VK_DrawPass*)((VK_SubDrawPass*)IMGUI_Subpass)->DrawPass)->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT != 1) {
+			if (((drawpass_vk*)((VK_SubDrawPass*)IMGUI_Subpass)->DrawPass)->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT != 1) {
 				LOG(tgfx_result_FAIL, "The Drawpass that's gonna render dear IMGUI should only have one color slot!");
 				VKRENDERER->RG_Status = RenderGraphStatus::Invalid;	//User can delete a draw pass, dear Imgui fails in this case.
 				//To avoid this, it needs to be reconstructed by calling Start_RenderGraphConstruction()
@@ -193,7 +193,7 @@ void Renderer::Destroy_RenderGraph() {
 
 	delete SEMAPHORESYS;
 	for (unsigned int DrawPassIndex = 0; DrawPassIndex < VKRENDERER->DrawPasses.size(); DrawPassIndex++) {
-		VK_DrawPass* DP = VKRENDERER->DrawPasses[DrawPassIndex];
+		drawpass_vk* DP = VKRENDERER->DrawPasses[DrawPassIndex];
 		vkDestroyFramebuffer(RENDERGPU->LOGICALDEVICE(), DP->FBs[0], nullptr);
 		vkDestroyFramebuffer(RENDERGPU->LOGICALDEVICE(), DP->FBs[1], nullptr);
 		vkDestroyRenderPass(RENDERGPU->LOGICALDEVICE(), DP->RenderPassObject, nullptr);

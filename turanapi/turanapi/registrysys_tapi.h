@@ -1,4 +1,5 @@
-#include "predefinitions.h"
+#pragma once
+#include "predefinitions_tapi.h"
 #define REGISTRYSYS_TAPI_PLUGIN_TYPE registrysys_tapi_type*
 
 

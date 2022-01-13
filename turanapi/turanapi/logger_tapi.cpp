@@ -30,7 +30,7 @@ static filesys_tapi* filesys = nullptr;
 
 
 
-#define GET_LOG(i) (*GET_LOGLISTTAPI())[i]
+#define GET_printer(i) (*GET_LOGLISTTAPI())[i]
 inline void breakpoint(const char* log){
     std::cout << "Crashing ERROR: " << log << "\ny to continue, n to exit application" << std::endl;
     char breakpoint_choice = 0;

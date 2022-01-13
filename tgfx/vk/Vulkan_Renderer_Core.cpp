@@ -218,7 +218,7 @@ tgfx_result Renderer::Create_DrawPass(tgfx_subdrawpassdescription_list TGFXSubDr
 	}
 
 	VK_SubDrawPass* Final_Subpasses = new VK_SubDrawPass[SubDrawPassesCount];
-	VK_DrawPass* VKDrawPass = new VK_DrawPass(NAME, ValidWAITsCount);
+	drawpass_vk* VKDrawPass = new drawpass_vk(NAME, ValidWAITsCount);
 	VKDrawPass->SLOTSET = SLOTSET;
 	VKDrawPass->Subpass_Count = SubDrawPassesCount;
 	VKDrawPass->Subpasses = Final_Subpasses;
@@ -330,7 +330,7 @@ tgfx_result Renderer::Create_TransferPass(tgfx_passwaitdescription_list WaitDesc
 		ValidWAITsCount++;
 	}
 
-	VK_TransferPass* TRANSFERPASS = new VK_TransferPass(NAME, ValidWAITsCount);
+	transferpass_vk* TRANSFERPASS = new transferpass_vk(NAME, ValidWAITsCount);
 	if (VKRENDERER->RG_Status != RenderGraphStatus::StartedConstruction) {
 		LOG(tgfx_result_FAIL, "You should call Start_RenderGraphConstruction() before RENDERER->Create_TransferPass()!");
 		return tgfx_result_FAIL;
@@ -392,7 +392,7 @@ tgfx_result Renderer::Create_ComputePass(tgfx_passwaitdescription_list WaitDescr
 		ValidWAITsCount++;
 	}
 
-	VK_ComputePass* CP = new VK_ComputePass(NAME, ValidWAITsCount);
+	computepass_vk* CP = new computepass_vk(NAME, ValidWAITsCount);
 	//Fill the pass wait description list
 	for (unsigned int S_i = 0, T_i = 0; S_i < WAITSCOUNT; S_i++) {
 		if (WaitDescriptions[S_i] == nullptr) {
@@ -435,7 +435,7 @@ tgfx_result Renderer::Create_WindowPass(tgfx_passwaitdescription_list WaitDescri
 #endif
 		ValidWAITsCount++;
 	}
-	VK_WindowPass* WP = new VK_WindowPass(NAME, ValidWAITsCount);
+	windowpass_vk* WP = new windowpass_vk(NAME, ValidWAITsCount);
 
 	//Fill the pass wait description list
 	for (unsigned int S_i = 0, T_i = 0; S_i < WAITSCOUNT; S_i++) {
@@ -595,7 +595,7 @@ void Renderer::DrawDirect(tgfx_buffer VertexBuffer_ID, tgfx_buffer IndexBuffer_I
 	}
 }
 void Renderer::SwapBuffers(tgfx_window WindowHandle, tgfx_windowpass WindowPassHandle) {
-	VK_WindowPass* WP = (VK_WindowPass*)WindowPassHandle;
+	windowpass_vk* WP = (windowpass_vk*)WindowPassHandle;
 	WINDOW* Window = (WINDOW*)WindowHandle;
 	VK_WindowCall WC;
 	WC.Window = Window;
@@ -611,7 +611,7 @@ void Renderer::CopyBuffer_toBuffer(tgfx_transferpass TransferPassHandle, tgfx_bu
 	Copy_i.dstOffset = DistanceOffset;
 	Copy_i.srcOffset = SourceOffset;
 	Copy_i.size = static_cast<VkDeviceSize>(Size);
-	VK_TPCopyDatas* DATAs = (VK_TPCopyDatas*)((VK_TransferPass*)TransferPassHandle)->TransferDatas;
+	VK_TPCopyDatas* DATAs = (VK_TPCopyDatas*)((transferpass_vk*)TransferPassHandle)->TransferDatas;
 	VK_BUFtoBUFinfo finalinfo;
 	finalinfo.DistanceBuffer = DistanceBuffer;
 	finalinfo.SourceBuffer = SourceBuffer;
@@ -681,7 +681,7 @@ void Renderer::CopyBuffer_toImage(tgfx_transferpass TransferPassHandle, tgfx_buf
 	x.TargetImage = TEXTURE->Image;
 	FindBufferOBJ_byBufType(SourceBuffer_Handle, SourceBufferTYPE, x.SourceBuffer, finaloffset);
 	x.BufferImageCopy.bufferOffset = finaloffset;
-	VK_TransferPass* TP = (VK_TransferPass*)TransferPassHandle;
+	transferpass_vk* TP = (transferpass_vk*)TransferPassHandle;
 	if (TP->TYPE == tgfx_transferpass_type_BARRIER) {
 		LOG(tgfx_result_FAIL, "You gave an barrier TP handle to CopyBuffer_toImage(), this is wrong!");
 		return;
@@ -738,14 +738,14 @@ void Renderer::CopyImage_toImage(tgfx_transferpass TransferPassHandle, tgfx_text
 	x.SourceTexture = SourceIm->Image;
 	x.TargetTexture = TargetIm->Image;
 
-	VK_TPCopyDatas* DATAs = (VK_TPCopyDatas*)((VK_TransferPass*)TransferPassHandle)->TransferDatas;
+	VK_TPCopyDatas* DATAs = (VK_TPCopyDatas*)((transferpass_vk*)TransferPassHandle)->TransferDatas;
 	DATAs->IMIMCopies.push_back(tapi_GetThisThreadIndex(JobSys), x);
 }
 
 void Renderer::ImageBarrier(tgfx_transferpass BarrierTPHandle, tgfx_texture TextureHandle, tgfx_imageaccess LAST_ACCESS, 
 	tgfx_imageaccess NEXT_ACCESS, unsigned int TargetMipLevel, tgfx_cubeface TargetCubeMapFace) {
 	VK_Texture* Texture = (VK_Texture*)TextureHandle;
-	VK_TransferPass* TP = (VK_TransferPass*)BarrierTPHandle;
+	transferpass_vk* TP = (transferpass_vk*)BarrierTPHandle;
 	if (TP->TYPE != tgfx_transferpass_type_BARRIER) {
 		LOG(tgfx_result_FAIL, "You should give the handle of a Barrier Transfer Pass! Given Transfer Pass' type isn't Barrier.");
 		return;
@@ -791,7 +791,7 @@ void Renderer::ImageBarrier(tgfx_transferpass BarrierTPHandle, tgfx_texture Text
 	TPDatas->TextureBarriers.push_back(tapi_GetThisThreadIndex(JobSys), im_bi);
 }
 void Renderer::Dispatch_Compute(tgfx_computepass ComputePassHandle, tgfx_computeshaderinstance ComputeInstanceHandle, unsigned int SubComputePassIndex, tgfx_uvec3 DispatchSize) {
-	VK_ComputePass* CP = (VK_ComputePass*)ComputePassHandle;
+	computepass_vk* CP = (computepass_vk*)ComputePassHandle;
 
 
 	VK_SubComputePass& SP = CP->Subpasses[SubComputePassIndex];
@@ -807,7 +807,7 @@ void Renderer::Dispatch_Compute(tgfx_computepass ComputePassHandle, tgfx_compute
 
 
 void Renderer::ChangeDrawPass_RTSlotSet(tgfx_drawpass DrawPassHandle, tgfx_rtslotset RTSlotSetHandle) {
-	VK_DrawPass* DP = (VK_DrawPass*)DrawPassHandle;
+	drawpass_vk* DP = (drawpass_vk*)DrawPassHandle;
 	VK_RTSLOTSET* slotset = (VK_RTSLOTSET*)RTSlotSetHandle;
 
 	//Check if slotsets are compatible

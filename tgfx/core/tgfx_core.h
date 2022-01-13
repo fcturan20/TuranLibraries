@@ -1,3 +1,4 @@
+#pragma once
 #include "tgfx_forwarddeclarations.h"
 
 typedef struct core_tgfx{
@@ -20,38 +21,40 @@ typedef struct core_tgfx{
     * 1) You can call TGFX functions concurrently. You can call all TGFX functions asynchronously unless otherwise is mentioned.
     * 2) TGFX uses multiple threads to create GPU commands faster.
     */
-	result_tgfx (*load_backend)(backends_tgfx backend, unsigned char is_Multithreaded);
-	void (*Initialize_SecondStage)(initializationsecondstageinfo_tgfx_handle info);
+	result_tgfx (*load_backend)(backends_tgfx backend);
+	void (*initialize_secondstage)(initializationsecondstageinfo_tgfx_handle info);
 	//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
-	void (*CreateWindow)(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor, 
+	void (*create_window)(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor, 
 		windowmode_tgfx Mode, const char* NAME, textureusageflag_tgfx_handle SwapchainUsage, tgfx_windowResizeCallback ResizeCB, 
 		void* UserPointer, texture_tgfx_handle* SwapchainTextureHandles, window_tgfx_handle* window);
-	void (*Change_Window_Resolution)(window_tgfx_handle WindowHandle, unsigned int width, unsigned int height);
-	void (*GetMonitorList)(monitor_tgfx_listhandle* MonitorList);
-	void (*GetGPUList)(gpu_tgfx_listhandle* GpuList);
+	void (*change_window_resolution)(window_tgfx_handle WindowHandle, unsigned int width, unsigned int height);
+	void (*getmonitorlist)(monitor_tgfx_listhandle* MonitorList);
+	void (*getGPUlist)(gpu_tgfx_listhandle* GpuList);
 
 	//Debug callbacks are user defined callbacks, you should assign the function pointer if you want to use them
 	//As default, all backends set them as empty no-work functions
-	void (*DebugCallback)(result_tgfx result, const char* Text);
+	void (*debugcallback)(result_tgfx result, const char* Text);
 	//You can set this if TGFX is started with threaded call.
-	void (*DebugCallback_Threaded)(unsigned char ThreadIndex, result_tgfx Result, const char* Text);
+	void (*debugcallback_threaded)(unsigned char ThreadIndex, result_tgfx Result, const char* Text);
 
 
 
 
-	void (*Take_Inputs)();
+	void (*take_inputs)();
 	//Destroy GFX API systems to create again (with a different Graphics API maybe?) or close application
 	//This will close all of the systems with "GFX" prefix and you shouldn't call them either
-	void (*Destroy_GFX_Resources)();
+	void (*destroy_tgfx_resources)();
 } core_tgfx;
 
+//This is for backend to implement
 typedef struct core_tgfx_d core_tgfx_d;
 typedef struct core_tgfx_type {
 	core_tgfx_d* data;
 	core_tgfx* api;
-} tgfx_core;
+} core_tgfx_type;
 
 //While coding GFX, we don't know the name of the handles, so we need to convert them according to the namespace preprocessor
 #define TGFXLISTCOUNT(gfxcoreptr, listobject, countername) unsigned int countername = 0;  while (listobject[countername] != gfxcoreptr->INVALIDHANDLE) { countername++; }
+typedef struct registrysys_tapi registrysys_tapi;
 //This function should be exported by the backend dll
-typedef result_tgfx (*backend_load_func)(core_tgfx_type* core);
+typedef result_tgfx (*backend_load_func)(unsigned int tgfx_version, core_tgfx_type* core);

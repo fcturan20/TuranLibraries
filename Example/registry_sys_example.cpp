@@ -2,16 +2,19 @@
 #include <string>
 #include <windows.h>
 
-#include "turanapi/registrysys_tapi.h"
-#include "turanapi/virtualmemorysys_tapi.h"
-#include "turanapi/unittestsys_tapi.h"
-#include "turanapi/array_of_strings_tapi.h"
-#include "turanapi/threadingsys_tapi.h"
-#include "turanapi/filesys_tapi.h"
-#include "turanapi/logger_tapi.h"
-#include "turanapi/bitset_tapi.h"
-#include "turanapi/profiler_tapi.h"
-#include "turanapi/allocator_tapi.h"
+#include "registrysys_tapi.h"
+#include "virtualmemorysys_tapi.h"
+#include "unittestsys_tapi.h"
+#include "array_of_strings_tapi.h"
+#include "threadingsys_tapi.h"
+#include "filesys_tapi.h"
+#include "logger_tapi.h"
+#include "bitset_tapi.h"
+#include "profiler_tapi.h"
+#include "allocator_tapi.h"
+#include "tgfx_forwarddeclarations.h"
+#include "tgfx_core.h"
+
 
 #include <stdint.h>
 
@@ -90,17 +93,21 @@ int main(){
 	unsigned long long firstprofiling_duration = 0;
 	profilersys->funcs->start_profiling(&firstprofiling_handle, "First Profiling", &firstprofiling_duration, 2);
 
+
+	auto tgfxdll = DLIB_LOAD_TAPI("tgfx_core.dll");
+	load_plugin_func tgfxloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(tgfxdll, "load_plugin");
+	TGFX_PLUGIN_LOAD_TYPE tgfxsys = (TGFX_PLUGIN_LOAD_TYPE)tgfxloader(sys, 0);
+	result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_VULKAN);
+	printf("%c", result);
+
+	gpu_tgfx_listhandle gpulist;
+	tgfxsys->api->getGPUlist(&gpulist);
+	TGFXLISTCOUNT(tgfxsys->api, gpulist, gpulist_count);
+	printf("GPU COUNT: %u\n", gpulist_count);
 	
-	auto allocatorsysdll = DLIB_LOAD_TAPI("tapi_allocator.dll");
-	load_plugin_func allocatorsysloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(allocatorsysdll, "load_plugin");
-	ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE allocatorsys = (ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE)allocatorsysloader(sys, 0);
-	void* allocation = allocatorsys->end_of_page->malloc(6);
-	uint64_t eight_bytes = 5;
-	//There should be a segmentation error!
-	memcpy(allocation, &eight_bytes, sizeof(eight_bytes));
+	
 
-
-
+	printf("Application waits for an input: ");
 	scanf("%c", &stop_char);
 	threadingsys->funcs->wait_all_otherjobs();
 	Sleep(100);

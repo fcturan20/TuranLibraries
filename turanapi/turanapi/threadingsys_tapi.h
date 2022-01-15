@@ -42,7 +42,7 @@ typedef struct threadingsys_tapi{
 
 	unsigned int (*this_thread_index)();
 	unsigned int (*thread_count)();
-}	threadingsys_tapi;
+} threadingsys_tapi;
 
 typedef struct threadingsys_tapi_d threadingsys_tapi_d;
 typedef struct threadingsys_tapi_type{

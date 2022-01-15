@@ -4,7 +4,7 @@
 
 
 
-typedef struct tgfx_renderer {
+typedef struct renderer_tgfx {
     //RenderGraph Functions
 
     //Returns Swapchain's Handle
@@ -84,4 +84,4 @@ typedef struct tgfx_renderer {
     unsigned char (*GetCurrentFrameIndex)();
     //Everything you call after this, will be proccessed for next frame!
     void (*Run)();
-} tgfx_renderer;
+} renderer_tgfx;

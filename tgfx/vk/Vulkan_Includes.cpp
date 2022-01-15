@@ -895,7 +895,7 @@ bool GPU::DoesQueue_Support(const VK_QUEUEFAM* QUEUEFAM, const VK_QUEUEFLAG& Fla
 	}
 	return true;
 }
-bool GPU::isWindowSupported(VkSurfaceKHR WindowSurface) {
+bool GPU:: isWindowSupported(VkSurfaceKHR WindowSurface) {
 	bool supported = false;
 	for (unsigned int QueueIndex = 0; QueueIndex < RENDERGPU->QUEUEFAMSCOUNT(); QueueIndex++) {
 		VkBool32 Does_Support = 0;

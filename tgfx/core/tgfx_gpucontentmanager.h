@@ -49,7 +49,7 @@
 	9) Please read "Resources_README.md" for details
 	*/
 
-	typedef struct tgfx_gpudatamanager {
+	typedef struct gpudatamanager_tgfx {
 		void (*Destroy_AllResources)();
 
 
@@ -142,4 +142,4 @@
 		result_tgfx (*Change_RTSlotTexture)(rtslotset_tgfx_handle RTSlotHandle, unsigned char isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, texture_tgfx_handle TextureHandle);
 		result_tgfx (*Inherite_RTSlotSet)(rtslotusage_tgfx_listhandle Descriptions, rtslotset_tgfx_handle RTSlotSetHandle, inheritedrtslotset_tgfx_handle* InheritedSlotSetHandle);
 		void (*Delete_InheritedRTSlotSet)(inheritedrtslotset_tgfx_handle InheritedRTSlotSetHandle);
-	} tgfx_gpudatamanager;
+	} gpudatamanager_tgfx;

@@ -1,5 +1,8 @@
 #pragma once
 #include "tgfx_forwarddeclarations.h"
+#define TGFX_PLUGIN_NAME "tgfx_core"
+#define TGFX_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0,0,0)
+#define TGFX_PLUGIN_LOAD_TYPE core_tgfx_type*
 
 typedef struct core_tgfx{
     renderer_tgfx* renderer;
@@ -57,4 +60,4 @@ typedef struct core_tgfx_type {
 #define TGFXLISTCOUNT(gfxcoreptr, listobject, countername) unsigned int countername = 0;  while (listobject[countername] != gfxcoreptr->INVALIDHANDLE) { countername++; }
 typedef struct registrysys_tapi registrysys_tapi;
 //This function should be exported by the backend dll
-typedef result_tgfx (*backend_load_func)(unsigned int tgfx_version, core_tgfx_type* core);
+typedef result_tgfx (*backend_load_func)(registrysys_tapi* regsys, core_tgfx_type* core);

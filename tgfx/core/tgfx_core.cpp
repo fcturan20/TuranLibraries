@@ -2,6 +2,10 @@
 #include <predefinitions_tapi.h>
 #include <registrysys_tapi.h>
 #include <assert.h>
+#include "tgfx_gpucontentmanager.h"
+#include "tgfx_helper.h"
+#include "tgfx_imgui.h"
+#include "tgfx_renderer.h"
 
 
 static core_tgfx_type* core_type_ptr;
@@ -24,7 +28,7 @@ result_tgfx load_backend(backends_tgfx backend){
 
     auto backend_dll = DLIB_LOAD_TAPI(path);
     backend_load_func backendloader = (backend_load_func)DLIB_FUNC_LOAD_TAPI(backend_dll, "backend_load");
-    return backendloader(TGFX_PLUGIN_VERSION, core_type_ptr);
+    return backendloader(core_regsys, core_type_ptr);
 }
 
 extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned char reload){
@@ -32,8 +36,14 @@ extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned
     core->api = (core_tgfx*)malloc(sizeof(core_tgfx));
     core_type_ptr = core;
     core_regsys = regsys;
+	core->api->contentmanager = new gpudatamanager_tgfx;
+	core->api->helpers = new helper_tgfx;
+	core->api->imgui = new dearimgui_tgfx;
+	core->api->renderer = new renderer_tgfx;
 
     core->api->load_backend = &load_backend;
+
+	regsys->add(TGFX_PLUGIN_NAME, TGFX_PLUGIN_VERSION, core);
 
     return core;
 }

@@ -4,7 +4,7 @@
 
 
 
-typedef struct tgfx_helper {
+typedef struct helper_tgfx {
     //Hardware Capability Helpers
     void (*GetGPUInfo_General)(gpu_tgfx_handle GPUHandle, const char** NAME, unsigned int* API_VERSION, unsigned int* DRIVER_VERSION, gpu_type_tgfx* GPUTYPE, memorytype_tgfx_listhandle* MemTypes,
         unsigned char* isGraphicsOperationsSupported, unsigned char* isComputeOperationsSupported, unsigned char* isTransferOperationsSupported);
@@ -79,4 +79,4 @@ typedef struct tgfx_helper {
 
     void (*Destroy_ExtensionData)(extension_tgfx_handle ExtensionToDestroy);
     unsigned char (*DoesGPUsupportsVKDESCINDEXING)(gpu_tgfx_handle GPU);
-} tgfx_helper;
+} helper_tgfx;

@@ -9,7 +9,7 @@ typedef struct windowpass_vk windowpass_vk;
 typedef struct computepass_vk computepass_vk;
 
 //Renderer data that other parts of the backend can access
-class renderer_public {
+struct renderer_public {
 private:
 	std::vector<drawpass_vk*> DrawPasses;
 	std::vector<transferpass_vk*> TransferPasses;

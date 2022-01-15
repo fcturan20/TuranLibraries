@@ -12,7 +12,7 @@ typedef struct imguiwindow_tgfx {
 
 
 
-typedef struct tgfx_imguicore {
+typedef struct dearimgui_tgfx {
     //WINDOW MANAGEMENT
 
 	void (*Run_IMGUI_WINDOWs)();
@@ -78,4 +78,4 @@ typedef struct tgfx_imguicore {
 	unsigned char (*Slider_Vec2)(const char* name, vec2_tgfx* data, float min, float max);
 	unsigned char (*Slider_Vec3)(const char* name, vec3_tgfx* data, float min, float max);
 	unsigned char (*Slider_Vec4)(const char* name, vec4_tgfx* data, float min, float max);
-} tgfx_imguicore;
+} dearimgui_tgfx;

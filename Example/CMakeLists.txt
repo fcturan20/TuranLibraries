@@ -11,8 +11,7 @@ set(LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 add_executable(registry_sys_example "registry_sys_example.cpp")
 set_target_properties(registry_sys_example PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug PREFIX "")
 set_target_properties(registry_sys_example PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
-target_include_directories(registry_sys_example PUBLIC ${CMAKE_SOURCE_DIR}/turanapi)
-target_include_directories(registry_sys_example PUBLIC ${CMAKE_SOURCE_DIR}/TGFXCORE)
+target_include_directories(registry_sys_example PUBLIC ${CMAKE_SOURCE_DIR}/turanapi/turanapi ${CMAKE_SOURCE_DIR}/tgfx/core)
 install(TARGETS registry_sys_example RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/Example_runnables)
 
 

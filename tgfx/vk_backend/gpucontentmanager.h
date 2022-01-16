@@ -2,6 +2,6 @@
 
 
 
-class vk_gpudatamanager {
+struct vk_gpudatamanager {
 
 };

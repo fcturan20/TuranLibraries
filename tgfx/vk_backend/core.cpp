@@ -14,6 +14,9 @@
 #include <tgfx_renderer.h>
 #include <tgfx_gpucontentmanager.h>
 #include <tgfx_imgui.h>
+#include <vector>
+#include "memory.h"
+#include "queue.h"
 
 struct core_private{
 public:
@@ -28,42 +31,12 @@ public:
 static core_private* hidden = nullptr;
 static logger_tapi* logsys = nullptr;
 
-struct gpu_private {
-
-	struct suballocation_vk {
-		VkDeviceSize Size = 0, Offset = 0;
-		std::atomic<bool> isEmpty;
-		suballocation_vk();
-		suballocation_vk(const suballocation_vk& copyblock);
-	};
-	struct memoryallocation_vk {
-		std::atomic<uint32_t> UnusedSize = 0;
-		uint32_t MemoryTypeIndex;
-		unsigned long long MaxSize = 0, ALLOCATIONSIZE = 0;
-		void* MappedMemory;
-		memoryallocationtype_tgfx TYPE;
-
-		VkDeviceMemory Allocated_Memory;
-		VkBuffer Buffer;
-		threadlocal_vector<suballocation_vk> Allocated_Blocks;
-		memoryallocation_vk();
-		memoryallocation_vk(const memoryallocation_vk& copyALLOC);
-		//Use this function in Suballocate_Buffer and Suballocate_Image after you're sure that you have enough memory in the allocation
-		VkDeviceSize FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment);
-		//Free a block
-		void FreeBlock(VkDeviceSize Offset);
-	};
-	std::vector<memoryallocation_vk> ALLOCs;
-public:
-	inline std::vector<memoryallocation_vk>& ALLOCS() { return ALLOCs; }
-};
-
 
 void GFX_Error_Callback(int error_code, const char* description) {
 	printf("TGFX_FAIL: %s\n", description);
 }
 
-class core_functions {
+struct core_functions {
 public:
 	static inline void initialize_secondstage(initializationsecondstageinfo_tgfx_handle info);
 	//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
@@ -95,14 +68,15 @@ public:
 
 	//GPU ANALYZATION FUNCS
 
-	static inline void core_functions::Gather_PhysicalDeviceInformations(gpu_public* VKGPU);
+	static inline void Gather_PhysicalDeviceInformations(gpu_public* VKGPU);
 };
 
 
-static void Create_IMGUI();
-static void Create_Renderer();
-static void Create_GPUContentManager();
-static void set_helper_functions();
+extern void Create_IMGUI();
+extern void Create_Renderer();
+extern void Create_GPUContentManager();
+extern void set_helper_functions();
+extern void Create_AllocatorSys();
 
 
 void printf_log(result_tgfx result, const char* text) {
@@ -175,8 +149,9 @@ void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_h
 	}
 
 
-	//Create_Renderer();
-	//Create_GPUContentManager();
+	Create_Renderer();
+	Create_GPUContentManager();
+	Create_AllocatorSys();
 	delete vkinfo;
 }
 
@@ -337,7 +312,7 @@ void core_functions::Setup_Debugging() {
 	printer(result_tgfx_SUCCESS, "Vulkan Debug Callback system is started!");
 }
 
-/*
+
 void core_functions::Gather_PhysicalDeviceInformations(gpu_public* VKGPU) {
 	vkGetPhysicalDeviceProperties(VKGPU->PHYSICALDEVICE(), &VKGPU->Device_Properties);
 	vkGetPhysicalDeviceFeatures(VKGPU->Physical_Device, &VKGPU->Supported_Features);
@@ -345,92 +320,12 @@ void core_functions::Gather_PhysicalDeviceInformations(gpu_public* VKGPU) {
 	//GET QUEUE FAMILIES, SAVE THEM TO GPU OBJECT, CHECK AND SAVE GRAPHICS,COMPUTE,TRANSFER QUEUEFAMILIES INDEX
 	uint32_t queueFamilyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, nullptr);
-	VKGPU->QueueFamilyProperties.resize(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, VKGPU->QueueFamilyProperties.data());
+	VKGPU->QueueFamilyProperties = new VkQueueFamilyProperties[queueFamilyCount];
+	vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, VKGPU->QueueFamilyProperties);
 
 	vkGetPhysicalDeviceMemoryProperties(VKGPU->Physical_Device, &VKGPU->MemoryProperties);
 }
-void Analize_PhysicalDeviceMemoryProperties(GPU* VKGPU, GFX_API::GPUDescription& GPUdesc) {
-	for (uint32_t MemoryTypeIndex = 0; MemoryTypeIndex < VKGPU->MemoryProperties.memoryTypeCount; MemoryTypeIndex++) {
-		VkMemoryType& MemoryType = VKGPU->MemoryProperties.memoryTypes[MemoryTypeIndex];
-		bool isDeviceLocal = false;
-		bool isHostVisible = false;
-		bool isHostCoherent = false;
-		bool isHostCached = false;
-
-		if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
-			isDeviceLocal = true;
-		}
-		if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-			isHostVisible = true;
-		}
-		if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-			isHostCoherent = true;
-		}
-		if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
-			isHostCached = true;
-		}
-
-		if (GPUdesc.GPU_TYPE != GFX_API::GPU_TYPEs::DISCRETE_GPU) {
-			continue;
-		}
-		if (!isDeviceLocal && !isHostVisible && !isHostCoherent && !isHostCached) {
-			continue;
-		}
-		if (isDeviceLocal) {
-			if (isHostVisible && isHostCoherent) {
-				GFX_API::MemoryType MEMTYPE;
-				MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE;
-				MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
-				GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-				VK_MemoryAllocation alloc;
-				alloc.MemoryTypeIndex = MemoryTypeIndex;
-				alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE;
-				VKGPU->ALLOCs.push_back(alloc);
-				GPUdesc.FASTHOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-				LOG_STATUS_TAPI("Found FAST HOST VISIBLE BIT! Size: " + to_string(GPUdesc.FASTHOSTVISIBLE_MaxMemorySize));
-			}
-			else {
-				GFX_API::MemoryType MEMTYPE;
-				MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
-				MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
-				GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-				VK_MemoryAllocation alloc;
-				alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
-				alloc.MemoryTypeIndex = MemoryTypeIndex;
-				VKGPU->ALLOCs.push_back(alloc);
-				GPUdesc.DEVICELOCAL_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-				LOG_STATUS_TAPI("Found DEVICE LOCAL BIT! Size: " + to_string(GPUdesc.DEVICELOCAL_MaxMemorySize));
-			}
-		}
-		else if (isHostVisible && isHostCoherent) {
-			if (isHostCached) {
-				GFX_API::MemoryType MEMTYPE;
-				MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK;
-				MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
-				GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-				VK_MemoryAllocation alloc;
-				alloc.MemoryTypeIndex = MemoryTypeIndex;
-				alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK;
-				VKGPU->ALLOCs.push_back(alloc);
-				GPUdesc.READBACK_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-				LOG_STATUS_TAPI("Found READBACK BIT! Size: " + to_string(GPUdesc.READBACK_MaxMemorySize));
-			}
-			else {
-				GFX_API::MemoryType MEMTYPE;
-				MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE;
-				MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
-				GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-				VK_MemoryAllocation alloc;
-				alloc.MemoryTypeIndex = MemoryTypeIndex;
-				alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE;
-				VKGPU->ALLOCs.push_back(alloc);
-				GPUdesc.HOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-				LOG_STATUS_TAPI("Found HOST VISIBLE BIT! Size: " + to_string(GPUdesc.HOSTVISIBLE_MaxMemorySize));
-			}
-		}
-	}
-}
+/*
 void Analize_Queues(GPU* VKGPU, GFX_API::GPUDescription& GPUdesc) {
 	bool is_presentationfound = false;
 	for (unsigned int queuefamily_index = 0; queuefamily_index < VKGPU->QueueFamilyProperties.size(); queuefamily_index++) {
@@ -483,6 +378,21 @@ void Analize_Queues(GPU* VKGPU, GFX_API::GPUDescription& GPUdesc) {
 	}
 }*/
 
+inline const char* Convert_VendorID_toaString(uint32_t VendorID) {
+	switch (VendorID) {
+	case 0x1002:
+		return "AMD";
+	case 0x10DE:
+		return "Nvidia";
+	case 0x8086:
+		return "Intel";
+	case 0x13B5:
+		return "ARM";
+	default:
+		printer(result_tgfx_FAIL, "(Vulkan_Core::Check_Computer_Specs failed to find GPU's Vendor, Vendor ID is: " + VendorID);
+		return "NULL";
+	}
+}
 inline void core_functions::Check_Computer_Specs() {
 	printer(result_tgfx_SUCCESS, "Started to check Computer Specifications!");
 
@@ -496,45 +406,85 @@ inline void core_functions::Check_Computer_Specs() {
 		printer(result_tgfx_FAIL, "There is no GPU that has Vulkan support! Updating your drivers or Upgrading the OS may help");
 	}
 
+	std::vector<VkPhysicalDevice> DiscreteGPUs;
 	//GET GPU INFORMATIONs, QUEUE FAMILIES etc
 	for (unsigned int i = 0; i < GPU_NUMBER; i++) {
+		VkPhysicalDeviceProperties props;
+		vkGetPhysicalDeviceProperties(Physical_GPU_LIST[i], &props);
+		if (props.deviceType == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+			DiscreteGPUs.push_back(Physical_GPU_LIST[i]);
+		}
+		else{
+			printer(result_tgfx_WARNING, "Non-Discrete GPUs are not available in vulkan backend!");
+		}
+	}
+	for(unsigned int i = 0; i < DiscreteGPUs.size(); i++){
 		//GPU initializer handles everything else
 		gpu_public* vkgpu = new gpu_public;
-		vkgpu->hidden = new gpu_private;
-		vkgpu->physicaldevice = Physical_GPU_LIST[i];
+		vkgpu->hidden = nullptr;	//there is no private gpu data for now
+		vkgpu->Physical_Device = DiscreteGPUs[i];
 		hidden->DEVICE_GPUs.push_back(vkgpu);
 
 
-
-
-		/*
-		Gather_PhysicalDeviceInformations(VKGPU);
-
-
-		const char* VendorName = VK_States.Convert_VendorID_toaString(VKGPU->Device_Properties.vendorID);
-
-		//SAVE BASIC INFOs TO THE GPU DESC
-		GPUdesc.MODEL = VKGPU->Device_Properties.deviceName;
-		GPUdesc.DRIVER_VERSION = VKGPU->Device_Properties.driverVersion;
-		GPUdesc.API_VERSION = VKGPU->Device_Properties.apiVersion;
-		GPUdesc.DRIVER_VERSION = VKGPU->Device_Properties.driverVersion;
-
-		//CHECK IF GPU IS DISCRETE OR INTEGRATED
-		switch (VKGPU->Device_Properties.deviceType) {
-		case VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-			GPUdesc.GPU_TYPE = GFX_API::GPU_TYPEs::DISCRETE_GPU;
-			break;
-		case VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-			GPUdesc.GPU_TYPE = GFX_API::GPU_TYPEs::INTEGRATED_GPU;
-			break;
-		default:
-			//const char* CrashingError = Text_Add("Vulkan_Core::Check_Computer_Specs failed to find GPU's Type (Only Discrete and Integrated GPUs supported!), Type is:",
-				//std::to_string(VKGPU->Device_Properties.deviceType).c_str());
-			LOG_CRASHING_TAPI("There is an error about GPU!");
-			break;
+		Gather_PhysicalDeviceInformations(vkgpu);
+		gpudescription_tgfx gpudesc;
+		{
+			std::string fullname = Convert_VendorID_toaString(vkgpu->DEVICEPROPERTIES().vendorID) + std::string(vkgpu->DEVICEPROPERTIES().deviceName);
+			vkgpu->desc.MODEL = new char[fullname.length() + 1];
+			memcpy(vkgpu->desc.MODEL, fullname.c_str(), fullname.length() + 1);
 		}
 
-		Analize_PhysicalDeviceMemoryProperties(VKGPU, GPUdesc);
+		//SAVE BASIC INFOs TO THE GPU DESC
+		gpudesc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
+		gpudesc.API_VERSION = vkgpu->Device_Properties.apiVersion;
+		gpudesc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
+
+		allocatorsys->analize_gpumemory(vkgpu);
+
+		/*
+		std::vector<VkDeviceQueueCreateInfo> QueueCreationInfos = queuesys->analize_queues(vkgpu);
+
+
+		VkDeviceCreateInfo Logical_Device_CreationInfo{};
+		Logical_Device_CreationInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		Logical_Device_CreationInfo.flags = 0;
+		Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
+		Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
+		VK_States.Activate_DeviceExtensions(VKGPU);
+		LOG_STATUS_TAPI("Activated Device Extensions");
+		//This is to destroy datas of extending features
+		DeviceExtendedFeatures extendedfeatures;
+		VK_States.Activate_DeviceFeatures(VKGPU, GPUdesc, Logical_Device_CreationInfo, extendedfeatures);
+
+		Logical_Device_CreationInfo.enabledExtensionCount = VKGPU->Active_DeviceExtensions.size();
+		Logical_Device_CreationInfo.ppEnabledExtensionNames = VKGPU->Active_DeviceExtensions.data();
+		Logical_Device_CreationInfo.pEnabledFeatures = &VKGPU->Active_Features;
+
+		Logical_Device_CreationInfo.enabledLayerCount = 0;
+
+		if (VKGPU->Device_Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+			if (vkCreateDevice(VKGPU->Physical_Device, &Logical_Device_CreationInfo, nullptr, &VKGPU->Logical_Device) != VK_SUCCESS) {
+				LOG_STATUS_TAPI("Vulkan failed to create a Logical Device!");
+				return;
+			}
+			LOG_STATUS_TAPI("After vkCreateDevice()");
+
+			VKGPU->AllQueueFamilies = new uint32_t[VKGPU->QUEUEs.size()];
+			for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
+				LOG_STATUS_TAPI("Queue Feature Score: " + to_string(VKGPU->QUEUEs[QueueIndex].QueueFeatureScore));
+				vkGetDeviceQueue(VKGPU->Logical_Device, VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &VKGPU->QUEUEs[QueueIndex].Queue);
+				LOG_STATUS_TAPI("After vkGetDeviceQueue() " + to_string(QueueIndex));
+				VKGPU->AllQueueFamilies[QueueIndex] = VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex;
+			}
+			LOG_STATUS_TAPI("After vkGetDeviceQueue()");
+			LOG_STATUS_TAPI("Vulkan created a Logical Device!");
+
+			VK_States.Check_DeviceLimits(VKGPU, GPUdesc);
+			LOG_STATUS_TAPI("After Check_DeviceLimits()");
+		}
+		else {
+		}
+		/*
 		Analize_Queues(VKGPU, GPUdesc);
 		LOG_STATUS_TAPI("Analized Queues");
 

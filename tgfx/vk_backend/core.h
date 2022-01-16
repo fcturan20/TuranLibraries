@@ -4,6 +4,7 @@
 #include <atomic>
 #include <string>
 #include "predefinitions_vk.h"
+#include "tgfx_structs.h"
 
 struct core_public {
 
@@ -13,8 +14,11 @@ struct core_public {
 struct gpu_private;
 struct gpu_public{
 private:
-	friend class core_functions;
+	friend struct core_functions; 
+	friend struct allocatorsys_privatefuncs;
+	friend struct queuesys_vk;
 	gpu_private* hidden = nullptr;
+	gpudescription_tgfx desc;
 	//Initializes as everything is false (same as CreateInvalidNullFlag)
 	struct VK_QUEUEFLAG {
 		bool is_GRAPHICSsupported : 1;
@@ -71,8 +75,9 @@ private:
 	VkPhysicalDeviceFeatures Supported_Features = {}, Active_Features = {};
 
 	uint32_t* AllQueueFamilies;
+
+	memorytype_vk* memorytypes_vk;
 public:
-	VkPhysicalDevice physicaldevice;
 	inline const std::string DEVICENAME() { return NAME; }
 	inline const unsigned int APIVERSION() { return APIVER; }
 	inline const unsigned int DRIVERSION() { return DRIVERVER; }

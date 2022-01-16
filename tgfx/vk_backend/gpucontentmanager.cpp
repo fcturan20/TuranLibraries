@@ -1,3 +1,3 @@
-void Create_GPUContentManager() {
+extern void Create_GPUContentManager() {
 
 }

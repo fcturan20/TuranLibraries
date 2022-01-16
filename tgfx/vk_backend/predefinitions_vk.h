@@ -5,6 +5,9 @@
 #include <GLFW/glfw3.h>
 #include <tgfx_forwarddeclarations.h>
 
+
+//Systems 
+
 struct core_tgfx;
 extern core_tgfx* core_tgfx_main;
 struct core_public;
@@ -19,7 +22,13 @@ struct gpu_public;
 extern gpu_public* rendergpu;
 typedef struct threadingsys_tapi threadingsys_tapi;
 extern threadingsys_tapi* threadingsys;
+struct allocatorsys_vk;
+extern allocatorsys_vk* allocatorsys;
+struct queuesys_vk;
+extern queuesys_vk* queuesys;
 
+
+//Synchronization systems and objects
 
 struct semaphoresys_vk;
 extern semaphoresys_vk* semaphoresys;
@@ -40,6 +49,11 @@ typedef fence_vk* fence_idtype_vk;
 static constexpr fence_idtype_vk invalid_fenceid = nullptr;
 #endif
 
+
+//Structs
+
+struct memorytype_vk;
+struct queuefam_vk;
 
 typedef void (*print_log)(result_tgfx result, const char* text);
 extern print_log printer;

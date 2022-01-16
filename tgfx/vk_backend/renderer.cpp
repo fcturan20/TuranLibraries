@@ -50,7 +50,7 @@ static void Dispatch_Compute(computepass_tgfx_handle ComputePassHandle, computes
 static void ChangeDrawPass_RTSlotSet(drawpass_tgfx_handle DrawPassHandle, rtslotset_tgfx_handle RTSlotSetHandle);
 
 
-void Create_Renderer() {
+extern void Create_Renderer() {
     renderer = new renderer_public;
     hidden = new renderer_private;
 }

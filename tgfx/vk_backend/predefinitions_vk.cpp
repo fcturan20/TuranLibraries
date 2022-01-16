@@ -9,6 +9,8 @@ gpu_public* rendergpu = nullptr;
 threadingsys_tapi* threadingsys = nullptr;
 semaphoresys_vk* semaphoresys = nullptr;
 fencesys_vk* fencesys = nullptr;
+allocatorsys_vk* allocatorsys = nullptr;
+queuesys_vk* queuesys = nullptr;
 
 VkInstance Vulkan_Instance = VK_NULL_HANDLE;
 VkApplicationInfo Application_Info;

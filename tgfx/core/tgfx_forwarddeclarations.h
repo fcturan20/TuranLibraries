@@ -405,10 +405,10 @@ typedef enum shaderinputtype_tgfx {
 } shaderinputtype_tgfx;
 
 typedef enum memoryallocationtype_tgfx {
-    DEVICELOCAL = 0,
-    HOSTVISIBLE = 1,
-    FASTHOSTVISIBLE = 2,
-    READBACK = 3
+    memoryallocationtype_DEVICELOCAL = 0,
+    memoryallocationtype_HOSTVISIBLE = 1,
+    memoryallocationtype_FASTHOSTVISIBLE = 2,
+    memoryallocationtype_READBACK = 3
 } memoryallocationtype_tgfx;
 
 

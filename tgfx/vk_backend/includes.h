@@ -3,18 +3,7 @@
 #include <vulkan/vulkan.h>
 #include <stdio.h>
 
-
-struct VK_Extension {
-	enum class EXTTYPE : unsigned int {
-		UNDEFINED = 0
-	};
-	EXTTYPE TYPE = EXTTYPE::UNDEFINED;
-	void* DATA = nullptr;
-};
-
-
-//Extensions
-static bool isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = false;
+//Some algorithms and data structures to help in C++ (like threadlocalvector)
 
 template<typename T>
 class threadlocal_vector {

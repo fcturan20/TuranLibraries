@@ -1,41 +1,50 @@
 #include "memory.h"
 #include <atomic>
 #include <vector>
-#include "tgfx_structs.h"
+#include <tgfx_core.h>
+#include <tgfx_structs.h>
 #include "core.h"
+#include "includes.h"
 
-struct allocatorsys_privatefuncs {
-	static inline void Analize_PhysicalDeviceMemoryProperties(gpu_public* VKGPU, gpudescription_tgfx& GPUdesc);
-};
+
 struct suballocation_vk {
 	VkDeviceSize Size = 0, Offset = 0;
 	std::atomic<bool> isEmpty;
 	suballocation_vk();
 	suballocation_vk(const suballocation_vk& copyblock);
 };
-struct memoryallocation_vk {
+struct memoryHeap_vk {
+
+};
+
+//Each memory type has its own buffers
+struct memorytype_vk {
+	unsigned int memorytype_ID = UINT32_MAX;		//AllocatorSys' index
+	VkDeviceMemory Allocated_Memory;
+	VkBuffer Buffer;
 	std::atomic<uint32_t> UnusedSize = 0;
-	uint32_t MemoryTypeIndex;
+	uint32_t MemoryTypeIndex;	//Vulkan's index
 	unsigned long long MaxSize = 0, ALLOCATIONSIZE = 0;
 	void* MappedMemory;
 	memoryallocationtype_tgfx TYPE;
-
-	VkDeviceMemory Allocated_Memory;
-	VkBuffer Buffer;
-	//threadlocal_vector<suballocation_vk> Allocated_Blocks;
-	memoryallocation_vk();
-	memoryallocation_vk(const memoryallocation_vk& copyALLOC);
-	//Use this function in Suballocate_Buffer and Suballocate_Image after you're sure that you have enough memory in the allocation
-	VkDeviceSize FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment);
-	//Free a block
-	void FreeBlock(VkDeviceSize Offset);
+	memorytype_vk() = default;
+	memorytype_vk(const memorytype_vk& copy) {
+		Allocated_Memory = copy.Allocated_Memory;
+		Buffer = copy.Buffer;
+		UnusedSize.store(UnusedSize.load());
+		MemoryTypeIndex = copy.MemoryTypeIndex;
+		MaxSize = copy.MaxSize;
+		ALLOCATIONSIZE = copy.ALLOCATIONSIZE;
+		MappedMemory = copy.MappedMemory;
+		memorytype_ID = copy.memorytype_ID;
+	}
+};
+struct allocatorsys_data {
+	std::vector<memorytype_vk> memorytypes;
 };
 
-void allocatorsys_vk::analize_gpumemory(gpu_public* vkgpu) {
 
-}
-
-void allocatorsys_privatefuncs::Analize_PhysicalDeviceMemoryProperties(gpu_public* VKGPU, gpudescription_tgfx& GPUdesc) {
+void allocatorsys_vk::analize_gpumemory(gpu_public* VKGPU) {
 	std::vector<memory_description_tgfx> mem_descs;
 	for (uint32_t MemoryTypeIndex = 0; MemoryTypeIndex < VKGPU->MemoryProperties.memoryTypeCount; MemoryTypeIndex++) {
 		VkMemoryType& MemoryType = VKGPU->MemoryProperties.memoryTypes[MemoryTypeIndex];
@@ -57,9 +66,7 @@ void allocatorsys_privatefuncs::Analize_PhysicalDeviceMemoryProperties(gpu_publi
 			isHostCached = true;
 		}
 
-		if (GPUdesc.GPU_TYPE != gpu_type_tgfx_DISCRETE_GPU) {
-			continue;
-		}
+
 		if (!isDeviceLocal && !isHostVisible && !isHostCoherent && !isHostCached) {
 			continue;
 		}
@@ -67,60 +74,76 @@ void allocatorsys_privatefuncs::Analize_PhysicalDeviceMemoryProperties(gpu_publi
 			if (isHostVisible && isHostCoherent) {
 				memory_description_tgfx memtype_desc;
 				memtype_desc.allocationtype = memoryallocationtype_FASTHOSTVISIBLE;
-				memtype_desc.memorytype_id = mem_descs.size();
+				memtype_desc.memorytype_id = data->memorytypes.size();
 				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
 				mem_descs.push_back(memtype_desc);
 
-				/*				
-				memoryallocation_vk alloc;
-				alloc.MemoryTypeIndex = MemoryTypeIndex;
-				alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::FASTHOSTVISIBLE;
-				VKGPU->ALLOCs.push_back(alloc);
-				LOG_STATUS_TAPI("Found FAST HOST VISIBLE BIT! Size: " + to_string(GPUdesc.FASTHOSTVISIBLE_MaxMemorySize));
+				data->memorytypes.push_back(memorytype_vk());
+				memorytype_vk& memtype = data->memorytypes[data->memorytypes.size() - 1];
+				memtype.MemoryTypeIndex = MemoryTypeIndex;
+				memtype.TYPE = memoryallocationtype_FASTHOSTVISIBLE;
+				printer(result_tgfx_SUCCESS, ("Found FAST HOST VISIBLE BIT! Size: " + std::to_string(memtype_desc.allocationtype)).c_str());
 			}
 			else {
-				GFX_API::MemoryType MEMTYPE;
-				MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
-				MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
-				GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-				VK_MemoryAllocation alloc;
-				alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::DEVICELOCAL;
-				alloc.MemoryTypeIndex = MemoryTypeIndex;
-				VKGPU->ALLOCs.push_back(alloc);
-				GPUdesc.DEVICELOCAL_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-				LOG_STATUS_TAPI("Found DEVICE LOCAL BIT! Size: " + to_string(GPUdesc.DEVICELOCAL_MaxMemorySize));
+				memory_description_tgfx memtype_desc;
+				memtype_desc.allocationtype = memoryallocationtype_DEVICELOCAL;
+				memtype_desc.memorytype_id = data->memorytypes.size();
+				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+				mem_descs.push_back(memtype_desc);
+
+				data->memorytypes.push_back(memorytype_vk());
+				memorytype_vk& memtype = data->memorytypes[data->memorytypes.size() - 1];
+				memtype.MemoryTypeIndex = MemoryTypeIndex;
+				memtype.TYPE = memoryallocationtype_DEVICELOCAL;
+				printer(result_tgfx_SUCCESS, ("Found DEVICE LOCAL BIT! Size: " + std::to_string(memtype_desc.allocationtype)).c_str());
 			}
 		}
 		else if (isHostVisible && isHostCoherent) {
 			if (isHostCached) {
-				GFX_API::MemoryType MEMTYPE;
-				MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK;
-				MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
-				GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-				VK_MemoryAllocation alloc;
-				alloc.MemoryTypeIndex = MemoryTypeIndex;
-				alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::READBACK;
-				VKGPU->ALLOCs.push_back(alloc);
-				GPUdesc.READBACK_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-				LOG_STATUS_TAPI("Found READBACK BIT! Size: " + to_string(GPUdesc.READBACK_MaxMemorySize));
+				memory_description_tgfx memtype_desc;
+				memtype_desc.allocationtype = memoryallocationtype_READBACK;
+				memtype_desc.memorytype_id = data->memorytypes.size();
+				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+				mem_descs.push_back(memtype_desc);
+
+				data->memorytypes.push_back(memorytype_vk());
+				memorytype_vk& memtype = data->memorytypes[data->memorytypes.size() - 1];
+				memtype.MemoryTypeIndex = MemoryTypeIndex;
+				memtype.TYPE = memoryallocationtype_READBACK;
+				printer(result_tgfx_SUCCESS, ("Found READBACK BIT! Size: " + std::to_string(memtype_desc.allocationtype)).c_str());
 			}
 			else {
-				GFX_API::MemoryType MEMTYPE;
-				MEMTYPE.HEAPTYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE;
-				MEMTYPE.MemoryTypeIndex = GPUdesc.MEMTYPEs.size();
-				GPUdesc.MEMTYPEs.push_back(MEMTYPE);
-				VK_MemoryAllocation alloc;
-				alloc.MemoryTypeIndex = MemoryTypeIndex;
-				alloc.TYPE = GFX_API::SUBALLOCATEBUFFERTYPEs::HOSTVISIBLE;
-				VKGPU->ALLOCs.push_back(alloc);
-				GPUdesc.HOSTVISIBLE_MaxMemorySize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
-				LOG_STATUS_TAPI("Found HOST VISIBLE BIT! Size: " + to_string(GPUdesc.HOSTVISIBLE_MaxMemorySize));
-				*/
+				memory_description_tgfx memtype_desc;
+				memtype_desc.allocationtype = memoryallocationtype_HOSTVISIBLE;
+				memtype_desc.memorytype_id = data->memorytypes.size();
+				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+				mem_descs.push_back(memtype_desc);
+
+				data->memorytypes.push_back(memorytype_vk());
+				memorytype_vk& memtype = data->memorytypes[data->memorytypes.size() - 1];
+				memtype.MemoryTypeIndex = MemoryTypeIndex;
+				memtype.TYPE = memoryallocationtype_HOSTVISIBLE;
+				printer(result_tgfx_SUCCESS, ("Found HOST VISIBLE BIT! Size: " + std::to_string(memtype_desc.allocationtype)).c_str());
 			}
 		}
 	}
+	VKGPU->desc.MEMTYPEsCOUNT = mem_descs.size();
+	memory_description_tgfx* memdescs_final = new memory_description_tgfx[mem_descs.size()];
+
+	for (uint32_t i = 0; i < mem_descs.size(); i++) {
+		memdescs_final[i] = mem_descs[i];
+	}
+
+	VKGPU->desc.MEMTYPEs = memdescs_final;
+}
+
+VkDeviceSize allocatorsys_vk::suballocate_memoryblock(memorytype_vk* memory, VkDevice RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
+	return 0;
+}
+void allocatorsys_vk::free_memoryblock(memorytype_vk* memory, VkDeviceSize offset) {
+
 }
 extern void Create_AllocatorSys() {
 	allocatorsys = new allocatorsys_vk;
-
+	allocatorsys->data = new allocatorsys_data;
 }

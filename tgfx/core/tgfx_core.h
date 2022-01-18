@@ -24,7 +24,7 @@ typedef struct core_tgfx{
     * 1) You can call TGFX functions concurrently. You can call all TGFX functions asynchronously unless otherwise is mentioned.
     * 2) TGFX uses multiple threads to create GPU commands faster.
     */
-	result_tgfx (*load_backend)(backends_tgfx backend);
+	result_tgfx (*load_backend)(backends_tgfx backend, tgfx_PrintLogCallback printcallback);
 	void (*initialize_secondstage)(initializationsecondstageinfo_tgfx_handle info);
 	//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
 	void (*create_window)(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor, 
@@ -60,4 +60,4 @@ typedef struct core_tgfx_type {
 #define TGFXLISTCOUNT(gfxcoreptr, listobject, countername) unsigned int countername = 0;  while (listobject[countername] != gfxcoreptr->INVALIDHANDLE) { countername++; }
 typedef struct registrysys_tapi registrysys_tapi;
 //This function should be exported by the backend dll
-typedef result_tgfx (*backend_load_func)(registrysys_tapi* regsys, core_tgfx_type* core);
+typedef result_tgfx (*backend_load_func)(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallback printcallback);

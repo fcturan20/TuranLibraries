@@ -10,51 +10,19 @@ struct core_public {
 
 };
 
+struct extension_private;
+struct extension_public {
+	extension_private* hidden = nullptr;
+};
 
 struct gpu_private;
 struct gpu_public{
 private:
 	friend struct core_functions; 
-	friend struct allocatorsys_privatefuncs;
+	friend struct allocatorsys_vk;
 	friend struct queuesys_vk;
 	gpu_private* hidden = nullptr;
 	gpudescription_tgfx desc;
-	//Initializes as everything is false (same as CreateInvalidNullFlag)
-	struct VK_QUEUEFLAG {
-		bool is_GRAPHICSsupported : 1;
-		bool is_PRESENTATIONsupported : 1;
-		bool is_COMPUTEsupported : 1;
-		bool is_TRANSFERsupported : 1;
-		bool doesntNeedAnything : 1;	//This is a special flag to be used as "Don't care other parameters, this is a special operation"
-		VK_QUEUEFLAG();
-		inline static VK_QUEUEFLAG CreateInvalidNullFlag();	//Returned flag's every bit is false. You should set at least one of them as true.
-		inline bool isFlagValid() const;
-		//bool is_VTMEMsupported : 1;	Not supported for now!
-	};
-	struct VK_QUEUE {
-		void Initialize(VkQueue QUEUE, float PRIORITY);
-		~VK_QUEUE();
-	private:
-		fence_idtype_vk RenderGraphFences[2];
-		float Priority = 0.0f;
-		VkQueue Queue = VK_NULL_HANDLE;
-	};
-	struct VK_QUEUEFAM {
-	private:
-		VK_QUEUEFLAG SupportFlag;
-		VK_QUEUE* QUEUEs;
-		unsigned int QueueCount;
-		uint32_t QueueFamilyIndex;
-		unsigned char QueueFeatureScore = 0;
-	public:
-		inline void Initialize(const VkQueueFamilyProperties& FamProps, unsigned int QueueFamIndex, const std::vector<VkQueue>& Queues);
-		inline unsigned char QUEUEFEATURESCORE() const { return QueueFeatureScore; }
-		inline VK_QUEUEFLAG QUEUEFLAG() const { return SupportFlag; }
-		inline unsigned int QUEUECOUNT() const { return QueueCount; }
-		inline uint32_t QUEUEFAMINDEX() const { return QueueFamilyIndex; }
-		inline void SUPPORT_PRESENTATION() { if (!SupportFlag.is_PRESENTATIONsupported) { SupportFlag.is_PRESENTATIONsupported = true; QueueFeatureScore++; } }
-		~VK_QUEUEFAM();
-	};
 
 
 	std::string NAME;
@@ -65,31 +33,32 @@ private:
 	VkPhysicalDeviceProperties Device_Properties = {};
 	VkPhysicalDeviceMemoryProperties MemoryProperties = {};
 	VkQueueFamilyProperties* QueueFamilyProperties; unsigned int QueueFamiliesCount = 0;
-	//Use SortedQUEUEFAMsLIST to access queue families in increasing feature score order
-	VK_QUEUEFAM* QUEUEFAMs; unsigned int* SortedQUEUEFAMsLIST;
 	//If GRAPHICS_QUEUEIndex is UINT32_MAX, Graphics isn't supported by the device
-	unsigned int TRANSFERs_supportedqueuecount = 0, COMPUTE_supportedqueuecount = 0, GRAPHICS_QUEUEFamIndex = UINT32_MAX;
+	unsigned int TRANSFERs_supportedqueuecount = 0, COMPUTE_supportedqueuecount = 0, GRAPHICS_supportedqueuecount = 0;
 	VkDevice Logical_Device = {};
 	VkExtensionProperties* Supported_DeviceExtensions; unsigned int Supported_DeviceExtensionsCount = 0;
 	std::vector<const char*> Active_DeviceExtensions;
+	extension_manager* extensions;
 	VkPhysicalDeviceFeatures Supported_Features = {}, Active_Features = {};
-
 	uint32_t* AllQueueFamilies;
 
-	memorytype_vk* memorytypes_vk;
+
+	std::vector<memorytype_vk*> ALLOCs;
+	//Use SortedQUEUEFAMsLIST to access queue families in increasing feature score order
+	queuefam_vk** queuefams;
 public:
 	inline const std::string DEVICENAME() { return NAME; }
 	inline const unsigned int APIVERSION() { return APIVER; }
 	inline const unsigned int DRIVERSION() { return DRIVERVER; }
 	inline const gpu_type_tgfx DEVICETYPE() { return GPUTYPE; }
-	inline const bool GRAPHICSSUPPORTED() { return (GRAPHICS_QUEUEFamIndex == UINT32_MAX) ? (false) : (true); }
+	inline const bool GRAPHICSSUPPORTED() { return GRAPHICS_supportedqueuecount; }
 	inline const bool COMPUTESUPPORTED() { return COMPUTE_supportedqueuecount; }
 	inline const bool TRANSFERSUPPORTED() { return TRANSFERs_supportedqueuecount; }
 	inline VkPhysicalDevice PHYSICALDEVICE() { return Physical_Device; }
 	inline const VkPhysicalDeviceProperties& DEVICEPROPERTIES() const { return Device_Properties; }
 	inline const VkPhysicalDeviceMemoryProperties& MEMORYPROPERTIES() const { return MemoryProperties; }
 	inline VkQueueFamilyProperties* QUEUEFAMILYPROPERTIES() const { return QueueFamilyProperties; }
-	inline VK_QUEUEFAM* QUEUEFAMS() const { return QUEUEFAMs; }
+	inline queuefam_vk** QUEUEFAMS() const { return queuefams; }
 	inline const uint32_t* ALLQUEUEFAMILIES() const { return AllQueueFamilies; }
 	inline unsigned int QUEUEFAMSCOUNT() const { return QueueFamiliesCount; }
 	inline unsigned int TRANSFERSUPPORTEDQUEUECOUNT() { return TRANSFERs_supportedqueuecount; }
@@ -97,7 +66,7 @@ public:
 	inline VkExtensionProperties* EXTPROPERTIES() { return Supported_DeviceExtensions; }
 	inline VkPhysicalDeviceFeatures DEVICEFEATURES_SUPPORTED() { return Supported_Features; }
 	inline VkPhysicalDeviceFeatures DEVICEFEATURES_ACTIVE() { return Active_Features; }
-	inline unsigned int GRAPHICSQUEUEINDEX() { return GRAPHICS_QUEUEFamIndex; }
+	inline const gpudescription_tgfx& DESC() { return desc; }
 
 	/*
 	//This function searches the best queue that has least specs but needed specs
@@ -146,18 +115,6 @@ public:
 		return true;
 	}
 	*/
-	bool isWindowSupported(VkSurfaceKHR WindowSurface) {
-		bool supported = false;
-		for (unsigned int QueueIndex = 0; QueueIndex < rendergpu->QUEUEFAMSCOUNT(); QueueIndex++) {
-			VkBool32 Does_Support = 0;
-			vkGetPhysicalDeviceSurfaceSupportKHR(rendergpu->PHYSICALDEVICE(), rendergpu->QUEUEFAMS()[QueueIndex].QUEUEFAMINDEX(), WindowSurface, &Does_Support);
-			if (Does_Support) {
-				QUEUEFAMs[QueueIndex].SUPPORT_PRESENTATION();
-				supported = true;
-			}
-		}
-		return supported;
-	}
 };
 
 struct monitor_vk {

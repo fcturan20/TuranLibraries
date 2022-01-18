@@ -30,84 +30,131 @@ struct queueflag_vk {
 struct queue_vk {
 	fence_idtype_vk RenderGraphFences[2];
 	VkQueue Queue = VK_NULL_HANDLE;
-	unsigned int QueueFamilyIndex, QueueFeatureScore;
-	queueflag_vk SupportFlag;
 };
 struct queuefam_vk {
-	unsigned int queuecount = 0;
+	uint32_t queueFamIndex = 0;
+	unsigned int queuecount = 0, featurescore = 0;
+	queueflag_vk supportflag;
 	queue_vk* queues = nullptr;
 };
+struct queuesys_data {
+	std::vector<queuefam_vk*> queuefams;
+};
 
-std::vector<VkDeviceQueueCreateInfo> queuesys_vk::analize_queues(gpu_public* vkgpu) {
-	std::vector<VkDeviceQueueCreateInfo> queuefam_ci(vkgpu->QUEUEFAMSCOUNT());
+void queuesys_vk::analize_queues(gpu_public* vkgpu) {
+	bool is_presentationfound = false;
+	vkgpu->queuefams = new queuefam_vk * [vkgpu->QUEUEFAMSCOUNT()];
+	for (unsigned int queuefamily_index = 0; queuefamily_index < vkgpu->QUEUEFAMSCOUNT(); queuefamily_index++) {
+		VkQueueFamilyProperties* QueueFamily = &vkgpu->QUEUEFAMILYPROPERTIES()[queuefamily_index];
+		queuefam_vk* queuefam = new queuefam_vk;
 
 
-	
-	/*
+		queuefam->queueFamIndex = static_cast<uint32_t>(queuefamily_index);
+		if (QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			vkgpu->desc.is_GraphicOperations_Supported = true;
+			queuefam->supportflag.is_GRAPHICSsupported = true;
+			vkgpu->GRAPHICS_supportedqueuecount++;
+			queuefam->featurescore++;
+		}
+		if (QueueFamily->queueFlags & VK_QUEUE_COMPUTE_BIT) {
+			vkgpu->desc.is_ComputeOperations_Supported = true;
+			queuefam->supportflag.is_COMPUTEsupported = true;
+			vkgpu->COMPUTE_supportedqueuecount++;
+			queuefam->featurescore++;
+		}
+		if (QueueFamily->queueFlags & VK_QUEUE_TRANSFER_BIT) {
+			vkgpu->desc.is_TransferOperations_Supported = true;
+			queuefam->supportflag.is_TRANSFERsupported = true;
+			vkgpu->TRANSFERs_supportedqueuecount++;
+			queuefam->featurescore++;
+		}
 
+		data->queuefams.push_back(queuefam);
+		vkgpu->queuefams[queuefamily_index] = queuefam;
+	}
+	if (!vkgpu->desc.is_GraphicOperations_Supported || !vkgpu->desc.is_TransferOperations_Supported || !vkgpu->desc.is_ComputeOperations_Supported) {
+		printer(result_tgfx_FAIL, "The GPU doesn't support one of the following operations, so we can't let you use this GPU: Compute, Transfer, Graphics");
+		return;
+	}
+	//Sort the queue families by their feature score (Example: Element 0 is Transfer Only, Element 1 is Transfer-Compute, Element 2 is Graphics-Transfer-Compute etc)
+	//QuickSort Algorithm
+	if (vkgpu->QUEUEFAMSCOUNT()) {
+		bool should_Sort = true;
+		while (should_Sort) {
+			should_Sort = false;
+			for (unsigned char i = 0; i < vkgpu->QUEUEFAMSCOUNT() - 1; i++) {
+				if (vkgpu->queuefams[i + 1]->featurescore < vkgpu->queuefams[i]->featurescore) {
+					should_Sort = true;
+					queuefam_vk* secondqueuefam = vkgpu->queuefams[i + 1];
+					vkgpu->queuefams[i + 1] = vkgpu->queuefams[i];
+					vkgpu->queuefams[i] = secondqueuefam;
+				}
+			}
+		}
+	}
+}
+
+
+//While creating VK Logical Device, we need which queues to create. Get that info from here.
+std::vector<VkDeviceQueueCreateInfo> queuesys_vk::get_queue_cis(gpu_public* vkgpu) {
 	std::vector<VkDeviceQueueCreateInfo> QueueCreationInfos(0);
 	//Queue Creation Processes
-	float QueuePriority = 1.0f;
-	for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
-		queue_vk& QUEUE = VKGPU->QUEUEs[QueueIndex];
+	for (unsigned int QueueIndex = 0; QueueIndex < vkgpu->QUEUEFAMSCOUNT(); QueueIndex++) {
+		queuefam_vk* queuefam = vkgpu->queuefams[QueueIndex];
 		VkDeviceQueueCreateInfo QueueInfo = {};
 		QueueInfo.flags = 0;
 		QueueInfo.pNext = nullptr;
 		QueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		QueueInfo.queueFamilyIndex = QUEUE.QueueFamilyIndex;
-		QueueInfo.pQueuePriorities = &QueuePriority;
-		QueueInfo.queueCount = 1;
+		QueueInfo.queueFamilyIndex = queuefam->queueFamIndex;
+		float QueuePriority = 1.0f;
+		float* priorities = new float[queuefam->queuecount];
+		QueueInfo.pQueuePriorities = priorities;
+		QueueInfo.queueCount = queuefam->queuecount;
+		for (unsigned int i = 0; i < queuefam->queuecount; i++) {
+			priorities[i] = 1.0f - (float(i) / float(queuefam->queuecount));
+		}
 		QueueCreationInfos.push_back(QueueInfo);
 	}
+	return QueueCreationInfos;
+}
 
-	bool is_presentationfound = false;
-	for (unsigned int queuefamily_index = 0; queuefamily_index < vkgpu->QUEUEFAMSCOUNT(); queuefamily_index++) {
-		VkQueueFamilyProperties* QueueFamily = &vkgpu->QUEUEFAMILYPROPERTIES()[queuefamily_index];
-		queue_vk VKQUEUE;
-		VKQUEUE.QueueFamilyIndex = static_cast<uint32_t>(queuefamily_index);
-		if (QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			vkgpu->desc.is_GraphicOperations_Supported = true;
-			VKQUEUE.SupportFlag.is_GRAPHICSsupported = true;
-			VKQUEUE.QueueFeatureScore++;
-		}
-		if (QueueFamily->queueFlags & VK_QUEUE_COMPUTE_BIT) {
-			vkgpu->desc.is_ComputeOperations_Supported = true;
-			VKQUEUE.SupportFlag.is_COMPUTEsupported = true;
-			vkgpu->COMPUTE_supportedqueuecount++;
-			VKQUEUE.QueueFeatureScore++;
-		}
-		if (QueueFamily->queueFlags & VK_QUEUE_TRANSFER_BIT) {
-			vkgpu->desc.is_TransferOperations_Supported = true;
-			VKQUEUE.SupportFlag.is_TRANSFERsupported = true;
-			vkgpu->TRANSFERs_supportedqueuecount++;
-			VKQUEUE.QueueFeatureScore++;
-		}
 
-		vkgpu->QUEUEs.push_back(VKQUEUE);
-		if (VKQUEUE.SupportFlag.is_GRAPHICSsupported) {
-			vkgpu->GRAPHICS_QUEUEIndex = vkgpu->QUEUEs.size() - 1;
+void queuesys_vk::get_queue_objects(gpu_public* vkgpu) {
+	rendergpu->AllQueueFamilies = new uint32_t[rendergpu->QUEUEFAMSCOUNT()];
+	for (unsigned int i = 0; i < rendergpu->QUEUEFAMSCOUNT(); i++) {
+		printer(result_tgfx_SUCCESS, ("Queue Feature Score: " + std::to_string(rendergpu->queuefams[i]->featurescore)).c_str());
+		for (unsigned int queueindex = 0; queueindex < rendergpu->queuefams[i]->queuecount; queueindex++) {
+			vkGetDeviceQueue(rendergpu->Logical_Device, rendergpu->queuefams[i]->queueFamIndex, queueindex, &(rendergpu->queuefams[i]->queues[queueindex].Queue));
+		}
+		printer(result_tgfx_SUCCESS, ("After vkGetDeviceQueue() " + std::to_string(i)).c_str());
+		rendergpu->AllQueueFamilies[i] = rendergpu->queuefams[i]->queueFamIndex;
+	}
+	printer(result_tgfx_SUCCESS, "After vkGetDeviceQueue()");
+}
+uint32_t queuesys_vk::get_queuefam_index(gpu_public* vkgpu, queuefam_vk* fam) {
+#ifdef VULKAN_DEBUGGING
+	bool isfound = false;
+	for (unsigned int i = 0; i < vkgpu->QUEUEFAMSCOUNT(); i++) {
+		if (vkgpu->queuefams[i] == fam) { isfound = true; }
+	}
+	if (!isfound) { printer(result_tgfx_FAIL, "Queue Family Handle is invalid!"); }
+#endif
+	return fam->queueFamIndex;
+}
+bool queuesys_vk::check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR WindowSurface) {
+	bool issupported = false;
+	for (unsigned int i = 0; i < rendergpu->QUEUEFAMSCOUNT(); i++) {
+		VkBool32 Does_Support = 0;
+		queuefam_vk* queuefam = rendergpu->QUEUEFAMS()[i];
+		vkGetPhysicalDeviceSurfaceSupportKHR(rendergpu->PHYSICALDEVICE(), queuefam->queueFamIndex, WindowSurface, &Does_Support);
+		if (Does_Support) {
+			if (!queuefam->supportflag.is_PRESENTATIONsupported) { queuefam->supportflag.is_PRESENTATIONsupported = true; queuefam->featurescore++; }
+			issupported = true;
 		}
 	}
-	if (!GPUdesc.is_GraphicOperations_Supported || !GPUdesc.is_TransferOperations_Supported || !GPUdesc.is_ComputeOperations_Supported) {
-		LOG_CRASHING_TAPI("The GPU doesn't support one of the following operations, so we can't let you use this GPU: Compute, Transfer, Graphics");
-		return;
-	}
-	//Sort the queues by their feature count (Example: Element 0 is Transfer Only, Element 1 is Transfer-Compute, Element 2 is Graphics-Transfer-Compute etc)
-	//QuickSort Algorithm
-	if (vkgpu->QUEUEs.size()) {
-		bool should_Sort = true;
-		while (should_Sort) {
-			should_Sort = false;
-			for (unsigned char QueueIndex = 0; QueueIndex < vkgpu->QUEUEs.size() - 1; QueueIndex++) {
-				if (vkgpu->QUEUEs[QueueIndex + 1].QueueFeatureScore < vkgpu->QUEUEs[QueueIndex].QueueFeatureScore) {
-					should_Sort = true;
-					VK_QUEUE SecondQueue;
-					SecondQueue = vkgpu->QUEUEs[QueueIndex + 1];
-					vkgpu->QUEUEs[QueueIndex + 1] = vkgpu->QUEUEs[QueueIndex];
-					vkgpu->QUEUEs[QueueIndex] = SecondQueue;
-				}
-			}
-		}
-	}*/
-	return queuefam_ci;
+	return issupported;
+}
+extern void Create_QueueSys() {
+	queuesys = new queuesys_vk;
+	queuesys->data = new queuesys_data;
 }

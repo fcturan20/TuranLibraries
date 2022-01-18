@@ -11,7 +11,7 @@
 static core_tgfx_type* core_type_ptr;
 static registrysys_tapi* core_regsys;
 
-result_tgfx load_backend(backends_tgfx backend){
+result_tgfx load_backend(backends_tgfx backend, tgfx_PrintLogCallback printcallback){
     const char* path = nullptr;
 	switch (backend)
 	{
@@ -28,7 +28,7 @@ result_tgfx load_backend(backends_tgfx backend){
 
     auto backend_dll = DLIB_LOAD_TAPI(path);
     backend_load_func backendloader = (backend_load_func)DLIB_FUNC_LOAD_TAPI(backend_dll, "backend_load");
-    return backendloader(core_regsys, core_type_ptr);
+    return backendloader(core_regsys, core_type_ptr, printcallback);
 }
 
 extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned char reload){

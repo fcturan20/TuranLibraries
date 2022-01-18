@@ -392,16 +392,16 @@ typedef enum subdrawpassaccess_tgfx {
 //If there is no title, that means it's modifiable and possibly includes a double buffered implementation in GL back-end
 //CONST title means it can't be changed after the creation
 typedef enum shaderinputtype_tgfx {
-    tgfx_shaderinput_type_UNDEFINED = 0,
+    shaderinputtype_tgfx_UNDEFINED = 0,
     //DRAWCALL_DESCRIPTOR = 1,
-    tgfx_shaderinput_type_SAMPLER_PI,
-    tgfx_shaderinput_type_SAMPLER_G,
-    tgfx_shaderinput_type_IMAGE_PI,
-    tgfx_shaderinput_type_IMAGE_G,
-    tgfx_shaderinput_type_UBUFFER_PI,
-    tgfx_shaderinput_type_UBUFFER_G,
-    tgfx_shaderinput_type_SBUFFER_PI,
-    tgfx_shaderinput_type_SBUFFER_G
+    shaderinputtype_tgfx_SAMPLER_PI,
+    shaderinputtype_tgfx_SAMPLER_G,
+    shaderinputtype_tgfx_IMAGE_PI,
+    shaderinputtype_tgfx_IMAGE_G,
+    shaderinputtype_tgfx_UBUFFER_PI,
+    shaderinputtype_tgfx_UBUFFER_G,
+    shaderinputtype_tgfx_SBUFFER_PI,
+    shaderinputtype_tgfx_SBUFFER_G
 } shaderinputtype_tgfx;
 
 typedef enum memoryallocationtype_tgfx {
@@ -417,6 +417,7 @@ typedef enum memoryallocationtype_tgfx {
 
 typedef void (*tgfx_windowResizeCallback)(window_tgfx_handle WindowHandle, void* UserPointer, unsigned int WIDTH, unsigned int HEIGHT,
     texture_tgfx_handle* SwapchainTextureHandles);
+typedef void (*tgfx_PrintLogCallback)(result_tgfx result, const char* text);
     
             //SYSTEMS
 typedef struct renderer_tgfx renderer_tgfx;

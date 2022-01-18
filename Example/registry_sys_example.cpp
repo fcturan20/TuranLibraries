@@ -12,7 +12,10 @@
 #include "bitset_tapi.h"
 #include "profiler_tapi.h"
 #include "allocator_tapi.h"
+
+
 #include "tgfx_forwarddeclarations.h"
+#include "tgfx_helper.h"
 #include "tgfx_core.h"
 
 
@@ -32,6 +35,9 @@ void thread_print(){
 	}
 	Sleep(2000);
 	printf("Finished thread index: %u\n", threadingsys->funcs->this_thread_index());
+}
+void printf_log_tgfx(result_tgfx result, const char* text) {
+	printf("TGFX Result %u: %s\n", (unsigned int)result, text);
 }
 
 int main(){
@@ -97,15 +103,22 @@ int main(){
 	auto tgfxdll = DLIB_LOAD_TAPI("tgfx_core.dll");
 	load_plugin_func tgfxloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(tgfxdll, "load_plugin");
 	TGFX_PLUGIN_LOAD_TYPE tgfxsys = (TGFX_PLUGIN_LOAD_TYPE)tgfxloader(sys, 0);
-	result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_VULKAN);
+	result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_VULKAN, nullptr);
 	printf("%c", result);
 
 	gpu_tgfx_listhandle gpulist;
 	tgfxsys->api->getGPUlist(&gpulist);
 	TGFXLISTCOUNT(tgfxsys->api, gpulist, gpulist_count);
 	printf("GPU COUNT: %u\n", gpulist_count);
-	
-	
+	const char* gpuname;
+	const memory_description_tgfx* memtypelist; unsigned int memtypelistcount;
+	tgfxsys->api->helpers->GetGPUInfo_General(gpulist[0], &gpuname, nullptr, nullptr, nullptr, &memtypelist, &memtypelistcount, nullptr, nullptr, nullptr);
+	std::cout << "Memory Type Count: " << memtypelistcount << " and GPU Name: " << gpuname << "\n";
+	for (unsigned int i = 0; i < memtypelistcount; i++) {
+		tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 10 * 1024 * 1024, nullptr);
+	}
+	//initializationsecondstageinfo_tgfx_handle secondinfo = tgfxsys->api->helpers->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, true, true, true, (extension_tgfx_listhandle)tgfxsys->api->INVALIDHANDLE);
+	//tgfxsys->api->initialize_secondstage(secondinfo);
 
 	printf("Application waits for an input: ");
 	scanf("%c", &stop_char);

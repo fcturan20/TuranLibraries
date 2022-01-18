@@ -27,6 +27,8 @@ extern allocatorsys_vk* allocatorsys;
 struct queuesys_vk;
 extern queuesys_vk* queuesys;
 
+extern tgfx_PrintLogCallback printer;
+
 
 //Synchronization systems and objects
 
@@ -54,9 +56,43 @@ static constexpr fence_idtype_vk invalid_fenceid = nullptr;
 
 struct memorytype_vk;
 struct queuefam_vk;
+struct extension_manager;	//Stores activated extensions and set function pointers according to that
 
-typedef void (*print_log)(result_tgfx result, const char* text);
-extern print_log printer;
+//Enums
+enum class desctype_vk : unsigned char {
+	SAMPLER = 0,
+	IMAGE = 1,
+	SBUFFER = 2,
+	UBUFFER = 3
+};
+
+
+//Simple enumaration functions
+extern VkFormat Find_VkFormat_byDataType(datatype_tgfx datatype);
+extern VkFormat Find_VkFormat_byTEXTURECHANNELs(texture_channels_tgfx channels);
+extern VkDescriptorType Find_VkDescType_byMATDATATYPE(shaderinputtype_tgfx TYPE);
+extern VkSamplerAddressMode Find_AddressMode_byWRAPPING(texture_wrapping_tgfx Wrapping);
+extern VkFilter Find_VkFilter_byGFXFilter(texture_mipmapfilter_tgfx filter);
+extern VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(texture_mipmapfilter_tgfx filter);
+extern VkCullModeFlags Find_CullMode_byGFXCullMode(cullmode_tgfx mode);
+extern VkPolygonMode Find_PolygonMode_byGFXPolygonMode(polygonmode_tgfx mode);
+extern VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(vertexlisttypes_tgfx type);
+extern VkIndexType Find_IndexType_byGFXDATATYPE(datatype_tgfx datatype);
+extern VkCompareOp Find_CompareOp_byGFXDepthTest(depthtest_tgfx test);
+extern void Find_DepthMode_byGFXDepthMode(depthmode_tgfx mode, VkBool32& ShouldTest, VkBool32& ShouldWrite);
+extern VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(drawpassload_tgfx load);
+extern VkCompareOp Find_CompareOp_byGFXStencilCompare(stencilcompare_tgfx op);
+extern VkStencilOp Find_StencilOp_byGFXStencilOp(stencilop_tgfx op);
+extern VkBlendOp Find_BlendOp_byGFXBlendMode(blendmode_tgfx mode);
+extern VkBlendFactor Find_BlendFactor_byGFXBlendFactor(blendfactor_tgfx factor);
+extern void Fill_ComponentMapping_byCHANNELs(texture_channels_tgfx channels, VkComponentMapping& mapping);
+extern void Find_SubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSource, VkPipelineStageFlags& stageflag, VkAccessFlags& accessflag);
+desctype_vk Find_DescType_byGFXShaderInputType(shaderinputtype_tgfx type);
+VkDescriptorType Find_VkDescType_byDescTypeCategoryless(desctype_vk type);
+
+//Resources
+struct texture_vk;
+
 
 extern VkInstance Vulkan_Instance;
 extern VkApplicationInfo Application_Info;

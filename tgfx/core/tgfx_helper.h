@@ -6,9 +6,8 @@
 
 typedef struct helper_tgfx {
     //Hardware Capability Helpers
-    void (*GetGPUInfo_General)(gpu_tgfx_handle GPUHandle, const char** NAME, unsigned int* API_VERSION, unsigned int* DRIVER_VERSION, gpu_type_tgfx* GPUTYPE, memorytype_tgfx_listhandle* MemTypes,
-        unsigned char* isGraphicsOperationsSupported, unsigned char* isComputeOperationsSupported, unsigned char* isTransferOperationsSupported);
-    void (*GetGPUInfo_Memory)(memorytype_tgfx_handle MemoryType, memoryallocationtype_tgfx* AllocType, unsigned long long* MaxAllocSize);
+    void (*GetGPUInfo_General)(gpu_tgfx_handle GPUHandle, const char** NAME, unsigned int* API_VERSION, unsigned int* DRIVER_VERSION, gpu_type_tgfx* GPUTYPE, const memory_description_tgfx** MemType_descs,
+        unsigned int* MemType_descsCount, unsigned char* isGraphicsOperationsSupported, unsigned char* isComputeOperationsSupported, unsigned char* isTransferOperationsSupported);
     unsigned char (*GetTextureTypeLimits)(texture_dimensions_tgfx dims, texture_order_tgfx dataorder, texture_channels_tgfx channeltype,
         textureusageflag_tgfx_handle usageflag, gpu_tgfx_handle GPUHandle, unsigned int* MAXWIDTH, unsigned int* MAXHEIGHT, unsigned int* MAXDEPTH,
         unsigned int* MAXMIPLEVEL);
@@ -16,7 +15,7 @@ typedef struct helper_tgfx {
         unsigned char isRenderableTo, unsigned char isSampledReadOnly, unsigned char isRandomlyWrittenTo);
     void (*GetSupportedAllocations_ofTexture)(unsigned int GPUIndex, unsigned int* SupportedMemoryTypesBitset);
     //You can't create a memory type, only set allocation size of a given Memory Type (Memory Type is given by the GFX initialization process)
-    result_tgfx(*SetMemoryTypeInfo)(memorytype_tgfx_handle MemoryType, unsigned long long AllocationSize, extension_tgfx_listhandle Extensions);
+    result_tgfx(*SetMemoryTypeInfo)(unsigned int MemoryType_id, unsigned long long AllocationSize, extension_tgfx_listhandle Extensions);
     initializationsecondstageinfo_tgfx_handle(*Create_GFXInitializationSecondStageInfo)(
         gpu_tgfx_handle RendererGPU,
         //You have to specify how much shader input categories you're gonna use max (material types that have general shader inputs + material instances that have per instance shader inputs)

@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <vector>
 #include <string>
-#include <logger_tapi.h>
 #include "resource.h"
 #include <tgfx_helper.h>
 #include <tgfx_renderer.h>
@@ -17,6 +16,7 @@
 #include <vector>
 #include "memory.h"
 #include "queue.h"
+#include "extension.h"
 
 struct core_private{
 public:
@@ -26,16 +26,16 @@ public:
 	std::vector<window_vk*> WINDOWs;
 
 	//Instead of checking each window each frame, just check this
-	bool isAnyWindowResized = false;
+	bool isAnyWindowResized = false, isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = false;
 };
 static core_private* hidden = nullptr;
-static logger_tapi* logsys = nullptr;
 
 
 void GFX_Error_Callback(int error_code, const char* description) {
 	printf("TGFX_FAIL: %s\n", description);
 }
 
+struct device_features_chainedstructs;
 struct core_functions {
 public:
 	static inline void initialize_secondstage(initializationsecondstageinfo_tgfx_handle info);
@@ -69,6 +69,9 @@ public:
 	//GPU ANALYZATION FUNCS
 
 	static inline void Gather_PhysicalDeviceInformations(gpu_public* VKGPU);
+	static inline void Describe_SupportedExtensions(gpu_public* VKGPU);
+	static inline void ActivateDeviceFeatures(gpu_public* VKGPU, VkDeviceCreateInfo& device_ci, device_features_chainedstructs& chainer);
+	static inline void CheckDeviceLimits(gpu_public* VKGPU);
 };
 
 
@@ -77,15 +80,13 @@ extern void Create_Renderer();
 extern void Create_GPUContentManager();
 extern void set_helper_functions();
 extern void Create_AllocatorSys();
+extern void Create_QueueSys();
 
 
-void printf_log(result_tgfx result, const char* text) {
-	printf("TGFX %u: %s", (unsigned int)result, text);
+void printf_log_tgfx(result_tgfx result, const char* text) {
+	printf("TGFX %u: %s\n", (unsigned int)result, text);
 }
-void loggersys_log(result_tgfx result, const char* text) {
-	logsys->log_status(text);
-}
-result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core) {
+result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallback printcallback) {
 	if (!regsys->get(TGFX_PLUGIN_NAME, TGFX_PLUGIN_VERSION, 0))
 		return result_tgfx_FAIL;
 
@@ -103,9 +104,8 @@ result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core) {
 	core_tgfx_main = core->api;
 	hidden = new core_private;
 
-	LOGGER_TAPI_PLUGIN_LOAD_TYPE logsys_type = (LOGGER_TAPI_PLUGIN_LOAD_TYPE)regsys->get(LOGGER_TAPI_PLUGIN_NAME, LOGGER_TAPI_PLUGIN_VERSION, 0);
-	if (logsys_type) { logsys = logsys_type->funcs; printer = loggersys_log; }
-	else {printer = printf_log;}
+	if (printcallback) { printer = printcallback; }
+	else { printer = printf_log_tgfx; }
 
 	core->api->initialize_secondstage = &core_functions::initialize_secondstage;
 	
@@ -118,7 +118,9 @@ result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core) {
 	//core->api->take_inputs = &core_functions::take_inputs;
 	core->api->getmonitorlist = &core_functions::getmonitorlist;
 	core->api->getGPUlist = &core_functions::getGPUlist;
-	//set_helper_functions();
+	set_helper_functions();
+	Create_AllocatorSys();
+	Create_QueueSys();
 
 
 	//Set error callback to handle all glfw errors (including initialization error)!
@@ -137,24 +139,191 @@ result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core) {
 
 	return result_tgfx_SUCCESS;
 }
-extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi* regsys, core_tgfx_type* core){
-	return load(regsys, core);
+extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallback printcallback){
+	return load(regsys, core, printcallback);
  }
+//While enabling features, some struct should be chained. This struct is to keep data object lifetimes optimal
+struct device_features_chainedstructs {
+	VkPhysicalDeviceDescriptorIndexingFeatures DescIndexingFeatures = {};
+};
+//You have to enable some features to use some device extensions
+inline void core_functions::ActivateDeviceFeatures(gpu_public* VKGPU, VkDeviceCreateInfo& device_ci, device_features_chainedstructs& chainer) {
+	const void*& dev_ci_Next = device_ci.pNext;
+	void** extending_Next = nullptr;
+
+
+	//Check for seperate RTSlot blending
+	if (VKGPU->Supported_Features.independentBlend) {
+		VKGPU->Active_Features.independentBlend = VK_TRUE;
+		//GPUDesc.isSupported_SeperateRTSlotBlending = true;
+	}
+
+	//Activate Descriptor Indexing Features
+	if (VKGPU->extensions->ISSUPPORTED_DESCINDEXING()) {
+		chainer.DescIndexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
+		chainer.DescIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+		chainer.DescIndexingFeatures.descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE;
+		chainer.DescIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = VK_TRUE;
+		chainer.DescIndexingFeatures.descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE;
+		chainer.DescIndexingFeatures.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
+		chainer.DescIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
+		chainer.DescIndexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
+		chainer.DescIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+		chainer.DescIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
+		chainer.DescIndexingFeatures.shaderStorageImageArrayNonUniformIndexing = VK_TRUE;
+		chainer.DescIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = VK_TRUE;
+		chainer.DescIndexingFeatures.pNext = nullptr;
+		chainer.DescIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+
+		if (extending_Next) {
+			*extending_Next = &chainer.DescIndexingFeatures;
+			extending_Next = &chainer.DescIndexingFeatures.pNext;
+		}
+		else {
+			dev_ci_Next = &chainer.DescIndexingFeatures;
+			extending_Next = &chainer.DescIndexingFeatures.pNext;
+		}
+	}
+}
+inline void core_functions::CheckDeviceLimits(gpu_public* VKGPU) {
+	//Check Descriptor Limits
+	{
+		if (VKGPU->extensions->ISSUPPORTED_DESCINDEXING()) {
+			VkPhysicalDeviceDescriptorIndexingProperties* descindexinglimits = new VkPhysicalDeviceDescriptorIndexingProperties{};
+			descindexinglimits->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
+			VkPhysicalDeviceProperties2 devprops2;
+			devprops2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+			devprops2.pNext = descindexinglimits;
+			vkGetPhysicalDeviceProperties2(VKGPU->Physical_Device, &devprops2);
+
+			VKGPU->extensions->GETMAXDESC(desctype_vk::SAMPLER) = descindexinglimits->maxDescriptorSetUpdateAfterBindSampledImages;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::IMAGE) = descindexinglimits->maxDescriptorSetUpdateAfterBindStorageImages;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::SBUFFER) = descindexinglimits->maxDescriptorSetUpdateAfterBindStorageBuffers;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::UBUFFER) = descindexinglimits->maxDescriptorSetUpdateAfterBindUniformBuffers;
+			VKGPU->extensions->GETMAXDESCALL() = descindexinglimits->maxUpdateAfterBindDescriptorsInAllPools;
+			VKGPU->extensions->GETMAXDESCPERSTAGE() = descindexinglimits->maxPerStageUpdateAfterBindResources;
+			delete descindexinglimits;
+		}
+		else {
+			VKGPU->extensions->GETMAXDESC(desctype_vk::SAMPLER) = VKGPU->Device_Properties.limits.maxPerStageDescriptorSampledImages;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::IMAGE) = VKGPU->Device_Properties.limits.maxPerStageDescriptorStorageImages;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::SBUFFER) = VKGPU->Device_Properties.limits.maxPerStageDescriptorStorageBuffers;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::UBUFFER) = VKGPU->Device_Properties.limits.maxPerStageDescriptorUniformBuffers;
+			VKGPU->extensions->GETMAXDESCALL() = VKGPU->Device_Properties.limits.maxPerStageResources;
+			VKGPU->extensions->GETMAXDESCPERSTAGE() = UINT32_MAX;
+		}
+	}
+}
 void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_handle info) {
 	initialization_secondstageinfo* vkinfo = (initialization_secondstageinfo*)info;
 	rendergpu = vkinfo->renderergpu;
 
 	if (vkinfo->shouldActivate_DearIMGUI) {
-		//Create_IMGUI();
+		Create_IMGUI();
+	}
+
+	//Create Logical Device
+	{
+		std::vector<VkDeviceQueueCreateInfo> queues_ci = queuesys->get_queue_cis(rendergpu);
+
+		VkDeviceCreateInfo Logical_Device_CreationInfo{};
+		Logical_Device_CreationInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		Logical_Device_CreationInfo.flags = 0;
+		Logical_Device_CreationInfo.pQueueCreateInfos = queues_ci.data();
+		Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(queues_ci.size());
+		//This is to destroy datas of extending features
+		device_features_chainedstructs chainer;
+		ActivateDeviceFeatures(rendergpu, Logical_Device_CreationInfo, chainer);
+
+		Logical_Device_CreationInfo.enabledExtensionCount = rendergpu->Active_DeviceExtensions.size();
+		Logical_Device_CreationInfo.ppEnabledExtensionNames = rendergpu->Active_DeviceExtensions.data();
+		Logical_Device_CreationInfo.pEnabledFeatures = &rendergpu->Active_Features;
+
+		Logical_Device_CreationInfo.enabledLayerCount = 0;
+		if (vkCreateDevice(rendergpu->Physical_Device, &Logical_Device_CreationInfo, nullptr, &rendergpu->Logical_Device) != VK_SUCCESS) {
+			printer(result_tgfx_SUCCESS, "Vulkan failed to create a Logical Device!");
+			return;
+		}
+		printer(result_tgfx_SUCCESS, "After vkCreateDevice()");
+		
+		queuesys->get_queue_objects(rendergpu);
+
+		CheckDeviceLimits(rendergpu);
+		printer(result_tgfx_SUCCESS, "After Check_DeviceLimits()");
 	}
 
 
 	Create_Renderer();
 	Create_GPUContentManager();
-	Create_AllocatorSys();
 	delete vkinfo;
 }
 
+inline bool IsExtensionSupported(const char* ExtensionName, VkExtensionProperties* SupportedExtensions, unsigned int SupportedExtensionsCount) {
+	bool Is_Found = false;
+	for (unsigned int supported_extension_index = 0; supported_extension_index < SupportedExtensionsCount; supported_extension_index++) {
+		if (strcmp(ExtensionName, SupportedExtensions[supported_extension_index].extensionName)) {
+			return true;
+		}
+	}
+	printer(result_tgfx_WARNING, ("Extension: " + std::string(ExtensionName) + " is not supported by the GPU!").c_str());
+	return false;
+}
+inline void core_functions::Describe_SupportedExtensions(gpu_public* VKGPU) {
+	//GET SUPPORTED DEVICE EXTENSIONS
+	vkEnumerateDeviceExtensionProperties(VKGPU->Physical_Device, nullptr, &VKGPU->Supported_DeviceExtensionsCount, nullptr);
+	VKGPU->Supported_DeviceExtensions = new VkExtensionProperties[VKGPU->Supported_DeviceExtensionsCount];
+	vkEnumerateDeviceExtensionProperties(VKGPU->Physical_Device, nullptr, &VKGPU->Supported_DeviceExtensionsCount, VKGPU->Supported_DeviceExtensions);
+
+	//Check Seperate_DepthStencil
+	if (Application_Info.apiVersion == VK_API_VERSION_1_0 || Application_Info.apiVersion == VK_API_VERSION_1_1) {
+		if (IsExtensionSupported(VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME, VKGPU->Supported_DeviceExtensions, VKGPU->Supported_DeviceExtensionsCount)) {
+			VKGPU->extensions->SUPPORT_SEPERATEDDEPTHSTENCILLAYOUTS();
+			VKGPU->Active_DeviceExtensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+			if (Application_Info.apiVersion == VK_API_VERSION_1_0) {
+				VKGPU->Active_DeviceExtensions.push_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
+				VKGPU->Active_DeviceExtensions.push_back(VK_KHR_MAINTENANCE2_EXTENSION_NAME);
+			}
+		}
+	}
+	else {
+		VKGPU->extensions->SUPPORT_SEPERATEDDEPTHSTENCILLAYOUTS();
+	}
+
+	if (IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME, VKGPU->Supported_DeviceExtensions, VKGPU->Supported_DeviceExtensionsCount)) {
+		VKGPU->extensions->SUPPORT_SWAWPCHAINDISPLAY();
+		VKGPU->Active_DeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+	}
+	else {
+		printer(result_tgfx_WARNING, "Current GPU doesn't support to display a swapchain, so you shouldn't use any window related functionality such as: GFXRENDERER->Create_WindowPass, GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
+	}
+
+
+	//Check Descriptor Indexing
+	//First check Maintenance3 and PhysicalDeviceProperties2 for Vulkan 1.0
+	if (Application_Info.apiVersion == VK_API_VERSION_1_0) {
+		if (IsExtensionSupported(VK_KHR_MAINTENANCE3_EXTENSION_NAME, VKGPU->Supported_DeviceExtensions, VKGPU->Supported_DeviceExtensionsCount) && hidden->isSupported_PhysicalDeviceProperties2) {
+			VKGPU->Active_DeviceExtensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
+			if (IsExtensionSupported(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, VKGPU->Supported_DeviceExtensions, VKGPU->Supported_DeviceExtensionsCount)) {
+				VKGPU->Active_DeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+				VKGPU->extensions->SUPPORT_DESCINDEXING();
+			}
+		}
+	}
+	//Maintenance3 and PhysicalDeviceProperties2 is core in 1.1, so check only Descriptor Indexing
+	else {
+		//If Vulkan is 1.1, check extension
+		if (Application_Info.apiVersion == VK_API_VERSION_1_1) {
+			if (IsExtensionSupported(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, VKGPU->Supported_DeviceExtensions, VKGPU->Supported_DeviceExtensionsCount)) {
+				VKGPU->Active_DeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+				VKGPU->extensions->SUPPORT_DESCINDEXING();
+			}
+		}
+		//1.2+ Vulkan supports DescriptorIndexing by default.
+		else {
+			VKGPU->extensions->SUPPORT_DESCINDEXING();
+		}
+	}
+}
 void core_functions::Save_Monitors() {
 	hidden->MONITORs.clear();
 	int monitor_count;
@@ -187,16 +356,6 @@ void core_functions::Save_Monitors() {
 	}
 }
 
-inline bool IsExtensionSupported(const char* ExtensionName, VkExtensionProperties* SupportedExtensions, unsigned int SupportedExtensionsCount) {
-	bool Is_Found = false;
-	for (unsigned int supported_extension_index = 0; supported_extension_index < SupportedExtensionsCount; supported_extension_index++) {
-		if (strcmp(ExtensionName, SupportedExtensions[supported_extension_index].extensionName)) {
-			return true;
-		}
-	}
-	printer(result_tgfx_WARNING, ("Extension: " + std::string(ExtensionName) + " is not supported by the GPU!").c_str());
-	return false;
-}
 std::vector<const char*> Active_InstanceExtensionNames;
 std::vector<VkExtensionProperties> Supported_InstanceExtensionList;
 inline void Check_InstanceExtensions() {
@@ -213,7 +372,7 @@ inline void Check_InstanceExtensions() {
 
 
 	if (IsExtensionSupported(VK_KHR_SURFACE_EXTENSION_NAME, Supported_InstanceExtensionList.data(), Supported_InstanceExtensionList.size())) {
-		isActive_SurfaceKHR = true;
+		hidden->isActive_SurfaceKHR = true;
 		Active_InstanceExtensionNames.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 	}
 	else {
@@ -232,7 +391,7 @@ inline void Check_InstanceExtensions() {
 	if ((Application_Info.apiVersion == VK_API_VERSION_1_0 &&
 		IsExtensionSupported(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, Supported_InstanceExtensionList.data(), Supported_InstanceExtensionList.size())
 		) || Application_Info.apiVersion != VK_API_VERSION_1_0) {
-		isSupported_PhysicalDeviceProperties2 = true;
+		hidden->isSupported_PhysicalDeviceProperties2 = true;
 		if (Application_Info.apiVersion == VK_API_VERSION_1_0) {
 			Active_InstanceExtensionNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 		}
@@ -318,65 +477,13 @@ void core_functions::Gather_PhysicalDeviceInformations(gpu_public* VKGPU) {
 	vkGetPhysicalDeviceFeatures(VKGPU->Physical_Device, &VKGPU->Supported_Features);
 
 	//GET QUEUE FAMILIES, SAVE THEM TO GPU OBJECT, CHECK AND SAVE GRAPHICS,COMPUTE,TRANSFER QUEUEFAMILIES INDEX
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, nullptr);
-	VKGPU->QueueFamilyProperties = new VkQueueFamilyProperties[queueFamilyCount];
-	vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &queueFamilyCount, VKGPU->QueueFamilyProperties);
+	vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &VKGPU->QueueFamiliesCount, nullptr);
+	VKGPU->QueueFamilyProperties = new VkQueueFamilyProperties[VKGPU->QueueFamiliesCount];
+	vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &VKGPU->QueueFamiliesCount, VKGPU->QueueFamilyProperties);
 
 	vkGetPhysicalDeviceMemoryProperties(VKGPU->Physical_Device, &VKGPU->MemoryProperties);
 }
-/*
-void Analize_Queues(GPU* VKGPU, GFX_API::GPUDescription& GPUdesc) {
-	bool is_presentationfound = false;
-	for (unsigned int queuefamily_index = 0; queuefamily_index < VKGPU->QueueFamilyProperties.size(); queuefamily_index++) {
-		VkQueueFamilyProperties* QueueFamily = &VKGPU->QueueFamilyProperties[queuefamily_index];
-		VK_QUEUE VKQUEUE;
-		VKQUEUE.QueueFamilyIndex = static_cast<uint32_t>(queuefamily_index);
-		if (QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			GPUdesc.is_GraphicOperations_Supported = true;
-			VKQUEUE.SupportFlag.is_GRAPHICSsupported = true;
-			VKQUEUE.QueueFeatureScore++;
-		}
-		if (QueueFamily->queueFlags & VK_QUEUE_COMPUTE_BIT) {
-			GPUdesc.is_ComputeOperations_Supported = true;
-			VKQUEUE.SupportFlag.is_COMPUTEsupported = true;
-			VKGPU->COMPUTE_supportedqueuecount++;
-			VKQUEUE.QueueFeatureScore++;
-		}
-		if (QueueFamily->queueFlags & VK_QUEUE_TRANSFER_BIT) {
-			GPUdesc.is_TransferOperations_Supported = true;
-			VKQUEUE.SupportFlag.is_TRANSFERsupported = true;
-			VKGPU->TRANSFERs_supportedqueuecount++;
-			VKQUEUE.QueueFeatureScore++;
-		}
 
-		VKGPU->QUEUEs.push_back(VKQUEUE);
-		if (VKQUEUE.SupportFlag.is_GRAPHICSsupported) {
-			VKGPU->GRAPHICS_QUEUEIndex = VKGPU->QUEUEs.size() - 1;
-		}
-	}
-	if (!GPUdesc.is_GraphicOperations_Supported || !GPUdesc.is_TransferOperations_Supported || !GPUdesc.is_ComputeOperations_Supported) {
-		LOG_CRASHING_TAPI("The GPU doesn't support one of the following operations, so we can't let you use this GPU: Compute, Transfer, Graphics");
-		return;
-	}
-	//Sort the queues by their feature count (Example: Element 0 is Transfer Only, Element 1 is Transfer-Compute, Element 2 is Graphics-Transfer-Compute etc)
-	//QuickSort Algorithm
-	if (VKGPU->QUEUEs.size()) {
-		bool should_Sort = true;
-		while (should_Sort) {
-			should_Sort = false;
-			for (unsigned char QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size() - 1; QueueIndex++) {
-				if (VKGPU->QUEUEs[QueueIndex + 1].QueueFeatureScore < VKGPU->QUEUEs[QueueIndex].QueueFeatureScore) {
-					should_Sort = true;
-					VK_QUEUE SecondQueue;
-					SecondQueue = VKGPU->QUEUEs[QueueIndex + 1];
-					VKGPU->QUEUEs[QueueIndex + 1] = VKGPU->QUEUEs[QueueIndex];
-					VKGPU->QUEUEs[QueueIndex] = SecondQueue;
-				}
-			}
-		}
-	}
-}*/
 
 inline const char* Convert_VendorID_toaString(uint32_t VendorID) {
 	switch (VendorID) {
@@ -440,9 +547,10 @@ inline void core_functions::Check_Computer_Specs() {
 		gpudesc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
 
 		allocatorsys->analize_gpumemory(vkgpu);
+		queuesys->analize_queues(vkgpu);
 
+		printer(result_tgfx_SUCCESS, "Finished checking Computer Specifications!");
 		/*
-		std::vector<VkDeviceQueueCreateInfo> QueueCreationInfos = queuesys->analize_queues(vkgpu);
 
 
 		VkDeviceCreateInfo Logical_Device_CreationInfo{};
@@ -549,7 +657,6 @@ inline void core_functions::Check_Computer_Specs() {
 		*/
 	}
 
-	printer(result_tgfx_SUCCESS, "Finished checking Computer Specifications!");
 }
 
 
@@ -734,7 +841,7 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 
 	//Finding GPU_TO_RENDER's Surface Capabilities
 
-	if (!rendergpu->isWindowSupported(Vulkan_Window->Window_Surface)) {
+	if (!queuesys->check_windowsupport(rendergpu, Vulkan_Window->Window_Surface)) {
 		printer(result_tgfx_FAIL, "Vulkan backend supports windows that your GPU supports but your GPU doesn't support current window. So window creation has failed!");
 		return;
 	}

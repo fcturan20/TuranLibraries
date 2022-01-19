@@ -5,6 +5,7 @@
 #include <tgfx_core.h>
 #include <tgfx_helper.h>
 #include "core.h"
+#include "extension.h"
 
 
 struct helper_functions {
@@ -12,7 +13,7 @@ struct helper_functions {
     static void  GetGPUInfo_General(gpu_tgfx_handle GPUHandle, const char** NAME, unsigned int* API_VERSION, unsigned int* DRIVER_VERSION, gpu_type_tgfx* GPUTYPE, const memory_description_tgfx** MemType_descs,
         unsigned int* MemType_descsCount, unsigned char* isGraphicsOperationsSupported, unsigned char* isComputeOperationsSupported, unsigned char* isTransferOperationsSupported) {
         gpu_public* VKGPU = (gpu_public*)GPUHandle;
-        if (NAME) { *NAME = VKGPU->DEVICENAME().c_str(); }
+        if (NAME) { *NAME = VKGPU->DEVICENAME(); }
         if (API_VERSION) { *API_VERSION = VKGPU->APIVERSION(); }
         if (DRIVER_VERSION) { *DRIVER_VERSION = VKGPU->DRIVERSION(); }
         if (GPUTYPE) { *GPUTYPE = VKGPU->DEVICETYPE(); }
@@ -29,7 +30,13 @@ struct helper_functions {
     }
     static textureusageflag_tgfx_handle CreateTextureUsageFlag(unsigned char isCopiableFrom, unsigned char isCopiableTo,
         unsigned char isRenderableTo, unsigned char isSampledReadOnly, unsigned char isRandomlyWrittenTo) {
-        return nullptr;
+        VkImageUsageFlags* UsageFlag = new VkImageUsageFlags;
+        *UsageFlag = ((isCopiableFrom) ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0) |
+            ((isCopiableTo) ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0) |
+            ((isRenderableTo) ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : 0) |
+            ((isSampledReadOnly) ? VK_IMAGE_USAGE_SAMPLED_BIT : 0) |
+            ((isRandomlyWrittenTo) ? VK_IMAGE_USAGE_STORAGE_BIT : 0);
+        return (textureusageflag_tgfx_handle)UsageFlag;
     }
     static void  GetSupportedAllocations_ofTexture(unsigned int GPUIndex, unsigned int* SupportedMemoryTypesBitset) {
 
@@ -50,7 +57,34 @@ struct helper_functions {
         unsigned char isGlobalUniformBuffer_Index1, unsigned char isGlobalSampledTexture_Index1,
         unsigned char ShouldActive_dearIMGUI,
         extension_tgfx_listhandle EXTList) {
-        return nullptr;
+        gpu_public* VKGPU = (gpu_public*)RendererGPU;
+
+        unsigned int MAXDESC_SAMPLEDTEXTURE = MaxSumMaterial_SampledTexture + GlobalSampledTextureInputCount;
+        unsigned int MAXDESC_IMAGETEXTURE = MaxSumMaterial_ImageTexture + GlobalImageTextureInputCount;
+        unsigned int MAXDESC_UNIFORMBUFFER = MaxSumMaterial_UniformBuffer + GlobalUniformBufferInputCount;
+        unsigned int MAXDESC_STORAGEBUFFER = MaxSumMaterial_StorageBuffer + GlobalInputStorageBufferInputCount;
+        if (MAXDESC_SAMPLEDTEXTURE > VKGPU->EXTMANAGER()->GETMAXDESC(desctype_vk::SAMPLER) || MAXDESC_IMAGETEXTURE > VKGPU->EXTMANAGER()->GETMAXDESC(desctype_vk::IMAGE) ||
+            MAXDESC_UNIFORMBUFFER > VKGPU->EXTMANAGER()->GETMAXDESC(desctype_vk::UBUFFER) || MAXDESC_STORAGEBUFFER > VKGPU->EXTMANAGER()->GETMAXDESC(desctype_vk::SBUFFER)) {
+            printer(result_tgfx_FAIL, "One of the shader input types exceeds the GPU's limits. Don't forget that Global + General + Per Instance shouldn't exceed GPU's related shader input type limits!");
+            return nullptr;
+        }
+
+        InitializationSecondStageInfo* info = new InitializationSecondStageInfo;
+
+        info->MaxSumMaterial_ImageTexture = MaxSumMaterial_ImageTexture;
+        info->MaxSumMaterial_SampledTexture = MaxSumMaterial_SampledTexture;
+        info->MaxSumMaterial_StorageBuffer = MaxSumMaterial_StorageBuffer;
+        info->MaxSumMaterial_UniformBuffer = MaxSumMaterial_UniformBuffer;
+        info->GlobalShaderInput_ImageTextureCount = GlobalImageTextureInputCount;
+        info->GlobalShaderInput_SampledTextureCount = GlobalSampledTextureInputCount;
+        info->GlobalShaderInput_StorageBufferCount = GlobalInputStorageBufferInputCount;
+        info->GlobalShaderInput_UniformBufferCount = GlobalUniformBufferInputCount;
+        info->MaxMaterialCount = MaterialCount;
+        info->renderergpu = VKGPU;
+        info->isSampledTexture_Index1 = isGlobalSampledTexture_Index1;
+        info->isUniformBuffer_Index1 = isGlobalUniformBuffer_Index1;
+        info->shouldActivate_DearIMGUI = ShouldActive_dearIMGUI;
+        return (initializationsecondstageinfo_tgfx_handle)info;
     }
     static void  GetMonitor_Resolution_ColorBites_RefreshRate(monitor_tgfx_handle MonitorHandle, unsigned int* WIDTH, unsigned int* HEIGHT, unsigned int* ColorBites, unsigned int* RefreshRate) {
 

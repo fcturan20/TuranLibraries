@@ -18,6 +18,11 @@ struct depthstencilslot_vk {
 	glm::vec2 CLEAR_COLOR;
 	std::atomic_bool IsChanged = false;
 };
+extension_manager::extension_manager() {
+	SeperatedDepthStencilLayouts = false;
+	Fill_DepthAttachmentDescription = Fill_DepthAttachmentDescription_NOSeperated;
+	Fill_DepthAttachmentReference = Fill_DepthAttachmentReference_NOSeperated;
+}
 void extension_manager::SUPPORT_DESCINDEXING() { isDescriptorIndexingSupported = true; }
 void extension_manager::SUPPORT_SWAWPCHAINDISPLAY() { SwapchainDisplay = true; }
 void extension_manager::SUPPORT_SEPERATEDDEPTHSTENCILLAYOUTS() {

@@ -136,6 +136,53 @@ void allocatorsys_vk::analize_gpumemory(gpu_public* VKGPU) {
 
 	VKGPU->desc.MEMTYPEs = memdescs_final;
 }
+void allocatorsys_vk::do_allocations(gpu_public* gpu) {
+	/*
+	//Do memory allocations
+	for (unsigned int allocindex = 0; allocindex < rendergpu->ALLOCS().size(); allocindex++) {
+		memoryallocation_vk& ALLOC = rendergpu->ALLOCS()[allocindex];
+		if (!ALLOC.ALLOCATIONSIZE) {
+			continue;
+		}
+
+		VkMemoryRequirements memrequirements;
+		VkBufferUsageFlags USAGEFLAGs = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		uint64_t AllocSize = ALLOC.ALLOCATIONSIZE;
+		VkBuffer GPULOCAL_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
+		vkGetBufferMemoryRequirements(rendergpu->LOGICALDEVICE(), GPULOCAL_buf, &memrequirements);
+		if (!(memrequirements.memoryTypeBits & (1 << ALLOC.MemoryTypeIndex))) {
+			printer(result_tgfx_FAIL, "GPU Local Memory Allocation doesn't support the MemoryType!");
+			return;
+		}
+		VkMemoryAllocateInfo ci{};
+		ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		ci.allocationSize = memrequirements.size;
+		ci.memoryTypeIndex = ALLOC.MemoryTypeIndex;
+		VkDeviceMemory allocated_memory;
+		if (vkAllocateMemory(rendergpu->LOGICALDEVICE(), &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, "vk_gpudatamanager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
+		}
+		ALLOC.Allocated_Memory = allocated_memory;
+		ALLOC.UnusedSize.DirectStore(AllocSize);
+		ALLOC.MappedMemory = nullptr;
+		ALLOC.Buffer = GPULOCAL_buf;
+		if (vkBindBufferMemory(rendergpu->LOGICALDEVICE(), GPULOCAL_buf, allocated_memory, 0) != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, "Binding buffer to the allocated memory has failed!");
+		}
+
+		//If allocation is device local, it is not mappable. So continue.
+		if (ALLOC.TYPE == memoryallocationtype_DEVICELOCAL) {
+			continue;
+		}
+
+		if (vkMapMemory(rendergpu->LOGICALDEVICE(), allocated_memory, 0, memrequirements.size, 0, &ALLOC.MappedMemory) != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, "Mapping the HOSTVISIBLE memory has failed!");
+			return;
+		}
+	}
+	*/
+}
 
 VkDeviceSize allocatorsys_vk::suballocate_memoryblock(memorytype_vk* memory, VkDevice RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
 	return 0;

@@ -17,6 +17,7 @@
 #include "tgfx_forwarddeclarations.h"
 #include "tgfx_helper.h"
 #include "tgfx_core.h"
+#include "tgfx_renderer.h"
 
 
 #include <stdint.h>
@@ -117,8 +118,17 @@ int main(){
 	for (unsigned int i = 0; i < memtypelistcount; i++) {
 		tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 10 * 1024 * 1024, nullptr);
 	}
-	//initializationsecondstageinfo_tgfx_handle secondinfo = tgfxsys->api->helpers->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, true, true, true, (extension_tgfx_listhandle)tgfxsys->api->INVALIDHANDLE);
-	//tgfxsys->api->initialize_secondstage(secondinfo);
+	initializationsecondstageinfo_tgfx_handle secondinfo = tgfxsys->api->helpers->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, true, true, true, (extension_tgfx_listhandle)tgfxsys->api->INVALIDHANDLE);
+	tgfxsys->api->initialize_secondstage(secondinfo);
+	monitor_tgfx_listhandle monitorlist;
+	tgfxsys->api->getmonitorlist(&monitorlist);
+	TGFXLISTCOUNT(tgfxsys->api, monitorlist, monitorcount);
+	printf("Monitor Count: %u", monitorcount);
+	textureusageflag_tgfx_handle usageflag = tgfxsys->api->helpers->CreateTextureUsageFlag(true, true, true, true, true);
+	texture_tgfx_handle swapchain_textures[2];
+	window_tgfx_handle firstwindow;
+	tgfxsys->api->create_window(1280, 720, monitorlist[1], windowmode_tgfx_FULLSCREEN, "First Window", usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
+	tgfxsys->api->renderer->Start_RenderGraphConstruction();
 
 	printf("Application waits for an input: ");
 	scanf("%c", &stop_char);

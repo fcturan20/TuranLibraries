@@ -1,32 +1,26 @@
 #include "queue.h"
 #include "core.h"
+#include <mutex>
 
-//Initializes as everything is false (same as CreateInvalidNullFlag)
-struct queueflag_vk {
-	bool is_GRAPHICSsupported : 1;
-	bool is_PRESENTATIONsupported : 1;
-	bool is_COMPUTEsupported : 1;
-	bool is_TRANSFERsupported : 1;
-	bool doesntNeedAnything : 1;	//This is a special flag to be used as "Don't care other parameters, this is a special operation"
-	//bool is_VTMEMsupported : 1;	Not supported for now!
-	inline queueflag_vk() {
-		doesntNeedAnything = false; is_GRAPHICSsupported = false; is_PRESENTATIONsupported = false; is_COMPUTEsupported = false; is_TRANSFERsupported = false;
-	}
-	inline static queueflag_vk CreateInvalidNullFlag() {	//Returned flag's every bit is false. You should set at least one of them as true.
-		return queueflag_vk();
-	}
-	inline bool isFlagValid() const {
-		if (doesntNeedAnything && (is_GRAPHICSsupported || is_COMPUTEsupported || is_PRESENTATIONsupported || is_TRANSFERsupported)) {
-			printer(result_tgfx_FAIL, "(This flag doesn't need anything but it also needs something, this shouldn't happen!");
-			return false;
-		}
-		if (!doesntNeedAnything && !is_GRAPHICSsupported && !is_COMPUTEsupported && !is_PRESENTATIONsupported && !is_TRANSFERsupported) {
-			printer(result_tgfx_FAIL, "(This flag needs something but it doesn't support anything");
-			return false;
-		}
-		return true;
-	}
+struct commandbuffer_vk {
+	VkCommandBuffer CB;
+	bool is_Used = false;
+#ifdef VULKAN_DEBUGGING
+	CommandBufferIDType ID = INVALID_CommandBufferID;
+#endif
 };
+struct commandpool_vk {
+	commandpool_vk() = default;
+	commandpool_vk(const commandpool_vk& RefCP) { CPHandle = RefCP.CPHandle;CBs = RefCP.CBs;}
+	void operator= (const commandpool_vk& RefCP) { CPHandle = RefCP.CPHandle;CBs = RefCP.CBs;}
+	commandbuffer_vk& CreateCommandBuffer();
+	void DestroyCommandBuffer();
+	VkCommandPool CPHandle = VK_NULL_HANDLE;
+private:
+	std::mutex Sync;
+	std::vector<commandbuffer_vk> CBs;
+};
+
 struct queue_vk {
 	fence_idtype_vk RenderGraphFences[2];
 	VkQueue Queue = VK_NULL_HANDLE;
@@ -36,6 +30,7 @@ struct queuefam_vk {
 	unsigned int queuecount = 0, featurescore = 0;
 	queueflag_vk supportflag;
 	queue_vk* queues = nullptr;
+	commandpool_vk CommandPools[2];
 };
 struct queuesys_data {
 	std::vector<queuefam_vk*> queuefams;
@@ -68,7 +63,8 @@ void queuesys_vk::analize_queues(gpu_public* vkgpu) {
 			vkgpu->TRANSFERs_supportedqueuecount++;
 			queuefam->featurescore++;
 		}
-
+		queuefam->queuecount = QueueFamily->queueCount;
+		queuefam->queues = new queue_vk[queuefam->queuecount];
 		data->queuefams.push_back(queuefam);
 		vkgpu->queuefams[queuefamily_index] = queuefam;
 	}
@@ -124,10 +120,30 @@ void queuesys_vk::get_queue_objects(gpu_public* vkgpu) {
 	for (unsigned int i = 0; i < rendergpu->QUEUEFAMSCOUNT(); i++) {
 		printer(result_tgfx_SUCCESS, ("Queue Feature Score: " + std::to_string(rendergpu->queuefams[i]->featurescore)).c_str());
 		for (unsigned int queueindex = 0; queueindex < rendergpu->queuefams[i]->queuecount; queueindex++) {
-			vkGetDeviceQueue(rendergpu->Logical_Device, rendergpu->queuefams[i]->queueFamIndex, queueindex, &(rendergpu->queuefams[i]->queues[queueindex].Queue));
+			vkGetDeviceQueue(rendergpu->LOGICALDEVICE(), rendergpu->queuefams[i]->queueFamIndex, queueindex, &(rendergpu->queuefams[i]->queues[queueindex].Queue));
 		}
 		printer(result_tgfx_SUCCESS, ("After vkGetDeviceQueue() " + std::to_string(i)).c_str());
 		rendergpu->AllQueueFamilies[i] = rendergpu->queuefams[i]->queueFamIndex;
+	}
+	//Create Command Pool for each Queue Family
+	for (unsigned int queuefamindex = 0; queuefamindex < rendergpu->QUEUEFAMSCOUNT(); queuefamindex++) {
+		if (!(rendergpu->QUEUEFAMS()[queuefamindex]->supportflag.is_COMPUTEsupported || rendergpu->QUEUEFAMS()[queuefamindex]->supportflag.is_GRAPHICSsupported ||
+			rendergpu->QUEUEFAMS()[queuefamindex]->supportflag.is_TRANSFERsupported)
+			) {
+			printer(result_tgfx_SUCCESS, "VulkanRenderer:Command pool creation for a queue has failed because one of the VkQueues doesn't support neither Graphics, Compute or Transfer. So GFX API didn't create a command pool for it!");
+			continue;
+		}
+		for (unsigned char i = 0; i < 2; i++) {
+			VkCommandPoolCreateInfo cp_ci_g = {};
+			cp_ci_g.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			cp_ci_g.queueFamilyIndex = rendergpu->QUEUEFAMS()[queuefamindex]->queueFamIndex;
+			cp_ci_g.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+			cp_ci_g.pNext = nullptr;
+
+			if (vkCreateCommandPool(rendergpu->LOGICALDEVICE(), &cp_ci_g, nullptr, &rendergpu->QUEUEFAMS()[queuefamindex]->CommandPools[i].CPHandle) != VK_SUCCESS) {
+				printer(result_tgfx_FAIL, "VulkanRenderer: Command pool creation for a queue has failed at vkCreateCommandPool()!");
+			}
+		}
 	}
 	printer(result_tgfx_SUCCESS, "After vkGetDeviceQueue()");
 }

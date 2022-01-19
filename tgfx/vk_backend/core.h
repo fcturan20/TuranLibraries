@@ -24,11 +24,6 @@ private:
 	gpu_private* hidden = nullptr;
 	gpudescription_tgfx desc;
 
-
-	std::string NAME;
-	unsigned int APIVER = UINT32_MAX, DRIVERVER = UINT32_MAX;
-	gpu_type_tgfx GPUTYPE;
-
 	VkPhysicalDevice Physical_Device = {};
 	VkPhysicalDeviceProperties Device_Properties = {};
 	VkPhysicalDeviceMemoryProperties MemoryProperties = {};
@@ -47,10 +42,10 @@ private:
 	//Use SortedQUEUEFAMsLIST to access queue families in increasing feature score order
 	queuefam_vk** queuefams;
 public:
-	inline const std::string DEVICENAME() { return NAME; }
-	inline const unsigned int APIVERSION() { return APIVER; }
-	inline const unsigned int DRIVERSION() { return DRIVERVER; }
-	inline const gpu_type_tgfx DEVICETYPE() { return GPUTYPE; }
+	inline const char* DEVICENAME() { return desc.NAME.c_str(); }
+	inline const unsigned int APIVERSION() { return desc.API_VERSION; }
+	inline const unsigned int DRIVERSION() { return desc.DRIVER_VERSION; }
+	inline const gpu_type_tgfx DEVICETYPE() { return desc.GPU_TYPE; }
 	inline const bool GRAPHICSSUPPORTED() { return GRAPHICS_supportedqueuecount; }
 	inline const bool COMPUTESUPPORTED() { return COMPUTE_supportedqueuecount; }
 	inline const bool TRANSFERSUPPORTED() { return TRANSFERs_supportedqueuecount; }
@@ -67,6 +62,7 @@ public:
 	inline VkPhysicalDeviceFeatures DEVICEFEATURES_SUPPORTED() { return Supported_Features; }
 	inline VkPhysicalDeviceFeatures DEVICEFEATURES_ACTIVE() { return Active_Features; }
 	inline const gpudescription_tgfx& DESC() { return desc; }
+	inline extension_manager* EXTMANAGER() { return extensions; }
 
 	/*
 	//This function searches the best queue that has least specs but needed specs

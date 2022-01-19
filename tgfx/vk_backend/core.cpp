@@ -81,6 +81,7 @@ extern void Create_GPUContentManager();
 extern void set_helper_functions();
 extern void Create_AllocatorSys();
 extern void Create_QueueSys();
+extern void Create_SyncSystems();
 
 
 void printf_log_tgfx(result_tgfx result, const char* text) {
@@ -121,6 +122,7 @@ result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCa
 	set_helper_functions();
 	Create_AllocatorSys();
 	Create_QueueSys();
+	Create_SyncSystems();
 
 
 	//Set error callback to handle all glfw errors (including initialization error)!
@@ -235,7 +237,7 @@ void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_h
 		device_features_chainedstructs chainer;
 		ActivateDeviceFeatures(rendergpu, Logical_Device_CreationInfo, chainer);
 
-		Logical_Device_CreationInfo.enabledExtensionCount = rendergpu->Active_DeviceExtensions.size();
+		Logical_Device_CreationInfo.enabledExtensionCount = static_cast<uint32_t>(rendergpu->Active_DeviceExtensions.size());
 		Logical_Device_CreationInfo.ppEnabledExtensionNames = rendergpu->Active_DeviceExtensions.data();
 		Logical_Device_CreationInfo.pEnabledFeatures = &rendergpu->Active_Features;
 
@@ -247,13 +249,13 @@ void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_h
 		printer(result_tgfx_SUCCESS, "After vkCreateDevice()");
 		
 		queuesys->get_queue_objects(rendergpu);
-
 		CheckDeviceLimits(rendergpu);
 		printer(result_tgfx_SUCCESS, "After Check_DeviceLimits()");
 	}
 
 
 	Create_Renderer();
+	
 	Create_GPUContentManager();
 	delete vkinfo;
 }
@@ -534,127 +536,20 @@ inline void core_functions::Check_Computer_Specs() {
 
 
 		Gather_PhysicalDeviceInformations(vkgpu);
-		gpudescription_tgfx gpudesc;
-		{
-			std::string fullname = Convert_VendorID_toaString(vkgpu->DEVICEPROPERTIES().vendorID) + std::string(vkgpu->DEVICEPROPERTIES().deviceName);
-			vkgpu->desc.MODEL = new char[fullname.length() + 1];
-			memcpy(vkgpu->desc.MODEL, fullname.c_str(), fullname.length() + 1);
-		}
-
 		//SAVE BASIC INFOs TO THE GPU DESC
-		gpudesc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
-		gpudesc.API_VERSION = vkgpu->Device_Properties.apiVersion;
-		gpudesc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
+		vkgpu->desc.NAME = std::string(vkgpu->DEVICEPROPERTIES().deviceName);
+		vkgpu->desc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
+		vkgpu->desc.API_VERSION = vkgpu->Device_Properties.apiVersion;
+		vkgpu->desc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
 
 		allocatorsys->analize_gpumemory(vkgpu);
 		queuesys->analize_queues(vkgpu);
+		vkgpu->extensions = new extension_manager;
+		Describe_SupportedExtensions(vkgpu);
+		CheckDeviceLimits(vkgpu);
+
 
 		printer(result_tgfx_SUCCESS, "Finished checking Computer Specifications!");
-		/*
-
-
-		VkDeviceCreateInfo Logical_Device_CreationInfo{};
-		Logical_Device_CreationInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		Logical_Device_CreationInfo.flags = 0;
-		Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
-		Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
-		VK_States.Activate_DeviceExtensions(VKGPU);
-		LOG_STATUS_TAPI("Activated Device Extensions");
-		//This is to destroy datas of extending features
-		DeviceExtendedFeatures extendedfeatures;
-		VK_States.Activate_DeviceFeatures(VKGPU, GPUdesc, Logical_Device_CreationInfo, extendedfeatures);
-
-		Logical_Device_CreationInfo.enabledExtensionCount = VKGPU->Active_DeviceExtensions.size();
-		Logical_Device_CreationInfo.ppEnabledExtensionNames = VKGPU->Active_DeviceExtensions.data();
-		Logical_Device_CreationInfo.pEnabledFeatures = &VKGPU->Active_Features;
-
-		Logical_Device_CreationInfo.enabledLayerCount = 0;
-
-		if (VKGPU->Device_Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-			if (vkCreateDevice(VKGPU->Physical_Device, &Logical_Device_CreationInfo, nullptr, &VKGPU->Logical_Device) != VK_SUCCESS) {
-				LOG_STATUS_TAPI("Vulkan failed to create a Logical Device!");
-				return;
-			}
-			LOG_STATUS_TAPI("After vkCreateDevice()");
-
-			VKGPU->AllQueueFamilies = new uint32_t[VKGPU->QUEUEs.size()];
-			for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
-				LOG_STATUS_TAPI("Queue Feature Score: " + to_string(VKGPU->QUEUEs[QueueIndex].QueueFeatureScore));
-				vkGetDeviceQueue(VKGPU->Logical_Device, VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &VKGPU->QUEUEs[QueueIndex].Queue);
-				LOG_STATUS_TAPI("After vkGetDeviceQueue() " + to_string(QueueIndex));
-				VKGPU->AllQueueFamilies[QueueIndex] = VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex;
-			}
-			LOG_STATUS_TAPI("After vkGetDeviceQueue()");
-			LOG_STATUS_TAPI("Vulkan created a Logical Device!");
-
-			VK_States.Check_DeviceLimits(VKGPU, GPUdesc);
-			LOG_STATUS_TAPI("After Check_DeviceLimits()");
-		}
-		else {
-		}
-		/*
-		Analize_Queues(VKGPU, GPUdesc);
-		LOG_STATUS_TAPI("Analized Queues");
-
-		vector<VkDeviceQueueCreateInfo> QueueCreationInfos(0);
-		//Queue Creation Processes
-		float QueuePriority = 1.0f;
-		for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
-			VK_QUEUE& QUEUE = VKGPU->QUEUEs[QueueIndex];
-			VkDeviceQueueCreateInfo QueueInfo = {};
-			QueueInfo.flags = 0;
-			QueueInfo.pNext = nullptr;
-			QueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-			QueueInfo.queueFamilyIndex = QUEUE.QueueFamilyIndex;
-			QueueInfo.pQueuePriorities = &QueuePriority;
-			QueueInfo.queueCount = 1;
-			QueueCreationInfos.push_back(QueueInfo);
-		}
-
-		VkDeviceCreateInfo Logical_Device_CreationInfo{};
-		Logical_Device_CreationInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		Logical_Device_CreationInfo.flags = 0;
-		Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
-		Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
-		VK_States.Activate_DeviceExtensions(VKGPU);
-		LOG_STATUS_TAPI("Activated Device Extensions");
-		//This is to destroy datas of extending features
-		DeviceExtendedFeatures extendedfeatures;
-		VK_States.Activate_DeviceFeatures(VKGPU, GPUdesc, Logical_Device_CreationInfo, extendedfeatures);
-
-		Logical_Device_CreationInfo.enabledExtensionCount = VKGPU->Active_DeviceExtensions.size();
-		Logical_Device_CreationInfo.ppEnabledExtensionNames = VKGPU->Active_DeviceExtensions.data();
-		Logical_Device_CreationInfo.pEnabledFeatures = &VKGPU->Active_Features;
-
-		Logical_Device_CreationInfo.enabledLayerCount = 0;
-
-		if (VKGPU->Device_Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-			if (vkCreateDevice(VKGPU->Physical_Device, &Logical_Device_CreationInfo, nullptr, &VKGPU->Logical_Device) != VK_SUCCESS) {
-				LOG_STATUS_TAPI("Vulkan failed to create a Logical Device!");
-				return;
-			}
-			LOG_STATUS_TAPI("After vkCreateDevice()");
-
-			VKGPU->AllQueueFamilies = new uint32_t[VKGPU->QUEUEs.size()];
-			for (unsigned int QueueIndex = 0; QueueIndex < VKGPU->QUEUEs.size(); QueueIndex++) {
-				LOG_STATUS_TAPI("Queue Feature Score: " + to_string(VKGPU->QUEUEs[QueueIndex].QueueFeatureScore));
-				vkGetDeviceQueue(VKGPU->Logical_Device, VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex, 0, &VKGPU->QUEUEs[QueueIndex].Queue);
-				LOG_STATUS_TAPI("After vkGetDeviceQueue() " + to_string(QueueIndex));
-				VKGPU->AllQueueFamilies[QueueIndex] = VKGPU->QUEUEs[QueueIndex].QueueFamilyIndex;
-			}
-			LOG_STATUS_TAPI("After vkGetDeviceQueue()");
-			LOG_STATUS_TAPI("Vulkan created a Logical Device!");
-
-			VK_States.Check_DeviceLimits(VKGPU, GPUdesc);
-			LOG_STATUS_TAPI("After Check_DeviceLimits()");
-
-			GPUdescs.push_back(GPUdesc);
-			DEVICE_GPUs.push_back(VKGPU);
-		}
-		else {
-			LOG_WARNING_TAPI("RenderDoc doesn't support to create multiple vkDevices, so Device object isn't created for non-Discrete GPUs!");
-		}
-		*/
 	}
 
 }
@@ -726,7 +621,6 @@ bool Create_WindowSwapchain(window_vk* Vulkan_Window, unsigned int WIDTH, unsign
 	}
 	swpchn_ci.pQueueFamilyIndices = rendergpu->ALLQUEUEFAMILIES();
 	swpchn_ci.queueFamilyIndexCount = rendergpu->QUEUEFAMSCOUNT();
-
 
 	if (vkCreateSwapchainKHR(rendergpu->LOGICALDEVICE(), &swpchn_ci, nullptr, SwapchainOBJ) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "VulkanCore: Failed to create a SwapChain for a Window");
@@ -896,6 +790,7 @@ inline void core_functions::getmonitorlist(monitor_tgfx_listhandle* MonitorList)
 	for (unsigned int i = 0; i < hidden->MONITORs.size(); i++) {
 		(*MonitorList)[i] = (monitor_tgfx_handle)hidden->MONITORs[i];
 	}
+	(*MonitorList)[hidden->MONITORs.size()] = (monitor_tgfx_handle)core_tgfx_main->INVALIDHANDLE;
 }
 inline void core_functions::getGPUlist(gpu_tgfx_listhandle* GPULIST) {
 	*GPULIST = new gpu_tgfx_handle[hidden->DEVICE_GPUs.size() + 1];

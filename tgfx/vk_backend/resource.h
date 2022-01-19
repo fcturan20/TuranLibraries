@@ -1,6 +1,7 @@
 #include <predefinitions_tapi.h>
 
 
+
 struct texture_vk {
 	struct MemoryBlock {
 		unsigned int MemAllocIndex = UINT32_MAX;

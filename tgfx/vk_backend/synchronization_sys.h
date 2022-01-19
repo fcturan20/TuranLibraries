@@ -1,4 +1,6 @@
 #include "predefinitions_vk.h"
+#include <vector>
+#include "core.h"
 
 //Synchronization primitives shouldn't cause call stack to grow
 //So everything is inlined here and you should only include if you have use functions. Otherwise, use the predefinitions_vk's forward declaration to store an instance of the structs
@@ -93,7 +95,7 @@ struct semaphoresys_vk {
 		invalidone->ID = invalid_semaphoreid;
 #endif
 		invalidone->SPHandle = VK_NULL_HANDLE;
-		semaphoresys->Semaphores.push_back(invalidone);
+		Semaphores.push_back(invalidone);
 	}
 	~semaphoresys_vk() {
 

@@ -2,8 +2,6 @@
 #include "tgfx_forwarddeclarations.h"
 #include "tgfx_structs.h"
 
-
-
 typedef struct helper_tgfx {
     //Hardware Capability Helpers
     void (*GetGPUInfo_General)(gpu_tgfx_handle GPUHandle, const char** NAME, unsigned int* API_VERSION, unsigned int* DRIVER_VERSION, gpu_type_tgfx* GPUTYPE, const memory_description_tgfx** MemType_descs,

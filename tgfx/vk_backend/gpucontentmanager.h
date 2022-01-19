@@ -1,7 +1,8 @@
 #pragma once
+#include "predefinitions_vk.h"
 
 
-
-struct vk_gpudatamanager {
-
+struct gpudatamanager_private;
+struct gpudatamanager_public {
+	gpudatamanager_private* hidden;
 };

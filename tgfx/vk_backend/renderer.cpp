@@ -1,7 +1,9 @@
 #include "renderer.h"
 #include "predefinitions_vk.h"
 #include <tgfx_structs.h>
-
+#include <tgfx_core.h>
+#include <tgfx_renderer.h>
+#include "core.h"
 
 
 typedef struct renderer_private{
@@ -10,11 +12,13 @@ typedef struct renderer_private{
 static renderer_private* hidden = nullptr;
 
 //RenderGraph operations
-static unsigned char GetCurrentFrameIndex();
-static void Start_RenderGraphConstruction();
-static unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpass);
+extern unsigned char GetCurrentFrameIndex() {
+    return 0;
+}
+extern void Start_RenderGraphConstruction();
+extern unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpass);
 //This function is defined in the FGAlgorithm.cpp
-static void Destroy_RenderGraph();
+extern void Destroy_RenderGraph();
 static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle SubDrawPasses, rtslotset_tgfx_handle RTSLOTSET_ID, passwaitdescription_tgfx_listhandle DrawPassWAITs,
     const char* NAME, subdrawpassaccess_tgfx* SubDrawPassHandles, drawpass_tgfx_handle* DPHandle);
 static result_tgfx Create_TransferPass(passwaitdescription_tgfx_listhandle WaitDescriptions, transferpasstype_tgfx TP_TYPE, const char* NAME,
@@ -49,8 +53,17 @@ static void Dispatch_Compute(computepass_tgfx_handle ComputePassHandle, computes
     unsigned int SubComputePassIndex, uvec3_tgfx DispatchSize);
 static void ChangeDrawPass_RTSlotSet(drawpass_tgfx_handle DrawPassHandle, rtslotset_tgfx_handle RTSlotSetHandle);
 
+inline void set_FunctionPointers() {
+	core_tgfx_main->renderer->Start_RenderGraphConstruction = &Start_RenderGraphConstruction;
+	core_tgfx_main->renderer->Finish_RenderGraphConstruction = &Finish_RenderGraphConstruction;
+	core_tgfx_main->renderer->Destroy_RenderGraph = &Destroy_RenderGraph;
+}
 
 extern void Create_Renderer() {
     renderer = new renderer_public;
     hidden = new renderer_private;
+
+	set_FunctionPointers();
+
+
 }

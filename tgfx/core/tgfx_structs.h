@@ -1,5 +1,4 @@
 #pragma once
-#include <string>
 
 typedef struct uvec3_tgfx {
     unsigned int x, y, z;
@@ -31,7 +30,7 @@ typedef struct memory_description_tgfx {
 	unsigned long max_allocationsize;
 };
 typedef struct gpudescription_tgfx {
-	std::string NAME;
+	const char* NAME;
 	unsigned int API_VERSION, DRIVER_VERSION;
 	gpu_type_tgfx GPU_TYPE;
 	unsigned char is_GraphicOperations_Supported, is_ComputeOperations_Supported, is_TransferOperations_Supported;

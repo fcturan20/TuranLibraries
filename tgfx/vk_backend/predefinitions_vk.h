@@ -87,8 +87,10 @@ extern VkBlendOp Find_BlendOp_byGFXBlendMode(blendmode_tgfx mode);
 extern VkBlendFactor Find_BlendFactor_byGFXBlendFactor(blendfactor_tgfx factor);
 extern void Fill_ComponentMapping_byCHANNELs(texture_channels_tgfx channels, VkComponentMapping& mapping);
 extern void Find_SubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSource, VkPipelineStageFlags& stageflag, VkAccessFlags& accessflag);
-desctype_vk Find_DescType_byGFXShaderInputType(shaderinputtype_tgfx type);
-VkDescriptorType Find_VkDescType_byDescTypeCategoryless(desctype_vk type);
+extern desctype_vk Find_DescType_byGFXShaderInputType(shaderinputtype_tgfx type);
+extern VkDescriptorType Find_VkDescType_byDescTypeCategoryless(desctype_vk type);
+extern VkImageType Find_VkImageType(texture_dimensions_tgfx dimensions);
+extern VkImageTiling Find_VkTiling(texture_order_tgfx order);
 
 //Resources
 struct texture_vk;

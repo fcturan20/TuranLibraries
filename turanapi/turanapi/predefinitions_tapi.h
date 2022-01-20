@@ -24,7 +24,7 @@
 #define GET_PLUGIN_VERSION_TAPI_MAJOR(version) (version >> 16)
 
 // Check windows
-#if _WIN32 || _WIN64
+#if defined(_WIN32) || defined(_WIN64)
 #define T_ENVWINDOWS
 #if _WIN64
 #define T_ENV64BIT

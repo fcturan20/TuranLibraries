@@ -20,6 +20,29 @@ tgfx_PrintLogCallback printer = nullptr;
 
 
 
+VkImageType Find_VkImageType(texture_dimensions_tgfx dimensions) {
+	switch (dimensions) {
+	case texture_dimensions_tgfx_2D:
+	case texture_dimensions_tgfx_2DCUBE:
+		return VK_IMAGE_TYPE_2D;
+	case texture_dimensions_tgfx_3D:
+		return VK_IMAGE_TYPE_3D;
+	default:
+		printer(result_tgfx_NOTCODED, "Find_VkImageType() doesn't support this dimension!");
+		return VkImageType::VK_IMAGE_TYPE_MAX_ENUM;
+	}
+}
+VkImageTiling Find_VkTiling(texture_order_tgfx order) {
+	switch (order) {
+	case texture_order_tgfx_SWIZZLE:
+		return VK_IMAGE_TILING_OPTIMAL;
+	case texture_order_tgfx_LINEAR:
+		return VK_IMAGE_TILING_LINEAR;
+	default:
+		printer(result_tgfx_NOTCODED, "Find_VkTiling() doesn't support this order!");
+		return VkImageTiling::VK_IMAGE_TILING_MAX_ENUM;
+	}
+}
 VkFormat Find_VkFormat_byDataType(datatype_tgfx datatype) {
 	switch (datatype) {
 	case datatype_tgfx_VAR_VEC2:

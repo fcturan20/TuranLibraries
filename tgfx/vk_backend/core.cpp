@@ -77,7 +77,7 @@ public:
 
 extern void Create_IMGUI();
 extern void Create_Renderer();
-extern void Create_GPUContentManager();
+extern void Create_GPUContentManager(initialization_secondstageinfo* info);
 extern void set_helper_functions();
 extern void Create_AllocatorSys();
 extern void Create_QueueSys();
@@ -250,13 +250,14 @@ void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_h
 		
 		queuesys->get_queue_objects(rendergpu);
 		CheckDeviceLimits(rendergpu);
+		allocatorsys->do_allocations(rendergpu);
 		printer(result_tgfx_SUCCESS, "After Check_DeviceLimits()");
 	}
 
 
 	Create_Renderer();
 	
-	Create_GPUContentManager();
+	Create_GPUContentManager(vkinfo);
 	delete vkinfo;
 }
 
@@ -355,6 +356,7 @@ void core_functions::Save_Monitors() {
 		}
 		Monitor->physical_width = physical_width;
 		Monitor->physical_height = physical_height;
+		Monitor->monitorobj = monitor;
 	}
 }
 
@@ -537,7 +539,7 @@ inline void core_functions::Check_Computer_Specs() {
 
 		Gather_PhysicalDeviceInformations(vkgpu);
 		//SAVE BASIC INFOs TO THE GPU DESC
-		vkgpu->desc.NAME = std::string(vkgpu->DEVICEPROPERTIES().deviceName);
+		vkgpu->desc.NAME = vkgpu->DEVICEPROPERTIES().deviceName;
 		vkgpu->desc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
 		vkgpu->desc.API_VERSION = vkgpu->Device_Properties.apiVersion;
 		vkgpu->desc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
@@ -694,8 +696,12 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 	if (ResizeCB) {
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 	}
+	else {
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	}
 	//Create window as it will share resources with Renderer Context to get display texture!
-	GLFWwindow* glfw_window = glfwCreateWindow(WIDTH, HEIGHT, NAME, NULL, nullptr);
+	monitor_vk* MONITOR = (monitor_vk*)monitor;
+	GLFWwindow* glfw_window = glfwCreateWindow(WIDTH, HEIGHT, NAME, (Mode == windowmode_tgfx_FULLSCREEN) ? (MONITOR->monitorobj) : (NULL), nullptr);
 	window_vk* Vulkan_Window = new window_vk;
 	Vulkan_Window->LASTWIDTH = WIDTH;
 	Vulkan_Window->LASTHEIGHT = HEIGHT;

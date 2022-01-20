@@ -1,5 +1,6 @@
 #include "virtualmemorysys_tapi.h"
 #include "registrysys_tapi.h"
+#include "predefinitions_tapi.h"
 
 #ifdef T_ENVWINDOWS
 #include "windows.h"

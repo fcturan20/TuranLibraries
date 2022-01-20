@@ -38,11 +38,11 @@ private:
 	uint32_t* AllQueueFamilies;
 
 
-	std::vector<memorytype_vk*> ALLOCs;
+	std::vector<unsigned int> memtype_ids;
 	//Use SortedQUEUEFAMsLIST to access queue families in increasing feature score order
 	queuefam_vk** queuefams;
 public:
-	inline const char* DEVICENAME() { return desc.NAME.c_str(); }
+	inline const char* DEVICENAME() { return desc.NAME; }
 	inline const unsigned int APIVERSION() { return desc.API_VERSION; }
 	inline const unsigned int DRIVERSION() { return desc.DRIVER_VERSION; }
 	inline const gpu_type_tgfx DEVICETYPE() { return desc.GPU_TYPE; }
@@ -116,7 +116,7 @@ public:
 struct monitor_vk {
 	unsigned int width, height, color_bites, refresh_rate, physical_width, physical_height;
 	const char* name;
-	//I will fill this structure when I investigate monitor configurations deeper!
+	GLFWmonitor* monitorobj;
 };
 
 struct window_vk {

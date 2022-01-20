@@ -127,7 +127,7 @@ int main(){
 	textureusageflag_tgfx_handle usageflag = tgfxsys->api->helpers->CreateTextureUsageFlag(true, true, true, true, true);
 	texture_tgfx_handle swapchain_textures[2];
 	window_tgfx_handle firstwindow;
-	tgfxsys->api->create_window(1280, 720, monitorlist[0], windowmode_tgfx_WINDOWED, "First Window", usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
+	tgfxsys->api->create_window(1280, 720, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
 	tgfxsys->api->renderer->Start_RenderGraphConstruction();
 
 	printf("Application waits for an input: ");

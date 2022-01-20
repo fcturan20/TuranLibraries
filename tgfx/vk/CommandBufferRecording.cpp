@@ -45,7 +45,7 @@ void Record_RenderPass(VkCommandBuffer CB, drawpass_vk* DrawPass) {
 	for (unsigned char SubPassIndex = 0; SubPassIndex < DrawPass->Subpass_Count; SubPassIndex++) {
 		VK_SubDrawPass& SP = DrawPass->Subpasses[SubPassIndex];
 		if (SP.Binding_Index != SubPassIndex) {
-			LOG(tgfx_result_FAIL, "Subpass Binding Index and the SubDrawPass' element index doesn't match, handle this case!");
+			printer(result_tgfx_FAIL, "Subpass Binding Index and the SubDrawPass' element index doesn't match, handle this case!");
 		}
 		if (SP.render_dearIMGUI) {
 			VK_IMGUI->Render_toCB(CB);

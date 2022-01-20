@@ -8,7 +8,7 @@
 
 
 void FindBufferOBJ_byBufType(const tgfx_buffer Handle, tgfx_buffertype TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
-	LOG(tgfx_result_NOTCODED, "FindBufferOBJ_byBufType() isn't coded yet!");
+	printer(result_tgfx_NOTCODED, "FindBufferOBJ_byBufType() isn't coded yet!");
 }
 VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage) {
 	VkBuffer buffer;
@@ -27,7 +27,7 @@ VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage) {
 	ci.size = size;
 
 	if (vkCreateBuffer(RENDERGPU->LOGICALDEVICE(), &ci, nullptr, &buffer) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Create_VkBuffer has failed!");
+		printer(result_tgfx_FAIL, "Create_VkBuffer has failed!");
 	}
 	return buffer;
 }
@@ -47,7 +47,7 @@ unsigned int Find_MeaningfulDescriptorPoolSize(unsigned int needed_descriptorcou
 		Supported_MaxDescCount = RENDERGPU->ExtensionRelatedDatas.GETMAXDESC(DescType::SBUFFER);
 		break;
 	default:
-		LOG(tgfx_result_FAIL, "Find_MeaningfulDescriptorPoolSize() doesn't support this type of DescType!");
+		printer(result_tgfx_FAIL, "Find_MeaningfulDescriptorPoolSize() doesn't support this type of DescType!");
 		break;
 	}
 	const unsigned int FragmentationPreventingDescCount = ((Supported_MaxDescCount / 100) * 10);
@@ -55,7 +55,7 @@ unsigned int Find_MeaningfulDescriptorPoolSize(unsigned int needed_descriptorcou
 		return Supported_MaxDescCount;
 	}
 	if (needed_descriptorcount > Supported_MaxDescCount) {
-		LOG(tgfx_result_FAIL, "You want more shader input than your GPU supports, so maximum count that your GPU supports has returned!");
+		printer(result_tgfx_FAIL, "You want more shader input than your GPU supports, so maximum count that your GPU supports has returned!");
 		return Supported_MaxDescCount;
 	}
 	if (needed_descriptorcount > (Supported_MaxDescCount * 2) / 5) {
@@ -136,7 +136,7 @@ vk_gpudatamanager::vk_gpudatamanager(InitializationSecondStageInfo& info) :
 		VkBuffer GPULOCAL_buf = Create_VkBuffer(AllocSize, USAGEFLAGs);
 		vkGetBufferMemoryRequirements(RENDERGPU->LOGICALDEVICE(), GPULOCAL_buf, &memrequirements);
 		if (!(memrequirements.memoryTypeBits & (1 << ALLOC.MemoryTypeIndex))) {
-			LOG(tgfx_result_FAIL, "GPU Local Memory Allocation doesn't support the MemoryType!");
+			printer(result_tgfx_FAIL, "GPU Local Memory Allocation doesn't support the MemoryType!");
 			return;
 		}
 		VkMemoryAllocateInfo ci{};
@@ -145,14 +145,14 @@ vk_gpudatamanager::vk_gpudatamanager(InitializationSecondStageInfo& info) :
 		ci.memoryTypeIndex = ALLOC.MemoryTypeIndex;
 		VkDeviceMemory allocated_memory;
 		if (vkAllocateMemory(RENDERGPU->LOGICALDEVICE(), &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "vk_gpudatamanager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
+			printer(result_tgfx_FAIL, "vk_gpudatamanager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
 		}
 		ALLOC.Allocated_Memory = allocated_memory;
 		ALLOC.UnusedSize.DirectStore(AllocSize);
 		ALLOC.MappedMemory = nullptr;
 		ALLOC.Buffer = GPULOCAL_buf;
 		if (vkBindBufferMemory(RENDERGPU->LOGICALDEVICE(), GPULOCAL_buf, allocated_memory, 0) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "Binding buffer to the allocated memory has failed!");
+			printer(result_tgfx_FAIL, "Binding buffer to the allocated memory has failed!");
 		}
 
 		//If allocation is device local, it is not mappable. So continue.
@@ -161,7 +161,7 @@ vk_gpudatamanager::vk_gpudatamanager(InitializationSecondStageInfo& info) :
 		}
 
 		if (vkMapMemory(RENDERGPU->LOGICALDEVICE(), allocated_memory, 0, memrequirements.size, 0, &ALLOC.MappedMemory) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "Mapping the HOSTVISIBLE memory has failed!");
+			printer(result_tgfx_FAIL, "Mapping the HOSTVISIBLE memory has failed!");
 			return;
 		}
 	}
@@ -197,7 +197,7 @@ vk_gpudatamanager::vk_gpudatamanager(InitializationSecondStageInfo& info) :
 		dp_ci.poolSizeCount = 4;
 		dp_ci.pPoolSizes = SIZEs;
 		if (vkCreateDescriptorPool(RENDERGPU->LOGICALDEVICE(), &dp_ci, nullptr, &MaterialRelated_DescPool.pool) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "Material Related Descriptor Pool Creation has failed! So GFXContentManager system initialization has failed!");
+			printer(result_tgfx_FAIL, "Material Related Descriptor Pool Creation has failed! So GFXContentManager system initialization has failed!");
 			return;
 		}
 
@@ -267,7 +267,7 @@ vk_gpudatamanager::vk_gpudatamanager(InitializationSecondStageInfo& info) :
 			descpool_ci.poolSizeCount = poolsizes.size();
 			descpool_ci.pNext = nullptr;
 			if (vkCreateDescriptorPool(RENDERGPU->LOGICALDEVICE(), &descpool_ci, nullptr, &GlobalShaderInputs_DescPool) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "Vulkan Global Descriptor Pool Creation has failed!");
+				printer(result_tgfx_FAIL, "Vulkan Global Descriptor Pool Creation has failed!");
 			}
 		}
 
@@ -312,7 +312,7 @@ vk_gpudatamanager::vk_gpudatamanager(InitializationSecondStageInfo& info) :
 			DescSetLayout_ci.bindingCount = 2;
 			DescSetLayout_ci.pBindings = BufferBinding;
 			if (vkCreateDescriptorSetLayout(RENDERGPU->LOGICALDEVICE(), &DescSetLayout_ci, nullptr, &GlobalBuffers_DescSet.Layout) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
+				printer(result_tgfx_FAIL, "Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
 				return;
 			}
 		}
@@ -358,7 +358,7 @@ vk_gpudatamanager::vk_gpudatamanager(InitializationSecondStageInfo& info) :
 			DescSetLayout_ci.bindingCount = 2;
 			DescSetLayout_ci.pBindings = TextureBinding;
 			if (vkCreateDescriptorSetLayout(RENDERGPU->LOGICALDEVICE(), &DescSetLayout_ci, nullptr, &GlobalTextures_DescSet.Layout) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
+				printer(result_tgfx_FAIL, "Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
 				return;
 			}
 		}
@@ -384,7 +384,7 @@ vk_gpudatamanager::vk_gpudatamanager(InitializationSecondStageInfo& info) :
 			descset_ai.pSetLayouts = SetLayouts;
 			VkDescriptorSet Sets[2];
 			if (vkAllocateDescriptorSets(RENDERGPU->LOGICALDEVICE(), &descset_ai, Sets) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "CreateandUpdate_GlobalDescSet() has failed at vkAllocateDescriptorSets()!");
+				printer(result_tgfx_FAIL, "CreateandUpdate_GlobalDescSet() has failed at vkAllocateDescriptorSets()!");
 			}
 			UnboundGlobalBufferDescSet = Sets[0];
 			GlobalBuffers_DescSet.Set = Sets[1];
@@ -409,7 +409,7 @@ vk_gpudatamanager::vk_gpudatamanager(InitializationSecondStageInfo& info) :
 			descset_ai.pSetLayouts = SetLayouts;
 			VkDescriptorSet Sets[2];
 			if (vkAllocateDescriptorSets(RENDERGPU->LOGICALDEVICE(), &descset_ai, Sets) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "CreateandUpdate_GlobalDescSet() has failed at vkAllocateDescriptorSets()!");
+				printer(result_tgfx_FAIL, "CreateandUpdate_GlobalDescSet() has failed at vkAllocateDescriptorSets()!");
 			}
 			UnboundGlobalTextureDescSet = Sets[0];
 			GlobalTextures_DescSet.Set = Sets[1];
@@ -898,7 +898,7 @@ void vk_gpudatamanager::Apply_ResourceChanges() {
 						Set->ShouldRecreate.store(0);
 						break;
 					default:
-						LOG(tgfx_result_NOTCODED, "Descriptor Set atomic_uchar isn't supposed to have a value that's 2+! Please check 'Handle Descriptor Sets' in Vulkan Renderer->Run()");
+						printer(result_tgfx_NOTCODED, "Descriptor Set atomic_uchar isn't supposed to have a value that's 2+! Please check 'Handle Descriptor Sets' in Vulkan Renderer->Run()");
 						break;
 					}
 				}
@@ -1038,7 +1038,7 @@ void vk_gpudatamanager::Apply_ResourceChanges() {
 			VkFramebufferCreateInfo fb_ci = DP->SLOTSET->FB_ci[FrameIndex];
 			fb_ci.renderPass = DP->RenderPassObject;
 			if (vkCreateFramebuffer(RENDERGPU->LOGICALDEVICE(), &fb_ci, nullptr, &DP->FBs[FrameIndex]) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "vkCreateFramebuffer() has failed while changing one of the drawpasses' current frame slot's texture! Please report this!");
+				printer(result_tgfx_FAIL, "vkCreateFramebuffer() has failed while changing one of the drawpasses' current frame slot's texture! Please report this!");
 				return;
 			}
 
@@ -1095,7 +1095,7 @@ void vk_gpudatamanager::Resource_Finalizations() {
 			for (unsigned int ElementIndex = 0; ElementIndex < BufferBinding.ElementCount; ElementIndex++) {
 				VK_DescBufferElement& element = ((VK_DescBufferElement*)BufferBinding.Elements)[ElementIndex];
 				if (element.IsUpdated.load() == 255) {
-					LOG(tgfx_result_FAIL, ("You have to use SetGlobalBuffer() for element index: " + std::to_string(ElementIndex)).c_str());
+					printer(result_tgfx_FAIL, ("You have to use SetGlobalBuffer() for element index: " + std::to_string(ElementIndex)).c_str());
 					return;
 				}
 			}
@@ -1103,7 +1103,7 @@ void vk_gpudatamanager::Resource_Finalizations() {
 			for (unsigned int ElementIndex = 0; ElementIndex < TextureBinding.ElementCount; ElementIndex++) {
 				VK_DescImageElement& element = ((VK_DescImageElement*)TextureBinding.Elements)[ElementIndex];
 				if (element.IsUpdated.load() == 255) {
-					LOG(tgfx_result_FAIL, ("You have to use SetGlobalTexture() for element index: " + std::to_string(ElementIndex)).c_str());
+					printer(result_tgfx_FAIL, ("You have to use SetGlobalTexture() for element index: " + std::to_string(ElementIndex)).c_str());
 					return;
 				}
 			}
@@ -1127,7 +1127,7 @@ tgfx_result vk_gpudatamanager::Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsage
 	VK_MemoryAllocation& MEMALLOC = RENDERGPU->ALLOCS()[Block.MemAllocIndex];
 
 	if (!(bufferreq.memoryTypeBits & (1u << MEMALLOC.MemoryTypeIndex))) {
-		LOG(tgfx_result_FAIL, "Intended buffer doesn't support to be stored in specified memory region!");
+		printer(result_tgfx_FAIL, "Intended buffer doesn't support to be stored in specified memory region!");
 		return tgfx_result_FAIL;
 	}
 
@@ -1139,7 +1139,7 @@ tgfx_result vk_gpudatamanager::Suballocate_Buffer(VkBuffer BUFFER, VkBufferUsage
 		AlignmentOffset_ofGPU = RENDERGPU->DEVICEPROPERTIES().limits.minUniformBufferOffsetAlignment;
 	}
 	if (!MEMALLOC.UnusedSize.LimitedSubtract_weak(bufferreq.size + AlignmentOffset_ofGPU, 0)) {
-		LOG(tgfx_result_FAIL, "Buffer doesn't fit the remaining memory allocation! SuballocateBuffer has failed.");
+		printer(result_tgfx_FAIL, "Buffer doesn't fit the remaining memory allocation! SuballocateBuffer has failed.");
 		return tgfx_result_FAIL;
 	}
 
@@ -1158,7 +1158,7 @@ VkMemoryPropertyFlags ConvertGFXMemoryType_toVulkan(tgfx_memoryallocationtype ty
 	case tgfx_memoryallocationtype::READBACK:
 		return VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 	default:
-		LOG(tgfx_result_NOTCODED, "ConvertGFXMemoryType_toVulkan() doesn't support this type!");
+		printer(result_tgfx_NOTCODED, "ConvertGFXMemoryType_toVulkan() doesn't support this type!");
 		return 0;
 	}
 }
@@ -1171,17 +1171,17 @@ tgfx_result vk_gpudatamanager::Suballocate_Image(VK_Texture& Texture) {
 	bool Found_Offset = false;
 	VK_MemoryAllocation* MEMALLOC = &RENDERGPU->ALLOCS()[Texture.Block.MemAllocIndex];
 	if (!(req.memoryTypeBits & (1u << MEMALLOC->MemoryTypeIndex))) {
-		LOG(tgfx_result_FAIL, "Intended texture doesn't support to be stored in the specified memory region!");
+		printer(result_tgfx_FAIL, "Intended texture doesn't support to be stored in the specified memory region!");
 		return tgfx_result_FAIL;
 	}
 	if (!MEMALLOC->UnusedSize.LimitedSubtract_weak(req.size, 0)) {
-		LOG(tgfx_result_FAIL, "Buffer doesn't fit the remaining memory allocation! SuballocateBuffer has failed.");
+		printer(result_tgfx_FAIL, "Buffer doesn't fit the remaining memory allocation! SuballocateBuffer has failed.");
 		return tgfx_result_FAIL;
 	}
 	Offset = MEMALLOC->FindAvailableOffset(req.size, 0, req.alignment);
 
 	if (vkBindImageMemory(RENDERGPU->LOGICALDEVICE(), Texture.Image, MEMALLOC->Allocated_Memory, Offset) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "VKContentManager->Suballocate_Image() has failed at VkBindImageMemory()!");
+		printer(result_tgfx_FAIL, "VKContentManager->Suballocate_Image() has failed at VkBindImageMemory()!");
 		return tgfx_result_FAIL;
 	}
 	Texture.Block.Offset = Offset;
@@ -1219,7 +1219,7 @@ tgfx_result vk_gpudatamanager::Create_SamplingType(unsigned int MinimumMipLevel,
 	VK_Sampler* SAMPLER = new VK_Sampler;
 	if (vkCreateSampler(RENDERGPU->LOGICALDEVICE(), &s_ci, nullptr, &SAMPLER->Sampler) != VK_SUCCESS) {
 		delete SAMPLER;
-		LOG(tgfx_result_FAIL, "GFXContentManager->Create_SamplingType() has failed at vkCreateSampler!");
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_SamplingType() has failed at vkCreateSampler!");
 		return tgfx_result_FAIL;
 	}
 	*SamplingTypeHandle = (tgfx_samplingtype)SAMPLER;
@@ -1236,7 +1236,7 @@ bool vk_gpudatamanager::Create_DescSet(VK_DescSet* Set) {
 		!MaterialRelated_DescPool.REMAINING_SBUFFER.LimitedSubtract_weak(Set->DescSBuffersCount, 0) ||
 		!MaterialRelated_DescPool.REMAINING_UBUFFER.LimitedSubtract_weak(Set->DescUBuffersCount, 0) ||
 		!MaterialRelated_DescPool.REMAINING_SET.LimitedSubtract_weak(1, 0)) {
-		LOG(tgfx_result_FAIL, "Create_DescSets() has failed because descriptor pool doesn't have enough space!");
+		printer(result_tgfx_FAIL, "Create_DescSets() has failed because descriptor pool doesn't have enough space!");
 		return false;
 	}
 	DescSets_toCreate.push_back(tapi_GetThisThreadIndex(JobSys), Set);
@@ -1263,13 +1263,13 @@ bool VKDescSet_PipelineLayoutCreation(const VK_ShaderInputDesc** inputdescs, VK_
 			unsigned int BP = desc->BINDINDEX;
 			for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
 				if (BP == bindings[bpsearchindex].binding) {
-					LOG(tgfx_result_FAIL, "VKDescSet_PipelineLayoutCreation() has failed because there are colliding binding points!");
+					printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed because there are colliding binding points!");
 					return false;
 				}
 			}
 
 			if (!desc->ELEMENTCOUNT) {
-				LOG(tgfx_result_FAIL, "VKDescSet_PipelineLayoutCreation() has failed because one of the shader inputs have 0 element count!");
+				printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed because one of the shader inputs have 0 element count!");
 				return false;
 			}
 
@@ -1309,7 +1309,7 @@ bool VKDescSet_PipelineLayoutCreation(const VK_ShaderInputDesc** inputdescs, VK_
 					continue;
 				}
 				if (desc->BINDINDEX >= GeneralDescSet->DescCount) {
-					LOG(tgfx_result_FAIL, "One of your General shaderinputs uses a binding point that is exceeding the number of general shaderinputs. You have to use a binding point that's lower than size of the general shader inputs!");
+					printer(result_tgfx_FAIL, "One of your General shaderinputs uses a binding point that is exceeding the number of general shaderinputs. You have to use a binding point that's lower than size of the general shader inputs!");
 					return false;
 				}
 
@@ -1357,7 +1357,7 @@ bool VKDescSet_PipelineLayoutCreation(const VK_ShaderInputDesc** inputdescs, VK_
 			ci.pBindings = bindings.data();
 
 			if (vkCreateDescriptorSetLayout(RENDERGPU->LOGICALDEVICE(), &ci, nullptr, &GeneralDescSet->Layout) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "VKDescSet_PipelineLayoutCreation() has failed at General DescriptorSetLayout Creation vkCreateDescriptorSetLayout()");
+				printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed at General DescriptorSetLayout Creation vkCreateDescriptorSetLayout()");
 				return false;
 			}
 		}
@@ -1378,7 +1378,7 @@ bool VKDescSet_PipelineLayoutCreation(const VK_ShaderInputDesc** inputdescs, VK_
 			unsigned int BP = desc->BINDINDEX;
 			for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
 				if (BP == bindings[bpsearchindex].binding) {
-					LOG(tgfx_result_FAIL, "Link_MaterialType() has failed because there are colliding binding points!");
+					printer(result_tgfx_FAIL, "Link_MaterialType() has failed because there are colliding binding points!");
 					return false;
 				}
 			}
@@ -1427,7 +1427,7 @@ bool VKDescSet_PipelineLayoutCreation(const VK_ShaderInputDesc** inputdescs, VK_
 				}
 
 				if (desc->BINDINDEX >= InstanceDescSet->DescCount) {
-					LOG(tgfx_result_FAIL, "One of your Material Data Descriptors (Per Instance) uses a binding point that is exceeding the number of Material Data Descriptors (Per Instance). You have to use a binding point that's lower than size of the Material Data Descriptors (Per Instance)!");
+					printer(result_tgfx_FAIL, "One of your Material Data Descriptors (Per Instance) uses a binding point that is exceeding the number of Material Data Descriptors (Per Instance). You have to use a binding point that's lower than size of the Material Data Descriptors (Per Instance)!");
 					return false;
 				}
 
@@ -1461,7 +1461,7 @@ bool VKDescSet_PipelineLayoutCreation(const VK_ShaderInputDesc** inputdescs, VK_
 			ci.pBindings = bindings.data();
 
 			if (vkCreateDescriptorSetLayout(RENDERGPU->LOGICALDEVICE(), &ci, nullptr, &InstanceDescSet->Layout) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "Link_MaterialType() has failed at Instance DesciptorSetLayout Creation vkCreateDescriptorSetLayout()");
+				printer(result_tgfx_FAIL, "Link_MaterialType() has failed at Instance DesciptorSetLayout Creation vkCreateDescriptorSetLayout()");
 				return false;
 			}
 		}
@@ -1469,7 +1469,7 @@ bool VKDescSet_PipelineLayoutCreation(const VK_ShaderInputDesc** inputdescs, VK_
 
 	//General DescriptorSet Creation
 	if (!VKContentManager->Create_DescSet(GeneralDescSet)) {
-		LOG(tgfx_result_FAIL, "Descriptor pool is full, that means you should expand its size!");
+		printer(result_tgfx_FAIL, "Descriptor pool is full, that means you should expand its size!");
 		return false;
 	}
 
@@ -1496,7 +1496,7 @@ bool VKDescSet_PipelineLayoutCreation(const VK_ShaderInputDesc** inputdescs, VK_
 		pl_ci.pPushConstantRanges = nullptr;
 
 		if (vkCreatePipelineLayout(RENDERGPU->LOGICALDEVICE(), &pl_ci, nullptr, layout) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "Link_MaterialType() failed at vkCreatePipelineLayout()!");
+			printer(result_tgfx_FAIL, "Link_MaterialType() failed at vkCreatePipelineLayout()!");
 			return false;
 		}
 	}
@@ -1536,17 +1536,17 @@ tgfx_result vk_gpudatamanager::Create_VertexAttributeLayout(const tgfx_datatype*
 	return tgfx_result_SUCCESS;
 }
 void vk_gpudatamanager::Delete_VertexAttributeLayout(tgfx_vertexattributelayout Layout_ID) {
-	LOG(tgfx_result_NOTCODED, "Delete_VertexAttributeLayout() isn't coded yet!");
+	printer(result_tgfx_NOTCODED, "Delete_VertexAttributeLayout() isn't coded yet!");
 }
 
 
 tgfx_result vk_gpudatamanager::Create_StagingBuffer(unsigned int DATASIZE, unsigned int MemoryTypeIndex, tgfx_buffer* Handle) {
 	if (!DATASIZE) {
-		LOG(tgfx_result_FAIL, "Staging Buffer DATASIZE is zero!");
+		printer(result_tgfx_FAIL, "Staging Buffer DATASIZE is zero!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	if (RENDERGPU->ALLOCS()[MemoryTypeIndex].TYPE == tgfx_memoryallocationtype::DEVICELOCAL) {
-		LOG(tgfx_result_FAIL, "You can't create a staging buffer in DEVICELOCAL memory!");
+		printer(result_tgfx_FAIL, "You can't create a staging buffer in DEVICELOCAL memory!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	VkBufferCreateInfo psuedo_ci = {};
@@ -1566,7 +1566,7 @@ tgfx_result vk_gpudatamanager::Create_StagingBuffer(unsigned int DATASIZE, unsig
 		| VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	VkBuffer Bufferobj;
 	if (vkCreateBuffer(RENDERGPU->LOGICALDEVICE(), &psuedo_ci, nullptr, &Bufferobj) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Intended staging buffer's creation failed at vkCreateBuffer()!");
+		printer(result_tgfx_FAIL, "Intended staging buffer's creation failed at vkCreateBuffer()!");
 		return tgfx_result_FAIL;
 	}
 
@@ -1575,7 +1575,7 @@ tgfx_result vk_gpudatamanager::Create_StagingBuffer(unsigned int DATASIZE, unsig
 	StagingBuffer->MemAllocIndex = MemoryTypeIndex;
 	if (VKContentManager->Suballocate_Buffer(Bufferobj, psuedo_ci.usage, *StagingBuffer) != tgfx_result_SUCCESS) {
 		delete StagingBuffer;
-		LOG(tgfx_result_FAIL, "Suballocation has failed, so staging buffer creation too!");
+		printer(result_tgfx_FAIL, "Suballocation has failed, so staging buffer creation too!");
 		return tgfx_result_FAIL;
 	}
 	vkDestroyBuffer(RENDERGPU->LOGICALDEVICE(), Bufferobj, nullptr);
@@ -1603,20 +1603,20 @@ tgfx_result vk_gpudatamanager::Upload_toBuffer(tgfx_buffer Handle, tgfx_bufferty
 		MEMALLOCINDEX = ((VK_IndexBuffer*)Handle)->Block.MemAllocIndex;
 		UploadOFFSET += ((VK_IndexBuffer*)Handle)->Block.Offset;
 	default:
-		LOG(tgfx_result_NOTCODED, "Upload_toBuffer() doesn't support this type of buffer for now!");
+		printer(result_tgfx_NOTCODED, "Upload_toBuffer() doesn't support this type of buffer for now!");
 		return tgfx_result_NOTCODED;
 	}
 
 	void* MappedMemory = RENDERGPU->ALLOCS()[MEMALLOCINDEX].MappedMemory;
 	if (!MappedMemory) {
-		LOG(tgfx_result_FAIL, "Memory is not mapped, so you are either trying to upload to an GPU Local buffer or MemoryTypeIndex is not allocated memory type's index!");
+		printer(result_tgfx_FAIL, "Memory is not mapped, so you are either trying to upload to an GPU Local buffer or MemoryTypeIndex is not allocated memory type's index!");
 		return tgfx_result_FAIL;
 	}
 	memcpy(((char*)MappedMemory) + UploadOFFSET, DATA, DATA_SIZE);
 	return tgfx_result_SUCCESS;
 }
 void vk_gpudatamanager::Delete_StagingBuffer(tgfx_buffer StagingBufferHandle) {
-	LOG(tgfx_result_NOTCODED, "Delete_StagingBuffer() is not coded!");
+	printer(result_tgfx_NOTCODED, "Delete_StagingBuffer() is not coded!");
 	/*
 	MemoryBlock* SB = GFXHandleConverter(MemoryBlock*, StagingBufferHandle);
 	std::vector<VK_MemoryBlock>* MemoryBlockList = nullptr;
@@ -1635,7 +1635,7 @@ void vk_gpudatamanager::Delete_StagingBuffer(tgfx_buffer StagingBufferHandle) {
 		MemoryBlockList = &RENDERGPU->READBACK_ALLOC.Allocated_Blocks;
 		break;
 	default:
-		LOG(tgfx_result_NOTCODED, "This type of memory block isn't supported for a staging buffer! Delete_StagingBuffer() has failed!");
+		printer(result_tgfx_NOTCODED, "This type of memory block isn't supported for a staging buffer! Delete_StagingBuffer() has failed!");
 		return;
 	}
 	MutexPTR->lock();
@@ -1647,19 +1647,19 @@ void vk_gpudatamanager::Delete_StagingBuffer(tgfx_buffer StagingBufferHandle) {
 		}
 	}
 	MutexPTR->unlock();
-	LOG(tgfx_result_FAIL, "Delete_StagingBuffer() didn't delete any memory!");*/
+	printer(result_tgfx_FAIL, "Delete_StagingBuffer() didn't delete any memory!");*/
 }
 
 tgfx_result vk_gpudatamanager::Create_VertexBuffer(tgfx_vertexattributelayout AttributeLayout, unsigned int VertexCount,
 	unsigned int MemoryTypeIndex, tgfx_buffer* VertexBufferHandle) {
 	if (!VertexCount) {
-		LOG(tgfx_result_FAIL, "GFXContentManager->Create_MeshBuffer() has failed because vertex_count is zero!");
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_MeshBuffer() has failed because vertex_count is zero!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 
 	VK_VertexAttribLayout* Layout = ((VK_VertexAttribLayout*)AttributeLayout);
 	if (!Layout) {
-		LOG(tgfx_result_FAIL, "GFXContentManager->Create_MeshBuffer() has failed because Attribute Layout ID is invalid!");
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_MeshBuffer() has failed because Attribute Layout ID is invalid!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 
@@ -1674,7 +1674,7 @@ tgfx_result vk_gpudatamanager::Create_VertexBuffer(tgfx_vertexattributelayout At
 	VkBuffer Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
 	if (VKContentManager->Suballocate_Buffer(Buffer, BufferUsageFlag, VKMesh->Block) != tgfx_result_SUCCESS) {
 		delete VKMesh;
-		LOG(tgfx_result_FAIL, "There is no memory left in specified memory region!");
+		printer(result_tgfx_FAIL, "There is no memory left in specified memory region!");
 		vkDestroyBuffer(RENDERGPU->LOGICALDEVICE(), Buffer, nullptr);
 		return tgfx_result_FAIL;
 	}
@@ -1688,7 +1688,7 @@ tgfx_result vk_gpudatamanager::Create_VertexBuffer(tgfx_vertexattributelayout At
 //When you call this function, Draw Calls that uses this ID may draw another Mesh or crash
 //Also if you have any Point Buffer that uses first vertex attribute of that Mesh Buffer, it may crash or draw any other buffer
 void vk_gpudatamanager::Unload_VertexBuffer(tgfx_buffer MeshBuffer_ID) {
-	LOG(tgfx_result_NOTCODED, "VK::Unload_MeshBuffer isn't coded!");
+	printer(result_tgfx_NOTCODED, "VK::Unload_MeshBuffer isn't coded!");
 }
 
 
@@ -1696,15 +1696,15 @@ void vk_gpudatamanager::Unload_VertexBuffer(tgfx_buffer MeshBuffer_ID) {
 tgfx_result vk_gpudatamanager::Create_IndexBuffer(tgfx_datatype DataType, unsigned int IndexCount, unsigned int MemoryTypeIndex, tgfx_buffer* IndexBufferHandle) {
 	VkIndexType IndexType = Find_IndexType_byGFXDATATYPE(DataType);
 	if (IndexType == VK_INDEX_TYPE_MAX_ENUM) {
-		LOG(tgfx_result_FAIL, "GFXContentManager->Create_IndexBuffer() has failed because DataType isn't supported!");
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_IndexBuffer() has failed because DataType isn't supported!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	if (!IndexCount) {
-		LOG(tgfx_result_FAIL, "GFXContentManager->Create_IndexBuffer() has failed because IndexCount is zero!");
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_IndexBuffer() has failed because IndexCount is zero!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	if (MemoryTypeIndex >= RENDERGPU->ALLOCS().size()) {
-		LOG(tgfx_result_FAIL, "GFXContentManager->Create_IndexBuffer() has failed because MemoryTypeIndex is invalid!");
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_IndexBuffer() has failed because MemoryTypeIndex is invalid!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	VK_IndexBuffer* IB = new VK_IndexBuffer;
@@ -1716,7 +1716,7 @@ tgfx_result vk_gpudatamanager::Create_IndexBuffer(tgfx_datatype DataType, unsign
 	IB->IndexCount = static_cast<VkDeviceSize>(IndexCount);
 	if (VKContentManager->Suballocate_Buffer(Buffer, BufferUsageFlag, IB->Block) != tgfx_result_SUCCESS) {
 		delete IB;
-		LOG(tgfx_result_FAIL, "There is no memory left in specified memory region!");
+		printer(result_tgfx_FAIL, "There is no memory left in specified memory region!");
 		vkDestroyBuffer(RENDERGPU->LOGICALDEVICE(), Buffer, nullptr);
 		return tgfx_result_FAIL;
 	}
@@ -1727,14 +1727,14 @@ tgfx_result vk_gpudatamanager::Create_IndexBuffer(tgfx_datatype DataType, unsign
 	return tgfx_result_SUCCESS;
 }
 void vk_gpudatamanager::Unload_IndexBuffer(tgfx_buffer BufferHandle) {
-	LOG(tgfx_result_NOTCODED, "Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!");
+	printer(result_tgfx_NOTCODED, "Create_IndexBuffer() and nothing IndexBuffer related isn't coded yet!");
 }
 
 
 tgfx_result vk_gpudatamanager::Create_Texture(tgfx_texture_dimensions DIMENSION, unsigned int WIDTH, unsigned int HEIGHT, tgfx_texture_channels CHANNEL_TYPE, 
 	unsigned char MIPCOUNT, tgfx_textureusageflag USAGE, tgfx_texture_order DATAORDER, unsigned int MemoryTypeIndex, tgfx_texture* TextureHandle) {
 	if (MIPCOUNT > std::floor(std::log2(std::max(WIDTH, HEIGHT))) + 1 || !MIPCOUNT) {
-		LOG(tgfx_result_FAIL, "GFXContentManager->Create_Texture() has failed because mip count of the texture is wrong!");
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_Texture() has failed because mip count of the texture is wrong!");
 		return tgfx_result_FAIL;
 	}
 	VK_Texture* TEXTURE = new VK_Texture;
@@ -1782,13 +1782,13 @@ tgfx_result vk_gpudatamanager::Create_Texture(tgfx_texture_dimensions DIMENSION,
 		im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
 		if (vkCreateImage(RENDERGPU->LOGICALDEVICE(), &im_ci, nullptr, &TEXTURE->Image) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
+			printer(result_tgfx_FAIL, "GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
 			delete TEXTURE;
 			return tgfx_result_FAIL;
 		}
 
 		if (VKContentManager->Suballocate_Image(*TEXTURE) != tgfx_result_SUCCESS) {
-			LOG(tgfx_result_FAIL, "Suballocation of the texture has failed! Please re-create later.");
+			printer(result_tgfx_FAIL, "Suballocation of the texture has failed! Please re-create later.");
 			delete TEXTURE;
 			return tgfx_result_FAIL;
 		}
@@ -1828,7 +1828,7 @@ tgfx_result vk_gpudatamanager::Create_Texture(tgfx_texture_dimensions DIMENSION,
 		Fill_ComponentMapping_byCHANNELs(TEXTURE->CHANNELs, ci.components);
 
 		if (vkCreateImageView(RENDERGPU->LOGICALDEVICE(), &ci, nullptr, &TEXTURE->ImageView) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "GFXContentManager->Upload_Texture() has failed in vkCreateImageView()!");
+			printer(result_tgfx_FAIL, "GFXContentManager->Upload_Texture() has failed in vkCreateImageView()!");
 			return tgfx_result_FAIL;
 		}
 	}
@@ -1838,7 +1838,7 @@ tgfx_result vk_gpudatamanager::Create_Texture(tgfx_texture_dimensions DIMENSION,
 	return tgfx_result_SUCCESS;
 }
 tgfx_result vk_gpudatamanager::Upload_Texture(tgfx_texture TextureHandle, const void* DATA, unsigned int DATA_SIZE, unsigned int TARGETOFFSET) {
-	LOG(tgfx_result_NOTCODED, "GFXContentManager->Upload_Texture(): Uploading the data isn't coded yet!");
+	printer(result_tgfx_NOTCODED, "GFXContentManager->Upload_Texture(): Uploading the data isn't coded yet!");
 	return tgfx_result_NOTCODED;
 }
 void vk_gpudatamanager::Delete_Texture(tgfx_texture TextureHandle, unsigned char isUsedLastFrame) {
@@ -1869,7 +1869,7 @@ void vk_gpudatamanager::Delete_Texture(tgfx_texture TextureHandle, unsigned char
 tgfx_result vk_gpudatamanager::Create_GlobalBuffer(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned char isUniform, unsigned int MemoryTypeIndex, 
 	tgfx_buffer* GlobalBufferHandle) {
 	if (VKRENDERER->RG_Status != RenderGraphStatus::Invalid || VKRENDERER->FrameGraphs->BranchCount) {
-		LOG(tgfx_result_FAIL, "GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)! Please create your global buffers before render graph construction.");
+		printer(result_tgfx_FAIL, "GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)! Please create your global buffers before render graph construction.");
 		return tgfx_result_WRONGTIMING;
 	}
 
@@ -1887,7 +1887,7 @@ tgfx_result vk_gpudatamanager::Create_GlobalBuffer(const char* BUFFER_NAME, unsi
 	VK_GlobalBuffer* GB = new VK_GlobalBuffer;
 	GB->Block.MemAllocIndex = MemoryTypeIndex;
 	if (VKContentManager->Suballocate_Buffer(obj, flags, GB->Block) != tgfx_result_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Create_GlobalBuffer has failed at suballocation!");
+		printer(result_tgfx_FAIL, "Create_GlobalBuffer has failed at suballocation!");
 		return tgfx_result_FAIL;
 	}
 	vkDestroyBuffer(RENDERGPU->LOGICALDEVICE(), obj, nullptr);
@@ -1900,7 +1900,7 @@ tgfx_result vk_gpudatamanager::Create_GlobalBuffer(const char* BUFFER_NAME, unsi
 	return tgfx_result_SUCCESS;
 }
 void vk_gpudatamanager::Unload_GlobalBuffer(tgfx_buffer BUFFER_ID) {
-	LOG(tgfx_result_NOTCODED, "GFXContentManager->Unload_GlobalBuffer() isn't coded!");
+	printer(result_tgfx_NOTCODED, "GFXContentManager->Unload_GlobalBuffer() isn't coded!");
 }
 tgfx_result vk_gpudatamanager::SetGlobalShaderInput_Buffer(unsigned char isUniformBuffer, unsigned int ElementIndex, unsigned char isUsedLastFrame, tgfx_buffer BufferHandle, 
 	unsigned int BufferOffset, unsigned int BoundDataSize) {
@@ -1909,7 +1909,7 @@ tgfx_result vk_gpudatamanager::SetGlobalShaderInput_Buffer(unsigned char isUnifo
 	for (unsigned char i = 0; i < 2; i++) {
 		if (VKContentManager->GlobalBuffers_DescSet.Descs[i].Type == intendedDescType) {
 			if (VKContentManager->GlobalBuffers_DescSet.Descs[i].ElementCount <= ElementIndex) {
-				LOG(tgfx_result_FAIL, "SetGlobalBuffer() has failed because ElementIndex isn't smaller than ElementCount of the GlobalBuffer!");
+				printer(result_tgfx_FAIL, "SetGlobalBuffer() has failed because ElementIndex isn't smaller than ElementCount of the GlobalBuffer!");
 				return tgfx_result_FAIL;
 			}
 			element = &((VK_DescBufferElement*)VKContentManager->GlobalBuffers_DescSet.Descs[i].Elements)[ElementIndex];
@@ -1919,12 +1919,12 @@ tgfx_result vk_gpudatamanager::SetGlobalShaderInput_Buffer(unsigned char isUnifo
 	unsigned char x = 0;
 	if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
 		if (x != 255) {
-			LOG(tgfx_result_FAIL, "You already changed the global buffer this frame, second or concurrent one will fail!");
+			printer(result_tgfx_FAIL, "You already changed the global buffer this frame, second or concurrent one will fail!");
 			return tgfx_result_WRONGTIMING;
 		}
 		//If value is 255, this means global buffer isn't set before so try to set it again!
 		if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
-			LOG(tgfx_result_FAIL, "You already changed the global buffer this frame, second or concurrent one will fail!");
+			printer(result_tgfx_FAIL, "You already changed the global buffer this frame, second or concurrent one will fail!");
 			return tgfx_result_WRONGTIMING;
 		}
 	}
@@ -1944,7 +1944,7 @@ tgfx_result vk_gpudatamanager::SetGlobalShaderInput_Texture(unsigned char isSamp
 	for (unsigned char i = 0; i < 2; i++) {
 		if (VKContentManager->GlobalTextures_DescSet.Descs[i].Type == intendedDescType) {
 			if (VKContentManager->GlobalTextures_DescSet.Descs[i].ElementCount <= ElementIndex) {
-				LOG(tgfx_result_FAIL, "SetGlobalTexture() has failed because ElementIndex isn't smaller than TextureCount of the GlobalTexture!");
+				printer(result_tgfx_FAIL, "SetGlobalTexture() has failed because ElementIndex isn't smaller than TextureCount of the GlobalTexture!");
 				return tgfx_result_FAIL;
 			}
 			element = &((VK_DescImageElement*)VKContentManager->GlobalTextures_DescSet.Descs[i].Elements)[ElementIndex];
@@ -1954,12 +1954,12 @@ tgfx_result vk_gpudatamanager::SetGlobalShaderInput_Texture(unsigned char isSamp
 	unsigned char x = 0;
 	if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
 		if (x != 255) {
-			LOG(tgfx_result_FAIL, "You already changed the global texture this frame, second or concurrent one will fail!");
+			printer(result_tgfx_FAIL, "You already changed the global texture this frame, second or concurrent one will fail!");
 			return tgfx_result_WRONGTIMING;
 		}
 		//If value is 255, this means global texture isn't set before so try to set it again!
 		if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
-			LOG(tgfx_result_FAIL, "You already changed the global texture this frame, second or concurrent one will fail!");
+			printer(result_tgfx_FAIL, "You already changed the global texture this frame, second or concurrent one will fail!");
 			return tgfx_result_WRONGTIMING;
 		}
 	}
@@ -1985,19 +1985,19 @@ tgfx_result vk_gpudatamanager::Compile_ShaderSource(tgfx_shaderlanguages languag
 
 	VkShaderModule Module;
 	if (vkCreateShaderModule(RENDERGPU->LOGICALDEVICE(), &ci, 0, &Module) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Shader Source is failed at creation!");
+		printer(result_tgfx_FAIL, "Shader Source is failed at creation!");
 		return tgfx_result_FAIL;
 	}
 
 	VK_ShaderSource* SHADERSOURCE = new VK_ShaderSource;
 	SHADERSOURCE->Module = Module;
 	VKContentManager->SHADERSOURCEs.push_back(tapi_GetThisThreadIndex(JobSys), SHADERSOURCE);
-	LOG(tgfx_result_SUCCESS, "Vertex Shader Module is successfully created!");
+	printer(result_tgfx_SUCCESS, "Vertex Shader Module is successfully created!");
 	*ShaderSourceHandle = (tgfx_shadersource)SHADERSOURCE;
 	return tgfx_result_SUCCESS;
 }
 void vk_gpudatamanager::Delete_ShaderSource(tgfx_shadersource ASSET_ID) {
-	LOG(tgfx_result_NOTCODED, "VK::Unload_GlobalBuffer isn't coded!");
+	printer(result_tgfx_NOTCODED, "VK::Unload_GlobalBuffer isn't coded!");
 }
 tgfx_result vk_gpudatamanager::Create_ComputeType(tgfx_shadersource GFXSHADER, tgfx_shaderinputdescription_list ShaderInputDescs, tgfx_computeshadertype* ComputeTypeHandle) {
 	VkComputePipelineCreateInfo cp_ci = {};
@@ -2011,7 +2011,7 @@ tgfx_result vk_gpudatamanager::Create_ComputeType(tgfx_shadersource GFXSHADER, t
 	sm_ci.pCode = reinterpret_cast<const uint32_t*>(SHADER->SOURCE_CODE);
 	sm_ci.codeSize = static_cast<size_t>(SHADER->DATA_SIZE);
 	if (vkCreateShaderModule(RENDERGPU->LOGICALDEVICE(), &sm_ci, nullptr, &shader_module) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Compile_ComputeShader() has failed at vkCreateShaderModule!");
+		printer(result_tgfx_FAIL, "Compile_ComputeShader() has failed at vkCreateShaderModule!");
 		return tgfx_result_FAIL;
 	}
 
@@ -2019,7 +2019,7 @@ tgfx_result vk_gpudatamanager::Create_ComputeType(tgfx_shadersource GFXSHADER, t
 
 	if (!VKDescSet_PipelineLayoutCreation((const VK_ShaderInputDesc**)ShaderInputDescs, &VKPipeline->General_DescSet, &VKPipeline->Instance_DescSet, 
 		&VKPipeline->PipelineLayout)) {
-		LOG(tgfx_result_FAIL, "Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
+		printer(result_tgfx_FAIL, "Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
 		delete VKPipeline;
 		return tgfx_result_FAIL;
 	}
@@ -2040,7 +2040,7 @@ tgfx_result vk_gpudatamanager::Create_ComputeType(tgfx_shadersource GFXSHADER, t
 		cp_ci.pNext = nullptr;
 		cp_ci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 		if (vkCreateComputePipelines(RENDERGPU->LOGICALDEVICE(), VK_NULL_HANDLE, 1, &cp_ci, nullptr, &VKPipeline->PipelineObject) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "Compile_ComputeShader() has failed at vkCreateComputePipelines!");
+			printer(result_tgfx_FAIL, "Compile_ComputeShader() has failed at vkCreateComputePipelines!");
 			delete VKPipeline;
 			return tgfx_result_FAIL;
 		}
@@ -2084,7 +2084,7 @@ tgfx_result vk_gpudatamanager::Create_ComputeInstance(tgfx_computeshadertype Com
 		}
 
 		if (!VKContentManager->Create_DescSet(&instance->DescSet)) {
-			LOG(tgfx_result_FAIL, "You probably exceed one of the limits you specified at GFX initialization process! Create_ComputeInstance() has failed!");
+			printer(result_tgfx_FAIL, "You probably exceed one of the limits you specified at GFX initialization process! Create_ComputeInstance() has failed!");
 			delete[] instance->DescSet.Descs;
 			delete instance;
 			return tgfx_result_FAIL;
@@ -2096,10 +2096,10 @@ tgfx_result vk_gpudatamanager::Create_ComputeInstance(tgfx_computeshadertype Com
 	return tgfx_result_SUCCESS;
 }
 void vk_gpudatamanager::Delete_ComputeShaderType(tgfx_computeshadertype ASSET_ID) {
-	LOG(tgfx_result_NOTCODED, "VK::Delete_ComputeShader isn't coded!");
+	printer(result_tgfx_NOTCODED, "VK::Delete_ComputeShader isn't coded!");
 }
 void vk_gpudatamanager::Delete_ComputeShaderInstance(tgfx_computeshaderinstance ASSET_ID) {
-	LOG(tgfx_result_NOTCODED, "VK::Delete_ComputeShader isn't coded!");
+	printer(result_tgfx_NOTCODED, "VK::Delete_ComputeShader isn't coded!");
 }
 VkColorComponentFlags Find_ColorWriteMask_byChannels(tgfx_texture_channels channels) {
 	switch (channels)
@@ -2134,7 +2134,7 @@ VkColorComponentFlags Find_ColorWriteMask_byChannels(tgfx_texture_channels chann
 	case tgfx_texture_channels_D32:
 	case tgfx_texture_channels_D24S8:
 	default:
-		LOG(tgfx_result_NOTCODED, "Find_ColorWriteMask_byChannels() doesn't support this type of RTSlot channel!");
+		printer(result_tgfx_NOTCODED, "Find_ColorWriteMask_byChannels() doesn't support this type of RTSlot channel!");
 		return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
 	}
 }
@@ -2143,13 +2143,13 @@ tgfx_result vk_gpudatamanager::Link_MaterialType(tgfx_shadersource_list ShaderSo
 	tgfx_depthsettings depthtest, tgfx_stencilsettings StencilFrontFaced, tgfx_stencilsettings StencilBackFaced, tgfx_blendinginfo_list BLENDINGs, 
 	tgfx_rasterpipelinetype* MaterialHandle) {
 	if (VKRENDERER->RG_Status == RenderGraphStatus::StartedConstruction) {
-		LOG(tgfx_result_FAIL, "You can't link a Material Type while recording RenderGraph!");
+		printer(result_tgfx_FAIL, "You can't link a Material Type while recording RenderGraph!");
 		return tgfx_result_WRONGTIMING;
 	}
 	VK_VertexAttribLayout* LAYOUT = nullptr;
 	LAYOUT = (VK_VertexAttribLayout*)AttributeLayout;
 	if (!LAYOUT) {
-		LOG(tgfx_result_FAIL, "Link_MaterialType() has failed because Material Type has invalid Vertex Attribute Layout!");
+		printer(result_tgfx_FAIL, "Link_MaterialType() has failed because Material Type has invalid Vertex Attribute Layout!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	VK_SubDrawPass* Subpass = (VK_SubDrawPass*)Subdrawpass;
@@ -2161,13 +2161,13 @@ tgfx_result vk_gpudatamanager::Link_MaterialType(tgfx_shadersource_list ShaderSo
 		VK_ShaderSource* ShaderSource = ((VK_ShaderSource*)ShaderSources[ShaderSourceCount]);
 		switch (ShaderSource->stage) {
 		case tgfx_shaderstage_VERTEXSHADER:
-			if (VertexSource) {LOG(tgfx_result_FAIL, "Link_MaterialType() has failed because there 2 vertex shaders in the list!");return tgfx_result_FAIL;}
+			if (VertexSource) {printer(result_tgfx_FAIL, "Link_MaterialType() has failed because there 2 vertex shaders in the list!");return tgfx_result_FAIL;}
 			VertexSource = ShaderSource;	break;
 		case tgfx_shaderstage_FRAGMENTSHADER:
-			if (FragmentSource) {LOG(tgfx_result_FAIL, "Link_MaterialType() has failed because there 2 fragment shaders in the list!");return tgfx_result_FAIL;}
+			if (FragmentSource) {printer(result_tgfx_FAIL, "Link_MaterialType() has failed because there 2 fragment shaders in the list!");return tgfx_result_FAIL;}
 			FragmentSource = ShaderSource; 	break;
 		default:
-			LOG(tgfx_result_NOTCODED, "Link_MaterialType() has failed because list has unsupported shader source type!");
+			printer(result_tgfx_NOTCODED, "Link_MaterialType() has failed because list has unsupported shader source type!");
 			return tgfx_result_NOTCODED;
 		}
 		ShaderSourceCount++;
@@ -2317,7 +2317,7 @@ tgfx_result vk_gpudatamanager::Link_MaterialType(tgfx_shadersource_list ShaderSo
 	}
 
 	if (!VKDescSet_PipelineLayoutCreation((const VK_ShaderInputDesc**)ShaderInputDescs, &VKPipeline->General_DescSet, &VKPipeline->Instance_DescSet, &VKPipeline->PipelineLayout)) {
-		LOG(tgfx_result_FAIL, "Link_MaterialType() has failed at VKDescSet_PipelineLayoutCreation!");
+		printer(result_tgfx_FAIL, "Link_MaterialType() has failed at VKDescSet_PipelineLayoutCreation!");
 		delete VKPipeline;
 		return tgfx_result_FAIL;
 	}
@@ -2381,7 +2381,7 @@ tgfx_result vk_gpudatamanager::Link_MaterialType(tgfx_shadersource_list ShaderSo
 		if (vkCreateGraphicsPipelines(Vulkan_GPU->LOGICALDEVICE(), nullptr, 1, &GraphicsPipelineCreateInfo, nullptr, &VKPipeline->PipelineObject) != VK_SUCCESS) {
 			delete VKPipeline;
 			delete STAGEs;
-			LOG(tgfx_result_FAIL, "vkCreateGraphicsPipelines has failed!");
+			printer(result_tgfx_FAIL, "vkCreateGraphicsPipelines has failed!");
 			return tgfx_result_FAIL;
 		}
 	}
@@ -2390,17 +2390,17 @@ tgfx_result vk_gpudatamanager::Link_MaterialType(tgfx_shadersource_list ShaderSo
 	VKContentManager->SHADERPROGRAMs.push_back(tapi_GetThisThreadIndex(JobSys), VKPipeline);
 
 
-	LOG(tgfx_result_SUCCESS, "Finished creating Graphics Pipeline");
+	printer(result_tgfx_SUCCESS, "Finished creating Graphics Pipeline");
 	*MaterialHandle = (tgfx_rasterpipelinetype)VKPipeline;
 	return tgfx_result_SUCCESS;
 }
 void vk_gpudatamanager::Delete_MaterialType(tgfx_rasterpipelinetype Asset_ID) {
-	LOG(tgfx_result_NOTCODED, "VK::Unload_GlobalBuffer isn't coded!");
+	printer(result_tgfx_NOTCODED, "VK::Unload_GlobalBuffer isn't coded!");
 }
 tgfx_result vk_gpudatamanager::Create_MaterialInst(tgfx_rasterpipelinetype MaterialType, tgfx_rasterpipelineinstance* MaterialInstHandle) {
 	VK_GraphicsPipeline* VKPSO = (VK_GraphicsPipeline*)MaterialType;
 	if (!VKPSO) {
-		LOG(tgfx_result_FAIL, "Create_MaterialInst() has failed because Material Type isn't found!");
+		printer(result_tgfx_FAIL, "Create_MaterialInst() has failed because Material Type isn't found!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 
@@ -2443,28 +2443,28 @@ tgfx_result vk_gpudatamanager::Create_MaterialInst(tgfx_rasterpipelinetype Mater
 	return tgfx_result_SUCCESS;
 }
 void vk_gpudatamanager::Delete_MaterialInst(tgfx_rasterpipelineinstance Asset_ID) {
-	LOG(tgfx_result_FAIL, "Delete_MaterialInst() isn't coded yet!");
+	printer(result_tgfx_FAIL, "Delete_MaterialInst() isn't coded yet!");
 }
 
 tgfx_result SetDescSet_Buffer(VK_DescSet* Set, unsigned int BINDINDEX, bool isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset,
 	tgfx_buffertype BUFTYPE, tgfx_buffer BufferHandle, unsigned int BoundDataSize, bool isUsedRecently) {
 
 	if (!Set->DescCount) {
-		LOG(tgfx_result_FAIL, "Given Material Type/Instance doesn't have any shader input to set!");
+		printer(result_tgfx_FAIL, "Given Material Type/Instance doesn't have any shader input to set!");
 		return tgfx_result_FAIL;
 	}
 	if (BINDINDEX >= Set->DescCount) {
-		LOG(tgfx_result_FAIL, "BINDINDEX is exceeding the shader input count in the Material Type/Instance");
+		printer(result_tgfx_FAIL, "BINDINDEX is exceeding the shader input count in the Material Type/Instance");
 		return tgfx_result_FAIL;
 	}
 	VK_Descriptor& Descriptor = Set->Descs[BINDINDEX];
 	if ((isUniformBufferShaderInput && Descriptor.Type != DescType::UBUFFER) ||
 		(!isUniformBufferShaderInput && Descriptor.Type != DescType::SBUFFER)) {
-		LOG(tgfx_result_FAIL, "BINDINDEX is pointing to some other type of shader input!");
+		printer(result_tgfx_FAIL, "BINDINDEX is pointing to some other type of shader input!");
 		return tgfx_result_FAIL;
 	}
 	if (ELEMENTINDEX >= Descriptor.ElementCount) {
-		LOG(tgfx_result_FAIL, "You gave SetMaterialBuffer() an overflowing ELEMENTINDEX!");
+		printer(result_tgfx_FAIL, "You gave SetMaterialBuffer() an overflowing ELEMENTINDEX!");
 		return tgfx_result_FAIL;
 	}
 
@@ -2474,18 +2474,18 @@ tgfx_result SetDescSet_Buffer(VK_DescSet* Set, unsigned int BINDINDEX, bool isUn
 	
 	VkDeviceSize reqalignmentoffset = (isUniformBufferShaderInput) ? RENDERGPU->DEVICEPROPERTIES().limits.minUniformBufferOffsetAlignment : RENDERGPU->DEVICEPROPERTIES().limits.minStorageBufferOffsetAlignment;
 	if (TargetOffset % reqalignmentoffset) {
-		LOG(tgfx_result_WARNING, ("This TargetOffset in SetMaterialBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + std::to_string(reqalignmentoffset)).c_str());
+		printer(result_tgfx_WARNING, ("This TargetOffset in SetMaterialBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + std::to_string(reqalignmentoffset)).c_str());
 	}
 
 	unsigned char x = 0;
 	if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
 		if (x != 255) {
-			LOG(tgfx_result_FAIL, "You already set shader input buffer, you can't change it at the same frame!");
+			printer(result_tgfx_FAIL, "You already set shader input buffer, you can't change it at the same frame!");
 			return tgfx_result_WRONGTIMING;
 		}
 		//If value is 255, this means this shader input isn't set before. So try again!
 		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
-			LOG(tgfx_result_FAIL, "You already set shader input buffer, you can't change it at the same frame!");
+			printer(result_tgfx_FAIL, "You already set shader input buffer, you can't change it at the same frame!");
 			return tgfx_result_WRONGTIMING;
 		}
 	}
@@ -2496,7 +2496,7 @@ tgfx_result SetDescSet_Buffer(VK_DescSet* Set, unsigned int BINDINDEX, bool isUn
 		FindBufferOBJ_byBufType(BufferHandle, BUFTYPE, DescElement.Info.buffer, FinalOffset);
 		break;
 	default:
-		LOG(tgfx_result_NOTCODED, "SetMaterial_UniformBuffer() doesn't support this type of target buffers!");
+		printer(result_tgfx_NOTCODED, "SetMaterial_UniformBuffer() doesn't support this type of target buffers!");
 		return tgfx_result_NOTCODED;
 	}
 	DescElement.Info.offset = FinalOffset;
@@ -2518,21 +2518,21 @@ tgfx_result SetDescSet_Buffer(VK_DescSet* Set, unsigned int BINDINDEX, bool isUn
 tgfx_result SetDescSet_Texture(VK_DescSet* Set, unsigned int BINDINDEX, bool isSampledTexture, unsigned int ELEMENTINDEX, VK_Sampler* Sampler, VK_Texture* TextureHandle, 
 	tgfx_imageaccess usage, bool isUsedRecently) {
 	if (!Set->DescCount) {
-		LOG(tgfx_result_FAIL, "Given Material Type/Instance doesn't have any shader input to set!");
+		printer(result_tgfx_FAIL, "Given Material Type/Instance doesn't have any shader input to set!");
 		return tgfx_result_FAIL;
 	}
 	if (BINDINDEX >= Set->DescCount) {
-		LOG(tgfx_result_FAIL, "BINDINDEX is exceeding the shader input count in the Material Type/Instance");
+		printer(result_tgfx_FAIL, "BINDINDEX is exceeding the shader input count in the Material Type/Instance");
 		return tgfx_result_FAIL;
 	}
 	VK_Descriptor& Descriptor = Set->Descs[BINDINDEX];
 	if ((isSampledTexture && Descriptor.Type != DescType::SAMPLER) ||
 		(!isSampledTexture && Descriptor.Type != DescType::IMAGE)) {
-		LOG(tgfx_result_FAIL, "BINDINDEX is pointing to some other type of shader input!");
+		printer(result_tgfx_FAIL, "BINDINDEX is pointing to some other type of shader input!");
 		return tgfx_result_FAIL;
 	}
 	if (ELEMENTINDEX >= Descriptor.ElementCount) {
-		LOG(tgfx_result_FAIL, "You gave SetMaterialTexture() an overflowing ELEMENTINDEX!");
+		printer(result_tgfx_FAIL, "You gave SetMaterialTexture() an overflowing ELEMENTINDEX!");
 		return tgfx_result_FAIL;
 	}
 	VK_DescImageElement& DescElement = ((VK_DescImageElement*)Descriptor.Elements)[ELEMENTINDEX];
@@ -2541,12 +2541,12 @@ tgfx_result SetDescSet_Texture(VK_DescSet* Set, unsigned int BINDINDEX, bool isS
 	unsigned char x = 0;
 	if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
 		if (x != 255) {
-			LOG(tgfx_result_FAIL, "You already set shader input texture, you can't change it at the same frame!");
+			printer(result_tgfx_FAIL, "You already set shader input texture, you can't change it at the same frame!");
 			return tgfx_result_WRONGTIMING;
 		}
 		//If value is 255, this means this shader input isn't set before. So try again!
 		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
-			LOG(tgfx_result_FAIL, "You already set shader input texture, you can't change it at the same frame!");
+			printer(result_tgfx_FAIL, "You already set shader input texture, you can't change it at the same frame!");
 			return tgfx_result_WRONGTIMING;
 		}
 	}
@@ -2644,11 +2644,11 @@ tgfx_result vk_gpudatamanager::Create_RTSlotset(tgfx_rtslotdescription_list Desc
 			(FirstHandle->WIDTH != SecondHandle->WIDTH) ||
 			(FirstHandle->HEIGHT != SecondHandle->HEIGHT)
 			) {
-			LOG(tgfx_result_FAIL, "GFXContentManager->Create_RTSlotSet() has failed because one of the slots has texture handles that doesn't match channel type, width or height!");
+			printer(result_tgfx_FAIL, "GFXContentManager->Create_RTSlotSet() has failed because one of the slots has texture handles that doesn't match channel type, width or height!");
 			return tgfx_result_INVALIDARGUMENT;
 		}
 		if (!(FirstHandle->USAGE & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) || !(SecondHandle->USAGE & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))) {
-			LOG(tgfx_result_FAIL, "GFXContentManager->Create_RTSlotSet() has failed because one of the slots has a handle that doesn't use is_RenderableTo in its USAGEFLAG!");
+			printer(result_tgfx_FAIL, "GFXContentManager->Create_RTSlotSet() has failed because one of the slots has a handle that doesn't use is_RenderableTo in its USAGEFLAG!");
 			return tgfx_result_INVALIDARGUMENT;
 		}
 	}
@@ -2659,23 +2659,23 @@ tgfx_result vk_gpudatamanager::Create_RTSlotset(tgfx_rtslotdescription_list Desc
 		for (unsigned int RTIndex = 0; RTIndex < 2; RTIndex++) {
 			VK_Texture* RT = ((VK_Texture*)desc->TextureHandles[RTIndex]);
 			if (!RT) {
-				LOG(tgfx_result_FAIL, "Create_RTSlotSet() has failed because intended RT isn't found!");
+				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because intended RT isn't found!");
 				return tgfx_result_INVALIDARGUMENT;
 			}
 			if (desc->OPTYPE == tgfx_operationtype_UNUSED) {
-				LOG(tgfx_result_FAIL, "Create_RTSlotSet() has failed because you can't create a Base RT SlotSet that has unused attachment!");
+				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because you can't create a Base RT SlotSet that has unused attachment!");
 				return tgfx_result_INVALIDARGUMENT;
 			}
 			if (RT->CHANNELs == tgfx_texture_channels_D24S8 || RT->CHANNELs == tgfx_texture_channels_D32) {
 				if (DEPTHSLOT_VECTORINDEX != UINT32_MAX && DEPTHSLOT_VECTORINDEX != SlotIndex) {
-					LOG(tgfx_result_FAIL, "Create_RTSlotSet() has failed because you can't use two depth buffers at the same slot set!");
+					printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because you can't use two depth buffers at the same slot set!");
 					return tgfx_result_INVALIDARGUMENT;
 				}
 				DEPTHSLOT_VECTORINDEX = SlotIndex;
 				continue;
 			}
 			if (desc->SLOTINDEX > DescriptionsCount - 1) {
-				LOG(tgfx_result_FAIL, "Create_RTSlotSet() has failed because you gave a overflowing SLOTINDEX to a RTSLOT!");
+				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because you gave a overflowing SLOTINDEX to a RTSLOT!");
 				return tgfx_result_INVALIDARGUMENT;
 			}
 		}
@@ -2693,7 +2693,7 @@ tgfx_result vk_gpudatamanager::Create_RTSlotset(tgfx_rtslotdescription_list Desc
 				continue;
 			}
 			if (((VK_RTSlotDesc*)Descriptions[i])->SLOTINDEX == ((VK_RTSlotDesc*)Descriptions[i + j])->SLOTINDEX) {
-				LOG(tgfx_result_FAIL, "Create_RTSlotSet() has failed because some SLOTINDEXes are same, but each SLOTINDEX should be unique and lower then COLOR SLOT COUNT!");
+				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because some SLOTINDEXes are same, but each SLOTINDEX should be unique and lower then COLOR SLOT COUNT!");
 				return tgfx_result_INVALIDARGUMENT;
 			}
 		}
@@ -2704,7 +2704,7 @@ tgfx_result vk_gpudatamanager::Create_RTSlotset(tgfx_rtslotdescription_list Desc
 	for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
 		VK_Texture* Texture = ((VK_RTSlotDesc*)Descriptions[SlotIndex])->TextureHandles[0];
 		if (Texture->WIDTH != FBWIDTH || Texture->HEIGHT != FBHEIGHT) {
-			LOG(tgfx_result_FAIL, "Create_RTSlotSet() has failed because one of your slot's texture has wrong resolution!");
+			printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because one of your slot's texture has wrong resolution!");
 			return tgfx_result_INVALIDARGUMENT;
 		}
 	}
@@ -2743,7 +2743,7 @@ tgfx_result vk_gpudatamanager::Create_RTSlotset(tgfx_rtslotdescription_list Desc
 		for (unsigned int i = 0; i < PF_SLOTSET.COLORSLOTs_COUNT; i++) {
 			VK_Texture* VKTexture = PF_SLOTSET.COLOR_SLOTs[i].RT;
 			if (!VKTexture->ImageView) {
-				LOG(tgfx_result_FAIL, "One of your RTs doesn't have a VkImageView! You can't use such a texture as RT. Generally this case happens when you forgot to specify your swapchain texture's usage (while creating a window).");
+				printer(result_tgfx_FAIL, "One of your RTs doesn't have a VkImageView! You can't use such a texture as RT. Generally this case happens when you forgot to specify your swapchain texture's usage (while creating a window).");
 				return tgfx_result_FAIL;
 			}
 			VKSLOTSET->ImageViews[SlotSetIndex].push_back(VKTexture->ImageView);
@@ -2772,31 +2772,31 @@ tgfx_result vk_gpudatamanager::Change_RTSlotTexture(tgfx_rtslotset RTSlotHandle,
 	VK_RTSLOTSET* SlotSet = (VK_RTSLOTSET*)RTSlotHandle;
 	VK_Texture* Texture = (VK_Texture*)TextureHandle;
 	if (!(Texture->USAGE & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))) {
-		LOG(tgfx_result_FAIL, "You can't change RTSlot's texture because given texture's USAGE flag doesn't activate isRenderableTo!");
+		printer(result_tgfx_FAIL, "You can't change RTSlot's texture because given texture's USAGE flag doesn't activate isRenderableTo!");
 		return tgfx_result_FAIL;
 	}
 
 	VkFramebufferCreateInfo& FB_ci = SlotSet->FB_ci[FrameIndex];
 	if (Texture->WIDTH != FB_ci.width || Texture->HEIGHT != FB_ci.height) {
-		LOG(tgfx_result_FAIL, "You can't change RTSlot's texture because given texture has unmatching resolution!");
+		printer(result_tgfx_FAIL, "You can't change RTSlot's texture because given texture has unmatching resolution!");
 		return tgfx_result_FAIL;
 	}
 
 	if (isColorRT) {
 		if (SlotSet->PERFRAME_SLOTSETs[FrameIndex].COLORSLOTs_COUNT <= SlotIndex) {
-			LOG(tgfx_result_FAIL, "You can't change RTSlot's texture because given SlotIndex is exceeding the number of color slots!");
+			printer(result_tgfx_FAIL, "You can't change RTSlot's texture because given SlotIndex is exceeding the number of color slots!");
 			return tgfx_result_FAIL;
 		}
 		VK_COLORRTSLOT& Slot = SlotSet->PERFRAME_SLOTSETs[FrameIndex].COLOR_SLOTs[SlotIndex];
 		if (Slot.RT->CHANNELs != Texture->CHANNELs) {
-			LOG(tgfx_result_FAIL, "You can't change RTSlot's texture because given Texture's channel type isn't same with target slot's!");
+			printer(result_tgfx_FAIL, "You can't change RTSlot's texture because given Texture's channel type isn't same with target slot's!");
 			return tgfx_result_FAIL;
 		}
 
 		//Race against concurrency (*plays Tokyo Drift)
 		bool x = false, y = true;
 		if (!Slot.IsChanged.compare_exchange_strong(x, y)) {
-			LOG(tgfx_result_FAIL, "You already changed this slot!");
+			printer(result_tgfx_FAIL, "You already changed this slot!");
 			return tgfx_result_WRONGTIMING;
 		}
 		SlotSet->PERFRAME_SLOTSETs[FrameIndex].IsChanged.store(true);
@@ -2807,19 +2807,19 @@ tgfx_result vk_gpudatamanager::Change_RTSlotTexture(tgfx_rtslotset RTSlotHandle,
 	else {
 		VK_DEPTHSTENCILSLOT* Slot = SlotSet->PERFRAME_SLOTSETs[FrameIndex].DEPTHSTENCIL_SLOT;
 		if (!Slot) {
-			LOG(tgfx_result_FAIL, "You can't change RTSlot's texture because SlotSet doesn't have any Depth-Stencil Slot!");
+			printer(result_tgfx_FAIL, "You can't change RTSlot's texture because SlotSet doesn't have any Depth-Stencil Slot!");
 			return tgfx_result_FAIL;
 		}
 
 		if (Slot->RT->CHANNELs != Texture->CHANNELs) {
-			LOG(tgfx_result_FAIL, "You can't change RTSlot's texture because given Texture's channel type isn't same with target slot's!");
+			printer(result_tgfx_FAIL, "You can't change RTSlot's texture because given Texture's channel type isn't same with target slot's!");
 			return tgfx_result_FAIL;
 		}
 
 		//Race against concurrency
 		bool x = false, y = true;
 		if (!Slot->IsChanged.compare_exchange_strong(x, y)) {
-			LOG(tgfx_result_FAIL, "You already changed this slot!");
+			printer(result_tgfx_FAIL, "You already changed this slot!");
 			return tgfx_result_WRONGTIMING;
 		}
 		SlotSet->PERFRAME_SLOTSETs[FrameIndex].IsChanged.store(true);
@@ -2831,7 +2831,7 @@ tgfx_result vk_gpudatamanager::Change_RTSlotTexture(tgfx_rtslotset RTSlotHandle,
 }
 tgfx_result vk_gpudatamanager::Inherite_RTSlotSet(tgfx_rtslotusage_list DescriptionsGFX, tgfx_rtslotset RTSlotSetHandle, tgfx_inheritedrtslotset* InheritedSlotSetHandle) {
 	if (!RTSlotSetHandle) {
-		LOG(tgfx_result_FAIL, "Inherite_RTSlotSet() has failed because Handle is invalid!");
+		printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because Handle is invalid!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	VK_RTSLOTSET* BaseSet = (VK_RTSLOTSET*)RTSlotSetHandle;
@@ -2847,7 +2847,7 @@ tgfx_result vk_gpudatamanager::Inherite_RTSlotSet(tgfx_rtslotusage_list Descript
 		const VK_RTSlotUsage* DESC = Descriptions[i];
 		if (DESC->IS_DEPTH) {
 			if (DEPTH_FOUND) {
-				LOG(tgfx_result_FAIL, "Inherite_RTSlotSet() has failed because there are two depth buffers in the description, which is not supported!");
+				printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because there are two depth buffers in the description, which is not supported!");
 				delete InheritedSet;
 				return tgfx_result_INVALIDARGUMENT;
 			}
@@ -2857,7 +2857,7 @@ tgfx_result vk_gpudatamanager::Inherite_RTSlotSet(tgfx_rtslotusage_list Descript
 				(DESC->OPTYPE == tgfx_operationtype_WRITE_ONLY || DESC->OPTYPE == tgfx_operationtype_READ_AND_WRITE)
 				)
 			{
-				LOG(tgfx_result_FAIL, "Inherite_RTSlotSet() has failed because you can't use a Read-Only DepthSlot with Write Access in a Inherited Set!");
+				printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because you can't use a Read-Only DepthSlot with Write Access in a Inherited Set!");
 				delete InheritedSet;
 				return tgfx_result_INVALIDARGUMENT;
 			}
@@ -2872,7 +2872,7 @@ tgfx_result vk_gpudatamanager::Inherite_RTSlotSet(tgfx_rtslotusage_list Descript
 		InheritedSet->DEPTH_OPTYPE = tgfx_operationtype_UNUSED;
 	}
 	if (COLORSLOT_COUNT != BaseSet->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT) {
-		LOG(tgfx_result_FAIL, "Inherite_RTSlotSet() has failed because BaseSet's Color Slot count doesn't match given Descriptions's one!");
+		printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because BaseSet's Color Slot count doesn't match given Descriptions's one!");
 		delete InheritedSet;
 		return tgfx_result_INVALIDARGUMENT;
 	}
@@ -2887,12 +2887,12 @@ tgfx_result vk_gpudatamanager::Inherite_RTSlotSet(tgfx_rtslotusage_list Descript
 				continue;
 			}
 			if (Descriptions[i]->SLOTINDEX >= COLORSLOT_COUNT) {
-				LOG(tgfx_result_FAIL, "Inherite_RTSlotSet() has failed because some ColorSlots have indexes that are more than or equal to ColorSlotCount! Each slot's index should be unique and lower than ColorSlotCount!");
+				printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because some ColorSlots have indexes that are more than or equal to ColorSlotCount! Each slot's index should be unique and lower than ColorSlotCount!");
 				delete InheritedSet;
 				return tgfx_result_INVALIDARGUMENT;
 			}
 			if (Descriptions[i]->SLOTINDEX == Descriptions[i + j]->SLOTINDEX) {
-				LOG(tgfx_result_FAIL, "Inherite_RTSlotSet() has failed because given Descriptions have some ColorSlots that has same indexes! Each slot's index should be unique and lower than ColorSlotCount!");
+				printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because given Descriptions have some ColorSlots that has same indexes! Each slot's index should be unique and lower than ColorSlotCount!");
 				delete InheritedSet;
 				return tgfx_result_INVALIDARGUMENT;
 			}
@@ -2911,7 +2911,7 @@ tgfx_result vk_gpudatamanager::Inherite_RTSlotSet(tgfx_rtslotusage_list Descript
 			(Descriptions[i]->OPTYPE == tgfx_operationtype_WRITE_ONLY || Descriptions[i]->OPTYPE == tgfx_operationtype_READ_AND_WRITE)
 			)
 		{
-			LOG(tgfx_result_FAIL, "Inherite_RTSlotSet() has failed because you can't use a Read-Only ColorSlot with Write Access in a Inherited Set!");
+			printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because you can't use a Read-Only ColorSlot with Write Access in a Inherited Set!");
 			delete InheritedSet;
 			return tgfx_result_INVALIDARGUMENT;
 		}
@@ -2945,5 +2945,5 @@ void vk_gpudatamanager::Delete_RTSlotSet(tgfx_rtslotset RTSlotSetHandle) {
 }
 
 void vk_gpudatamanager::Delete_InheritedRTSlotSet(tgfx_inheritedrtslotset irtslotset) {
-	LOG(tgfx_result_NOTCODED, "Delete_InheritedRTSlotSet() isn't coded in TGFX's Vulkan backend!");
+	printer(result_tgfx_NOTCODED, "Delete_InheritedRTSlotSet() isn't coded in TGFX's Vulkan backend!");
 }

@@ -36,7 +36,7 @@ void Create_VkDataofRGBranches(const VK_FrameGraph& FrameGraph) {
 
 				VkCommandBuffer NewCB;
 				if (vkAllocateCommandBuffers(RENDERGPU->LOGICALDEVICE(), &cb_ai, &NewCB) != VK_SUCCESS) {
-					LOG(tgfx_result_FAIL, "vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
+					printer(result_tgfx_FAIL, "vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
 					return;
 				}
 				VK_CommandBuffer VK_CB;
@@ -86,7 +86,7 @@ VK_QUEUEFLAG FindRequiredQueue_ofGP(const VK_Pass* GP) {
 		flag.is_PRESENTATIONsupported = true;
 		break;
 	default:
-		LOG(tgfx_result_FAIL, "FindRequiredQueue_ofGP() doesn't support given TPType!");
+		printer(result_tgfx_FAIL, "FindRequiredQueue_ofGP() doesn't support given TPType!");
 	}
 	return flag;
 }
@@ -108,7 +108,7 @@ VK_RenderingPath* Create_NewRP(VK_Pass* Pass, std::vector<VK_RenderingPath*>& RP
 		for (unsigned int RPPassIndex = 0; RPPassIndex < RP_Check->ExecutionOrder.size(); RPPassIndex++) {
 			VK_Pass* GP_Check = RP_Check->ExecutionOrder[RPPassIndex];
 			if (GP_Check == Pass) {
-				LOG(tgfx_result_FAIL, ("Pass is already in a RP!" + Pass->NAME).c_str());
+				printer(result_tgfx_FAIL, ("Pass is already in a RP!" + Pass->NAME).c_str());
 				return nullptr;
 			}
 		}
@@ -482,7 +482,7 @@ void FindPasses_dependentRPs(VK_PassLinkedList* RPless_passes, std::vector<VK_Re
 				if (Waitdesc.WaitLastFramesPass
 					|| (*Waitdesc.WaitedPass)->TYPE == PassType::WP //I don't know if this should be here!
 					) {
-					LOG(tgfx_result_NOTCODED, "I added a condition but don't think it will work!");
+					printer(result_tgfx_NOTCODED, "I added a condition but don't think it will work!");
 					continue;
 				}
 				for (unsigned int CheckedRPIndex = 0; CheckedRPIndex < RPs.size() && !break_allloops; CheckedRPIndex++) {
@@ -547,7 +547,7 @@ void Create_VkFrameBuffers(drawpass_vk* DP, unsigned int FrameGraphIndex) {
 	for (unsigned int i = 0; i < DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLORSLOTs_COUNT; i++) {
 		VK_Texture* VKTexture = DP->SLOTSET->PERFRAME_SLOTSETs[FrameGraphIndex].COLOR_SLOTs[i].RT;
 		if (!VKTexture->ImageView) {
-			LOG(tgfx_result_FAIL, "One of your RTs doesn't have a VkImageView! You can't use such a texture as RT. Generally this case happens when you forgot to specify your swapchain texture's usage (while creating a window).");
+			printer(result_tgfx_FAIL, "One of your RTs doesn't have a VkImageView! You can't use such a texture as RT. Generally this case happens when you forgot to specify your swapchain texture's usage (while creating a window).");
 			return;
 		}
 		Attachments.push_back(VKTexture->ImageView);
@@ -567,7 +567,7 @@ void Create_VkFrameBuffers(drawpass_vk* DP, unsigned int FrameGraphIndex) {
 	FrameBuffer_ci.flags = 0;
 
 	if (vkCreateFramebuffer(RENDERGPU->LOGICALDEVICE(), &FrameBuffer_ci, nullptr, &DP->FBs[FrameGraphIndex]) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Renderer::Create_DrawPassFrameBuffers() has failed!");
+		printer(result_tgfx_FAIL, "Renderer::Create_DrawPassFrameBuffers() has failed!");
 		return;
 	}
 }
@@ -698,7 +698,7 @@ void Create_FrameGraphs() {
 				}
 			}
 			if (!isSupported) {
-				LOG(tgfx_result_NOTCODED, "One of the Rendering Paths is not supported by your GPU's Vulkan Queues, this shouldn't have happened! Please contact me!");
+				printer(result_tgfx_NOTCODED, "One of the Rendering Paths is not supported by your GPU's Vulkan Queues, this shouldn't have happened! Please contact me!");
 				return;
 			}
 		}
@@ -706,14 +706,14 @@ void Create_FrameGraphs() {
 
 
 	if (RPs.size()) {
-		LOG(tgfx_result_SUCCESS, "Started to print RP specs!");
+		printer(result_tgfx_SUCCESS, "Started to print RP specs!");
 		for (unsigned char RPIndex = 0; RPIndex < RPs.size(); RPIndex++) {
 			std::cout << "Next RP!\n";
 			PrintRPSpecs(RPs[RPIndex]);
 		}
 	}
 	else {
-		LOG(tgfx_result_SUCCESS, "There is no RP to print!");
+		printer(result_tgfx_SUCCESS, "There is no RP to print!");
 	}
 
 
@@ -759,7 +759,7 @@ void Create_FrameGraphs() {
 			}
 		}
 
-		LOG(tgfx_result_FAIL, "VulkanRenderer: There are unnecessary VkSemaphore creations for Barrier TPs, fix it when you have time!");
+		printer(result_tgfx_FAIL, "VulkanRenderer: There are unnecessary VkSemaphore creations for Barrier TPs, fix it when you have time!");
 
 
 		//Link RGBranches to each other across frames
@@ -804,14 +804,14 @@ void Create_FrameGraphs() {
 	}
 
 	if (VKRENDERER->FrameGraphs[0].BranchCount) {
-		LOG(tgfx_result_SUCCESS, "Started to print RB specs!");
+		printer(result_tgfx_SUCCESS, "Started to print RB specs!");
 		for (unsigned char RBIndex = 0; RBIndex < VKRENDERER->FrameGraphs[0].BranchCount; RBIndex++) {
 			std::cout << "Next RP!\n";
 			PrintRBSpecs(VK_RGBranchSystem::GetBranch_byID(GetFrameGraphTree(CurrentFG)[RBIndex]));
 		}
 	}
 	else {
-		LOG(tgfx_result_FAIL, "There is no RB to print!");
+		printer(result_tgfx_FAIL, "There is no RB to print!");
 	}
 
 	for (unsigned int RPClearIndex = 0; RPClearIndex < RPs.size(); RPClearIndex++) {
@@ -859,7 +859,7 @@ void DuplicateFrameGraph(VK_FrameGraph& TargetFrameGraph, const VK_FrameGraph& S
 		}
 
 		if (!TargetBranch.IsValid()) {
-			LOG(tgfx_result_FAIL, "Duplicating has failed, target branch isn't valid!");
+			printer(result_tgfx_FAIL, "Duplicating has failed, target branch isn't valid!");
 		}
 	}
 }

@@ -70,7 +70,7 @@ unsigned char Slider_Vec4(const char* name, tgfx_vec4* data, float min, float ma
 
 void CheckIMGUIVKResults(VkResult result) {
 	if (result != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "IMGUI's Vulkan backend has failed, please report!");
+		printer(result_tgfx_FAIL, "IMGUI's Vulkan backend has failed, please report!");
 	}
 }
 
@@ -126,7 +126,7 @@ void Set_IMGUIFunctionPTRs() {
 
 tgfx_result IMGUI_VK::Initialize(tgfx_subdrawpass SubPass, VkDescriptorPool DescPool) {
 	if (!VKCORE->WINDOWs.size()) {
-		LOG(tgfx_result_FAIL, "Initialization of dear IMGUI has failed because you didn't create a window!");
+		printer(result_tgfx_FAIL, "Initialization of dear IMGUI has failed because you didn't create a window!");
 		return tgfx_result_FAIL;
 	}
 	ImGui_ImplGlfw_InitForVulkan(VKCORE->WINDOWs[0]->GLFW_WINDOW, true);
@@ -165,7 +165,7 @@ IMGUI_VK::IMGUI_STATUS IMGUI_VK::Get_IMGUIStatus() {
 
 void IMGUI_VK::NewFrame() {
 	if (STAT == IMGUI_STATUS::NEW_FRAME) {
-		LOG(tgfx_result_WARNING, "You have mismatching IMGUI_VK calls, NewFrame() called twice without calling Render()!");
+		printer(result_tgfx_WARNING, "You have mismatching IMGUI_VK calls, NewFrame() called twice without calling Render()!");
 		return;
 	}
 	ImGui_ImplVulkan_NewFrame();
@@ -201,7 +201,7 @@ void IMGUI_VK::UploadFontTextures() {
 	cp_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	VkCommandPool cp;
 	if (vkCreateCommandPool(RENDERGPU->LOGICALDEVICE(), &cp_ci, nullptr, &cp) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Creation of Command Pool for dear IMGUI Font Upload has failed!");
+		printer(result_tgfx_FAIL, "Creation of Command Pool for dear IMGUI Font Upload has failed!");
 	}
 
 	VkCommandBufferAllocateInfo cb_ai = {};
@@ -212,19 +212,19 @@ void IMGUI_VK::UploadFontTextures() {
 	cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	VkCommandBuffer cb;
 	if (vkAllocateCommandBuffers(RENDERGPU->LOGICALDEVICE(), &cb_ai, &cb) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Creation of Command Buffer for dear IMGUI Font Upload has failed!");
+		printer(result_tgfx_FAIL, "Creation of Command Buffer for dear IMGUI Font Upload has failed!");
 	}
 
 
 
 	if (vkResetCommandPool(RENDERGPU->LOGICALDEVICE(), cp, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Resetting of Command Pool for dear IMGUI Font Upload has failed!");
+		printer(result_tgfx_FAIL, "Resetting of Command Pool for dear IMGUI Font Upload has failed!");
 	}
 	VkCommandBufferBeginInfo begin_info = {};
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	if (vkBeginCommandBuffer(cb, &begin_info) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "vkBeginCommandBuffer() for dear IMGUI Font Upload has failed!");
+		printer(result_tgfx_FAIL, "vkBeginCommandBuffer() for dear IMGUI Font Upload has failed!");
 	}
 
 	ImGui_ImplVulkan_CreateFontsTexture(cb);
@@ -234,19 +234,19 @@ void IMGUI_VK::UploadFontTextures() {
 	end_info.commandBufferCount = 1;
 	end_info.pCommandBuffers = &cb;
 	if (vkEndCommandBuffer(cb) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "vkEndCommandBuffer() for dear IMGUI Font Upload has failed!");
+		printer(result_tgfx_FAIL, "vkEndCommandBuffer() for dear IMGUI Font Upload has failed!");
 	}
 	if (vkQueueSubmit(RENDERGPU->QUEUEFAMS()[RENDERGPU->GRAPHICSQUEUEINDEX()].Queue, 1, &end_info, VK_NULL_HANDLE) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "VkQueueSubmit() for dear IMGUI Font Upload has failed!");
+		printer(result_tgfx_FAIL, "VkQueueSubmit() for dear IMGUI Font Upload has failed!");
 	}
 
 	if (vkDeviceWaitIdle(RENDERGPU->LOGICALDEVICE()) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "vkDeviceWaitIdle() for dear IMGUI Font Upload has failed!");
+		printer(result_tgfx_FAIL, "vkDeviceWaitIdle() for dear IMGUI Font Upload has failed!");
 	}
 	ImGui_ImplVulkan_DestroyFontUploadObjects();
 
 	if (vkResetCommandPool(RENDERGPU->LOGICALDEVICE(), cp, 0) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Resetting of Command Pool for destruction of dear IMGUI Font Upload has failed!");
+		printer(result_tgfx_FAIL, "Resetting of Command Pool for destruction of dear IMGUI Font Upload has failed!");
 	}
 	vkDestroyCommandPool(RENDERGPU->LOGICALDEVICE(), cp, nullptr);
 }
@@ -266,7 +266,7 @@ static VKIMGUI_WindowManager* IMGUIWINDOWMANAGER = nullptr;
 void Run_IMGUI_WINDOWs() {
 	for (unsigned int i = 0; i < IMGUIWINDOWMANAGER->ALL_IMGUI_WINDOWs.size(); i++) {
 		tgfx_IMGUI_WINDOW* window = IMGUIWINDOWMANAGER->ALL_IMGUI_WINDOWs[i];
-		LOG(tgfx_result_SUCCESS, ("Running the Window: " + std::string(window->WindowName)).c_str());
+		printer(result_tgfx_SUCCESS, ("Running the Window: " + std::string(window->WindowName)).c_str());
 		window->RunWindow();
 	}
 
@@ -304,7 +304,7 @@ void Run_IMGUI_WINDOWs() {
 	}
 }
 void Register_WINDOW(tgfx_IMGUI_WINDOW* Window) {
-	LOG(tgfx_result_SUCCESS, "Registering a Window!");
+	printer(result_tgfx_SUCCESS, "Registering a Window!");
 	IMGUIWINDOWMANAGER->Windows_toOpen.push_back(Window);
 }
 void Delete_WINDOW(tgfx_IMGUI_WINDOW* Window) {
@@ -312,14 +312,14 @@ void Delete_WINDOW(tgfx_IMGUI_WINDOW* Window) {
 }
 
 void StartIMGUI() {
-	LOG(tgfx_result_SUCCESS, "tgfx_imguicore's constructor has finished!");
+	printer(result_tgfx_SUCCESS, "tgfx_imguicore's constructor has finished!");
 
 
 	//Create Context here!
 	IMGUI_CHECKVERSION();
 	Context = ImGui::CreateContext();
 	if (Context == nullptr) {
-		LOG(tgfx_result_FAIL, "Dear IMGUI Context is nullptr after creation!\n");
+		printer(result_tgfx_FAIL, "Dear IMGUI Context is nullptr after creation!\n");
 	}
 
 	//Set Input Handling settings here! 
@@ -343,7 +343,7 @@ void Set_as_MainViewport() {
 }
 
 void Destroy_IMGUI_Resources() {
-	LOG(tgfx_result_SUCCESS, "IMGUI resources are being destroyed!\n");
+	printer(result_tgfx_SUCCESS, "IMGUI resources are being destroyed!\n");
 	ImGui::DestroyContext();
 }
 
@@ -389,7 +389,7 @@ unsigned char Checkbox(const char* name, unsigned char* variable) {
 }
 
 unsigned char Input_Text(const char* name, char** text) {
-	LOG(tgfx_result_NOTCODED, "Vulkan::tgfx_imguicore->Input_Text() is not coded!");
+	printer(result_tgfx_NOTCODED, "Vulkan::tgfx_imguicore->Input_Text() is not coded!");
 	/*
 	if (ImGui::InputText(name, text, ImGuiInputTextFlags_EnterReturnsTrue)) {
 		return true;
@@ -418,7 +418,7 @@ unsigned char Menu_Item(const char* name) {
 }
 
 unsigned char Input_Paragraph_Text(const char* name, char** Text) {
-	LOG(tgfx_result_NOTCODED, "Vulkan::IMGUI::Input_Paragraph_Text() isn't coded!");
+	printer(result_tgfx_NOTCODED, "Vulkan::IMGUI::Input_Paragraph_Text() isn't coded!");
 	/*
 	if (ImGui::InputTextMultiline(name, Text, ImVec2(0, 0), ImGuiInputTextFlags_EnterReturnsTrue)) {
 		return true;
@@ -492,9 +492,9 @@ void CheckListBox(const char* name, Bitset items_status, const char* const* item
 			unsigned char x = GetBit_Value(items_status, i);
 			Checkbox(item_names[i], &x);
 			x ? SetBit_True(items_status, i) : SetBit_False(items_status, i);
-			LOG(tgfx_result_SUCCESS, ("Current Index: " + std::to_string(i)).c_str());
-			LOG(tgfx_result_SUCCESS, ("Current Name: " + std::string(item_names[i])).c_str());
-			LOG(tgfx_result_SUCCESS, ("Current Value: " + std::to_string(x)).c_str());
+			printer(result_tgfx_SUCCESS, ("Current Index: " + std::to_string(i)).c_str());
+			printer(result_tgfx_SUCCESS, ("Current Name: " + std::string(item_names[i])).c_str());
+			printer(result_tgfx_SUCCESS, ("Current Value: " + std::to_string(x)).c_str());
 			i++;
 		}
 		ImGui::ListBoxFooter();

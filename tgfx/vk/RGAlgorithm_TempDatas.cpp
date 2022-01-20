@@ -20,10 +20,10 @@ void VK_Submit::Invalidate() {
 void VK_Submit::Initialize(VK_CommandBuffer::CommandBufferIDType CommandBufferID, VK_RGBranch::BranchIDType FirstBranchID, SubmitIDType SubmitID) {
 #ifdef VULKAN_DEBUGGING
 	if (CommandBufferID == VK_CommandBuffer::INVALID_ID) {
-		LOG(tgfx_result_FAIL, "Please don't initialize submits with invalid command buffer id, this is not recommended!");
+		printer(result_tgfx_FAIL, "Please don't initialize submits with invalid command buffer id, this is not recommended!");
 	}
 	if (FirstBranchID == VK_RGBranch::INVALID_BRANCHID) {
-		LOG(tgfx_result_FAIL, "Please don't initialize submits with invalid branch id, this is not recommended!");
+		printer(result_tgfx_FAIL, "Please don't initialize submits with invalid branch id, this is not recommended!");
 	}
 	ID = SubmitID;
 #endif // VULKAN_DEBUGGING
@@ -55,11 +55,11 @@ bool VK_RGBranch::PrepareForNewFrame() {
 	}
 	//If the branch is workloaded
 	if (!CalculateBranchType()) {
-		LOG(tgfx_result_FAIL, "VK_RGBranch::PrepareForNewFrame() has failed at CalculateBranchType()!");
+		printer(result_tgfx_FAIL, "VK_RGBranch::PrepareForNewFrame() has failed at CalculateBranchType()!");
 		return false;
 	}
 	if (!CalculateNeededQueueFlag()) {
-		LOG(tgfx_result_FAIL, "VK_RGBranch::PrepareForNewFrame() has failed at CalculateNeededQueueFlag()!");
+		printer(result_tgfx_FAIL, "VK_RGBranch::PrepareForNewFrame() has failed at CalculateNeededQueueFlag()!");
 		return false;
 	}
 	return true;
@@ -67,7 +67,7 @@ bool VK_RGBranch::PrepareForNewFrame() {
 inline void VK_RGBranch::FindProcessibleType() {
 #ifdef VULKAN_DEBUGGING
 	if (CurrentType == BranchType::UNDEFINED) {
-		LOG(tgfx_result_FAIL, "CurrentBranchType shouldn't be UNDEFINED, there maybe a problem.");
+		printer(result_tgfx_FAIL, "CurrentBranchType shouldn't be UNDEFINED, there maybe a problem.");
 		return;
 	}
 #endif
@@ -158,33 +158,33 @@ void VK_RGBranch::Initialize(VK_RGBranch::PassIndexType passcount) {
 void VK_RGBranch::CreateVulkanObjects() {
 	if (CorePasses[0]->TYPE == PassType::WP) {
 		if (PassCount > 1) {
-			LOG(tgfx_result_FAIL, "If a branch has a window pass, it can't have any other pass!");
+			printer(result_tgfx_FAIL, "If a branch has a window pass, it can't have any other pass!");
 		}
 		return;
 	}
 }
 bool VK_RGBranch::IsValid() {
 	for (BranchIDListType i = 0; i < PenultimateSwapchainBranchCount; i++) {
-		if (PenultimateSwapchainBranches[i] == INVALID_BRANCHID) { LOG(tgfx_result_WARNING,  "Problem is in penultimate branches!");	return false; }
+		if (PenultimateSwapchainBranches[i] == INVALID_BRANCHID) { printer(result_tgfx_WARNING,  "Problem is in penultimate branches!");	return false; }
 	}
 	for (BranchIDListType i = 0; i < LaterExecutedBranchCount; i++) {
-		if (LaterExecutedBranches[i] == INVALID_BRANCHID) { LOG(tgfx_result_WARNING,  "Problem is in current frame later executed branches!");	return false; }
+		if (LaterExecutedBranches[i] == INVALID_BRANCHID) { printer(result_tgfx_WARNING,  "Problem is in current frame later executed branches!");	return false; }
 	}
 	for (BranchIDListType i = 0; i < LFDependentBranchCount; i++) {
-		if (LFDependentBranches[i] == INVALID_BRANCHID) { LOG(tgfx_result_WARNING,  "Problem is in last frame dependent branches!");	return false; }
+		if (LFDependentBranches[i] == INVALID_BRANCHID) { printer(result_tgfx_WARNING,  "Problem is in last frame dependent branches!");	return false; }
 	}
 	for (BranchIDListType i = 0; i < CFDependentBranchCount; i++) {
-		if (CFDependentBranches[i] == INVALID_BRANCHID) { LOG(tgfx_result_WARNING,  "Problem is in current frame dependent branches!");	return false; }
+		if (CFDependentBranches[i] == INVALID_BRANCHID) { printer(result_tgfx_WARNING,  "Problem is in current frame dependent branches!");	return false; }
 	}
 #ifdef VULKAN_DEBUGGING
-	if (ID == INVALID_BRANCHID) { LOG(tgfx_result_WARNING,  "Problem is in branch id!");	return false; }
+	if (ID == INVALID_BRANCHID) { printer(result_tgfx_WARNING,  "Problem is in branch id!");	return false; }
 #endif
-	if (SiblingBranchID == INVALID_BRANCHID) { LOG(tgfx_result_WARNING,  "Problem is in sibling branch id!"); return false; }
+	if (SiblingBranchID == INVALID_BRANCHID) { printer(result_tgfx_WARNING,  "Problem is in sibling branch id!"); return false; }
 
-	if (!CurrentFramePassesIndexes) { LOG(tgfx_result_WARNING,  "Problem is in CurrentFramePassesIndexes array!"); return false; };
+	if (!CurrentFramePassesIndexes) { printer(result_tgfx_WARNING,  "Problem is in CurrentFramePassesIndexes array!"); return false; };
 
-	if (!CorePasses) { LOG(tgfx_result_WARNING,  "Problem is in CorePasses array!"); return false; };
-	if (!PassCount || PassCount == PASSINDEXTYPE_INVALID) { LOG(tgfx_result_WARNING,  "Problem is in PassCount value!"); return false; };
+	if (!CorePasses) { printer(result_tgfx_WARNING,  "Problem is in CorePasses array!"); return false; };
+	if (!PassCount || PassCount == PASSINDEXTYPE_INVALID) { printer(result_tgfx_WARNING,  "Problem is in PassCount value!"); return false; };
 
 	return true;
 }
@@ -201,7 +201,7 @@ void VK_RGBranch::PushBack_CorePass(VK_Pass* PassHandle, PassType Type) {
 			return;
 		}
 	}
-	LOG(tgfx_result_FAIL, "VK_RGBranch::PushBack_CorePass() has failed! You either called it before initialization or full-filled the list!");
+	printer(result_tgfx_FAIL, "VK_RGBranch::PushBack_CorePass() has failed! You either called it before initialization or full-filled the list!");
 }
 void VK_RGBranch::SetListSizes(VK_RGBranch::BranchIDListType PenultimateDependentBranchCount_i, VK_RGBranch::BranchIDListType LFDependentBranchCount_i,
 	VK_RGBranch::BranchIDListType CFDependentBranchCount_i, VK_RGBranch::BranchIDListType CFLaterExecutedBranchCount_i) {
@@ -244,7 +244,7 @@ void VK_RGBranch::PushBack_PenultimateDependentBranch(BranchIDType BranchID) {
 			return;
 		}
 	}
-	LOG(tgfx_result_FAIL, "VK_RGBranch::PushBack_PenultimateDependentBranch() has failed! You either called it before SetListSizes or full-filled the list!");
+	printer(result_tgfx_FAIL, "VK_RGBranch::PushBack_PenultimateDependentBranch() has failed! You either called it before SetListSizes or full-filled the list!");
 	return;
 }
 void VK_RGBranch::PushBack_LFDependentBranch(BranchIDType BranchID) {
@@ -254,7 +254,7 @@ void VK_RGBranch::PushBack_LFDependentBranch(BranchIDType BranchID) {
 			return;
 		}
 	}
-	LOG(tgfx_result_FAIL, "VK_RGBranch::PushBack_LFDependentBranch() has failed! You either called it before SetListSizes or full-filled the list!");
+	printer(result_tgfx_FAIL, "VK_RGBranch::PushBack_LFDependentBranch() has failed! You either called it before SetListSizes or full-filled the list!");
 	return;
 }
 void VK_RGBranch::PushBack_CFDependentBranch(BranchIDType BranchID) {
@@ -264,7 +264,7 @@ void VK_RGBranch::PushBack_CFDependentBranch(BranchIDType BranchID) {
 			return;
 		}
 	}
-	LOG(tgfx_result_FAIL, "VK_RGBranch::PushBack_CFDependentBranch() has failed! You either called it before SetListSizes or full-filled the list!");
+	printer(result_tgfx_FAIL, "VK_RGBranch::PushBack_CFDependentBranch() has failed! You either called it before SetListSizes or full-filled the list!");
 	return;
 }
 void VK_RGBranch::PushBack_CFLaterExecutedBranch(BranchIDType BranchID) {
@@ -274,7 +274,7 @@ void VK_RGBranch::PushBack_CFLaterExecutedBranch(BranchIDType BranchID) {
 			return;
 		}
 	}
-	LOG(tgfx_result_FAIL, "VK_RGBranch::PushBack_CFLaterExecutedBranch() has failed! You either called it before SetListSizes or full-filled the list!");
+	printer(result_tgfx_FAIL, "VK_RGBranch::PushBack_CFLaterExecutedBranch() has failed! You either called it before SetListSizes or full-filled the list!");
 	return;
 }
 
@@ -362,7 +362,7 @@ bool VK_RGBranch::CalculateBranchType() {
 			if (isCFPassIndexValid(1)) {
 				crash_text.append(" And the other pass has workload too! Please report this issue!");
 			}
-			LOG(tgfx_result_FAIL, crash_text.c_str());
+			printer(result_tgfx_FAIL, crash_text.c_str());
 			CurrentType = BranchType::UNDEFINED;
 			return false;
 		}
@@ -412,7 +412,7 @@ bool VK_RGBranch::CalculateBranchType() {
 					}
 					//If it is ERROR or WindowPass, throw crashing. If there is new type of Pass, it hits here too!
 					else {
-						LOG(tgfx_result_FAIL, "There is a unsupported pass type in the branch! This shouldn't happen!");
+						printer(result_tgfx_FAIL, "There is a unsupported pass type in the branch! This shouldn't happen!");
 						return false;
 					}
 				}
@@ -438,7 +438,7 @@ bool VK_RGBranch::CalculateBranchType() {
 
 				PassType passtype = GetBranchPass_byIndex(CurrentFramePassesIndexes[PassElement])->TYPE;
 				if (passtype == PassType::WP || passtype == PassType::ERROR) {
-					LOG(tgfx_result_FAIL, "Current branch is a BusyStart_RenderBranch but it has either a WindowPass or a ERROR pass, which is undefined!");
+					printer(result_tgfx_FAIL, "Current branch is a BusyStart_RenderBranch but it has either a WindowPass or a ERROR pass, which is undefined!");
 					return false;
 				}
 			}
@@ -447,13 +447,13 @@ bool VK_RGBranch::CalculateBranchType() {
 		}
 		break;
 		default:
-			LOG(tgfx_result_FAIL, "This TP type isn't allowed in CalculateBranchType()!");
+			printer(result_tgfx_FAIL, "This TP type isn't allowed in CalculateBranchType()!");
 			return false;
 		}
 
 	}
 	if (FirstWorkloadedPass->TYPE == PassType::ERROR) {
-		LOG(tgfx_result_FAIL, "First workloaded pass is a ERROR pass, this is undefined!");
+		printer(result_tgfx_FAIL, "First workloaded pass is a ERROR pass, this is undefined!");
 		return false;
 	}
 	if (FirstWorkloadedPass->TYPE == PassType::CP ||
@@ -466,7 +466,7 @@ bool VK_RGBranch::CalculateBranchType() {
 			VK_Pass* CurrentPass = GetBranchPass_byIndex(PassElement);
 			if (CurrentPass->TYPE == PassType::WP ||
 				CurrentPass->TYPE == PassType::ERROR) {
-				LOG(tgfx_result_FAIL, "Current branch is a BusyStart_RenderBranch but it has either a WindowPass or a ERROR pass, which is undefined!");
+				printer(result_tgfx_FAIL, "Current branch is a BusyStart_RenderBranch but it has either a WindowPass or a ERROR pass, which is undefined!");
 				return false;
 			}
 		}
@@ -522,7 +522,7 @@ void VK_RGBranch::PushBack_toCFPassIndexList(PassIndexType CorePassIndex) {
 // We need to create a flag to help decide which queue the branch should be run by
 bool VK_RGBranch::CalculateNeededQueueFlag() {
 	if (CurrentType == BranchType::UNDEFINED) {
-		LOG(tgfx_result_FAIL, "VK_RGBranch::CalculateNeededQueueFlag() has failed because BranchType is UNDEFINED!");
+		printer(result_tgfx_FAIL, "VK_RGBranch::CalculateNeededQueueFlag() has failed because BranchType is UNDEFINED!");
 		return false;
 	}
 	if (CurrentType == BranchType::WindowBranch || CurrentType == BranchType::BarrierTPOnlyBranch) {
@@ -550,7 +550,7 @@ VK_RGBranch& VK_RGBranchSystem::GetBranch(VK_RGBranch::BranchIDType ID) {
 			return *BRANCHSYS->Branches[i];
 		}
 	}
-	LOG(tgfx_result_FAIL, "There is no branch that has this ID!");
+	printer(result_tgfx_FAIL, "There is no branch that has this ID!");
 }
 VK_Submit& VK_SubmitSystem::GetSubmit_byID(SubmitIDType ID) { return GetSubmit(ID); }
 VK_Submit& VK_SubmitSystem::GetSubmit(SubmitIDType ID) {
@@ -559,7 +559,7 @@ VK_Submit& VK_SubmitSystem::GetSubmit(SubmitIDType ID) {
 			return *SUBMITSYS->Submits[i];
 		}
 	}
-	LOG(tgfx_result_FAIL, "There is no submit that has this ID!");
+	printer(result_tgfx_FAIL, "There is no submit that has this ID!");
 }
 #else
 const SubmitIDType VK_Submit::Get_ID() {
@@ -567,14 +567,14 @@ const SubmitIDType VK_Submit::Get_ID() {
 }
 VK_Submit& VK_SubmitSystem::CreateSubmit(VK_CommandBuffer::CommandBufferIDType CommandBufferID, VK_RGBranch::BranchIDType FirstBranchID) {
 	VK_Submit s;
-	LOG(tgfx_result_NOTCODED, "CreateSubmit isn't coded!", true);
+	printer(result_tgfx_NOTCODED, "CreateSubmit isn't coded!", true);
 	return s;
 }
 
 void VK_RGBranchSystem::SortByID() {}
 void VK_SubmitSystem::SortByID() {}
 VK_RGBranch& VK_RGBranchSystem::GetBranch_byID(VK_RGBranch::BranchIDType ID) { return *((VK_RGBranch*)ID); }
-VK_Submit& VK_SubmitSystem::GetSubmit_byID(SubmitIDType ID) { LOG(tgfx_result_FAIL, "GetSubmit_byID()'nin pointer d�nd�rmesi saglanmali, hatta diger bircok get'in de. Cunku validation yapamiyorum."); return *((VK_Submit*)ID); }
+VK_Submit& VK_SubmitSystem::GetSubmit_byID(SubmitIDType ID) { printer(result_tgfx_FAIL, "GetSubmit_byID()'nin pointer d�nd�rmesi saglanmali, hatta diger bircok get'in de. Cunku validation yapamiyorum."); return *((VK_Submit*)ID); }
 #endif // VULKAN_DEBUGGING
 
 

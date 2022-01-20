@@ -22,6 +22,7 @@ struct gpu_public;
 extern gpu_public* rendergpu;
 typedef struct threadingsys_tapi threadingsys_tapi;
 extern threadingsys_tapi* threadingsys;
+extern unsigned int threadcount;
 struct allocatorsys_vk;
 extern allocatorsys_vk* allocatorsys;
 struct queuesys_vk;

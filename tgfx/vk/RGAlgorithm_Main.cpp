@@ -46,7 +46,7 @@ void Renderer::Start_RenderGraphConstruction() {
 	VKContentManager->Resource_Finalizations();
 
 	if (VKRENDERER->RG_Status == RenderGraphStatus::FinishConstructionCalled || VKRENDERER->RG_Status == RenderGraphStatus::StartedConstruction) {
-		LOG(tgfx_result_FAIL, "GFXRENDERER->Start_RenderGraphCreation() has failed because you have wrong function call order!"); return;
+		printer(result_tgfx_FAIL, "GFXRENDERER->Start_RenderGraphCreation() has failed because you have wrong function call order!"); return;
 	}
 	VKRENDERER->RG_Status = RenderGraphStatus::StartedConstruction;
 }
@@ -60,7 +60,7 @@ void Renderer::Start_RenderGraphConstruction() {
 */
 unsigned char Renderer::Finish_RenderGraphConstruction(tgfx_subdrawpass IMGUI_Subpass) {
 	if (VKRENDERER->RG_Status != RenderGraphStatus::StartedConstruction) {
-		LOG(tgfx_result_FAIL, "VulkanRenderer->Finish_RenderGraphCreation() has failed because you didn't call Start_RenderGraphConstruction() before!");
+		printer(result_tgfx_FAIL, "VulkanRenderer->Finish_RenderGraphCreation() has failed because you didn't call Start_RenderGraphConstruction() before!");
 		return false;
 	}
 
@@ -69,7 +69,7 @@ unsigned char Renderer::Finish_RenderGraphConstruction(tgfx_subdrawpass IMGUI_Su
 		unsigned long long duration = 0;
 		TURAN_PROFILE_SCOPE_MCS("Checking Wait Handles of RenderNodes", &duration)
 			if (!Check_WaitHandles()) {
-				LOG(tgfx_result_FAIL, "VulkanRenderer->Finish_RenderGraphConstruction() has failed because some wait handles have issues!");
+				printer(result_tgfx_FAIL, "VulkanRenderer->Finish_RenderGraphConstruction() has failed because some wait handles have issues!");
 				VKRENDERER->RG_Status = RenderGraphStatus::Invalid;	//User can change only waits of a pass, so all rendergraph falls to invalid in this case
 				//It needs to be reconstructed by calling Start_RenderGraphConstruction()
 				return false;
@@ -91,7 +91,7 @@ unsigned char Renderer::Finish_RenderGraphConstruction(tgfx_subdrawpass IMGUI_Su
 		if (IMGUI_Subpass) {
 			//If subdrawpass has only one color slot, return false
 			if (((drawpass_vk*)((VK_SubDrawPass*)IMGUI_Subpass)->DrawPass)->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT != 1) {
-				LOG(tgfx_result_FAIL, "The Drawpass that's gonna render dear IMGUI should only have one color slot!");
+				printer(result_tgfx_FAIL, "The Drawpass that's gonna render dear IMGUI should only have one color slot!");
 				VKRENDERER->RG_Status = RenderGraphStatus::Invalid;	//User can delete a draw pass, dear Imgui fails in this case.
 				//To avoid this, it needs to be reconstructed by calling Start_RenderGraphConstruction()
 				return false;
@@ -112,7 +112,7 @@ unsigned char Renderer::Finish_RenderGraphConstruction(tgfx_subdrawpass IMGUI_Su
 				descpool_ci.pPoolSizes = pool_sizes;
 				descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 				if (vkCreateDescriptorPool(RENDERGPU->LOGICALDEVICE(), &descpool_ci, nullptr, &VKRENDERER->IMGUIPOOL) != VK_SUCCESS) {
-					LOG(tgfx_result_FAIL, "Creating a descriptor pool for dear IMGUI has failed!");
+					printer(result_tgfx_FAIL, "Creating a descriptor pool for dear IMGUI has failed!");
 					return false;
 				}
 
@@ -143,7 +143,7 @@ bool Renderer::Execute_RenderGraph() {
 	{
 	case RenderGraphStatus::Invalid:
 	case RenderGraphStatus::StartedConstruction:
-		LOG(tgfx_result_FAIL, "VulkanRenderer:Execute_RenderGraph() has failed because your rendergraph is either invalid or Finish_RenderGraphConstruction() isn't called!");
+		printer(result_tgfx_FAIL, "VulkanRenderer:Execute_RenderGraph() has failed because your rendergraph is either invalid or Finish_RenderGraphConstruction() isn't called!");
 		return false;
 	case RenderGraphStatus::FinishConstructionCalled:
 		Create_FrameGraphs();
@@ -172,7 +172,7 @@ bool Renderer::Execute_RenderGraph() {
 		CreateSubmits_Fast(Current_FrameGraph, Last_FrameGraph);
 		break;
 	default:
-		LOG(tgfx_result_FAIL, "VulkanRenderer:Execute_RenderGraph() has failed because rendergraph's status isn't supported!");
+		printer(result_tgfx_FAIL, "VulkanRenderer:Execute_RenderGraph() has failed because rendergraph's status isn't supported!");
 		return false;
 	}
 

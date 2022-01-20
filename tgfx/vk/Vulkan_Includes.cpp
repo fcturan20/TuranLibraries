@@ -65,22 +65,22 @@ tgfx_initializationsecondstageinfo Create_GFXInitializationSecondStageInfo(tgfx_
 void Destroy_ExtensionData(tgfx_extension EXT) {
 #ifdef VULKAN_DEBUGGING
 	if (EXT == nullptr) {
-		LOG(tgfx_result_FAIL, "You're trying to destroy a null pointer as extension, this should be avoided if you use release build!");
+		printer(result_tgfx_FAIL, "You're trying to destroy a null pointer as extension, this should be avoided if you use release build!");
 		return;
 	}
 	if (EXT == VKCORE->TGFXCORE.INVALIDHANDLE) {
-		LOG(tgfx_result_FAIL, "You're trying to destroy a invalidterminator as extension, this should be avoided if you use release build!");
+		printer(result_tgfx_FAIL, "You're trying to destroy a invalidterminator as extension, this should be avoided if you use release build!");
 		return;
 	}
 #endif
 	VK_Extension* VKEXT = (VK_Extension*)EXT;
 #ifdef VULKAN_DEBUGGING
 	if (VKEXT->DATA == nullptr || VKEXT->TYPE == VK_Extension::EXTTYPE::UNDEFINED) {
-		LOG(tgfx_result_FAIL, "You're trying to destroy an extensions that's already destroyed, this should be avoided if you use release build!");
+		printer(result_tgfx_FAIL, "You're trying to destroy an extensions that's already destroyed, this should be avoided if you use release build!");
 		return;
 	}
 	if (VKEXT->DATA == VKCORE->TGFXCORE.INVALIDHANDLE) {
-		LOG(tgfx_result_FAIL, "You probably tried to change the data extension handle's pointing at, this may cause undefined behaviour and should be avoided if you use release build!");
+		printer(result_tgfx_FAIL, "You probably tried to change the data extension handle's pointing at, this may cause undefined behaviour and should be avoided if you use release build!");
 		return;
 	}
 #endif
@@ -143,7 +143,7 @@ tgfx_initializationsecondstageinfo Create_GFXInitializationSecondStageInfo(tgfx_
 	unsigned int MAXDESC_STORAGEBUFFER = MaxSumMaterial_StorageBuffer + GlobalShaderInput_StorageBufferCount;
 	if (MAXDESC_SAMPLEDTEXTURE > VKGPU->ExtensionRelatedDatas.GETMAXDESC(DescType::SAMPLER) || MAXDESC_IMAGETEXTURE > VKGPU->ExtensionRelatedDatas.GETMAXDESC(DescType::IMAGE) ||
 		MAXDESC_UNIFORMBUFFER > VKGPU->ExtensionRelatedDatas.GETMAXDESC(DescType::UBUFFER) || MAXDESC_STORAGEBUFFER > VKGPU->ExtensionRelatedDatas.GETMAXDESC(DescType::SBUFFER)) {
-		LOG(tgfx_result_FAIL, "One of the shader input types exceeds the GPU's limits. Don't forget that Global + General + Per Instance shouldn't exceed GPU's related shader input type limits!");
+		printer(result_tgfx_FAIL, "One of the shader input types exceeds the GPU's limits. Don't forget that Global + General + Per Instance shouldn't exceed GPU's related shader input type limits!");
 		return nullptr;
 	}
 	
@@ -168,17 +168,17 @@ tgfx_initializationsecondstageinfo Create_GFXInitializationSecondStageInfo(tgfx_
 
 unsigned char GetTextureTypeLimits(tgfx_texture_dimensions dims, tgfx_texture_order dataorder, tgfx_texture_channels channeltype,
 	tgfx_textureusageflag usageflag, tgfx_gpu GPUHandle, unsigned int* MAXWIDTH, unsigned int* MAXHEIGHT, unsigned int* MAXDEPTH, unsigned int* MAXMIPLEVEL) {
-	LOG(tgfx_result_NOTCODED, "Vulkan backend's GetTextureTypeLimits() isn't coded yet!");
-	LOG(tgfx_result_SUCCESS, "Before vkGetPhysicalDeviceImageFormatProperties()!");
+	printer(result_tgfx_NOTCODED, "Vulkan backend's GetTextureTypeLimits() isn't coded yet!");
+	printer(result_tgfx_SUCCESS, "Before vkGetPhysicalDeviceImageFormatProperties()!");
 	VkImageFormatProperties props = {};
 	/*
 	if (vkGetPhysicalDeviceImageFormatProperties(RENDERGPU->Physical_Device, Find_VkFormat_byTEXTURECHANNELs(channeltype),
 		Find_VkImageType(dims), Find_VkTiling(dataorder), Find_VKImageUsage_forGFXTextureDesc(*(VkImageUsageFlags*)usageflag, channeltype),
 		0, &props) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "GFX->GetTextureTypeLimits() has failed!");
+		printer(result_tgfx_FAIL, "GFX->GetTextureTypeLimits() has failed!");
 		return false;
 	}*/
-	LOG(tgfx_result_SUCCESS, "After vkGetPhysicalDeviceImageFormatProperties()!");
+	printer(result_tgfx_SUCCESS, "After vkGetPhysicalDeviceImageFormatProperties()!");
 
 	*MAXWIDTH = props.maxExtent.width;
 	*MAXHEIGHT = props.maxExtent.height;
@@ -188,15 +188,15 @@ unsigned char GetTextureTypeLimits(tgfx_texture_dimensions dims, tgfx_texture_or
 }
 bool GetTextureTypeLimits(tgfx_texture_dimensions dims, tgfx_texture_order dataorder, tgfx_texture_channels channeltype,
 	tgfx_textureusageflag usageflag, unsigned int GPUIndex, unsigned int& MAXWIDTH, unsigned int& MAXHEIGHT, unsigned int& MAXDEPTH, unsigned int& MAXMIPLEVEL) {
-	LOG(tgfx_result_SUCCESS, "Before vkGetPhysicalDeviceImageFormatProperties()!");
+	printer(result_tgfx_SUCCESS, "Before vkGetPhysicalDeviceImageFormatProperties()!");
 	VkImageFormatProperties props;
 	if (vkGetPhysicalDeviceImageFormatProperties(RENDERGPU->PHYSICALDEVICE(), Find_VkFormat_byTEXTURECHANNELs(channeltype),
 		Find_VkImageType(dims), Find_VkTiling(dataorder), *(VkImageUsageFlags*)usageflag,
 		0, &props) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "(GFX->GetTextureTypeLimits() has failed!");
+		printer(result_tgfx_FAIL, "(GFX->GetTextureTypeLimits() has failed!");
 			return false;
 	}
-	LOG(tgfx_result_SUCCESS, "After vkGetPhysicalDeviceImageFormatProperties()!");
+	printer(result_tgfx_SUCCESS, "After vkGetPhysicalDeviceImageFormatProperties()!");
 
 	MAXWIDTH = props.maxExtent.width;
 	MAXHEIGHT = props.maxExtent.height;
@@ -233,19 +233,19 @@ void GetSupportedAllocations_ofTexture(unsigned int GPUIndex, unsigned int* Supp
 	im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
 
-	LOG(tgfx_result_SUCCESS, "Before vkCreateImage()!");
+	printer(result_tgfx_SUCCESS, "Before vkCreateImage()!");
 	VkImage Imageobj;
 	if (vkCreateImage(GPU_TO_RENDER->Logical_Device, &im_ci, nullptr, &Imageobj) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "GFX->IsTextureSupported() has failed in vkCreateImage()!");
+		printer(result_tgfx_FAIL, "GFX->IsTextureSupported() has failed in vkCreateImage()!");
 			return;
 	}
-	LOG(tgfx_result_SUCCESS, "After vkCreateImage()!");
+	printer(result_tgfx_SUCCESS, "After vkCreateImage()!");
 
 	VkMemoryRequirements req;
 	vkGetImageMemoryRequirements(GPU_TO_RENDER->Logical_Device, Imageobj, &req);
-	LOG(tgfx_result_SUCCESS, "After vkGetImageMemoryRequirements()!");
+	printer(result_tgfx_SUCCESS, "After vkGetImageMemoryRequirements()!");
 	vkDestroyImage(GPU_TO_RENDER->Logical_Device, Imageobj, nullptr);
-	LOG(tgfx_result_SUCCESS, "After vkDestroyImage()!");
+	printer(result_tgfx_SUCCESS, "After vkDestroyImage()!");
 	bool isFound = false;
 	for (unsigned int GFXMemoryTypeIndex = 0; GFXMemoryTypeIndex < GPU_TO_RENDER->ALLOCs.size(); GFXMemoryTypeIndex++) {
 		VK_MemoryAllocation& ALLOC = GPU_TO_RENDER->ALLOCs[GFXMemoryTypeIndex];
@@ -255,7 +255,7 @@ void GetSupportedAllocations_ofTexture(unsigned int GPUIndex, unsigned int* Supp
 		}
 	}
 	if (!isFound) {
-		LOG(tgfx_result_FAIL, "(Your image is supported by a memory allocation that GFX API doesn't support to allocate, please report this issue!");
+		printer(result_tgfx_FAIL, "(Your image is supported by a memory allocation that GFX API doesn't support to allocate, please report this issue!");
 	}
 }
 void GetSupportedAllocations_ofTexture(const tgfx_texture_Description& TEXTURE, unsigned int GPUIndex, unsigned int& SupportedMemoryTypesBitset) {
@@ -286,19 +286,19 @@ void GetSupportedAllocations_ofTexture(const tgfx_texture_Description& TEXTURE, 
 	im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
 
-	LOG(tgfx_result_SUCCESS, "Before vkCreateImage()!");
+	printer(result_tgfx_SUCCESS, "Before vkCreateImage()!");
 	VkImage Imageobj;
 	if (vkCreateImage(GPU_TO_RENDER->Logical_Device, &im_ci, nullptr, &Imageobj) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "(GFX->IsTextureSupported() has failed in vkCreateImage()!");
+		printer(result_tgfx_FAIL, "(GFX->IsTextureSupported() has failed in vkCreateImage()!");
 			return;
 	}
-	LOG(tgfx_result_SUCCESS, "After vkCreateImage()!");
+	printer(result_tgfx_SUCCESS, "After vkCreateImage()!");
 
 	VkMemoryRequirements req;
 	vkGetImageMemoryRequirements(GPU_TO_RENDER->Logical_Device, Imageobj, &req);
-	LOG(tgfx_result_SUCCESS, "After vkGetImageMemoryRequirements()!");
+	printer(result_tgfx_SUCCESS, "After vkGetImageMemoryRequirements()!");
 	vkDestroyImage(GPU_TO_RENDER->Logical_Device, Imageobj, nullptr);
-	LOG(tgfx_result_SUCCESS, "After vkDestroyImage()!");
+	printer(result_tgfx_SUCCESS, "After vkDestroyImage()!");
 	bool isFound = false;
 	for (unsigned int GFXMemoryTypeIndex = 0; GFXMemoryTypeIndex < GPU_TO_RENDER->ALLOCs.size(); GFXMemoryTypeIndex++) {
 		VK_MemoryAllocation& ALLOC = GPU_TO_RENDER->ALLOCs[GFXMemoryTypeIndex];
@@ -308,7 +308,7 @@ void GetSupportedAllocations_ofTexture(const tgfx_texture_Description& TEXTURE, 
 		}
 	}
 	if (!isFound) {
-		LOG(tgfx_result_FAIL, "(Your image is supported by a memory allocation that GFX API doesn't support to allocate, please report this issue!");
+		printer(result_tgfx_FAIL, "(Your image is supported by a memory allocation that GFX API doesn't support to allocate, please report this issue!");
 	}
 }*/
 
@@ -335,11 +335,11 @@ void GetGPUInfo_General(tgfx_gpu GPUHandle, const char** NAME, unsigned int* API
 void GetGPUInfo_Memory(tgfx_memorytype MemoryType, tgfx_memoryallocationtype* AllocType, unsigned long long* MaxAllocSize) {
 #ifdef VULKAN_DEBUGGING
 	if (MemoryType == nullptr) {
-		LOG(tgfx_result_FAIL, "GetGPUInfo_Memory() has failed because MemoryType handle is nullptr! You should avoid this in release build!");
+		printer(result_tgfx_FAIL, "GetGPUInfo_Memory() has failed because MemoryType handle is nullptr! You should avoid this in release build!");
 		return;
 	}
 	if (MemoryType == VKCORE->TGFXCORE.INVALIDHANDLE) {
-		LOG(tgfx_result_FAIL, "GetGPUInfo_Memory() has failed because MemoryType handle is invalid handle (terminator)! You should avoid this in release build!");
+		printer(result_tgfx_FAIL, "GetGPUInfo_Memory() has failed because MemoryType handle is invalid handle (terminator)! You should avoid this in release build!");
 		return;
 	}
 #endif
@@ -350,7 +350,7 @@ void GetGPUInfo_Memory(tgfx_memorytype MemoryType, tgfx_memoryallocationtype* Al
 tgfx_result SetMemoryTypeInfo(tgfx_memorytype GPUMemoryType, unsigned long long AllocationSize, tgfx_extension_list Extensions) {
 	VK_MemoryAllocation* ALLOC = (VK_MemoryAllocation*)GPUMemoryType;
 	if (AllocationSize > ALLOC->MaxSize) {
-		LOG(tgfx_result_INVALIDARGUMENT, "SetMemoryTypeInfo() has failed because allocation size can't be larger than maximum size!");
+		printer(result_tgfx_INVALIDARGUMENT, "SetMemoryTypeInfo() has failed because allocation size can't be larger than maximum size!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	ALLOC->ALLOCATIONSIZE = AllocationSize;
@@ -375,7 +375,7 @@ void VK_SemaphoreSystem::DestroySemaphore(VK_Semaphore::SemaphoreIDType Semaphor
 #ifdef VULKAN_DEBUGGING
 	VK_Semaphore& Semaphore = GetSemaphore(SemaphoreID);
 	if (Semaphore.ID == VK_Semaphore::INVALID_ID) {
-		LOG(tgfx_result_FAIL, "Vulkan backend couldn't find the semaphore in DestroySemaphore() function!");
+		printer(result_tgfx_FAIL, "Vulkan backend couldn't find the semaphore in DestroySemaphore() function!");
 		return;
 	}
 	Semaphore.isUsed = false;
@@ -407,12 +407,12 @@ VK_Semaphore& VK_SemaphoreSystem::Create_Semaphore() {
 
 	VkSemaphore vksemp = VK_NULL_HANDLE;
 	if (vkCreateSemaphore(RENDERGPU->LOGICALDEVICE(), &Semaphore_ci, nullptr, &vksemp) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Window creation has failed while creating semaphores for each swapchain texture!");
+		printer(result_tgfx_FAIL, "Window creation has failed while creating semaphores for each swapchain texture!");
 		return *SEMAPHORESYS->Semaphores[0];
 	}
 #ifdef VULKAN_DEBUGGING
 	if (vksemp == VK_NULL_HANDLE) {
-		LOG(tgfx_result_FAIL, "vkCreateSemaphore() has failed!");
+		printer(result_tgfx_FAIL, "vkCreateSemaphore() has failed!");
 		return *SEMAPHORESYS->Semaphores[0];
 	}
 #endif
@@ -426,7 +426,7 @@ VK_Semaphore& VK_SemaphoreSystem::Create_Semaphore() {
 	SEMAPHORESYS->Semaphores.push_back(NewSemaphore);
 	return *NewSemaphore;
 }
-void VK_SemaphoreSystem::ClearList() { LOG(tgfx_result_NOTCODED, "SemaphoreSys->ClearList() isn't coded!"); }
+void VK_SemaphoreSystem::ClearList() { printer(result_tgfx_NOTCODED, "SemaphoreSys->ClearList() isn't coded!"); }
 
 
 #ifdef VULKAN_DEBUGGING
@@ -436,7 +436,7 @@ VK_Semaphore& VK_SemaphoreSystem::GetSemaphore(VK_Semaphore::SemaphoreIDType ID)
 			return *SEMAPHORESYS->Semaphores[i];
 		}
 	}
-	LOG(tgfx_result_FAIL, "There is no semaphore that has this ID! Invalid Semaphore has been returned!");
+	printer(result_tgfx_FAIL, "There is no semaphore that has this ID! Invalid Semaphore has been returned!");
 	return *SEMAPHORESYS->Semaphores[0];
 }
 #endif
@@ -455,11 +455,11 @@ VK_QUEUEFLAG VK_QUEUEFLAG::CreateInvalidNullFlag() {
 }
 bool VK_QUEUEFLAG::isFlagValid() const {
 	if (doesntNeedAnything && (is_GRAPHICSsupported || is_COMPUTEsupported || is_PRESENTATIONsupported || is_TRANSFERsupported)) {
-		LOG(tgfx_result_FAIL, "(This flag doesn't need anything but it also needs something, this shouldn't happen!");
+		printer(result_tgfx_FAIL, "(This flag doesn't need anything but it also needs something, this shouldn't happen!");
 			return false;
 	}
 	if (!doesntNeedAnything && !is_GRAPHICSsupported && !is_COMPUTEsupported && !is_PRESENTATIONsupported && !is_TRANSFERsupported) {
-		LOG(tgfx_result_FAIL, "(This flag needs something but it doesn't support anything");
+		printer(result_tgfx_FAIL, "(This flag needs something but it doesn't support anything");
 			return false;
 	}
 	return true;
@@ -540,7 +540,7 @@ void GPU::Analize_PhysicalDeviceMemoryProperties() {
 				alloc.MaxSize = MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
 				ALLOCs.push_back(alloc);
 
-				LOG(tgfx_result_SUCCESS, ("Found FAST HOST VISIBLE BIT! Size: " + std::to_string(MemoryProperties.memoryHeaps[MemoryType.heapIndex].size)).c_str());
+				printer(result_tgfx_SUCCESS, ("Found FAST HOST VISIBLE BIT! Size: " + std::to_string(MemoryProperties.memoryHeaps[MemoryType.heapIndex].size)).c_str());
 			}
 			else {
 				VK_MemoryAllocation alloc;
@@ -548,7 +548,7 @@ void GPU::Analize_PhysicalDeviceMemoryProperties() {
 				alloc.MaxSize = MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
 				alloc.MemoryTypeIndex = MemoryTypeIndex;
 				ALLOCs.push_back(alloc);
-				LOG(tgfx_result_SUCCESS, ("Found DEVICE LOCAL BIT! Size: " + std::to_string(MemoryProperties.memoryHeaps[MemoryType.heapIndex].size)).c_str());
+				printer(result_tgfx_SUCCESS, ("Found DEVICE LOCAL BIT! Size: " + std::to_string(MemoryProperties.memoryHeaps[MemoryType.heapIndex].size)).c_str());
 			}
 		}
 		else if (isHostVisible && isHostCoherent) {
@@ -558,7 +558,7 @@ void GPU::Analize_PhysicalDeviceMemoryProperties() {
 				alloc.MaxSize = MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
 				alloc.TYPE = tgfx_memoryallocationtype::READBACK;
 				ALLOCs.push_back(alloc);
-				LOG(tgfx_result_SUCCESS, ("Found READBACK BIT! Size: " + std::to_string(MemoryProperties.memoryHeaps[MemoryType.heapIndex].size)).c_str());
+				printer(result_tgfx_SUCCESS, ("Found READBACK BIT! Size: " + std::to_string(MemoryProperties.memoryHeaps[MemoryType.heapIndex].size)).c_str());
 			}
 			else {
 				VK_MemoryAllocation alloc;
@@ -566,7 +566,7 @@ void GPU::Analize_PhysicalDeviceMemoryProperties() {
 				alloc.MaxSize = MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
 				alloc.TYPE = tgfx_memoryallocationtype::HOSTVISIBLE;
 				ALLOCs.push_back(alloc);
-				LOG(tgfx_result_SUCCESS, ("Found HOST VISIBLE BIT! Size: " + std::to_string(MemoryProperties.memoryHeaps[MemoryType.heapIndex].size)).c_str());
+				printer(result_tgfx_SUCCESS, ("Found HOST VISIBLE BIT! Size: " + std::to_string(MemoryProperties.memoryHeaps[MemoryType.heapIndex].size)).c_str());
 			}
 		}
 	}
@@ -574,7 +574,7 @@ void GPU::Analize_PhysicalDeviceMemoryProperties() {
 void GPU::Analize_Queues() {
 
 	if (GRAPHICS_QUEUEFamIndex == UINT32_MAX || !TRANSFERs_supportedqueuecount || !COMPUTE_supportedqueuecount) {
-		LOG(tgfx_result_FAIL, "The GPU doesn't support one of the following operations, so we can't let you use this GPU: Compute, Transfer, Graphics");
+		printer(result_tgfx_FAIL, "The GPU doesn't support one of the following operations, so we can't let you use this GPU: Compute, Transfer, Graphics");
 		return;
 	}
 }
@@ -589,7 +589,7 @@ const char* GPU::Convert_VendorID_toaString(uint32_t VendorID){
 	case 0x13B5:
 		return "ARM";
 	default:
-		LOG(tgfx_result_FAIL, "(Vulkan_Core::Check_Computer_Specs failed to find GPU's Vendor, Vendor ID is: " + VendorID);
+		printer(result_tgfx_FAIL, "(Vulkan_Core::Check_Computer_Specs failed to find GPU's Vendor, Vendor ID is: " + VendorID);
 		return "NULL";
 	}
 }
@@ -607,7 +607,7 @@ inline bool IsExtensionSupported(const char* ExtensionName, VkExtensionPropertie
 			return true;
 		}
 	}
-	LOG(tgfx_result_WARNING, ("Extension: " + std::string(ExtensionName) + " is not supported by the GPU!").c_str());
+	printer(result_tgfx_WARNING, ("Extension: " + std::string(ExtensionName) + " is not supported by the GPU!").c_str());
 	return false;
 }
 //Some features needs device extensions, so check if they're supported here
@@ -638,7 +638,7 @@ void GPU::Activate_DeviceExtensions() {
 		Active_DeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 	}
 	else {
-		LOG(tgfx_result_WARNING, "Current GPU doesn't support to display a swapchain, so you shouldn't use any window related functionality such as: GFXRENDERER->Create_WindowPass, GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
+		printer(result_tgfx_WARNING, "Current GPU doesn't support to display a swapchain, so you shouldn't use any window related functionality such as: GFXRENDERER->Create_WindowPass, GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
 	}
 
 
@@ -754,7 +754,7 @@ GPU::GPU(VkPhysicalDevice PhyDevice) : Physical_Device(PhyDevice) {
 		GPUTYPE = tgfx_INTEGRATED_GPU;
 		break;
 	default:
-		LOG(tgfx_result_FAIL, ("Vulkan_Core::Check_Computer_Specs failed to find GPU's Type (Only Discrete and Integrated GPUs supported!), Type is:" +
+		printer(result_tgfx_FAIL, ("Vulkan_Core::Check_Computer_Specs failed to find GPU's Type (Only Discrete and Integrated GPUs supported!), Type is:" +
 			std::to_string(Device_Properties.deviceType)).c_str());
 		break;
 	}
@@ -786,7 +786,7 @@ GPU::GPU(VkPhysicalDevice PhyDevice) : Physical_Device(PhyDevice) {
 	Logical_Device_CreationInfo.pQueueCreateInfos = QueueCreationInfos.data();
 	Logical_Device_CreationInfo.queueCreateInfoCount = static_cast<uint32_t>(QueueCreationInfos.size());
 	Activate_DeviceExtensions();
-	LOG(tgfx_result_SUCCESS, "Activated Device Extensions");
+	printer(result_tgfx_SUCCESS, "Activated Device Extensions");
 	//This is to destroy datas of extending features
 	DeviceExtendedFeatures extendedfeatures;
 	Activate_DeviceFeatures(Logical_Device_CreationInfo, extendedfeatures);
@@ -799,18 +799,18 @@ GPU::GPU(VkPhysicalDevice PhyDevice) : Physical_Device(PhyDevice) {
 
 	if (Device_Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
 		if (vkCreateDevice(Physical_Device, &Logical_Device_CreationInfo, nullptr, &Logical_Device) != VK_SUCCESS) {
-			LOG(tgfx_result_SUCCESS, "Vulkan failed to create a Logical Device!");
+			printer(result_tgfx_SUCCESS, "Vulkan failed to create a Logical Device!");
 			return;
 		}
-		LOG(tgfx_result_SUCCESS, "After vkCreateDevice()");
+		printer(result_tgfx_SUCCESS, "After vkCreateDevice()");
 
 		AllQueueFamilies = new uint32_t[QueueFamiliesCount];
 		SortedQUEUEFAMsLIST = new unsigned int[QueueFamiliesCount];
 		for (unsigned int QueueFamIndex = 0; QueueFamIndex < QueueFamiliesCount; QueueFamIndex++) {
-			LOG(tgfx_result_SUCCESS, ("Queue Family Index: " + std::to_string(QueueFamIndex)).c_str());
+			printer(result_tgfx_SUCCESS, ("Queue Family Index: " + std::to_string(QueueFamIndex)).c_str());
 			std::vector<VkQueue> QueueList(QueueFamilyProperties[QueueFamIndex].queueCount);
 			vkGetDeviceQueue(Logical_Device, QueueFamIndex, 0, QueueList.data());
-			LOG(tgfx_result_SUCCESS, ("After vkGetDeviceQueue() " + std::to_string(QueueFamIndex)).c_str());
+			printer(result_tgfx_SUCCESS, ("After vkGetDeviceQueue() " + std::to_string(QueueFamIndex)).c_str());
 			QUEUEFAMs[QueueFamIndex].Initialize(QueueFamilyProperties[QueueFamIndex], QueueFamIndex, QueueList);
 			AllQueueFamilies[QueueFamIndex] = QueueFamIndex;
 		}
@@ -844,22 +844,22 @@ GPU::GPU(VkPhysicalDevice PhyDevice) : Physical_Device(PhyDevice) {
 		}
 
 
-		LOG(tgfx_result_SUCCESS, "After vkGetDeviceQueue()");
-		LOG(tgfx_result_SUCCESS, "Vulkan created a Logical Device!");
+		printer(result_tgfx_SUCCESS, "After vkGetDeviceQueue()");
+		printer(result_tgfx_SUCCESS, "Vulkan created a Logical Device!");
 
 		Check_DeviceLimits();
-		LOG(tgfx_result_SUCCESS, "After Check_DeviceLimits()");
+		printer(result_tgfx_SUCCESS, "After Check_DeviceLimits()");
 
 		VKCORE->DEVICE_GPUs.push_back(this);
 	}
 	else {
-		LOG(tgfx_result_WARNING, "RenderDoc doesn't support to create multiple vkDevices, so Device object isn't created for non-Discrete GPUs!");
+		printer(result_tgfx_WARNING, "RenderDoc doesn't support to create multiple vkDevices, so Device object isn't created for non-Discrete GPUs!");
 	}
 
 }
 VK_QUEUEFAM* GPU::Find_BestQueue(const VK_QUEUEFLAG& Flag) {
 	if (!Flag.isFlagValid()) {
-		LOG(tgfx_result_FAIL, "(Find_BestQueue() has failed because flag is invalid!");
+		printer(result_tgfx_FAIL, "(Find_BestQueue() has failed because flag is invalid!");
 			return nullptr;
 	}
 	if (Flag.doesntNeedAnything) {
@@ -881,7 +881,7 @@ VK_QUEUEFAM* GPU::Find_BestQueue(const VK_QUEUEFLAG& Flag) {
 bool GPU::DoesQueue_Support(const VK_QUEUEFAM* QUEUEFAM, const VK_QUEUEFLAG& Flag) const  {
 	const VK_QUEUEFLAG& supportflag = QUEUEFAM->QUEUEFLAG();
 	if (Flag.doesntNeedAnything) {
-		LOG(tgfx_result_FAIL, "(You should handle this type of flag in a special way, don't call this function for this type of flag!");
+		printer(result_tgfx_FAIL, "(You should handle this type of flag in a special way, don't call this function for this type of flag!");
 			return false;
 	}
 	if (Flag.is_COMPUTEsupported && !supportflag.is_COMPUTEsupported) {
@@ -954,7 +954,7 @@ void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref
 			Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
 			break;
 		default:
-			LOG(tgfx_result_INVALIDARGUMENT, "VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthBuffer!");
+			printer(result_tgfx_INVALIDARGUMENT, "VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthBuffer!");
 		}
 	}
 	else if (channels == tgfx_texture_channels_D24S8) {
@@ -989,7 +989,7 @@ void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref
 			}
 			break;
 		default:
-			LOG(tgfx_result_INVALIDARGUMENT, "VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthSTENCILBuffer!");
+			printer(result_tgfx_INVALIDARGUMENT, "VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthSTENCILBuffer!");
 		}
 	}
 }
@@ -1106,7 +1106,7 @@ VkFormat Find_VkFormat_byDataType(tgfx_datatype datatype) {
 	case tgfx_datatype_VAR_VEC4:
 		return VK_FORMAT_R32G32B32A32_SFLOAT;
 	default:
-		LOG(tgfx_result_FAIL, "(Find_VkFormat_byDataType() doesn't support this data type! UNDEFINED");
+		printer(result_tgfx_FAIL, "(Find_VkFormat_byDataType() doesn't support this data type! UNDEFINED");
 			return VK_FORMAT_UNDEFINED;
 	}
 }
@@ -1129,7 +1129,7 @@ VkFormat Find_VkFormat_byTEXTURECHANNELs(tgfx_texture_channels channels) {
 	case tgfx_texture_channels_D24S8:
 		return VK_FORMAT_D24_UNORM_S8_UINT;
 	default:
-		LOG(tgfx_result_FAIL, "(Find_VkFormat_byTEXTURECHANNELs doesn't support this type of channel!");
+		printer(result_tgfx_FAIL, "(Find_VkFormat_byTEXTURECHANNELs doesn't support this type of channel!");
 			return VK_FORMAT_UNDEFINED;
 	}
 }
@@ -1148,9 +1148,9 @@ VkDescriptorType Find_VkDescType_byMATDATATYPE(tgfx_shaderinput_type TYPE) {
 	case tgfx_shaderinput_type_IMAGE_PI:
 		return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	case tgfx_shaderinput_type_UNDEFINED:
-		LOG(tgfx_result_FAIL, "(Find_VkDescType_byMATDATATYPE() has failed because SHADERINPUT_TYPE = UNDEFINED!");
+		printer(result_tgfx_FAIL, "(Find_VkDescType_byMATDATATYPE() has failed because SHADERINPUT_TYPE = UNDEFINED!");
 	default:
-		LOG(tgfx_result_FAIL, "(Find_VkDescType_byMATDATATYPE() doesn't support this type of SHADERINPUT_TYPE!");
+		printer(result_tgfx_FAIL, "(Find_VkDescType_byMATDATATYPE() doesn't support this type of SHADERINPUT_TYPE!");
 	}
 	return VK_DESCRIPTOR_TYPE_MAX_ENUM;
 }
@@ -1166,7 +1166,7 @@ VkDescriptorType Find_VkDescType_byDescTypeCategoryless(DescType type) {
 	case DescType::SBUFFER:
 		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	default:
-		LOG(tgfx_result_FAIL, "(Find_VkDescType_byDescTypeCategoryless() doesn't support this type!");
+		printer(result_tgfx_FAIL, "(Find_VkDescType_byDescTypeCategoryless() doesn't support this type!");
 			return VK_DESCRIPTOR_TYPE_MAX_ENUM;
 	}
 }
@@ -1180,7 +1180,7 @@ VkSamplerAddressMode Find_AddressMode_byWRAPPING(tgfx_texture_wrapping Wrapping)
 	case tgfx_texture_wrapping_CLAMP_TO_EDGE:
 		return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "Find_AddressMode_byWRAPPING() doesn't support this wrapping type!");
+		printer(result_tgfx_INVALIDARGUMENT, "Find_AddressMode_byWRAPPING() doesn't support this wrapping type!");
 		return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
 	}
 }
@@ -1194,7 +1194,7 @@ VkFilter Find_VkFilter_byGFXFilter(tgfx_texture_mipmapfilter filter) {
 	case tgfx_texture_mipmapfilter::NEAREST_FROM_2MIP:
 		return VK_FILTER_NEAREST;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "Find_VkFilter_byGFXFilter() doesn't support this filter type!");
+		printer(result_tgfx_INVALIDARGUMENT, "Find_VkFilter_byGFXFilter() doesn't support this filter type!");
 		return VK_FILTER_MAX_ENUM;
 	}
 }
@@ -1222,7 +1222,7 @@ VkCullModeFlags Find_CullMode_byGFXCullMode(tgfx_cullmode mode) {
 		return VK_CULL_MODE_FRONT_BIT;
 		break;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "This culling type isn't supported by Find_CullMode_byGFXCullMode()!");
+		printer(result_tgfx_INVALIDARGUMENT, "This culling type isn't supported by Find_CullMode_byGFXCullMode()!");
 		return VK_CULL_MODE_NONE;
 		break;
 	}
@@ -1240,7 +1240,7 @@ VkPolygonMode Find_PolygonMode_byGFXPolygonMode(tgfx_polygonmode mode) {
 		return VK_POLYGON_MODE_POINT;
 		break;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "This polygon mode isn't support by Find_PolygonMode_byGFXPolygonMode()");
+		printer(result_tgfx_INVALIDARGUMENT, "This polygon mode isn't support by Find_PolygonMode_byGFXPolygonMode()");
 		break;
 	}
 }
@@ -1250,7 +1250,7 @@ VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(tgfx_vertexlistty
 	case tgfx_vertexlisttypes::TRIANGLELIST:
 		return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "This type of vertex list is not supported by Find_PrimitiveTopology_byGFXVertexListType()");
+		printer(result_tgfx_INVALIDARGUMENT, "This type of vertex list is not supported by Find_PrimitiveTopology_byGFXVertexListType()");
 		return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
 		break;
 	}
@@ -1263,7 +1263,7 @@ VkIndexType Find_IndexType_byGFXDATATYPE(tgfx_datatype datatype) {
 	case tgfx_datatype_VAR_UINT16:
 		return VK_INDEX_TYPE_UINT16;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "This type of data isn't supported by Find_IndexType_byGFXDATATYPE()");
+		printer(result_tgfx_INVALIDARGUMENT, "This type of data isn't supported by Find_IndexType_byGFXDATATYPE()");
 		return VK_INDEX_TYPE_MAX_ENUM;
 	}
 }
@@ -1282,7 +1282,7 @@ VkCompareOp Find_CompareOp_byGFXDepthTest(tgfx_depthtests test) {
 	case tgfx_DEPTH_TEST_LESS:
 		return VK_COMPARE_OP_LESS;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "Find_CompareOp_byGFXDepthTest() doesn't support this type of test!");
+		printer(result_tgfx_INVALIDARGUMENT, "Find_CompareOp_byGFXDepthTest() doesn't support this type of test!");
 		return VK_COMPARE_OP_MAX_ENUM;
 	}
 }
@@ -1303,7 +1303,7 @@ void Find_DepthMode_byGFXDepthMode(tgfx_depthmodes mode, VkBool32& ShouldTest, V
 		ShouldWrite = VK_FALSE;
 		break;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "Find_DepthMode_byGFXDepthMode() doesn't support this type of depth mode!");
+		printer(result_tgfx_INVALIDARGUMENT, "Find_DepthMode_byGFXDepthMode() doesn't support this type of depth mode!");
 		break;
 	}
 }
@@ -1317,7 +1317,7 @@ VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(tgfx_drawpassload load) {
 	case tgfx_drawpassload_LOAD:
 		return VK_ATTACHMENT_LOAD_OP_LOAD;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "Find_LoadOp_byGFXLoadOp() doesn't support this type of load!");
+		printer(result_tgfx_INVALIDARGUMENT, "Find_LoadOp_byGFXLoadOp() doesn't support this type of load!");
 		return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
 	}
 }
@@ -1343,7 +1343,7 @@ VkCompareOp Find_CompareOp_byGFXStencilCompare(tgfx_stencilcompare op) {
 	case tgfx_stencilcompare::ALWAYS_PASS:
 		return VK_COMPARE_OP_ALWAYS;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "Find_CompareOp_byGFXStencilCompare() doesn't support this type of stencil compare!");
+		printer(result_tgfx_INVALIDARGUMENT, "Find_CompareOp_byGFXStencilCompare() doesn't support this type of stencil compare!");
 		return VK_COMPARE_OP_ALWAYS;
 	}
 }
@@ -1368,7 +1368,7 @@ VkStencilOp Find_StencilOp_byGFXStencilOp(tgfx_stencilop op) {
 	case tgfx_stencilop_BITWISE_INVERT:
 		return VK_STENCIL_OP_INVERT;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "Find_StencilOp_byGFXStencilOp() doesn't support this type of stencil operation!");
+		printer(result_tgfx_INVALIDARGUMENT, "Find_StencilOp_byGFXStencilOp() doesn't support this type of stencil operation!");
 		return VK_STENCIL_OP_KEEP;
 	}
 }
@@ -1386,7 +1386,7 @@ VkBlendOp Find_BlendOp_byGFXBlendMode(tgfx_blendmode mode) {
 	case tgfx_blendmode_MAX:
 		return VK_BLEND_OP_MAX;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "Find_BlendOp_byGFXBlendMode() doesn't support this type of blend mode!");
+		printer(result_tgfx_INVALIDARGUMENT, "Find_BlendOp_byGFXBlendMode() doesn't support this type of blend mode!");
 		return VK_BLEND_OP_MAX_ENUM;
 	}
 }
@@ -1422,7 +1422,7 @@ VkBlendFactor Find_BlendFactor_byGFXBlendFactor(tgfx_blendfactor factor) {
 	case tgfx_blendfactor_CONST_1MINUSALPHA:
 		return VkBlendFactor::VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
 	default:
-		LOG(tgfx_result_INVALIDARGUMENT, "Find_BlendFactor_byGFXBlendFactor() doesn't support this type of blend factor!");
+		printer(result_tgfx_INVALIDARGUMENT, "Find_BlendFactor_byGFXBlendFactor() doesn't support this type of blend factor!");
 		return VK_BLEND_FACTOR_MAX_ENUM;
 	}
 }
@@ -1613,7 +1613,7 @@ DescType Find_DescType_byGFXShaderInputType(tgfx_shaderinput_type dtype) {
 	case tgfx_shaderinput_type_SBUFFER_G:
 		return DescType::SBUFFER;
 	default:
-		LOG(tgfx_result_FAIL, "(Find_DescType_byGFXShaderInputType() doesn't support this type!");
+		printer(result_tgfx_FAIL, "(Find_DescType_byGFXShaderInputType() doesn't support this type!");
 			return DescType::SAMPLER;
 	}
 }
@@ -1621,7 +1621,7 @@ DescType Find_DescType_byGFXShaderInputType(tgfx_shaderinput_type dtype) {
 //Don't use this functions outside of the FindAvailableOffset
 VkDeviceSize CalculateOffset(VkDeviceSize baseoffset, VkDeviceSize AlignmentOffset, VkDeviceSize ReqAlignment) {
 	VkDeviceSize FinalOffset = 0;
-	LOG(tgfx_result_NOTCODED, "VulkanBackend was using C++17's LCM before, but because LCM is a basic math please fix the backend to use a custom math code. C++17 for this feature is unnecessary!");
+	printer(result_tgfx_NOTCODED, "VulkanBackend was using C++17's LCM before, but because LCM is a basic math please fix the backend to use a custom math code. C++17 for this feature is unnecessary!");
 	//VkDeviceSize LCM = std::lcm(AlignmentOffset, ReqAlignment);
 	//FinalOffset = (baseoffset % LCM) ? (((baseoffset / LCM) + 1) * LCM) : baseoffset;
 	return FinalOffset;

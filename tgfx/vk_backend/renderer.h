@@ -3,10 +3,10 @@
 #include <vector>
 #include <tgfx_forwarddeclarations.h>
 
-typedef struct drawpass_vk drawpass_vk;
-typedef struct transferpass_vk transferpass_vk;
-typedef struct windowpass_vk windowpass_vk;
-typedef struct computepass_vk computepass_vk;
+struct drawpass_vk;
+struct transferpass_vk;
+struct windowpass_vk;
+struct computepass_vk;
 
 //Renderer data that other parts of the backend can access
 struct renderer_public {
@@ -20,4 +20,5 @@ public:
 	inline unsigned char Get_FrameIndex(bool is_LastFrame){
 		return (is_LastFrame) ? ((FrameIndex + 1) % 2) : (FrameIndex);
 	}
+	void RendererResource_Finalizations();
 };

@@ -53,6 +53,36 @@ static void Dispatch_Compute(computepass_tgfx_handle ComputePassHandle, computes
     unsigned int SubComputePassIndex, uvec3_tgfx DispatchSize);
 static void ChangeDrawPass_RTSlotSet(drawpass_tgfx_handle DrawPassHandle, rtslotset_tgfx_handle RTSlotSetHandle);
 
+void renderer_public::RendererResource_Finalizations() {
+	/*
+	//Handle RTSlotSet changes by recreating framebuffers of draw passes
+	//by "RTSlotSet changes": DrawPass' slotset is changed to different one or slotset's slots is changed.
+	for (unsigned int DrawPassIndex = 0; DrawPassIndex < renderer->DrawPasses.size(); DrawPassIndex++) {
+		drawpass_vk* DP = renderer->DrawPasses[DrawPassIndex];
+		unsigned char ChangeInfo = DP->SlotSetChanged.load();
+		if (ChangeInfo == FrameIndex + 1 || ChangeInfo == 3 || DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.load()) {
+			//This is safe because this FB is used 2 frames ago and CPU already waits for the frame's GPU process to end
+			vkDestroyFramebuffer(rendergpu->LOGICALDEVICE(), DP->FBs[FrameIndex], nullptr);
+
+			VkFramebufferCreateInfo fb_ci = DP->SLOTSET->FB_ci[FrameIndex];
+			fb_ci.renderPass = DP->RenderPassObject;
+			if (vkCreateFramebuffer(rendergpu->LOGICALDEVICE(), &fb_ci, nullptr, &DP->FBs[FrameIndex]) != VK_SUCCESS) {
+				printer(result_tgfx_FAIL, "vkCreateFramebuffer() has failed while changing one of the drawpasses' current frame slot's texture! Please report this!");
+				return;
+			}
+
+			DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.store(false);
+			for (unsigned int SlotIndex = 0; SlotIndex < DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].COLORSLOTs_COUNT; SlotIndex++) {
+				DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].COLOR_SLOTs[SlotIndex].IsChanged.store(false);
+			}
+
+			if (ChangeInfo) {
+				DP->SlotSetChanged.store(ChangeInfo - FrameIndex - 1);
+			}
+		}
+	}
+	*/
+}
 inline void set_FunctionPointers() {
 	core_tgfx_main->renderer->Start_RenderGraphConstruction = &Start_RenderGraphConstruction;
 	core_tgfx_main->renderer->Finish_RenderGraphConstruction = &Finish_RenderGraphConstruction;

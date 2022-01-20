@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include "rendergraph.h"
+#include "gpucontentmanager.h"
 
 
 /**	INTRODUCTION
@@ -37,7 +38,13 @@ extern void RenderGraph_DataShifting();
 
 extern unsigned char GetCurrentFrameIndex();
 extern void Start_RenderGraphConstruction() {
-
+	//Apply resource changes made by user
+	contentmanager->Resource_Finalizations();
+	/*
+	if (renderer->RG_Status == RenderGraphStatus::FinishConstructionCalled || VKRENDERER->RG_Status == RenderGraphStatus::StartedConstruction) {
+		printer(result_tgfx_FAIL, "GFXRENDERER->Start_RenderGraphCreation() has failed because you have wrong function call order!"); return;
+	}
+	VKRENDERER->RG_Status = RenderGraphStatus::StartedConstruction;*/
 }
 extern unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpass) {
 	return 0;

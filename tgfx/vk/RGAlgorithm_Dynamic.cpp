@@ -12,7 +12,7 @@ inline std::vector<SubmitIDType>& GetFrameGraphSubmits(VK_FrameGraph& fg);
 
 void PrintSubmits(VK_FrameGraph& CurrentFG) {
 	std::vector<SubmitIDType>& Submits = GetFrameGraphSubmits(CurrentFG);
-	LOG(tgfx_result_NOTCODED, "Print submit isn't coded!");
+	printer(result_tgfx_NOTCODED, "Print submit isn't coded!");
 	/*
 	for (unsigned int SubmitIndex = 0; SubmitIndex < Submits.size(); SubmitIndex++) {
 		VK_Submit* Submit = Submits[SubmitIndex];
@@ -57,7 +57,7 @@ void EraseFromSubmitlessList(VK_RGBranch::BranchIDType BranchID, std::vector<VK_
 		}
 	}
 #ifdef VULKAN_DEBUGGING
-	LOG(tgfx_result_FAIL, "BranchID isn't found in SubmitlessBranches list, so EraseFromSubmitlessList has failed!");
+	printer(result_tgfx_FAIL, "BranchID isn't found in SubmitlessBranches list, so EraseFromSubmitlessList has failed!");
 #endif
 }
 //Create a submit for the branch but don't give any queue
@@ -83,7 +83,7 @@ inline void CreateSubmit_ForRGB(VK_FrameGraph& CurrentFG, VK_RGBranch::BranchIDT
 		if (CFDynDepBranch.is_AttachedSubmitValid()) {
 			VK_Submit& Submit = CFDynDepBranch.Get_AttachedSubmit();
 			if (Submit.Get_SubmitType() == SubmitType::NoMoreBranch) {
-				LOG(tgfx_result_FAIL, "Submit is assumed to have NoMoreBranch but it hasn't! Please report to the author!");
+				printer(result_tgfx_FAIL, "Submit is assumed to have NoMoreBranch but it hasn't! Please report to the author!");
 				break;
 			}
 		}
@@ -125,7 +125,7 @@ inline void AttachRGB(VK_Submit& Submit, VK_RGBranch& Branch, std::vector<VK_RGB
 		Submit.Set_SubmitType(SubmitType::NoMoreBranch);
 		break;
 	default:
-		LOG(tgfx_result_FAIL, ("This type of branch isn't supported by the AttachRGB(). Branch Type's value is: " +
+		printer(result_tgfx_FAIL, ("This type of branch isn't supported by the AttachRGB(). Branch Type's value is: " +
 			std::to_string(static_cast<unsigned char>(Branch.GetBranchType()))).c_str());
 	}
 
@@ -148,7 +148,7 @@ inline bool isBranchProcessible(VK_RGBranch& Branch) {
 
 		return false;
 	default:
-		LOG(tgfx_result_FAIL, ("isBranchProcessible() isn't coded for this type of branch! BranchType's value is: " +
+		printer(result_tgfx_FAIL, ("isBranchProcessible() isn't coded for this type of branch! BranchType's value is: " +
 			std::to_string(static_cast<unsigned char>(Branch.GetBranchType()))).c_str());
 		return false;
 	}
@@ -197,7 +197,7 @@ void FindRGBranches_dependentSubmits(VK_FrameGraph& CurrentFG, std::vector<VK_RG
 		}
 									   continue;
 		default:
-			LOG(tgfx_result_FAIL, ("FindRGBranches_dependentSubmits() doesn't support this branch type in processing stage! Branch Type's value: " +
+			printer(result_tgfx_FAIL, ("FindRGBranches_dependentSubmits() doesn't support this branch type in processing stage! Branch Type's value: " +
 				std::to_string(static_cast<unsigned char>(MainBranch.GetBranchType()))).c_str());
 		}
 	}
@@ -353,7 +353,7 @@ inline void LinkSubmits(std::vector<SubmitIDType>& SubmitList) {
 			Submit.Set_SubmitType(TypeofSubmit);
 			break;
 		default:
-			LOG(tgfx_result_FAIL, ("LinkSubmits() has failed because StartBranch's Type is unsupported. Type's value is: " +
+			printer(result_tgfx_FAIL, ("LinkSubmits() has failed because StartBranch's Type is unsupported. Type's value is: " +
 				std::to_string(static_cast<unsigned char>(StartBranch.GetBranchType()))).c_str());
 		}
 
@@ -363,11 +363,11 @@ inline void LinkSubmits(std::vector<SubmitIDType>& SubmitList) {
 #ifdef VULKAN_DEBUGGING
 			if (!CFDynDepBranch.is_AttachedSubmitValid())
 			{
-				LOG(tgfx_result_FAIL, "CFDynDepBranch shouldn't have an invalid attachedsubmit, please report this to the author!");
+				printer(result_tgfx_FAIL, "CFDynDepBranch shouldn't have an invalid attachedsubmit, please report this to the author!");
 			}
 #endif
 			VK_Submit& CFDynSubmit = CFDynDepBranch.Get_AttachedSubmit();
-			LOG(tgfx_result_SUCCESS, "I left submit dependency as VK_PIPELINE_STAGE_ALL_COMMANDS_BIT but it should be more precise!");
+			printer(result_tgfx_SUCCESS, "I left submit dependency as VK_PIPELINE_STAGE_ALL_COMMANDS_BIT but it should be more precise!");
 			Submit.PushBack_WaitInfo(CFDynSubmit.Get_ID(), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, SubmitWaitType::CURRENTFRAME);
 		}
 
@@ -377,12 +377,12 @@ inline void LinkSubmits(std::vector<SubmitIDType>& SubmitList) {
 #ifdef VULKAN_DEBUGGING
 			if (!LFDynDepBranch.is_AttachedSubmitValid())
 			{
-				LOG(tgfx_result_FAIL, "LFDynDepBranch shouldn't have an invalid attachedsubmit, please report this to the author!");
+				printer(result_tgfx_FAIL, "LFDynDepBranch shouldn't have an invalid attachedsubmit, please report this to the author!");
 			}
 #endif
 
 			VK_Submit& LFDynSubmit = LFDynDepBranch.Get_AttachedSubmit();
-			LOG(tgfx_result_SUCCESS, "I left submit dependency as VK_PIPELINE_STAGE_ALL_COMMANDS_BIT but it should be more precise!");
+			printer(result_tgfx_SUCCESS, "I left submit dependency as VK_PIPELINE_STAGE_ALL_COMMANDS_BIT but it should be more precise!");
 			Submit.PushBack_WaitInfo(LFDynSubmit.Get_ID(), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, SubmitWaitType::LASTFRAME);
 		}
 	}
@@ -429,14 +429,14 @@ inline void CreateSubmits_Fast(VK_FrameGraph& Current_FrameGraph, VK_FrameGraph&
 			break;
 		case BranchType::RenderBranch:
 		case BranchType::BarrierTPOnlyBranch:
-			LOG(tgfx_result_FAIL, "Branch's dynamic dependencies isn't solved or there is a error because it has dynamic type instead of processible type!");
+			printer(result_tgfx_FAIL, "Branch's dynamic dependencies isn't solved or there is a error because it has dynamic type instead of processible type!");
 			break;
 		case BranchType::UNDEFINED:
 			//UNDEFINED means branch has no workload, so skip the branch
 			ShouldAddto_SubmitlessList = false;
 			break;
 		default:
-			LOG(tgfx_result_FAIL, "BranchType is an invalid value (not UNDEFINED), this shouldn't happen. Please check CreateSubmits_Fast()!");
+			printer(result_tgfx_FAIL, "BranchType is an invalid value (not UNDEFINED), this shouldn't happen. Please check CreateSubmits_Fast()!");
 			break;
 		}
 
@@ -490,7 +490,7 @@ inline void CreateSubmits_Fast(VK_FrameGraph& Current_FrameGraph, VK_FrameGraph&
 			}
 		}
 		if (Submit->CBIndex == 255) {
-			LOG(tgfx_result_FAIL, "There is a problem!");
+			printer(result_tgfx_FAIL, "There is a problem!");
 		}
 	}
 	//Find all Wait Semaphores of each Submit
@@ -639,7 +639,7 @@ void WaitForLastFrame(VK_FrameGraph& Last_FrameGraph) {
 	for (unsigned int SubmitIndex = 0; SubmitIndex < Submits.size(); SubmitIndex++) {
 #ifdef VULKAN_DEBUGGING
 		if (Submits[SubmitIndex] == INVALID_SubmitID) {
-			LOG(tgfx_result_FAIL, "Submit has an invalid id, which shouldn't have!");
+			printer(result_tgfx_FAIL, "Submit has an invalid id, which shouldn't have!");
 		}
 #endif
 		VK_Submit& Submit = VK_SubmitSystem::GetSubmit_byID(GetFrameGraphSubmits(Last_FrameGraph)[SubmitIndex]);
@@ -652,7 +652,7 @@ void WaitForRenderGraphCommandBuffers() {
 	unsigned char FrameIndex = VKRENDERER->GetCurrentFrameIndex();
 	//Wait for command buffers to end
 	for (unsigned char QueueIndex = 0; QueueIndex < RENDERGPU->QUEUEFAMS().size(); QueueIndex++) {
-		LOG(tgfx_result_SUCCESS, ("Queue Index: " + std::to_string(QueueIndex) + " & Feature Score: " +
+		printer(result_tgfx_SUCCESS, ("Queue Index: " + std::to_string(QueueIndex) + " & Feature Score: " +
 			std::to_string(RENDERGPU->QUEUEFAMS()[QueueIndex].QueueFeatureScore)).c_str());
 		std::vector<VkFence> Fences;
 		for (unsigned int FenceIndex = 0; FenceIndex < RENDERGPU->QUEUEFAMS()[QueueIndex].RenderGraphFences[FrameIndex].size(); FenceIndex++) {
@@ -663,10 +663,10 @@ void WaitForRenderGraphCommandBuffers() {
 			Fences.push_back(RENDERGPU->QUEUEFAMS()[QueueIndex].RenderGraphFences[FrameIndex][FenceIndex].Fence_o);
 		}
 		if (vkWaitForFences(RENDERGPU->LOGICALDEVICE(), Fences.size(), Fences.data(), VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "VulkanRenderer: Fence wait has failed!");
+			printer(result_tgfx_FAIL, "VulkanRenderer: Fence wait has failed!");
 		}
 		if (vkResetFences(RENDERGPU->LOGICALDEVICE(), Fences.size(), Fences.data()) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "VulkanRenderer: Fence reset has failed!");
+			printer(result_tgfx_FAIL, "VulkanRenderer: Fence reset has failed!");
 		}
 	}
 
@@ -703,7 +703,7 @@ void Prepare_forSubmitCreation() {
 	for (unsigned char BranchIndex = 0; BranchIndex < Current_FrameGraph.BranchCount; BranchIndex++) {
 		VK_RGBranch& Branch = ((VK_RGBranch*)Current_FrameGraph.FrameGraphTree)[BranchIndex];
 		if (!Branch.PrepareForNewFrame()) {
-			LOG(tgfx_result_SUCCESS, "One of the branches has no workload!");
+			printer(result_tgfx_SUCCESS, "One of the branches has no workload!");
 		}
 	}
 }
@@ -738,7 +738,7 @@ void Send_RenderCommands() {
 	while (isThereUnsentCB) {
 		isThereUnsentCB = false;
 		for (unsigned char QueueIndex = 0; QueueIndex < RENDERGPU->QUEUEFAMS().size(); QueueIndex++) {
-			LOG(tgfx_result_SUCCESS, ("QueueIndex: " + std::to_string(QueueIndex) + " & FeatureCount: " + std::to_string(RENDERGPU->QUEUEFAMS()[QueueIndex].QueueFeatureScore)).c_str());
+			printer(result_tgfx_SUCCESS, ("QueueIndex: " + std::to_string(QueueIndex) + " & FeatureCount: " + std::to_string(RENDERGPU->QUEUEFAMS()[QueueIndex].QueueFeatureScore)).c_str());
 			std::vector<VkSubmitInfo> FINALSUBMITs;
 			std::vector<std::vector<VkSemaphore>> WaitSemaphoreLists;
 			for (unsigned char SubmitIndex = 0; SubmitIndex < VKRENDERER->FrameGraphs[CurrentFrameIndex].CurrentFrameSubmits.size(); SubmitIndex++) {
@@ -747,7 +747,7 @@ void Send_RenderCommands() {
 					continue;
 				}
 				if (Submit->IsAddedToQueueSubmitList) {
-					LOG(tgfx_result_SUCCESS, "Submit is already added, skipped it!");
+					printer(result_tgfx_SUCCESS, "Submit is already added, skipped it!");
 					continue;
 				}
 				bool isDependentSubmits_notSent_or_notListed = false;
@@ -762,7 +762,7 @@ void Send_RenderCommands() {
 				}
 				if (isDependentSubmits_notSent_or_notListed) {
 					isThereUnsentCB = true;
-					LOG(tgfx_result_SUCCESS, "One of the dependent submits isn't sent, so don't send this submit!");
+					printer(result_tgfx_SUCCESS, "One of the dependent submits isn't sent, so don't send this submit!");
 					continue;
 				}
 
@@ -772,12 +772,12 @@ void Send_RenderCommands() {
 				submitinfo.pNext = nullptr;
 				submitinfo.pSignalSemaphores = &VKRENDERER->Semaphores[Submit->SignalSemaphoreIndex].SPHandle;
 				std::cout << "\n\nNew Submit";
-				LOG(tgfx_result_SUCCESS, "Signal SemaphoreIndex: " + std::to_string(Submit->SignalSemaphoreIndex));
+				printer(result_tgfx_SUCCESS, "Signal SemaphoreIndex: " + std::to_string(Submit->SignalSemaphoreIndex));
 				WaitSemaphoreLists.push_back(std::vector<VkSemaphore>());
 				std::vector<VkSemaphore>* WaitSemaphoreList = &WaitSemaphoreLists[WaitSemaphoreLists.size() - 1];
 				for (unsigned char WaitIndex = 0; WaitIndex < Submit->WaitSemaphoreIDs.size(); WaitIndex++) {
 					WaitSemaphoreList->push_back(VKRENDERER->Semaphores[Submit->WaitSemaphoreIDs[WaitIndex]].SPHandle);
-					LOG(tgfx_result_SUCCESS, "Wait Semaphore Index: " + std::to_string(Submit->WaitSemaphoreIDs[WaitIndex]));
+					printer(result_tgfx_SUCCESS, "Wait Semaphore Index: " + std::to_string(Submit->WaitSemaphoreIDs[WaitIndex]));
 				}
 
 				submitinfo.pWaitSemaphores = WaitSemaphoreList->data();
@@ -792,13 +792,13 @@ void Send_RenderCommands() {
 				continue;
 			}
 			VkFence TargetFence = VK_NULL_HANDLE;
-			LOG(tgfx_result_SUCCESS, "Queue's fence count: " + std::to_string(RENDERGPU->QUEUEFAMS()[QueueIndex].RenderGraphFences[CurrentFrameIndex].size()));
+			printer(result_tgfx_SUCCESS, "Queue's fence count: " + std::to_string(RENDERGPU->QUEUEFAMS()[QueueIndex].RenderGraphFences[CurrentFrameIndex].size()));
 			for (unsigned char FenceIndex = 0; FenceIndex < RENDERGPU->QUEUEFAMS()[QueueIndex].RenderGraphFences[CurrentFrameIndex].size(); FenceIndex++) {
 				VK_Fence& searchfence = RENDERGPU->QUEUEFAMS()[QueueIndex].RenderGraphFences[CurrentFrameIndex][FenceIndex];
 				if (!searchfence.is_Used) {
 					TargetFence = searchfence.Fence_o;
 					if (TargetFence == VK_NULL_HANDLE) {
-						LOG(tgfx_result_FAIL, "WTF!?");
+						printer(result_tgfx_FAIL, "WTF!?");
 					}
 					searchfence.is_Used = true;
 				}
@@ -811,10 +811,10 @@ void Send_RenderCommands() {
 				Fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 				Fence_ci.pNext = nullptr;
 				if (vkCreateFence(RENDERGPU->LOGICALDEVICE(), &Fence_ci, nullptr, &newfence.Fence_o) != VK_SUCCESS) {
-					LOG(tgfx_result_FAIL, "VulkanRenderer: Fence creation has failed!");
+					printer(result_tgfx_FAIL, "VulkanRenderer: Fence creation has failed!");
 				}
 				if (vkResetFences(RENDERGPU->LOGICALDEVICE(), 1, &newfence.Fence_o) != VK_SUCCESS) {
-					LOG(tgfx_result_FAIL, "VulkanRenderer: Fence reset has failed!");
+					printer(result_tgfx_FAIL, "VulkanRenderer: Fence reset has failed!");
 				}
 				TargetFence = newfence.Fence_o;
 				newfence.is_Used = true;
@@ -822,7 +822,7 @@ void Send_RenderCommands() {
 			unsigned long long duration;
 			TURAN_PROFILE_SCOPE_MCS(("CB submission! Submit Count: " + std::to_string(FINALSUBMITs.size()) + " & QueueFeatureCount: " + std::to_string(RENDERGPU->QUEUEFAMS()[QueueIndex].QueueFeatureScore)).c_str(), &duration)
 				if (vkQueueSubmit(RENDERGPU->QUEUEFAMS()[QueueIndex].Queue, FINALSUBMITs.size(), FINALSUBMITs.data(), TargetFence) != VK_SUCCESS) {
-					LOG(tgfx_result_FAIL, "Vulkan Queue Submission has failed!");
+					printer(result_tgfx_FAIL, "Vulkan Queue Submission has failed!");
 					return;
 				}
 			STOP_PROFILE_PRINTFUL_TAPI()
@@ -866,7 +866,7 @@ void Send_PresentationCommands() {
 				if (Pass.Handle == WP) {
 					for (unsigned char WaitSemaphoreIndex = 0; WaitSemaphoreIndex < Submit->WaitSemaphoreIDs.size(); WaitSemaphoreIndex++) {
 						WaitSemaphores.push_back(VKRENDERER->Semaphores[Submit->WaitSemaphoreIDs[WaitSemaphoreIndex]].SPHandle);
-						LOG(tgfx_result_SUCCESS, "vkQueuePresentKHR WaitSemaphoreIndex: " + std::to_string(Submit->WaitSemaphoreIDs[WaitSemaphoreIndex]));
+						printer(result_tgfx_SUCCESS, "vkQueuePresentKHR WaitSemaphoreIndex: " + std::to_string(Submit->WaitSemaphoreIDs[WaitSemaphoreIndex]));
 					}
 				}
 			}
@@ -891,7 +891,7 @@ void Send_PresentationCommands() {
 
 		TURAN_PROFILE_SCOPE_MCS("Display sendage!", nullptr)
 			if (vkQueuePresentKHR(DisplayQueue, &SwapchainImage_PresentationInfo) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "Submitting Presentation Queue has failed!");
+				printer(result_tgfx_FAIL, "Submitting Presentation Queue has failed!");
 				return;
 			}
 		STOP_PROFILE_PRINTFUL_TAPI()
@@ -924,7 +924,7 @@ bool Check_WaitHandles() {
 		for (unsigned int WaitIndex = 0; WaitIndex < DP->WAITsCOUNT; WaitIndex++) {
 			VK_PassWaitDescription& Wait_desc = DP->WAITs[WaitIndex];
 			if ((*Wait_desc.WaitedPass) == nullptr) {
-				LOG(tgfx_result_FAIL, "You forgot to set wait handle of one of the draw passes!");
+				printer(result_tgfx_FAIL, "You forgot to set wait handle of one of the draw passes!");
 				return false;
 			}
 
@@ -940,7 +940,7 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the draw passes waits for an draw pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the draw passes waits for an draw pass but given pass isn't found!");
 					return false;
 				}
 			}
@@ -955,7 +955,7 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the draw passes waits for an transfer pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the draw passes waits for an transfer pass but given pass isn't found!");
 					return false;
 				}
 			}
@@ -970,7 +970,7 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the draw passes waits for an window pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the draw passes waits for an window pass but given pass isn't found!");
 					return false;
 				}
 			}
@@ -985,18 +985,18 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the draw passes waits for a compute pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the draw passes waits for a compute pass but given pass isn't found!");
 					return false;
 				}
 			}
 			break;
 			case PassType::ERROR:
 			{
-				LOG(tgfx_result_FAIL, "Finding a proper TPType has failed, so Check Wait has failed!");
+				printer(result_tgfx_FAIL, "Finding a proper TPType has failed, so Check Wait has failed!");
 				return false;
 			}
 			default:
-				LOG(tgfx_result_FAIL, "Finding a Waited TP Type has failed, so Check Wait Handle has failed!");
+				printer(result_tgfx_FAIL, "Finding a Waited TP Type has failed, so Check Wait Handle has failed!");
 				return false;
 			}
 		}
@@ -1006,7 +1006,7 @@ bool Check_WaitHandles() {
 		for (unsigned int WaitIndex = 0; WaitIndex < WP->WAITsCOUNT; WaitIndex++) {
 			VK_PassWaitDescription& Wait_desc = WP->WAITs[WaitIndex];
 			if (!(*Wait_desc.WaitedPass)) {
-				LOG(tgfx_result_FAIL, "You forgot to set wait handle of one of the window passes!");
+				printer(result_tgfx_FAIL, "You forgot to set wait handle of one of the window passes!");
 				return false;
 			}
 
@@ -1021,7 +1021,7 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the window passes waits for an draw pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the window passes waits for an draw pass but given pass isn't found!");
 					return false;
 				}
 			}
@@ -1037,7 +1037,7 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the window passes waits for an transfer pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the window passes waits for an transfer pass but given pass isn't found!");
 					return false;
 				}
 			}
@@ -1052,19 +1052,19 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the window passes waits for a compute pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the window passes waits for a compute pass but given pass isn't found!");
 					return false;
 				}
 			}
 			break;
 			case PassType::WP:
-				LOG(tgfx_result_FAIL, "A window pass can't wait for another window pass, Check Wait Handle failed!");
+				printer(result_tgfx_FAIL, "A window pass can't wait for another window pass, Check Wait Handle failed!");
 				return false;
 			case PassType::ERROR:
-				LOG(tgfx_result_FAIL, "Finding a TPType has failed, so Check Wait Handle too!");
+				printer(result_tgfx_FAIL, "Finding a TPType has failed, so Check Wait Handle too!");
 				return false;
 			default:
-				LOG(tgfx_result_FAIL, "TP Type is not supported for now, so Check Wait Handle failed too!");
+				printer(result_tgfx_FAIL, "TP Type is not supported for now, so Check Wait Handle failed too!");
 				return false;
 			}
 		}
@@ -1074,7 +1074,7 @@ bool Check_WaitHandles() {
 		for (unsigned int WaitIndex = 0; WaitIndex < TP->WAITsCOUNT; WaitIndex++) {
 			VK_PassWaitDescription& Wait_desc = TP->WAITs[WaitIndex];
 			if (!(*Wait_desc.WaitedPass)) {
-				LOG(tgfx_result_FAIL, "You forgot to set wait handle of one of the transfer passes!");
+				printer(result_tgfx_FAIL, "You forgot to set wait handle of one of the transfer passes!");
 				return false;
 			}
 
@@ -1090,7 +1090,7 @@ bool Check_WaitHandles() {
 				}
 				if (!is_Found) {
 					std::cout << TP->NAME << std::endl;
-					LOG(tgfx_result_FAIL, "One of the transfer passes waits for an draw pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the transfer passes waits for an draw pass but given pass isn't found!");
 					return false;
 				}
 			}
@@ -1106,7 +1106,7 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the transfer passes waits for an transfer pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the transfer passes waits for an transfer pass but given pass isn't found!");
 					return false;
 				}
 			}
@@ -1121,7 +1121,7 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the transfer passes waits for an window pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the transfer passes waits for an window pass but given pass isn't found!");
 					return false;
 				}
 			}
@@ -1136,19 +1136,19 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the transfer passes waits for a compute pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the transfer passes waits for a compute pass but given pass isn't found!");
 					return false;
 				}
 			}
 			break;
 			case PassType::ERROR:
 			{
-				LOG(tgfx_result_FAIL, "Finding a TPType has failed, so Check Wait Handle too!");
+				printer(result_tgfx_FAIL, "Finding a TPType has failed, so Check Wait Handle too!");
 				return false;
 			}
 			default:
 			{
-				LOG(tgfx_result_FAIL, "TP Type is not supported for now, so Check Wait Handle failed too!");
+				printer(result_tgfx_FAIL, "TP Type is not supported for now, so Check Wait Handle failed too!");
 				return false;
 			}
 			}
@@ -1160,7 +1160,7 @@ bool Check_WaitHandles() {
 		for (unsigned int WaitIndex = 0; WaitIndex < CP->WAITsCOUNT; WaitIndex++) {
 			VK_PassWaitDescription& Wait_desc = CP->WAITs[WaitIndex];
 			if (!(*Wait_desc.WaitedPass)) {
-				LOG(tgfx_result_FAIL, "You forgot to set wait handle of one of the compute passes!");
+				printer(result_tgfx_FAIL, "You forgot to set wait handle of one of the compute passes!");
 				return false;
 			}
 
@@ -1176,7 +1176,7 @@ bool Check_WaitHandles() {
 				}
 				if (!is_Found) {
 					std::cout << CP->NAME << std::endl;
-					LOG(tgfx_result_FAIL, "One of the compute passes waits for an draw pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the compute passes waits for an draw pass but given pass isn't found!");
 					return false;
 				}
 			}
@@ -1192,7 +1192,7 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the compute passes waits for a transfer pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the compute passes waits for a transfer pass but given pass isn't found!");
 					return false;
 				}
 				break;
@@ -1207,7 +1207,7 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the compute passes waits for a window pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the compute passes waits for a window pass but given pass isn't found!");
 					return false;
 				}
 				break;
@@ -1222,19 +1222,19 @@ bool Check_WaitHandles() {
 					}
 				}
 				if (!is_Found) {
-					LOG(tgfx_result_FAIL, "One of the compute passes waits for a compute pass but given pass isn't found!");
+					printer(result_tgfx_FAIL, "One of the compute passes waits for a compute pass but given pass isn't found!");
 					return false;
 				}
 				break;
 			}
 			case PassType::ERROR:
 			{
-				LOG(tgfx_result_FAIL, "Finding a TPType has failed, so Check Wait Handle too!");
+				printer(result_tgfx_FAIL, "Finding a TPType has failed, so Check Wait Handle too!");
 				return false;
 			}
 			default:
 			{
-				LOG(tgfx_result_FAIL, "TP Type is not supported for now, so Check Wait Handle failed too!");
+				printer(result_tgfx_FAIL, "TP Type is not supported for now, so Check Wait Handle failed too!");
 				return false;
 			}
 			}

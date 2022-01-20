@@ -38,7 +38,7 @@ VK_PassLinkedList* DeleteP_FromPLinkedList(VK_PassLinkedList* Header, VK_Pass* E
 	VK_PassLinkedList* LastChecked_Item = nullptr;
 	while (CurrentCheckItem->CurrentGP != ElementToDelete) {
 		if (!CurrentCheckItem->NextElement) {
-			//LOG(tgfx_result_SUCCESS, "VulkanRenderer: DeleteGP_FromGPLinkedList() couldn't find the GP in the list!");
+			//printer(result_tgfx_SUCCESS, "VulkanRenderer: DeleteGP_FromGPLinkedList() couldn't find the GP in the list!");
 			return Header;
 		}
 		LastChecked_Item = CurrentCheckItem;

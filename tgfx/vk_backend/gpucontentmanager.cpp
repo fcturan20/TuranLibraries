@@ -5,6 +5,8 @@
 #include "extension.h"
 #include "core.h"
 #include "includes.h"
+#include "renderer.h"
+#include <mutex>
 
 
 struct descelement_buffer_vk {
@@ -60,6 +62,434 @@ struct gpudatamanager_private {
 	gpudatamanager_private() : DescSets_toCreate(1024, nullptr), DescSets_toCreateUpdate(1024, descset_updatecall_vk()), DescSets_toJustUpdate(1024, descset_updatecall_vk()) {}
 };
 static gpudatamanager_private* hidden = nullptr;
+
+void Update_GlobalDescSet_DescIndexing(descset_vk& Set, VkDescriptorPool Pool) {
+	//Update Descriptor Sets
+	{
+		std::vector<VkWriteDescriptorSet> UpdateInfos;
+
+		for (unsigned int BindingIndex = 0; BindingIndex < 2; BindingIndex++) {
+			descriptor_vk& Desc = Set.Descs[BindingIndex];
+			if (Desc.Type == desctype_vk::IMAGE || Desc.Type == desctype_vk::SAMPLER) {
+				for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
+					descelement_image_vk& im = ((descelement_image_vk*)Desc.Elements)[DescElementIndex];
+					if (im.IsUpdated.load() == 255) {
+						continue;
+					}
+					im.IsUpdated.store(0);
+
+					VkWriteDescriptorSet UpdateInfo = {};
+					UpdateInfo.descriptorCount = 1;
+					UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+					UpdateInfo.dstArrayElement = DescElementIndex;
+					UpdateInfo.dstBinding = BindingIndex;
+					UpdateInfo.dstSet = Set.Set;
+					UpdateInfo.pImageInfo = &im.info;
+					UpdateInfo.pNext = nullptr;
+					UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					UpdateInfos.push_back(UpdateInfo);
+				}
+			}
+			else {
+				for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
+					descelement_buffer_vk& buf = ((descelement_buffer_vk*)Desc.Elements)[DescElementIndex];
+					if (buf.IsUpdated.load() == 255) {
+						continue;
+					}
+					buf.IsUpdated.store(0);
+
+					VkWriteDescriptorSet UpdateInfo = {};
+					UpdateInfo.descriptorCount = 1;
+					UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+					UpdateInfo.dstArrayElement = DescElementIndex;
+					UpdateInfo.dstBinding = BindingIndex;
+					UpdateInfo.dstSet = Set.Set;
+					UpdateInfo.pBufferInfo = &buf.Info;
+					UpdateInfo.pNext = nullptr;
+					UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					UpdateInfos.push_back(UpdateInfo);
+				}
+			}
+		}
+
+		vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
+	}
+}
+void Update_GlobalDescSet_NonDescIndexing(descset_vk& Set, VkDescriptorPool Pool) {
+	//Update Descriptor Sets
+	{
+		std::vector<VkWriteDescriptorSet> UpdateInfos;
+
+		for (unsigned int BindingIndex = 0; BindingIndex < 2; BindingIndex++) {
+			descriptor_vk& Desc = Set.Descs[BindingIndex];
+			if (Desc.Type == desctype_vk::IMAGE || Desc.Type == desctype_vk::SAMPLER) {
+				for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
+					descelement_image_vk& im = ((descelement_image_vk*)Desc.Elements)[DescElementIndex];
+					im.IsUpdated.store(0);
+
+					VkWriteDescriptorSet UpdateInfo = {};
+					UpdateInfo.descriptorCount = 1;
+					UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+					UpdateInfo.dstArrayElement = DescElementIndex;
+					UpdateInfo.dstBinding = BindingIndex;
+					UpdateInfo.dstSet = Set.Set;
+					UpdateInfo.pImageInfo = &im.info;
+					UpdateInfo.pNext = nullptr;
+					UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					UpdateInfos.push_back(UpdateInfo);
+				}
+			}
+			else {
+				for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
+					descelement_buffer_vk& buf = ((descelement_buffer_vk*)Desc.Elements)[DescElementIndex];
+					buf.IsUpdated.store(0);
+
+					VkWriteDescriptorSet UpdateInfo = {};
+					UpdateInfo.descriptorCount = 1;
+					UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+					UpdateInfo.dstArrayElement = DescElementIndex;
+					UpdateInfo.dstBinding = BindingIndex;
+					UpdateInfo.dstSet = Set.Set;
+					UpdateInfo.pBufferInfo = &buf.Info;
+					UpdateInfo.pNext = nullptr;
+					UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					UpdateInfos.push_back(UpdateInfo);
+				}
+			}
+		}
+
+		vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
+	}
+}
+void CopyDescriptorSets(descset_vk& Set, std::vector<VkCopyDescriptorSet>& CopyVector, std::vector<VkDescriptorSet*>& CopyTargetSets) {
+	for (unsigned int DescIndex = 0; DescIndex < Set.DescCount; DescIndex++) {
+		VkCopyDescriptorSet copyinfo;
+		descriptor_vk& SourceDesc = ((descriptor_vk*)Set.Descs)[DescIndex];
+		copyinfo.pNext = nullptr;
+		copyinfo.sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
+		copyinfo.descriptorCount = SourceDesc.ElementCount;
+		//We will copy all descriptor array's elements
+		copyinfo.srcArrayElement = 0;
+		copyinfo.dstArrayElement = 0;
+		copyinfo.dstBinding = DescIndex;
+		copyinfo.srcBinding = DescIndex;
+		copyinfo.srcSet = Set.Set;
+		//We will fill this DistanceSet after creating it!
+		copyinfo.dstSet = VK_NULL_HANDLE;
+		CopyVector.push_back(copyinfo);
+		CopyTargetSets.push_back(&Set.Set);
+	}
+}
+void Apply_ResourceChanges() {
+	const unsigned char FrameIndex = renderer->Get_FrameIndex(false);
+
+
+	//Manage Global Descriptor Set
+	if (hidden->GlobalBuffers_DescSet.ShouldRecreate.load()) {
+		VkDescriptorSet backSet = hidden->UnboundGlobalBufferDescSet;
+		hidden->UnboundGlobalBufferDescSet = hidden->GlobalBuffers_DescSet.Set;
+		hidden->GlobalBuffers_DescSet.Set = backSet;
+		hidden->GlobalBuffers_DescSet.ShouldRecreate.store(false);
+	}
+	if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
+		Update_GlobalDescSet_DescIndexing(hidden->GlobalBuffers_DescSet, hidden->GlobalShaderInputs_DescPool);
+	}
+	else {
+		Update_GlobalDescSet_NonDescIndexing(hidden->GlobalBuffers_DescSet, hidden->GlobalShaderInputs_DescPool);
+	}
+	if (hidden->GlobalTextures_DescSet.ShouldRecreate.load()) {
+		VkDescriptorSet backSet = hidden->UnboundGlobalTextureDescSet;
+		hidden->UnboundGlobalTextureDescSet = hidden->GlobalTextures_DescSet.Set;
+		hidden->GlobalTextures_DescSet.Set = backSet;
+		hidden->GlobalTextures_DescSet.ShouldRecreate.store(false);
+	}
+	if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
+		Update_GlobalDescSet_DescIndexing(hidden->GlobalTextures_DescSet, hidden->GlobalShaderInputs_DescPool);
+	}
+	else {
+		Update_GlobalDescSet_NonDescIndexing(hidden->GlobalTextures_DescSet, hidden->GlobalShaderInputs_DescPool);
+	}
+
+	//Manage Material Related Descriptor Sets
+	{
+		//Destroy descriptor sets that are changed last frame
+		if (hidden->UnboundMaterialDescSetList.size()) {
+			descpool_vk& DP = hidden->MaterialRelated_DescPool;
+			vkFreeDescriptorSets(rendergpu->LOGICALDEVICE(), DP.pool, hidden->UnboundMaterialDescSetList.size(),
+				hidden->UnboundMaterialDescSetList.data());
+			DP.REMAINING_SET.fetch_add(hidden->UnboundMaterialDescSetList.size());
+
+			DP.REMAINING_IMAGE.fetch_add(hidden->UnboundDescSetImageCount);
+			hidden->UnboundDescSetImageCount = 0;
+			DP.REMAINING_SAMPLER.fetch_add(hidden->UnboundDescSetSamplerCount);
+			hidden->UnboundDescSetSamplerCount = 0;
+			DP.REMAINING_SBUFFER.fetch_add(hidden->UnboundDescSetSBufferCount);
+			hidden->UnboundDescSetSBufferCount = 0;
+			DP.REMAINING_UBUFFER.fetch_add(hidden->UnboundDescSetUBufferCount);
+			hidden->UnboundDescSetUBufferCount = 0;
+			hidden->UnboundMaterialDescSetList.clear();
+		}
+		//Create Descriptor Sets for material types/instances that are created this frame
+		{
+			std::vector<VkDescriptorSet> Sets;
+			std::vector<VkDescriptorSet*> SetPTRs;
+			std::vector<VkDescriptorSetLayout> SetLayouts;
+			std::unique_lock<std::mutex> Locker;
+			hidden->DescSets_toCreate.PauseAllOperations(Locker);
+			for (unsigned int ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
+				for (unsigned int SetIndex = 0; SetIndex < hidden->DescSets_toCreate.size(ThreadIndex); SetIndex++) {
+					descset_vk* Set = hidden->DescSets_toCreate.get(ThreadIndex, SetIndex);
+					Sets.push_back(VkDescriptorSet());
+					SetLayouts.push_back(Set->Layout);
+					SetPTRs.push_back(&Set->Set);
+				}
+				hidden->DescSets_toCreate.clear(ThreadIndex);
+			}
+			Locker.unlock();
+
+			if (Sets.size()) {
+				VkDescriptorSetAllocateInfo al_in = {};
+				al_in.descriptorPool = hidden->MaterialRelated_DescPool.pool;
+				al_in.descriptorSetCount = Sets.size();
+				al_in.pNext = nullptr;
+				al_in.pSetLayouts = SetLayouts.data();
+				al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				vkAllocateDescriptorSets(rendergpu->LOGICALDEVICE(), &al_in, Sets.data());
+				for (unsigned int SetIndex = 0; SetIndex < Sets.size(); SetIndex++) {
+					*SetPTRs[SetIndex] = Sets[SetIndex];
+				}
+			}
+		}
+		//Create Descriptor Sets for material types/instances that are created before and used recently (last 2 frames), to update their descriptor sets
+		{
+			std::vector<VkDescriptorSet> NewSets;
+			std::vector<VkDescriptorSet*> SetPTRs;
+			std::vector<VkDescriptorSetLayout> SetLayouts;
+
+			//Copy descriptor sets exactly, then update with this frame's SetMaterial_xxx calls
+			std::vector<VkCopyDescriptorSet> CopySetInfos;
+			std::vector<VkDescriptorSet*> CopyTargetSets;
+
+
+			std::unique_lock<std::mutex> Locker;
+			hidden->DescSets_toCreateUpdate.PauseAllOperations(Locker);
+			for (unsigned int ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
+				for (unsigned int SetIndex = 0; SetIndex < hidden->DescSets_toCreateUpdate.size(ThreadIndex); SetIndex++) {
+					descset_updatecall_vk& Call = hidden->DescSets_toCreateUpdate.get(ThreadIndex, SetIndex);
+					descset_vk* Set = Call.Set;
+					bool SetStatus = Set->ShouldRecreate.load();
+					switch (SetStatus) {
+					case 0:
+						continue;
+					case 1:
+						NewSets.push_back(VkDescriptorSet());
+						SetPTRs.push_back(&Set->Set);
+						SetLayouts.push_back(Set->Layout);
+						hidden->UnboundDescSetImageCount += Set->DescImagesCount;
+						hidden->UnboundDescSetSamplerCount += Set->DescSamplersCount;
+						hidden->UnboundDescSetSBufferCount += Set->DescSBuffersCount;
+						hidden->UnboundDescSetUBufferCount += Set->DescUBuffersCount;
+						hidden->UnboundMaterialDescSetList.push_back(Set->Set);
+
+						CopyDescriptorSets(*Set, CopySetInfos, CopyTargetSets);
+						Set->ShouldRecreate.store(0);
+						break;
+					default:
+						printer(result_tgfx_NOTCODED, "Descriptor Set atomic_uchar isn't supposed to have a value that's 2+! Please check 'Handle Descriptor Sets' in Vulkan Renderer->Run()");
+						break;
+					}
+				}
+			}
+
+			if (NewSets.size()) {
+				VkDescriptorSetAllocateInfo al_in = {};
+				al_in.descriptorPool = hidden->MaterialRelated_DescPool.pool;
+				al_in.descriptorSetCount = NewSets.size();
+				al_in.pNext = nullptr;
+				al_in.pSetLayouts = SetLayouts.data();
+				al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				vkAllocateDescriptorSets(rendergpu->LOGICALDEVICE(), &al_in, NewSets.data());
+				for (unsigned int SetIndex = 0; SetIndex < NewSets.size(); SetIndex++) {
+					*SetPTRs[SetIndex] = NewSets[SetIndex];
+				}
+
+				for (unsigned int CopyIndex = 0; CopyIndex < CopySetInfos.size(); CopyIndex++) {
+					CopySetInfos[CopyIndex].dstSet = *CopyTargetSets[CopyIndex];
+				}
+				vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), 0, nullptr, CopySetInfos.size(), CopySetInfos.data());
+			}
+		}
+		//Update descriptor sets
+		{
+			std::vector<VkWriteDescriptorSet> UpdateInfos;
+			std::unique_lock<std::mutex> Locker1;
+			hidden->DescSets_toCreateUpdate.PauseAllOperations(Locker1);
+			for (unsigned int ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
+				for (unsigned int CallIndex = 0; CallIndex < hidden->DescSets_toCreateUpdate.size(ThreadIndex); CallIndex++) {
+					descset_updatecall_vk& Call = hidden->DescSets_toCreateUpdate.get(ThreadIndex, CallIndex);
+					VkWriteDescriptorSet info = {};
+					info.descriptorCount = 1;
+					descriptor_vk& Desc = Call.Set->Descs[Call.BindingIndex];
+					switch (Desc.Type) {
+					case desctype_vk::IMAGE:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pImageInfo = &((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].info;
+						((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+						break;
+					case desctype_vk::SAMPLER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pImageInfo = &((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].info;
+						((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+						break;
+					case desctype_vk::UBUFFER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pBufferInfo = &((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].Info;
+						((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+						break;
+					case desctype_vk::SBUFFER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pBufferInfo = &((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].Info;
+						((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+						break;
+					}
+					info.dstSet = Call.Set->Set;
+					info.pNext = nullptr;
+					info.pTexelBufferView = nullptr;
+					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					UpdateInfos.push_back(info);
+				}
+				hidden->DescSets_toCreateUpdate.clear(ThreadIndex);
+			}
+			Locker1.unlock();
+
+
+			std::unique_lock<std::mutex> Locker2;
+			hidden->DescSets_toJustUpdate.PauseAllOperations(Locker2);
+			for (unsigned int ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
+				for (unsigned int CallIndex = 0; CallIndex < hidden->DescSets_toJustUpdate.size(ThreadIndex); CallIndex++) {
+					descset_updatecall_vk& Call = hidden->DescSets_toJustUpdate.get(ThreadIndex, CallIndex);
+					VkWriteDescriptorSet info = {};
+					info.descriptorCount = 1;
+					descriptor_vk& Desc = Call.Set->Descs[Call.BindingIndex];
+					switch (Desc.Type) {
+					case desctype_vk::IMAGE:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pImageInfo = &((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].info;
+						((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+						break;
+					case desctype_vk::SAMPLER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pImageInfo = &((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].info;
+						((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+						break;
+					case desctype_vk::UBUFFER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pBufferInfo = &((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].Info;
+						((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+						break;
+					case desctype_vk::SBUFFER:
+						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+						info.dstBinding = Call.BindingIndex;
+						info.dstArrayElement = Call.ElementIndex;
+						info.pBufferInfo = &((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].Info;
+						((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
+						break;
+					}
+					info.dstSet = Call.Set->Set;
+					info.pNext = nullptr;
+					info.pTexelBufferView = nullptr;
+					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					UpdateInfos.push_back(info);
+				}
+				hidden->DescSets_toJustUpdate.clear(ThreadIndex);
+			}
+			Locker2.unlock();
+
+			vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
+		}
+	}
+	/*
+	//Delete textures
+	{
+		std::unique_lock<std::mutex> Locker;
+		DeleteTextureList.PauseAllOperations(Locker);
+		for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
+			for (unsigned int i = 0; i < DeleteTextureList.size(ThreadID); i++) {
+				texture_vk* Texture = DeleteTextureList.get(ThreadID, i);
+				if (Texture->Image) {
+					vkDestroyImageView(rendergpu->LOGICALDEVICE(), Texture->ImageView, nullptr);
+					vkDestroyImage(rendergpu->LOGICALDEVICE(), Texture->Image, nullptr);
+				}
+				if (Texture->Block.MemAllocIndex != UINT32_MAX) {
+					rendergpu->ALLOCS()[Texture->Block.MemAllocIndex].FreeBlock(Texture->Block.Offset);
+				}
+				delete Texture;
+			}
+			DeleteTextureList.clear(ThreadID);
+		}
+	}
+	//Push next frame delete texture list to the delete textures list
+	{
+		std::unique_lock<std::mutex> Locker;
+		NextFrameDeleteTextureCalls.PauseAllOperations(Locker);
+		for (unsigned char ThreadID = 0; ThreadID < tapi_GetThreadCount(JobSys); ThreadID++) {
+			for (unsigned int i = 0; i < NextFrameDeleteTextureCalls.size(ThreadID); i++) {
+				DeleteTextureList.push_back(0, NextFrameDeleteTextureCalls.get(ThreadID, i));
+			}
+			NextFrameDeleteTextureCalls.clear(ThreadID);
+		}
+	}
+	*/
+
+}
+
+void gpudatamanager_public::Resource_Finalizations() {
+	//If Descriptor Indexing isn't supported, check if any global descriptor isn't set before!
+	if (!rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
+		for (unsigned char BindingIndex = 0; BindingIndex < 2; BindingIndex++) {
+			descriptor_vk& BufferBinding = hidden->GlobalBuffers_DescSet.Descs[BindingIndex];
+			for (unsigned int ElementIndex = 0; ElementIndex < BufferBinding.ElementCount; ElementIndex++) {
+				descelement_buffer_vk& element = ((descelement_buffer_vk*)BufferBinding.Elements)[ElementIndex];
+				if (element.IsUpdated.load() == 255) {
+					printer(result_tgfx_FAIL, ("You have to use SetGlobalBuffer() for element index: " + std::to_string(ElementIndex)).c_str());
+					return;
+				}
+			}
+			descriptor_vk& TextureBinding = hidden->GlobalTextures_DescSet.Descs[BindingIndex];
+			for (unsigned int ElementIndex = 0; ElementIndex < TextureBinding.ElementCount; ElementIndex++) {
+				descelement_image_vk& element = ((descelement_image_vk*)TextureBinding.Elements)[ElementIndex];
+				if (element.IsUpdated.load() == 255) {
+					printer(result_tgfx_FAIL, ("You have to use SetGlobalTexture() for element index: " + std::to_string(ElementIndex)).c_str());
+					return;
+				}
+			}
+		}
+	}
+
+	
+	if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
+		Update_GlobalDescSet_DescIndexing(hidden->GlobalBuffers_DescSet, hidden->GlobalShaderInputs_DescPool);
+		Update_GlobalDescSet_DescIndexing(hidden->GlobalTextures_DescSet, hidden->GlobalShaderInputs_DescPool);
+	}
+	else {
+		Update_GlobalDescSet_NonDescIndexing(hidden->GlobalBuffers_DescSet, hidden->GlobalShaderInputs_DescPool);
+		Update_GlobalDescSet_NonDescIndexing(hidden->GlobalTextures_DescSet, hidden->GlobalShaderInputs_DescPool);
+	}
+}
 
 
 void  Destroy_AllResources (){}

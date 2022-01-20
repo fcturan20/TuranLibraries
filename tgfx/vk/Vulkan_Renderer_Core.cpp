@@ -43,7 +43,7 @@ Renderer::Renderer() {
 		if (!(RENDERGPU->QUEUEFAMS()[QUEUEIndex].SupportFlag.is_COMPUTEsupported || RENDERGPU->QUEUEFAMS()[QUEUEIndex].SupportFlag.is_GRAPHICSsupported ||
 			RENDERGPU->QUEUEFAMS()[QUEUEIndex].SupportFlag.is_TRANSFERsupported)
 			) {
-			LOG(tgfx_result_SUCCESS, "VulkanRenderer:Command pool creation for a queue has failed because one of the VkQueues doesn't support neither Graphics, Compute or Transfer. So GFX API didn't create a command pool for it!");
+			printer(result_tgfx_SUCCESS, "VulkanRenderer:Command pool creation for a queue has failed because one of the VkQueues doesn't support neither Graphics, Compute or Transfer. So GFX API didn't create a command pool for it!");
 			continue;
 		}
 		for (unsigned char i = 0; i < 2; i++) {
@@ -54,7 +54,7 @@ Renderer::Renderer() {
 			cp_ci_g.pNext = nullptr;
 
 			if (vkCreateCommandPool(RENDERGPU->LOGICALDEVICE(), &cp_ci_g, nullptr, &RENDERGPU->QUEUEFAMS()[QUEUEIndex].CommandPools[i].CPHandle) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "VulkanRenderer: Command pool creation for a queue has failed at vkCreateCommandPool()!");
+				printer(result_tgfx_FAIL, "VulkanRenderer: Command pool creation for a queue has failed at vkCreateCommandPool()!");
 			}
 		}
 	}
@@ -165,25 +165,25 @@ void Fill_SubpassStructs(VK_IRTSLOTSET* slotset, tgfx_subdrawpass_access WaitedO
 tgfx_result Renderer::Create_DrawPass(tgfx_subdrawpassdescription_list TGFXSubDrawPasses, tgfx_rtslotset RTSLOTSET_ID,
 	tgfx_passwaitdescription_list WAITs, const char* NAME, tgfx_subdrawpass* SubDrawPassIDs, tgfx_drawpass* DPHandle) {
 	if (VKRENDERER->RG_Status != RenderGraphStatus::StartedConstruction) {
-		LOG(tgfx_result_FAIL, "GFXRENDERER->CreateDrawPass() has failed because you first need to call Start_RenderGraphCreation()!");
+		printer(result_tgfx_FAIL, "GFXRENDERER->CreateDrawPass() has failed because you first need to call Start_RenderGraphCreation()!");
 		return tgfx_result_FAIL;
 	}
 	VK_RTSLOTSET* SLOTSET = (VK_RTSLOTSET*)RTSLOTSET_ID;
 	for (unsigned int i = 0; i < SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT; i++) {
 		VK_COLORRTSLOT& slot = SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[i];
 		if (slot.RT_OPERATIONTYPE == tgfx_operationtype_UNUSED) {
-			LOG(tgfx_result_INVALIDARGUMENT, "Create_DrawPass() has failed because you can't give an unused Color RT Slot to the Draw Pass! You either don't give it, or use it");
+			printer(result_tgfx_INVALIDARGUMENT, "Create_DrawPass() has failed because you can't give an unused Color RT Slot to the Draw Pass! You either don't give it, or use it");
 			return tgfx_result_INVALIDARGUMENT;
 		}
 	}
 	if (SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
 		if (SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->DEPTH_OPTYPE == tgfx_operationtype_UNUSED) {
-			LOG(tgfx_result_FAIL, "Create_DrawPass() has failed because you can't give an unused Depth RT Slot to the Draw Pass! You either don't give it, or use it");
+			printer(result_tgfx_FAIL, "Create_DrawPass() has failed because you can't give an unused Depth RT Slot to the Draw Pass! You either don't give it, or use it");
 			return tgfx_result_INVALIDARGUMENT;
 		}
 	}
 	if (!SLOTSET) {
-		LOG(tgfx_result_FAIL, "Create_DrawPass() has failed because RTSLOTSET_ID is invalid!");
+		printer(result_tgfx_FAIL, "Create_DrawPass() has failed because RTSLOTSET_ID is invalid!");
 		return tgfx_result_INVALIDARGUMENT;
 	}
 	VK_SubDrawPassDesc** SubDrawPassDescs = (VK_SubDrawPassDesc**)TGFXSubDrawPasses;
@@ -191,11 +191,11 @@ tgfx_result Renderer::Create_DrawPass(tgfx_subdrawpassdescription_list TGFXSubDr
 	for (unsigned int i = 0; i < SubDrawPassesCount; i++) {
 		VK_IRTSLOTSET* ISET = SubDrawPassDescs[i]->INHERITEDSLOTSET;
 		if (!ISET) {
-			LOG(tgfx_result_FAIL, "GFXRenderer->Create_DrawPass() has failed because one of the inherited slotsets is nullptr!");
+			printer(result_tgfx_FAIL, "GFXRenderer->Create_DrawPass() has failed because one of the inherited slotsets is nullptr!");
 			return tgfx_result_INVALIDARGUMENT;
 		}
 		if (ISET->BASESLOTSET != SLOTSET) {
-			LOG(tgfx_result_FAIL, "GFXRenderer->Create_DrawPass() has failed because one of the inherited slotsets isn't inherited from the DrawPass' Base Slotset!");
+			printer(result_tgfx_FAIL, "GFXRenderer->Create_DrawPass() has failed because one of the inherited slotsets isn't inherited from the DrawPass' Base Slotset!");
 			return tgfx_result_INVALIDARGUMENT;
 		}
 	}
@@ -210,7 +210,7 @@ tgfx_result Renderer::Create_DrawPass(tgfx_subdrawpassdescription_list TGFXSubDr
 		VK_PassWaitDescription* Wait = (VK_PassWaitDescription*)WAITs[i];
 #ifdef VULKAN_DEBUGGING
 		if (!Wait->isValid()) {
-			LOG(tgfx_result_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
+			printer(result_tgfx_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
 			continue;
 		}
 #endif
@@ -298,7 +298,7 @@ tgfx_result Renderer::Create_DrawPass(tgfx_subdrawpassdescription_list TGFXSubDr
 		RenderPass_CreationInfo.pDependencies = SubpassDepends.data();
 
 		if (vkCreateRenderPass(RENDERGPU->LOGICALDEVICE(), &RenderPass_CreationInfo, nullptr, &VKDrawPass->RenderPassObject) != VK_SUCCESS) {
-			LOG(tgfx_result_FAIL, "VkCreateRenderPass() has failed!");
+			printer(result_tgfx_FAIL, "VkCreateRenderPass() has failed!");
 			delete VKDrawPass;
 			return tgfx_result_FAIL;
 		}
@@ -323,7 +323,7 @@ tgfx_result Renderer::Create_TransferPass(tgfx_passwaitdescription_list WaitDesc
 		VK_PassWaitDescription* Wait = (VK_PassWaitDescription*)WaitDescriptions[i];
 #ifdef VULKAN_DEBUGGING
 		if (!Wait->isValid()) {
-			LOG(tgfx_result_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
+			printer(result_tgfx_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
 			continue;
 		}
 #endif
@@ -332,7 +332,7 @@ tgfx_result Renderer::Create_TransferPass(tgfx_passwaitdescription_list WaitDesc
 
 	transferpass_vk* TRANSFERPASS = new transferpass_vk(NAME, ValidWAITsCount);
 	if (VKRENDERER->RG_Status != RenderGraphStatus::StartedConstruction) {
-		LOG(tgfx_result_FAIL, "You should call Start_RenderGraphConstruction() before RENDERER->Create_TransferPass()!");
+		printer(result_tgfx_FAIL, "You should call Start_RenderGraphConstruction() before RENDERER->Create_TransferPass()!");
 		return tgfx_result_FAIL;
 	}
 
@@ -361,7 +361,7 @@ tgfx_result Renderer::Create_TransferPass(tgfx_passwaitdescription_list WaitDesc
 		TRANSFERPASS->TransferDatas = new VK_TPCopyDatas;
 		break;
 	default:
-		LOG(tgfx_result_FAIL, "VulkanRenderer: Create_TransferPass() has failed because this type of TP creation isn't supported!");
+		printer(result_tgfx_FAIL, "VulkanRenderer: Create_TransferPass() has failed because this type of TP creation isn't supported!");
 		return tgfx_result_NOTCODED;
 	}
 
@@ -372,7 +372,7 @@ tgfx_result Renderer::Create_TransferPass(tgfx_passwaitdescription_list WaitDesc
 tgfx_result Renderer::Create_ComputePass(tgfx_passwaitdescription_list WaitDescriptions, unsigned int SubComputePassCount, 
 	const char* NAME, tgfx_computepass* CPHandle) {
 	if (VKRENDERER->RG_Status != RenderGraphStatus::StartedConstruction) {
-		LOG(tgfx_result_FAIL, "You should call Start_RenderGraphConstruction() before RENDERER->Create_ComputePass()!");
+		printer(result_tgfx_FAIL, "You should call Start_RenderGraphConstruction() before RENDERER->Create_ComputePass()!");
 		return tgfx_result_FAIL;
 	}
 	//Count the valid pass wait infos
@@ -385,7 +385,7 @@ tgfx_result Renderer::Create_ComputePass(tgfx_passwaitdescription_list WaitDescr
 		VK_PassWaitDescription* Wait = (VK_PassWaitDescription*)WaitDescriptions[i];
 #ifdef VULKAN_DEBUGGING
 		if (!Wait->isValid()) {
-			LOG(tgfx_result_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
+			printer(result_tgfx_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
 			continue;
 		}
 #endif
@@ -416,7 +416,7 @@ tgfx_result Renderer::Create_ComputePass(tgfx_passwaitdescription_list WaitDescr
 }
 tgfx_result Renderer::Create_WindowPass(tgfx_passwaitdescription_list WaitDescriptions, const char* NAME, tgfx_windowpass* WindowPassHandle) {
 	if (VKRENDERER->RG_Status != RenderGraphStatus::StartedConstruction) {
-		LOG(tgfx_result_FAIL, "You should call Start_RenderGraphConstruction() before RENDERER->Create_ComputePass()!");
+		printer(result_tgfx_FAIL, "You should call Start_RenderGraphConstruction() before RENDERER->Create_ComputePass()!");
 		return tgfx_result_FAIL;
 	}
 	//Count the valid pass wait infos
@@ -429,7 +429,7 @@ tgfx_result Renderer::Create_WindowPass(tgfx_passwaitdescription_list WaitDescri
 		VK_PassWaitDescription* Wait = (VK_PassWaitDescription*)WaitDescriptions[i];
 #ifdef VULKAN_DEBUGGING
 		if (!Wait->isValid()) {
-			LOG(tgfx_result_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
+			printer(result_tgfx_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
 			continue;
 		}
 #endif
@@ -469,7 +469,7 @@ void PrepareForNextFrame() {
 }
 
 void Renderer::Run() {
-	LOG(tgfx_result_SUCCESS, "Before cb waiting()!");
+	printer(result_tgfx_SUCCESS, "Before cb waiting()!");
 
 	//Wait for command buffers that are sent to render N-2th frame (N is the current frame)
 	//As the name says, this function stops the thread while waiting for render calls (raster-compute-transfer-barrier calls).
@@ -492,7 +492,7 @@ void Renderer::Run() {
 			ErrorStream << "Vulkan's reported SwapchainImage_Index: " << SwapchainImage_Index <<
 				"\nGFX's stored SwapchainImage_Index: " << unsigned int(VKWINDOW->CurrentFrameSWPCHNIndex) <<
 				"\nGFX's SwapchainIndex and Vulkan's SwapchainIndex don't match, there is something missing!";
-			LOG(tgfx_result_FAIL, ErrorStream.str().c_str());
+			printer(result_tgfx_FAIL, ErrorStream.str().c_str());
 		}
 	}
 
@@ -536,7 +536,7 @@ void FindBufferOBJ_byBufType(tgfx_buffer Handle, tgfx_buffertype TYPE, VkBuffer&
 	}
 	break;
 	default:
-		LOG(tgfx_result_FAIL, "FindBufferOBJ_byBufType() doesn't support this type of buffer!");
+		printer(result_tgfx_FAIL, "FindBufferOBJ_byBufType() doesn't support this type of buffer!");
 	}
 }
 void Renderer::DrawDirect(tgfx_buffer VertexBuffer_ID, tgfx_buffer IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
@@ -634,7 +634,7 @@ unsigned int Find_TextureLayer_fromGFXtgfx_cubeface(tgfx_cubeface cubeface) {
 	case tgfx_cubeface::BOTTOM:
 		return 5;
 	default:
-		LOG(tgfx_result_FAIL, "Find_TextureLayer_fromGFXtgfx_cubeface() in Vulkan backend doesn't support this type of CubeFace!");
+		printer(result_tgfx_FAIL, "Find_TextureLayer_fromGFXtgfx_cubeface() in Vulkan backend doesn't support this type of CubeFace!");
 	}
 }
 void Renderer::CopyBuffer_toImage(tgfx_transferpass TransferPassHandle, tgfx_buffer SourceBuffer_Handle, tgfx_texture TextureHandle, 
@@ -683,7 +683,7 @@ void Renderer::CopyBuffer_toImage(tgfx_transferpass TransferPassHandle, tgfx_buf
 	x.BufferImageCopy.bufferOffset = finaloffset;
 	transferpass_vk* TP = (transferpass_vk*)TransferPassHandle;
 	if (TP->TYPE == tgfx_transferpass_type_BARRIER) {
-		LOG(tgfx_result_FAIL, "You gave an barrier TP handle to CopyBuffer_toImage(), this is wrong!");
+		printer(result_tgfx_FAIL, "You gave an barrier TP handle to CopyBuffer_toImage(), this is wrong!");
 		return;
 	}
 	VK_TPCopyDatas* DATAs = (VK_TPCopyDatas*)TP->TransferDatas;
@@ -747,7 +747,7 @@ void Renderer::ImageBarrier(tgfx_transferpass BarrierTPHandle, tgfx_texture Text
 	VK_Texture* Texture = (VK_Texture*)TextureHandle;
 	transferpass_vk* TP = (transferpass_vk*)BarrierTPHandle;
 	if (TP->TYPE != tgfx_transferpass_type_BARRIER) {
-		LOG(tgfx_result_FAIL, "You should give the handle of a Barrier Transfer Pass! Given Transfer Pass' type isn't Barrier.");
+		printer(result_tgfx_FAIL, "You should give the handle of a Barrier Transfer Pass! Given Transfer Pass' type isn't Barrier.");
 		return;
 	}
 	VK_TPBarrierDatas* TPDatas = (VK_TPBarrierDatas*)TP->TransferDatas;
@@ -814,12 +814,12 @@ void Renderer::ChangeDrawPass_RTSlotSet(tgfx_drawpass DrawPassHandle, tgfx_rtslo
 	if (slotset->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT == DP->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT) {
 		if ((slotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT && !DP->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) ||
 			(!slotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT && DP->SLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT)) {
-			LOG(tgfx_result_FAIL, "ChangeDrawPass_RTSlotSet() has failed because slotsets are not compatible in depth slots");
+			printer(result_tgfx_FAIL, "ChangeDrawPass_RTSlotSet() has failed because slotsets are not compatible in depth slots");
 			return;
 		}
 	}
 	else {
-		LOG(tgfx_result_FAIL, "ChangeDrawPass_RTSlotSet() has failed because slotsets are not compatible in color slots count!");
+		printer(result_tgfx_FAIL, "ChangeDrawPass_RTSlotSet() has failed because slotsets are not compatible in color slots count!");
 		return;
 	}
 	for (unsigned char SlotSetIndex = 0; SlotSetIndex < 2; SlotSetIndex++) {
@@ -831,7 +831,7 @@ void Renderer::ChangeDrawPass_RTSlotSet(tgfx_drawpass DrawPassHandle, tgfx_rtslo
 				targetslot.LOADSTATE != referenceslot.LOADSTATE ||
 				targetslot.RT_OPERATIONTYPE != referenceslot.RT_OPERATIONTYPE ||
 				targetslot.CLEAR_COLOR != referenceslot.CLEAR_COLOR) {
-				LOG(tgfx_result_FAIL, "ChangeDrawPass_RTSlotSet() has failed because one of the color slots is incompatible!");
+				printer(result_tgfx_FAIL, "ChangeDrawPass_RTSlotSet() has failed because one of the color slots is incompatible!");
 				return;
 			}
 		}
@@ -846,22 +846,22 @@ void Renderer::ChangeDrawPass_RTSlotSet(tgfx_drawpass DrawPassHandle, tgfx_rtslo
 			targetslot->STENCIL_LOAD != referenceslot->STENCIL_LOAD ||
 			targetslot->STENCIL_OPTYPE != referenceslot->STENCIL_OPTYPE ||
 			targetslot->CLEAR_COLOR != referenceslot->CLEAR_COLOR) {
-			LOG(tgfx_result_FAIL, "ChangeDrawPass_RTSlotSet() has failed because depth slot is incompatible!");
+			printer(result_tgfx_FAIL, "ChangeDrawPass_RTSlotSet() has failed because depth slot is incompatible!");
 			return;
 		}
 	}
 
 	unsigned char raceinfo = DP->SlotSetChanged.load();
 	if (raceinfo == 3) {
-		LOG(tgfx_result_WARNING, "You already changed the slotset this frame, second time isn't allowed!");
+		printer(result_tgfx_WARNING, "You already changed the slotset this frame, second time isn't allowed!");
 		return;
 	}
 	else if (raceinfo > 3) {
-		LOG(tgfx_result_FAIL, "There is an issue to fix in vulkan backend!");
+		printer(result_tgfx_FAIL, "There is an issue to fix in vulkan backend!");
 		return;
 	}
 	else if (!DP->SlotSetChanged.compare_exchange_strong(raceinfo, 3)) {
-		LOG(tgfx_result_WARNING, "You are changing the draw pass' RTSlotSet concurrently between threads, only one of them succeeds!");
+		printer(result_tgfx_WARNING, "You are changing the draw pass' RTSlotSet concurrently between threads, only one of them succeeds!");
 		return;
 	}
 	else {

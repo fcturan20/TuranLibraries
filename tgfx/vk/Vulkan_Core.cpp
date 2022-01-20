@@ -41,7 +41,7 @@ VK_DLLEXPORTER tgfx_core* Load_TGFXBackend_Threaded(tapi_threadingsystem Threade
 #endif
 
 void GFX_Error_Callback(int error_code, const char* description) {
-	LOG(tgfx_result_FAIL, description);
+	printer(result_tgfx_FAIL, description);
 }
 inline void Save_Monitors();
 inline void Create_Instance();
@@ -91,13 +91,13 @@ void Vulkan_Core::Initialize_SecondStage(tgfx_initializationsecondstageinfo info
 
 
 	VKRENDERER = new Renderer;
-	LOG(tgfx_result_SUCCESS, "Before creating GPU ContentManager!");
+	printer(result_tgfx_SUCCESS, "Before creating GPU ContentManager!");
 	VKContentManager = new vk_gpudatamanager(*vkinfo);
 
 	delete vkinfo;
 
 
-	LOG(tgfx_result_SUCCESS, "VulkanCore: Vulkan systems are started!");
+	printer(result_tgfx_SUCCESS, "VulkanCore: Vulkan systems are started!");
 }
 Vulkan_Core::~Vulkan_Core() {
 	Destroy_GFX_Resources();
@@ -107,7 +107,7 @@ void Save_Monitors() {
 	VKCORE->MONITORs.clear();
 	int monitor_count;
 	GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
-	LOG(tgfx_result_SUCCESS, ("VulkanCore: " + std::to_string(monitor_count) + " number of monitor(s) detected!").c_str());
+	printer(result_tgfx_SUCCESS, ("VulkanCore: " + std::to_string(monitor_count) + " number of monitor(s) detected!").c_str());
 	for (unsigned int i = 0; i < monitor_count; i++) {
 		GLFWmonitor* monitor = monitors[i];
 
@@ -128,7 +128,7 @@ void Save_Monitors() {
 		int PHYSICALWIDTH, PHYSICALHEIGHT;
 		glfwGetMonitorPhysicalSize(monitor, &PHYSICALWIDTH, &PHYSICALHEIGHT);
 		if (PHYSICALWIDTH == 0 || PHYSICALHEIGHT == 0) {
-			LOG(tgfx_result_WARNING, "One of the monitors have invalid physical sizes, please be careful");
+			printer(result_tgfx_WARNING, "One of the monitors have invalid physical sizes, please be careful");
 		}
 	}
 }
@@ -143,7 +143,7 @@ inline void Check_InstanceExtensions() {
 	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 	for (unsigned int i = 0; i < glfwExtensionCount; i++) {
 		if (!IsExtensionSupported(glfwExtensions[i], Supported_InstanceExtensionList.data(), Supported_InstanceExtensionList.size())) {
-			LOG(tgfx_result_INVALIDARGUMENT, "Your vulkan instance doesn't support extensions that're required by GLFW. This situation is not tested, so report your device to the author!");
+			printer(result_tgfx_INVALIDARGUMENT, "Your vulkan instance doesn't support extensions that're required by GLFW. This situation is not tested, so report your device to the author!");
 			return;
 		}
 		Active_InstanceExtensionNames.push_back(glfwExtensions[i]);
@@ -155,7 +155,7 @@ inline void Check_InstanceExtensions() {
 		Active_InstanceExtensionNames.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 	}
 	else {
-		LOG(tgfx_result_WARNING, "Your Vulkan instance doesn't support to display a window, so you shouldn't use any window related functionality such as: GFXRENDERER->Create_WindowPass, GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
+		printer(result_tgfx_WARNING, "Your Vulkan instance doesn't support to display a window, so you shouldn't use any window related functionality such as: GFXRENDERER->Create_WindowPass, GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
 	}
 
 
@@ -227,9 +227,9 @@ void Create_Instance() {
 #endif
 
 	if (vkCreateInstance(&InstCreation_Info, nullptr, &Vulkan_Instance) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Failed to create a Vulkan Instance!");
+		printer(result_tgfx_FAIL, "Failed to create a Vulkan Instance!");
 	}
-	LOG(tgfx_result_SUCCESS, "Vulkan Instance is created successfully!");
+	printer(result_tgfx_SUCCESS, "Vulkan Instance is created successfully!");
 
 }
 
@@ -251,15 +251,15 @@ void Setup_Debugging() {
 
 	auto func = vkCreateDebugUtilsMessengerEXT();
 	if (func(Vulkan_Instance, &DebugMessenger_CreationInfo, nullptr, &Debug_Messenger) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "Vulkan's Debug Callback system failed to start!");
+		printer(result_tgfx_FAIL, "Vulkan's Debug Callback system failed to start!");
 	}
-	LOG(tgfx_result_SUCCESS, "Vulkan Debug Callback system is started!");
+	printer(result_tgfx_SUCCESS, "Vulkan Debug Callback system is started!");
 }
 
 
 
 inline void Check_Computer_Specs() {
-	LOG(tgfx_result_SUCCESS, "Started to check Computer Specifications!");
+	printer(result_tgfx_SUCCESS, "Started to check Computer Specifications!");
 
 	//CHECK GPUs
 	uint32_t GPU_NUMBER = 0;
@@ -271,7 +271,7 @@ inline void Check_Computer_Specs() {
 	vkEnumeratePhysicalDevices(Vulkan_Instance, &GPU_NUMBER, Physical_GPU_LIST.data());
 
 	if (GPU_NUMBER == 0) {
-		LOG(tgfx_result_FAIL, "There is no GPU that has Vulkan support! Updating your drivers or Upgrading the OS may help");
+		printer(result_tgfx_FAIL, "There is no GPU that has Vulkan support! Updating your drivers or Upgrading the OS may help");
 	}
 
 	//GET GPU INFORMATIONs, QUEUE FAMILIES etc
@@ -280,7 +280,7 @@ inline void Check_Computer_Specs() {
 		GPU* VKGPU = new GPU(Physical_GPU_LIST[i]);
 	}
 
-	LOG(tgfx_result_SUCCESS, "Finished checking Computer Specifications!");
+	printer(result_tgfx_SUCCESS, "Finished checking Computer Specifications!");
 }
 
 
@@ -312,7 +312,7 @@ bool Vulkan_Core::Create_WindowSwapchain(WINDOW* Vulkan_Window, unsigned int WID
 		image_count = 2;
 	}
 	else {
-		LOG(tgfx_result_NOTCODED, "VulkanCore: Window Surface Capabilities have issues, maxImageCount <= minImageCount!");
+		printer(result_tgfx_NOTCODED, "VulkanCore: Window Surface Capabilities have issues, maxImageCount <= minImageCount!");
 		return false;
 	}
 	VkSwapchainCreateInfoKHR swpchn_ci = {};
@@ -353,7 +353,7 @@ bool Vulkan_Core::Create_WindowSwapchain(WINDOW* Vulkan_Window, unsigned int WID
 
 
 	if (vkCreateSwapchainKHR(RENDERGPU->LOGICALDEVICE(), &swpchn_ci, nullptr, SwapchainOBJ) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "VulkanCore: Failed to create a SwapChain for a Window");
+		printer(result_tgfx_FAIL, "VulkanCore: Failed to create a SwapChain for a Window");
 		return false;
 	}
 
@@ -363,11 +363,11 @@ bool Vulkan_Core::Create_WindowSwapchain(WINDOW* Vulkan_Window, unsigned int WID
 	VkImage* SWPCHN_IMGs = new VkImage[created_imagecount];
 	vkGetSwapchainImagesKHR(RENDERGPU->LOGICALDEVICE(), *SwapchainOBJ, &created_imagecount, SWPCHN_IMGs);
 	if (created_imagecount < 2) {
-		LOG(tgfx_result_FAIL, "TGFX API asked for 2 swapchain textures but Vulkan driver gave less number of textures!");
+		printer(result_tgfx_FAIL, "TGFX API asked for 2 swapchain textures but Vulkan driver gave less number of textures!");
 		return false;
 	}
 	else if (created_imagecount > 2) { 
-		LOG(tgfx_result_SUCCESS, "TGFX API asked for 2 swapchain textures but Vulkan driver gave more than that, so GFX API only used 2 of them!");
+		printer(result_tgfx_SUCCESS, "TGFX API asked for 2 swapchain textures but Vulkan driver gave more than that, so GFX API only used 2 of them!");
 	}
 	for (unsigned int vkim_index = 0; vkim_index < 2; vkim_index++) {
 		VK_Texture* SWAPCHAINTEXTURE = new VK_Texture;
@@ -403,7 +403,7 @@ bool Vulkan_Core::Create_WindowSwapchain(WINDOW* Vulkan_Window, unsigned int WID
 			ImageView_ci.subresourceRange.levelCount = 1;
 
 			if (vkCreateImageView(RENDERGPU->LOGICALDEVICE(), &ImageView_ci, nullptr, &SwapchainTexture->ImageView) != VK_SUCCESS) {
-				LOG(tgfx_result_FAIL, "VulkanCore: Image View creation has failed!");
+				printer(result_tgfx_FAIL, "VulkanCore: Image View creation has failed!");
 				return false;
 			}
 		}
@@ -417,7 +417,7 @@ void GLFWwindowresizecallback(GLFWwindow* glfwwindow, int width, int height) {
 void Vulkan_Core::CreateWindow(unsigned int WIDTH, unsigned int HEIGHT, tgfx_monitor monitor,
 	tgfx_windowmode Mode, const char* NAME, tgfx_textureusageflag SwapchainUsage, tgfx_windowResizeCallback ResizeCB, void* UserPointer,
 	tgfx_texture* SwapchainTextureHandles, tgfx_window* window) {
-	LOG(tgfx_result_SUCCESS, "Window creation has started!");
+	printer(result_tgfx_SUCCESS, "Window creation has started!");
 
 	if (ResizeCB) {
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
@@ -439,7 +439,7 @@ void Vulkan_Core::CreateWindow(unsigned int WIDTH, unsigned int HEIGHT, tgfx_mon
 
 	//Check and Report if GLFW fails
 	if (glfw_window == NULL) {
-		LOG(tgfx_result_FAIL, "VulkanCore: We failed to create the window because of GLFW!");
+		printer(result_tgfx_FAIL, "VulkanCore: We failed to create the window because of GLFW!");
 		delete Vulkan_Window;
 		return;
 	}
@@ -447,11 +447,11 @@ void Vulkan_Core::CreateWindow(unsigned int WIDTH, unsigned int HEIGHT, tgfx_mon
 	//Window VulkanSurface Creation
 	VkSurfaceKHR Window_Surface = {};
 	if (glfwCreateWindowSurface(Vulkan_Instance, Vulkan_Window->GLFW_WINDOW, nullptr, &Window_Surface) != VK_SUCCESS) {
-		LOG(tgfx_result_FAIL, "GLFW failed to create a window surface");
+		printer(result_tgfx_FAIL, "GLFW failed to create a window surface");
 		return;
 	}
 	else {
-		LOG(tgfx_result_SUCCESS, "GLFW created a window surface!");
+		printer(result_tgfx_SUCCESS, "GLFW created a window surface!");
 	}
 	Vulkan_Window->Window_Surface = Window_Surface;
 
@@ -464,7 +464,7 @@ void Vulkan_Core::CreateWindow(unsigned int WIDTH, unsigned int HEIGHT, tgfx_mon
 	//Finding GPU_TO_RENDER's Surface Capabilities
 
 	if (!RENDERGPU->isWindowSupported(Vulkan_Window->Window_Surface)) {
-		LOG(tgfx_result_FAIL, "Vulkan backend supports windows that your GPU supports but your GPU doesn't support current window. So window creation has failed!");
+		printer(result_tgfx_FAIL, "Vulkan backend supports windows that your GPU supports but your GPU doesn't support current window. So window creation has failed!");
 		return;
 	}
 	
@@ -476,7 +476,7 @@ void Vulkan_Core::CreateWindow(unsigned int WIDTH, unsigned int HEIGHT, tgfx_mon
 		vkGetPhysicalDeviceSurfaceFormatsKHR(RENDERGPU->PHYSICALDEVICE(), Vulkan_Window->Window_Surface, &FormatCount, Vulkan_Window->SurfaceFormats.data());
 	}
 	else {
-		LOG(tgfx_result_FAIL, "This GPU doesn't support this type of windows, please try again with a different window configuration!");
+		printer(result_tgfx_FAIL, "This GPU doesn't support this type of windows, please try again with a different window configuration!");
 		delete Vulkan_Window;
 		return;
 	}
@@ -490,7 +490,7 @@ void Vulkan_Core::CreateWindow(unsigned int WIDTH, unsigned int HEIGHT, tgfx_mon
 
 	VK_Texture* SWPCHNTEXTUREHANDLESVK[2];
 	if (!VKCORE->Create_WindowSwapchain(Vulkan_Window, Vulkan_Window->LASTWIDTH, Vulkan_Window->LASTHEIGHT, &Vulkan_Window->Window_SwapChain, SWPCHNTEXTUREHANDLESVK)) {
-		LOG(tgfx_result_FAIL, "Window's swapchain creation has failed, so window's creation!");
+		printer(result_tgfx_FAIL, "Window's swapchain creation has failed, so window's creation!");
 		vkDestroySurfaceKHR(Vulkan_Instance, Vulkan_Window->Window_Surface, nullptr);
 		glfwDestroyWindow(Vulkan_Window->GLFW_WINDOW);
 		delete Vulkan_Window;
@@ -508,7 +508,7 @@ void Vulkan_Core::CreateWindow(unsigned int WIDTH, unsigned int HEIGHT, tgfx_mon
 	}
 
 
-	LOG(tgfx_result_SUCCESS, "Window creation is successful!");
+	printer(result_tgfx_SUCCESS, "Window creation is successful!");
 	VKCORE->WINDOWs.push_back(Vulkan_Window);
 }
 
@@ -568,7 +568,7 @@ void Vulkan_Core::Destroy_GFX_Resources() {
 	glfwTerminate();
 
 
-	LOG(tgfx_result_SUCCESS, "Vulkan Resources are destroyed!");
+	printer(result_tgfx_SUCCESS, "Vulkan Resources are destroyed!");
 }
 
 //Input (Keyboard-Controller) Operations
@@ -590,7 +590,7 @@ void Vulkan_Core::Take_Inputs() {
 			VK_Texture* swpchntextures[2]{ new VK_Texture(), new VK_Texture() };
 			//If new window size isn't able to create a swapchain, return to last window size
 			if (!VKCORE->Create_WindowSwapchain(VKWINDOW, VKWINDOW->NEWWIDTH, VKWINDOW->NEWHEIGHT, &swpchn, swpchntextures)) {
-				LOG(tgfx_result_FAIL, "New size for the window is not possible, returns to the last successful size!");
+				printer(result_tgfx_FAIL, "New size for the window is not possible, returns to the last successful size!");
 				glfwSetWindowSize(VKWINDOW->GLFW_WINDOW, VKWINDOW->LASTWIDTH, VKWINDOW->LASTHEIGHT);
 				VKWINDOW->isResized = false;
 				delete swpchntextures[0]; delete swpchntextures[1];
@@ -633,7 +633,7 @@ void Vulkan_Core::GetMonitorList(tgfx_monitor_list* List) {
 	}
 }
 void Vulkan_Core::ChangeWindowResolution(tgfx_window WindowHandle, unsigned int width, unsigned int height) {
-	LOG(tgfx_result_NOTCODED, "VulkanCore: Change_Window_Resolution isn't coded!");
+	printer(result_tgfx_NOTCODED, "VulkanCore: Change_Window_Resolution isn't coded!");
 }
 void Vulkan_Core::GetGPUList(tgfx_gpu_list* List) {
 	*List = new tgfx_gpu[VKCORE->DEVICE_GPUs.size() + 1];
@@ -658,7 +658,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VK_DebugCallback(VkDebugUtilsMessageSeverityFlagB
 		Callback_Type = "VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT: Potential non-optimal use of Vulkan\n";
 		break;
 	default:
-		LOG(tgfx_result_FAIL, "Vulkan Callback has returned a unsupported Message_Type");
+		printer(result_tgfx_FAIL, "Vulkan Callback has returned a unsupported Message_Type");
 		return true;
 		break;
 	}
@@ -667,16 +667,16 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VK_DebugCallback(VkDebugUtilsMessageSeverityFlagB
 	{
 	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
 	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-		LOG(tgfx_result_SUCCESS, pCallback_Data->pMessage);
+		printer(result_tgfx_SUCCESS, pCallback_Data->pMessage);
 		break;
 	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-		LOG(tgfx_result_WARNING, pCallback_Data->pMessage);
+		printer(result_tgfx_WARNING, pCallback_Data->pMessage);
 		break;
 	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-		LOG(tgfx_result_FAIL, pCallback_Data->pMessage);
+		printer(result_tgfx_FAIL, pCallback_Data->pMessage);
 		break;
 	default:
-		LOG(tgfx_result_FAIL, "Vulkan Callback has returned a unsupported debug message type!");
+		printer(result_tgfx_FAIL, "Vulkan Callback has returned a unsupported debug message type!");
 		return true;
 	}
 	return false;
@@ -684,7 +684,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VK_DebugCallback(VkDebugUtilsMessageSeverityFlagB
 PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT() {
 	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(Vulkan_Instance, "vkCreateDebugUtilsMessengerEXT");
 	if (func == nullptr) {
-		LOG(tgfx_result_FAIL, "(Vulkan failed to load vkCreateDebugUtilsMessengerEXT function!");
+		printer(result_tgfx_FAIL, "(Vulkan failed to load vkCreateDebugUtilsMessengerEXT function!");
 		return nullptr;
 	}
 	return func;
@@ -692,7 +692,7 @@ PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT() {
 PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT() {
 	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(Vulkan_Instance, "vkDestroyDebugUtilsMessengerEXT");
 	if (func == nullptr) {
-		LOG(tgfx_result_FAIL, "(Vulkan failed to load vkDestroyDebugUtilsMessengerEXT function!");
+		printer(result_tgfx_FAIL, "(Vulkan failed to load vkDestroyDebugUtilsMessengerEXT function!");
 		return nullptr;
 	}
 	return func;

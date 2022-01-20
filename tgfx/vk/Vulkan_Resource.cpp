@@ -109,7 +109,7 @@ void Find_AccessPattern_byIMAGEACCESS(const tgfx_imageaccess& Access, VkAccessFl
 		TargetImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 		return;
 	default:
-		LOG(tgfx_result_NOTCODED, "Find_AccessPattern_byIMAGEACCESS() doesn't support this access type!");
+		printer(result_tgfx_NOTCODED, "Find_AccessPattern_byIMAGEACCESS() doesn't support this access type!");
 		return;
 	}
 }
@@ -121,7 +121,7 @@ VkImageTiling Find_VkTiling(tgfx_texture_order order) {
 	case tgfx_texture_order_LINEAR:
 		return VK_IMAGE_TILING_LINEAR;
 	default:
-		LOG(tgfx_result_NOTCODED, "Find_VkTiling() doesn't support this order!");
+		printer(result_tgfx_NOTCODED, "Find_VkTiling() doesn't support this order!");
 		return VkImageTiling::VK_IMAGE_TILING_MAX_ENUM;
 	}
 }
@@ -133,7 +133,7 @@ VkImageType Find_VkImageType(tgfx_texture_dimensions dimensions) {
 	case tgfx_texture_dimensions::TEXTURE_3D:
 		return VK_IMAGE_TYPE_3D;
 	default:
-		LOG(tgfx_result_NOTCODED, "Find_VkImageType() doesn't support this dimension!");
+		printer(result_tgfx_NOTCODED, "Find_VkImageType() doesn't support this dimension!");
 		return VkImageType::VK_IMAGE_TYPE_MAX_ENUM;
 	}
 }
@@ -279,7 +279,7 @@ bool transferpass_vk::IsWorkloaded() {
 	}
 	break;
 	default:
-		LOG(tgfx_result_FAIL, "transferpass_vk::IsWorkloaded() doesn't support this type of transfer pass type!");
+		printer(result_tgfx_FAIL, "transferpass_vk::IsWorkloaded() doesn't support this type of transfer pass type!");
 		return false;
 	}
 

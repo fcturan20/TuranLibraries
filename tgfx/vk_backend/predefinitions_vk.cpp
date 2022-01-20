@@ -8,6 +8,7 @@ gpudatamanager_public* contentmanager = nullptr;
 IMGUI_VK* imgui = nullptr;
 gpu_public* rendergpu = nullptr;
 threadingsys_tapi* threadingsys = nullptr;
+unsigned int threadcount = 1;
 semaphoresys_vk* semaphoresys = nullptr;
 fencesys_vk* fencesys = nullptr;
 allocatorsys_vk* allocatorsys = nullptr;

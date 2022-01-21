@@ -26,10 +26,12 @@ static result_tgfx Create_TransferPass(passwaitdescription_tgfx_listhandle WaitD
 static result_tgfx Create_ComputePass(passwaitdescription_tgfx_listhandle WaitDescriptions, unsigned int SubComputePassCount, const char* NAME, 
     computepass_tgfx_handle* CPHandle);
 static result_tgfx Create_WindowPass(passwaitdescription_tgfx_listhandle WaitDescriptions, const char* NAME, windowpass_tgfx_handle* WindowPassHandle);
+
 //RenderGraph has draw-compute-transfer calls to execute and display calls to display on windows
 //So this function handles everything related to these calls
 //If returns false, this means nothing is rendered this frame
-static bool Execute_RenderGraph();
+//Implemented in rendergraph_main.cpp
+extern result_tgfx Execute_RenderGraph();
 
 //Rendering operations
 static void Run();
@@ -83,7 +85,7 @@ void renderer_public::RendererResource_Finalizations() {
 	}
 	*/
 }
-inline void set_FunctionPointers() {
+inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->Start_RenderGraphConstruction = &Start_RenderGraphConstruction;
 	core_tgfx_main->renderer->Finish_RenderGraphConstruction = &Finish_RenderGraphConstruction;
 	core_tgfx_main->renderer->Destroy_RenderGraph = &Destroy_RenderGraph;
@@ -93,7 +95,7 @@ extern void Create_Renderer() {
     renderer = new renderer_public;
     hidden = new renderer_private;
 
-	set_FunctionPointers();
+	set_rendersysptrs();
 
 
 }

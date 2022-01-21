@@ -198,10 +198,10 @@ void allocatorsys_vk::do_allocations(gpu_public* gpu) {
 	}
 }
 
-VkDeviceSize allocatorsys_vk::suballocate_memoryblock(memorytype_vk* memory, VkDevice RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
+VkDeviceSize allocatorsys_vk::suballocate_memoryblock(unsigned int memoryid, VkDevice RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
 	return 0;
 }
-void allocatorsys_vk::free_memoryblock(memorytype_vk* memory, VkDeviceSize offset) {
+void allocatorsys_vk::free_memoryblock(unsigned int memoryid, VkDeviceSize offset) {
 
 }
 extern void Create_AllocatorSys() {

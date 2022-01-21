@@ -63,7 +63,8 @@ public:
 	inline VkPhysicalDeviceFeatures DEVICEFEATURES_ACTIVE() { return Active_Features; }
 	inline const gpudescription_tgfx& DESC() { return desc; }
 	inline extension_manager* EXTMANAGER() { return extensions; }
-
+	inline const unsigned int* MEMORYTYPE_IDS() { return memtype_ids.data(); }
+	inline unsigned int MEMORYTYPE_IDSCOUNT() { return memtype_ids.size(); }
 	/*
 	//This function searches the best queue that has least specs but needed specs
 	//For example: Queue 1->Graphics,Transfer,Compute - Queue 2->Transfer, Compute - Queue 3->Transfer

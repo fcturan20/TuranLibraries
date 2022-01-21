@@ -7,6 +7,8 @@
 #include "includes.h"
 #include "renderer.h"
 #include <mutex>
+#include "resource.h"
+#include "memory.h"
 
 
 struct descelement_buffer_vk {
@@ -59,7 +61,13 @@ struct gpudatamanager_private {
 	VkDescriptorPool GlobalShaderInputs_DescPool;
 	VkDescriptorSet UnboundGlobalBufferDescSet, UnboundGlobalTextureDescSet; //These won't be deleted, just as a back buffer
 	descset_vk GlobalBuffers_DescSet, GlobalTextures_DescSet;
-	gpudatamanager_private() : DescSets_toCreate(1024, nullptr), DescSets_toCreateUpdate(1024, descset_updatecall_vk()), DescSets_toJustUpdate(1024, descset_updatecall_vk()) {}
+
+	//These are the textures that will be deleted after waiting for 2 frames ago's command buffer
+	threadlocal_vector<texture_vk*> DeleteTextureList;
+	//These are the texture that will be added to the list above after clearing the above list
+	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
+
+	gpudatamanager_private() : DescSets_toCreate(1024, nullptr), DescSets_toCreateUpdate(1024, descset_updatecall_vk()), DescSets_toJustUpdate(1024, descset_updatecall_vk()), DeleteTextureList(1024, nullptr), NextFrameDeleteTextureCalls(1024, nullptr) {}
 };
 static gpudatamanager_private* hidden = nullptr;
 
@@ -422,38 +430,39 @@ void Apply_ResourceChanges() {
 			vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
 		}
 	}
-	/*
+	renderer->RendererResource_Finalizations();
+	
 	//Delete textures
 	{
 		std::unique_lock<std::mutex> Locker;
-		DeleteTextureList.PauseAllOperations(Locker);
+		hidden->DeleteTextureList.PauseAllOperations(Locker);
 		for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
-			for (unsigned int i = 0; i < DeleteTextureList.size(ThreadID); i++) {
-				texture_vk* Texture = DeleteTextureList.get(ThreadID, i);
+			for (unsigned int i = 0; i < hidden->DeleteTextureList.size(ThreadID); i++) {
+				texture_vk* Texture = hidden->DeleteTextureList.get(ThreadID, i);
 				if (Texture->Image) {
 					vkDestroyImageView(rendergpu->LOGICALDEVICE(), Texture->ImageView, nullptr);
 					vkDestroyImage(rendergpu->LOGICALDEVICE(), Texture->Image, nullptr);
 				}
 				if (Texture->Block.MemAllocIndex != UINT32_MAX) {
-					rendergpu->ALLOCS()[Texture->Block.MemAllocIndex].FreeBlock(Texture->Block.Offset);
+					allocatorsys->free_memoryblock(rendergpu->MEMORYTYPE_IDS()[Texture->Block.MemAllocIndex], Texture->Block.Offset);
 				}
 				delete Texture;
 			}
-			DeleteTextureList.clear(ThreadID);
+			hidden->DeleteTextureList.clear(ThreadID);
 		}
 	}
 	//Push next frame delete texture list to the delete textures list
 	{
 		std::unique_lock<std::mutex> Locker;
-		NextFrameDeleteTextureCalls.PauseAllOperations(Locker);
-		for (unsigned char ThreadID = 0; ThreadID < tapi_GetThreadCount(JobSys); ThreadID++) {
-			for (unsigned int i = 0; i < NextFrameDeleteTextureCalls.size(ThreadID); i++) {
-				DeleteTextureList.push_back(0, NextFrameDeleteTextureCalls.get(ThreadID, i));
+		hidden->NextFrameDeleteTextureCalls.PauseAllOperations(Locker);
+		for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
+			for (unsigned int i = 0; i < hidden->NextFrameDeleteTextureCalls.size(ThreadID); i++) {
+				hidden->DeleteTextureList.push_back(hidden->NextFrameDeleteTextureCalls.get(ThreadID, i));
 			}
-			NextFrameDeleteTextureCalls.clear(ThreadID);
+			hidden->NextFrameDeleteTextureCalls.clear();
 		}
 	}
-	*/
+	
 
 }
 

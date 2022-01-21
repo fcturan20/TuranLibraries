@@ -3,6 +3,7 @@
 #include <tgfx_forwarddeclarations.h>
 #include <atomic>
 #include <glm/glm.hpp>
+#include "resource.h"
 
 void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
 void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
@@ -10,14 +11,6 @@ void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription&
 void Fill_DepthAttachmentDescription_NOSeperated(VkAttachmentDescription& Desc, depthstencilslot_vk* DepthSlot);
 
 
-struct depthstencilslot_vk {
-	texture_vk* RT;
-	drawpassload_tgfx DEPTH_LOAD, STENCIL_LOAD;
-	bool IS_USED_LATER;
-	operationtype_tgfx DEPTH_OPTYPE, STENCIL_OPTYPE;
-	glm::vec2 CLEAR_COLOR;
-	std::atomic_bool IsChanged = false;
-};
 extension_manager::extension_manager() {
 	SeperatedDepthStencilLayouts = false;
 	Fill_DepthAttachmentDescription = Fill_DepthAttachmentDescription_NOSeperated;

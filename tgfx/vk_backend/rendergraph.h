@@ -81,6 +81,12 @@ enum class BranchType : unsigned char {
 
 
 
+
+class rendergraph_functions {
+};
+
+
+
 							//STRUCTS
 
 
@@ -92,7 +98,9 @@ struct submitwaitinfo_vk {
 };
 
 struct branch_vk {
-
+	const queueflag_vk& GetNeededQueueFlag() { return supportflag; }
+private:
+	queueflag_vk supportflag;
 };
 
 struct submit_vk {
@@ -148,5 +156,30 @@ private:
 
 
 struct framegraph_vk {
-
+	branch_vk* FrameGraphTree;
+	unsigned char branchcount = 255;
 };
+
+struct framegraphsys_vk {
+	//SECONDARY FUNCTION DECLARATIONs
+
+	//This function will reconstruct framegraph's static information (and will generate branches for next frame, you only need to duplicate framegraph in next frame)
+	bool Check_WaitHandles();
+	void Create_FrameGraphs();
+	void Create_VkDataofRGBranches(const framegraph_vk& FrameGraph);
+	void WaitForLastFrame(framegraph_vk& Last_FrameGraph);
+	void UnsignalLastFrameSemaphores(framegraph_vk& Last_FrameGraph);
+	void CreateSubmits_Intermediate(framegraph_vk& Current_FrameGraph);
+	void DuplicateFrameGraph(framegraph_vk& TargetFrameGraph, const framegraph_vk& SourceFrameGraph);
+	void Prepare_forSubmitCreation();
+	inline void CreateSubmits_Fast(framegraph_vk& Current_FrameGraph, framegraph_vk& LastFrameGraph);
+	void Send_RenderCommands();
+	void Send_PresentationCommands();
+	void RenderGraph_DataShifting();
+	friend void Start_RenderGraphConstruction();
+	friend unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpass);
+	friend void Destroy_RenderGraph();
+
+	framegraph_vk framegraphs[2];
+};
+extern framegraphsys_vk framegraphsys;

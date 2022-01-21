@@ -58,6 +58,15 @@ static constexpr fence_idtype_vk invalid_fenceid = nullptr;
 struct memorytype_vk;
 struct queuefam_vk;
 struct extension_manager;	//Stores activated extensions and set function pointers according to that
+struct drawpass_vk;
+struct transferpass_vk;
+struct windowpass_vk;
+struct computepass_vk;
+struct subdrawpass_vk;
+struct indexeddrawcall_vk;
+struct nonindexeddrawcall_vk;
+struct irtslotset_vk;
+struct rtslotset_vk;
 
 //Enums
 enum class desctype_vk : unsigned char {

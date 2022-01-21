@@ -16,9 +16,9 @@ struct commandpool_vk {
 	commandbuffer_vk& CreateCommandBuffer();
 	void DestroyCommandBuffer();
 	VkCommandPool CPHandle = VK_NULL_HANDLE;
+	std::vector<commandbuffer_vk> CBs;
 private:
 	std::mutex Sync;
-	std::vector<commandbuffer_vk> CBs;
 };
 
 struct queue_vk {
@@ -169,6 +169,32 @@ bool queuesys_vk::check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR WindowSurf
 		}
 	}
 	return issupported;
+}
+void queuesys_vk::create_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex) {
+	commandpool_vk& CP = family->CommandPools[FrameIndex];
+
+	VkCommandBufferAllocateInfo cb_ai = {};
+	cb_ai.commandBufferCount = 1;
+	cb_ai.commandPool = CP.CPHandle;
+	cb_ai.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cb_ai.pNext = nullptr;
+	cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+
+	commandbuffer_vk VK_CB;
+	if (vkAllocateCommandBuffers(rendergpu->LOGICALDEVICE(), &cb_ai, &VK_CB.CB) != VK_SUCCESS) {
+		printer(result_tgfx_FAIL, "vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
+		return;
+	}
+	VK_CB.is_Used = false;
+#ifdef TURAN_DEBUGGING
+	VK_CB.ID = CP.CBs.size();
+#endif
+
+	CP.CBs.push_back(VK_CB);
+}
+bool queuesys_vk::does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag) {
+	printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");
+	return false;
 }
 extern void Create_QueueSys() {
 	queuesys = new queuesys_vk;

@@ -1,3 +1,4 @@
+#pragma once
 #include "predefinitions_vk.h"
 #include <vector>
 
@@ -24,6 +25,9 @@ struct queueflag_vk {
 	inline queueflag_vk() {
 		doesntNeedAnything = false; is_GRAPHICSsupported = false; is_PRESENTATIONsupported = false; is_COMPUTEsupported = false; is_TRANSFERsupported = false;
 	}
+	inline queueflag_vk(const queueflag_vk& copy) {
+		doesntNeedAnything = copy.doesntNeedAnything; is_GRAPHICSsupported = copy.is_GRAPHICSsupported; is_PRESENTATIONsupported = copy.is_PRESENTATIONsupported; is_COMPUTEsupported = copy.is_COMPUTEsupported; is_TRANSFERsupported = copy.is_TRANSFERsupported;
+	}
 	inline static queueflag_vk CreateInvalidNullFlag() {	//Returned flag's every bit is false. You should set at least one of them as true.
 		return queueflag_vk();
 	}
@@ -41,6 +45,7 @@ struct queueflag_vk {
 };
 
 struct queuesys_vk {
+	queuesys_data* data;
 	//Analize queues to fill gpu description
 	void analize_queues(gpu_public* vkgpu);
 	//While creating VK Logical Device, we need which queues to create. Get that info from here.
@@ -50,5 +55,6 @@ struct queuesys_vk {
 	commandbuffer_vk* get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family);
 	uint32_t get_queuefam_index(gpu_public* vkgpu, queuefam_vk* fam);
 	bool check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR surface);
-	queuesys_data* data;
+	void create_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex);
+	bool does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag);
 };

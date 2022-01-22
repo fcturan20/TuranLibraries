@@ -2,7 +2,7 @@
 #include "rendergraph.h"
 #include "gpucontentmanager.h"
 #include "imgui.h"
-
+framegraphsys_vk framegraphsys;
 
 /**	INTRODUCTION
 * This .cpp is core of the framegraph algorithm. Reconstruction, Execution and Destruction lies here and each of them is a Section.
@@ -52,7 +52,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 	//Static information gives maximum number of command buffers we can need, create them beforehand
 	framegraphsys.Create_VkDataofRGBranches(framegraphsys.framegraphs[0]);
 
-
+#ifndef NO_IMGUI
 	//If dear Imgui is created, apply subpass changes and render UI
 	if (imgui) {
 		//Initialize IMGUI if it isn't initialized
@@ -65,7 +65,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 				return false;
 			} 
 
-			if (imgui->Get_IMGUIStatus() == IMGUI_VK::IMGUI_STATUS::UNINITIALIZED) {
+			if (imgui->Get_IMGUIStatus() == imgui_vk::IMGUI_STATUS::UNINITIALIZED) {
 				imgui->Initialize(IMGUI_Subpass);
 				imgui->UploadFontTextures();
 			}
@@ -79,6 +79,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 
 		imgui->NewFrame();
 	}
+#endif
 
 	renderer->RG_Status = RenderGraphStatus::FinishConstructionCalled;
 	return true;

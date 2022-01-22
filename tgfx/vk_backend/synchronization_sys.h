@@ -168,7 +168,7 @@ public:
 	inline void DestroyFence(fence_idtype_vk& FenceID) {
 		fence_vk& fence = getfence_byid(FenceID);
 		fence.current_status = fence_vk::invalid;
-		FenceID = invalid_fenceid;
+		FenceID = INVALID_FenceID;
 	}
 	inline fence_vk& getfence_byid(fence_idtype_vk id) {
 #ifdef VULKAN_DEBUGGING

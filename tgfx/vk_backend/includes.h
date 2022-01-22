@@ -27,12 +27,25 @@ class threadlocal_vector {
 		}
 	}
 public:
+	threadlocal_vector(const threadlocal_vector& copy) {
+		unsigned int threadcount = (threadingsys) ? (threadingsys->thread_count()) : 1;
+		lists = new T * [threadcount];
+		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count()) : 1];
+		for (unsigned int thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
+			lists[thread_i] = new T[copy.sizes_and_capacities[thread_i * 2]];
+			for (unsigned int element_i = 0; element_i < copy.sizes_and_capacities[thread_i * 2]; element_i++) {
+				lists[thread_i][element_i] = copy.lists[thread_i][element_i];
+			}
+			sizes_and_capacities[thread_i * 2] = copy.sizes_and_capacities[thread_i * 2];
+			sizes_and_capacities[(thread_i * 2) + 1] = copy.sizes_and_capacities[(thread_i * 2) + 1];
+		}
+	}
 	threadlocal_vector(unsigned long initial_sizes) {
 		unsigned int threadcount = (threadingsys) ? (threadingsys->thread_count()) : 1;
 		lists = new T * [threadcount];
 		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count()) : 1];
 		if (initial_sizes) {
-			for (unsigned long thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
+			for (unsigned int thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
 				lists[thread_i] = new T[initial_sizes * 2];
 				sizes_and_capacities[thread_i * 2] = initial_sizes;
 				sizes_and_capacities[(thread_i * 2) + 1] = initial_sizes * 2;

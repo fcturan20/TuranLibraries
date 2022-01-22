@@ -99,3 +99,138 @@ extern void Create_Renderer() {
 
 
 }
+bool transferpass_vk::isWorkloaded() {
+	if (!TransferDatas) {
+		return false;
+	}
+	switch (TYPE) {
+	case transferpasstype_tgfx_BARRIER:
+	{
+		bool isThereAny = false;
+		VK_TPBarrierDatas* TPB = (VK_TPBarrierDatas*)TransferDatas;
+		//Check Buffer Barriers
+		{
+			std::unique_lock<std::mutex> BufferLocker;
+			TPB->BufferBarriers.PauseAllOperations(BufferLocker);
+			for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
+				if (TPB->BufferBarriers.size(ThreadID)) {
+					return true;
+				}
+			}
+		}
+		//Check Texture Barriers
+		if (!isThereAny) {
+			std::unique_lock<std::mutex> TextureLocker;
+			TPB->TextureBarriers.PauseAllOperations(TextureLocker);
+			for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
+				if (TPB->TextureBarriers.size(ThreadID)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	break;
+	case transferpasstype_tgfx_COPY:
+	{
+		bool isThereAny = false;
+		VK_TPCopyDatas* DATAs = (VK_TPCopyDatas*)TransferDatas;
+		{
+			std::unique_lock<std::mutex> BUFBUFLOCKER;
+			DATAs->BUFBUFCopies.PauseAllOperations(BUFBUFLOCKER);
+			for (unsigned char ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
+				if (DATAs->BUFBUFCopies.size(ThreadIndex)) {
+					return true;
+				}
+			}
+		}
+		if (!isThereAny) {
+			std::unique_lock<std::mutex> BUFIMLOCKER;
+			DATAs->BUFIMCopies.PauseAllOperations(BUFIMLOCKER);
+			for (unsigned char ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
+				if (DATAs->BUFIMCopies.size(ThreadIndex)) {
+					return true;
+				}
+			}
+		}
+		if (!isThereAny) {
+			std::unique_lock<std::mutex> IMIMLOCKER;
+			DATAs->IMIMCopies.PauseAllOperations(IMIMLOCKER);
+			for (unsigned char ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
+				if (DATAs->IMIMCopies.size(ThreadIndex)) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+	break;
+	default:
+		printer(result_tgfx_FAIL, "transferpass_vk::IsWorkloaded() doesn't support this type of transfer pass type!");
+		return false;
+	}
+
+
+
+
+	return false;
+}
+bool computepass_vk::isWorkloaded() {
+	for (unsigned char SubpassIndex = 0; SubpassIndex < Subpasses.size(); SubpassIndex++) {
+		subcomputepass_vk& SP = Subpasses[SubpassIndex];
+		if (SP.isThereWorkload()) {
+			return true;
+		}
+	}
+	return false;
+}
+bool windowpass_vk::isWorkloaded() {
+	if (WindowCalls[3].size()) {
+		return true;
+	}
+	return false;
+}
+bool drawpass_vk::isWorkloaded() {
+	for (unsigned char SubpassIndex = 0; SubpassIndex < Subpass_Count; SubpassIndex++) {
+		subdrawpass_vk& SP = Subpasses[SubpassIndex];
+		if (SP.isThereWorkload()) {
+			return true;
+		}
+	}
+	return false;
+}
+bool subdrawpass_vk::isThereWorkload() {
+	if (render_dearIMGUI) {
+		return true;
+	}
+	{
+		std::unique_lock<std::mutex> Locker;
+		IndexedDrawCalls.PauseAllOperations(Locker);
+		for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
+			if (IndexedDrawCalls.size(ThreadID)) {
+				return true;
+			}
+		}
+	}
+	{
+		std::unique_lock<std::mutex> Locker;
+		NonIndexedDrawCalls.PauseAllOperations(Locker);
+		for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
+			if (NonIndexedDrawCalls.size(ThreadID)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+bool subcomputepass_vk::isThereWorkload() {
+	std::unique_lock<std::mutex> Locker;
+	Dispatches.PauseAllOperations(Locker);
+	for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
+		if (Dispatches.size(ThreadID)) {
+			return true;
+		}
+	}
+	return false;
+}

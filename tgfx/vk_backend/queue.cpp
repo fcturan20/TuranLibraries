@@ -5,8 +5,15 @@
 struct commandbuffer_vk {
 	VkCommandBuffer CB;
 	bool is_Used = false;
+	commandbuffer_idtype_vk GetID() {
 #ifdef VULKAN_DEBUGGING
-	CommandBufferIDType ID = INVALID_CommandBufferID;
+		return ID;
+#else
+		return this;
+#endif
+	}
+#ifdef VULKAN_DEBUGGING
+	commandbuffer_idtype_vk ID = INVALID_CommandBufferID;
 #endif
 };
 struct commandpool_vk {
@@ -50,6 +57,7 @@ void queuesys_vk::analize_queues(gpu_public* vkgpu) {
 			queuefam->supportflag.is_GRAPHICSsupported = true;
 			vkgpu->GRAPHICS_supportedqueuecount++;
 			queuefam->featurescore++;
+			vkgpu->graphicsqueue = queuefam;
 		}
 		if (QueueFamily->queueFlags & VK_QUEUE_COMPUTE_BIT) {
 			vkgpu->desc.is_ComputeOperations_Supported = true;
@@ -170,7 +178,7 @@ bool queuesys_vk::check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR WindowSurf
 	}
 	return issupported;
 }
-void queuesys_vk::create_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex) {
+commandbuffer_idtype_vk queuesys_vk::get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex) {
 	commandpool_vk& CP = family->CommandPools[FrameIndex];
 
 	VkCommandBufferAllocateInfo cb_ai = {};
@@ -183,7 +191,7 @@ void queuesys_vk::create_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, u
 	commandbuffer_vk VK_CB;
 	if (vkAllocateCommandBuffers(rendergpu->LOGICALDEVICE(), &cb_ai, &VK_CB.CB) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
-		return;
+		return INVALID_CommandBufferID;
 	}
 	VK_CB.is_Used = false;
 #ifdef TURAN_DEBUGGING
@@ -191,6 +199,11 @@ void queuesys_vk::create_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, u
 #endif
 
 	CP.CBs.push_back(VK_CB);
+
+	return VK_CB.ID;
+}
+fence_idtype_vk queuesys_vk::queueSubmit(gpu_public* vkgpu, queuefam_vk* family, VkSubmitInfo info) {
+	return INVALID_FenceID;
 }
 bool queuesys_vk::does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag) {
 	printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");

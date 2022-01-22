@@ -1,6 +1,6 @@
 #include "predefinitions_vk.h"
-
-class IMGUI_VK {
+#ifndef NO_IMGUI
+struct imgui_vk {
 public:
 	enum class IMGUI_STATUS {
 		UNINITIALIZED = 0,
@@ -9,8 +9,8 @@ public:
 		RENDERED = 3
 	};
 	result_tgfx Initialize(subdrawpass_tgfx_handle SubPass);
-	subdrawpass_tgfx_handle Get_SubDrawPassHandle() const;
-	IMGUI_STATUS Get_IMGUIStatus();
+	inline subdrawpass_tgfx_handle Get_SubDrawPassHandle() const { return Subdrawpass; }
+	inline IMGUI_STATUS Get_IMGUIStatus() { return STAT; }
 	void Change_DrawPass(subdrawpass_tgfx_handle Subpass);
 	void NewFrame();
 	void Render_AdditionalWindows();
@@ -23,3 +23,4 @@ private:
 	subdrawpass_tgfx_handle Subdrawpass;
 	VkDescriptorPool descpool;
 };
+#endif

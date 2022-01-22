@@ -16,8 +16,8 @@ struct renderer_public;
 extern renderer_public* renderer;
 struct gpudatamanager_public;
 extern gpudatamanager_public* contentmanager;
-struct IMGUI_VK;
-extern IMGUI_VK* imgui;
+struct imgui_vk;
+extern imgui_vk* imgui;
 struct gpu_public;
 extern gpu_public* rendergpu;
 typedef struct threadingsys_tapi threadingsys_tapi;
@@ -37,12 +37,11 @@ struct semaphoresys_vk;
 extern semaphoresys_vk* semaphoresys;
 struct fencesys_vk;
 extern fencesys_vk* fencesys;
-struct texture_vk;
 #ifdef VULKAN_DEBUGGING
 typedef unsigned int semaphore_idtype_vk;
 static constexpr semaphore_idtype_vk invalid_semaphoreid = UINT32_MAX;
 typedef unsigned int fence_idtype_vk;
-static constexpr fence_idtype_vk invalid_fenceid = UINT32_MAX;
+static constexpr fence_idtype_vk INVALID_FenceID = UINT32_MAX;
 #else
 struct semaphore_vk;
 typedef semaphore_vk* semaphore_idtype_vk;
@@ -55,6 +54,7 @@ static constexpr fence_idtype_vk invalid_fenceid = nullptr;
 
 //Structs
 
+struct texture_vk;
 struct memorytype_vk;
 struct queuefam_vk;
 struct extension_manager;	//Stores activated extensions and set function pointers according to that
@@ -67,6 +67,7 @@ struct indexeddrawcall_vk;
 struct nonindexeddrawcall_vk;
 struct irtslotset_vk;
 struct rtslotset_vk;
+struct window_vk;
 
 //Enums
 enum class desctype_vk : unsigned char {

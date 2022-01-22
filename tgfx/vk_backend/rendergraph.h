@@ -107,7 +107,7 @@ struct submit_vk {
 	//Creates an invalidated submit
 	submit_vk();
 	void Invalidate();
-	void Initialize(CommandBufferIDType CommandBufferID, BranchIDType FirstBranchID, SubmitIDType SubmitID);
+	void Initialize(commandbuffer_idtype_vk CommandBufferID, BranchIDType FirstBranchID, SubmitIDType SubmitID);
 	bool isValid() const;
 
 	inline const SubmitIDType Get_ID();
@@ -123,7 +123,7 @@ struct submit_vk {
 private:
 	std::vector<submitwaitinfo_vk> WaitInfos;
 	std::vector<semaphore_idtype_vk> SignalSemaphoreIDs;
-	CommandBufferIDType CB_ID = INVALID_CommandBufferID;
+	commandbuffer_idtype_vk CB_ID = INVALID_CommandBufferID;
 	std::vector<BranchIDType> BranchIDs;
 	queuefam_vk* Run_Queue = nullptr;
 	SubmitType Type;
@@ -139,7 +139,7 @@ struct branchsys_vk {
 struct submitsys_vk {
 	inline void SortByID();
 	void ClearList();
-	submit_vk& CreateSubmit(CommandBufferIDType CommandBufferID, BranchIDType FirstBranchID);
+	submit_vk& CreateSubmit(commandbuffer_idtype_vk CommandBufferID, BranchIDType FirstBranchID);
 	inline submit_vk& GetSubmit_byID(SubmitIDType ID);
 	//A submit object isn't completely destroyed, this just invalidates the object
 	//There is no way to completely destroy one object from memory, you have to destroy submitsystem
@@ -172,7 +172,7 @@ struct framegraphsys_vk {
 	void CreateSubmits_Intermediate(framegraph_vk& Current_FrameGraph);
 	void DuplicateFrameGraph(framegraph_vk& TargetFrameGraph, const framegraph_vk& SourceFrameGraph);
 	void Prepare_forSubmitCreation();
-	inline void CreateSubmits_Fast(framegraph_vk& Current_FrameGraph, framegraph_vk& LastFrameGraph);
+	void CreateSubmits_Fast(framegraph_vk& Current_FrameGraph, framegraph_vk& LastFrameGraph);
 	void Send_RenderCommands();
 	void Send_PresentationCommands();
 	void RenderGraph_DataShifting();

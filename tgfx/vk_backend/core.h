@@ -28,7 +28,6 @@ private:
 	VkPhysicalDeviceProperties Device_Properties = {};
 	VkPhysicalDeviceMemoryProperties MemoryProperties = {};
 	VkQueueFamilyProperties* QueueFamilyProperties; unsigned int QueueFamiliesCount = 0;
-	//If GRAPHICS_QUEUEIndex is UINT32_MAX, Graphics isn't supported by the device
 	unsigned int TRANSFERs_supportedqueuecount = 0, COMPUTE_supportedqueuecount = 0, GRAPHICS_supportedqueuecount = 0;
 	VkDevice Logical_Device = {};
 	VkExtensionProperties* Supported_DeviceExtensions; unsigned int Supported_DeviceExtensionsCount = 0;
@@ -41,6 +40,7 @@ private:
 	std::vector<unsigned int> memtype_ids;
 	//Use SortedQUEUEFAMsLIST to access queue families in increasing feature score order
 	queuefam_vk** queuefams;
+	queuefam_vk* graphicsqueue;
 public:
 	inline const char* DEVICENAME() { return desc.NAME; }
 	inline const unsigned int APIVERSION() { return desc.API_VERSION; }
@@ -54,6 +54,7 @@ public:
 	inline const VkPhysicalDeviceMemoryProperties& MEMORYPROPERTIES() const { return MemoryProperties; }
 	inline VkQueueFamilyProperties* QUEUEFAMILYPROPERTIES() const { return QueueFamilyProperties; }
 	inline queuefam_vk** QUEUEFAMS() const { return queuefams; }
+	inline queuefam_vk* GRAPHICSQUEUEFAM() { return graphicsqueue; }
 	inline const uint32_t* ALLQUEUEFAMILIES() const { return AllQueueFamilies; }
 	inline unsigned int QUEUEFAMSCOUNT() const { return QueueFamiliesCount; }
 	inline unsigned int TRANSFERSUPPORTEDQUEUECOUNT() { return TRANSFERs_supportedqueuecount; }

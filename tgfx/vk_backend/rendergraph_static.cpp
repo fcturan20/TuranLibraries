@@ -5,50 +5,10 @@
 #include "queue.h"
 
 
-//RENDER NODEs
-struct VK_Pass {
-	struct VK_PassWaitDescription {
-		VK_Pass** WaitedPass = nullptr;
-		bool WaitLastFramesPass = false;
-		bool isValid() const { printer(result_tgfx_NOTCODED, "PassDescription::isValid isn't coded"); }
-	};
-	enum class PassType : unsigned char {
-		INVALID = 0,
-		DP = 1,
-		TP = 2,
-		CP = 3,
-		WP = 4,
-	};
-	//Name is to debug the rendergraph algorithms, production ready code won't use it!
-	std::string NAME;
-	passwaitdescription_tgfx_handle* const WAITs;
-	const unsigned char WAITsCOUNT;
-	PassType TYPE;
-	//This is to store which branch this pass is used in last frames
-	//With that way, we can identify which semaphore we should wait on if rendergraph is reconstructed
-	//This is UINT32_MAX if pass isn't used last frame
-	unsigned int LastUsedBranchID = UINT32_MAX;
-
-
-	VK_Pass(const std::string& name, PassType type, unsigned int WAITSCOUNT);
-	virtual bool IsWorkloaded() = 0;
-};
 
 //Each framegraph is constructed as same, so there is no difference about passing different framegraphs here
 void framegraphsys_vk::Create_VkDataofRGBranches(const framegraph_vk& FrameGraph) {
-	for (unsigned char BranchIndex = 0; BranchIndex < FrameGraph.branchcount; BranchIndex++) {
-		branch_vk& MainBranch = FrameGraph.FrameGraphTree[BranchIndex];
-		//For each possible queue for the branch, create a command buffer in the related pool!
-		for (unsigned char QueueIndex = 0; QueueIndex < rendergpu->QUEUEFAMSCOUNT(); QueueIndex++) {
-			queuefam_vk* queuefamily = rendergpu->QUEUEFAMS()[QueueIndex];
-			if (!queuesys->does_queuefamily_support(rendergpu, queuefamily, MainBranch.GetNeededQueueFlag())) {
-				continue;
-			}
-			for (unsigned char i = 0; i < 2; i++) {
-				queuesys->create_commandbuffer(rendergpu, queuefamily, i);
-			}
-		}
-	}
+	printer(result_tgfx_NOTCODED, "Couldn't find anything to do in Create_VkDataofRGBranches()");
 }
 //This structure is to create RGBranches easily
 struct VK_RenderingPath {
@@ -74,7 +34,7 @@ queueflag_vk FindRequiredQueue_ofGP(const VK_Pass* GP) {
 		flag.is_GRAPHICSsupported = true;
 		break;
 	case VK_Pass::PassType::TP:
-		if (((transferpass_vk*)GP)->TYPE == tgfx_transferpass_type_BARRIER) {
+		if (((transferpass_vk*)GP)->TYPE == transferpasstype_tgfx_BARRIER) {
 			//All is false means any queue can call this pass!
 			break;
 		}
@@ -117,7 +77,7 @@ VK_RenderingPath* Create_NewRP(VK_Pass* Pass, std::vector<VK_RenderingPath*>& RP
 	RP = new VK_RenderingPath;
 	//Create dependencies for all
 	for (unsigned int PassWaitIndex = 0; PassWaitIndex < Pass->WAITsCOUNT; PassWaitIndex++) {
-		VK_PassWaitDescription& Wait_desc = Pass->WAITs[PassWaitIndex];
+		VK_Pass::WaitDescription& Wait_desc = Pass->WAITs[PassWaitIndex];
 		for (unsigned int RPIndex = 0; RPIndex < RPs.size(); RPIndex++) {
 			VK_RenderingPath* RP_Check = RPs[RPIndex];
 			bool is_alreadydependent = false;
@@ -147,4 +107,10 @@ VK_RenderingPath* Create_NewRP(VK_Pass* Pass, std::vector<VK_RenderingPath*>& RP
 
 	RPs.push_back(RP);
 	return RP;
+}
+
+
+
+void framegraphsys_vk::Create_FrameGraphs() {
+
 }

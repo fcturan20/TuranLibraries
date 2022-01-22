@@ -74,8 +74,10 @@ public:
 	static inline void CheckDeviceLimits(gpu_public* VKGPU);
 };
 
-
+#ifndef NO_IMGUI
 extern void Create_IMGUI();
+#endif // !NO_IMGUI
+
 extern void Create_Renderer();
 extern void Create_GPUContentManager(initialization_secondstageinfo* info);
 extern void set_helper_functions();
@@ -220,9 +222,11 @@ void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_h
 	initialization_secondstageinfo* vkinfo = (initialization_secondstageinfo*)info;
 	rendergpu = vkinfo->renderergpu;
 
+#ifndef NO_IMGUI
 	if (vkinfo->shouldActivate_DearIMGUI) {
 		Create_IMGUI();
 	}
+#endif
 
 	//Create Logical Device
 	{

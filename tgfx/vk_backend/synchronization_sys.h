@@ -181,6 +181,22 @@ public:
 		return *(fence_vk*)id;
 #endif
 	}
+	inline void waitfor_fences(const std::vector<fence_idtype_vk>& fences) {
+		std::vector<VkFence> Fence_objects(fences.size());
+		for (unsigned int fence_i = 0; fence_i < fences.size(); fence_i++) {
+			Fence_objects[fence_i] = getfence_byid(fences[fence_i]).Fence_o;
+		}
+		if (vkWaitForFences(rendergpu->LOGICALDEVICE(), Fence_objects.size(), Fence_objects.data(), VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, "vkWaitForFences() has failed!");
+			return;
+		}
+		if (vkResetFences(rendergpu->LOGICALDEVICE(), Fence_objects.size(), Fence_objects.data()) != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, "VulkanRenderer: Fence reset has failed!");
+		}
+		for (unsigned int fence_i = 0; fence_i < fences.size(); fence_i++) {
+			getfence_byid(fences[fence_i]).current_status = fence_vk::unused;
+		}
+	}
 private:
 	std::vector<fence_vk*> Fences;
 };

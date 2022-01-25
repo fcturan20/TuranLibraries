@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 3.8)
 
 file(GLOB_RECURSE VKbackendfiles "*.cpp" "*.h" "*.c")
+list(REMOVE_ITEM VKbackendfiles "${CMAKE_SOURCE_DIR}/tgfx/vk_backend/rendergraph_main.cpp" "${CMAKE_SOURCE_DIR}/tgfx/vk_backend/rendergraph_static.cpp" "${CMAKE_SOURCE_DIR}/tgfx/vk_backend/rendergraph_dynamic.cpp" "${CMAKE_SOURCE_DIR}/tgfx/vk_backend/rendergraph.h")
 add_library(TGFXVulkan SHARED ${VKbackendfiles})
 target_include_directories(TGFXVulkan PRIVATE ${CMAKE_SOURCE_DIR}/turanapi/turanapi ${CMAKE_SOURCE_DIR}/tgfx/core)
 set_target_properties(TGFXVulkan PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)

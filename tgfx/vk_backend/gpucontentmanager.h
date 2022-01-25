@@ -5,5 +5,8 @@
 struct gpudatamanager_private;
 struct gpudatamanager_public {
 	gpudatamanager_private* hidden;
+	//Create Global descriptor sets
 	void Resource_Finalizations();
+	//Apply changes in Descriptor Sets, RTSlotSets
+	void Apply_ResourceChanges();
 };

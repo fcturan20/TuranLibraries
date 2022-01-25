@@ -7,7 +7,7 @@
 #include "tgfx_structs.h"
 
 struct core_public {
-
+	const std::vector<window_vk*>& GET_WINDOWs();
 };
 
 struct extension_private;
@@ -25,8 +25,8 @@ private:
 	gpudescription_tgfx desc;
 
 	VkPhysicalDevice Physical_Device = {};
-	VkPhysicalDeviceProperties Device_Properties = {};
 	VkPhysicalDeviceMemoryProperties MemoryProperties = {};
+	VkPhysicalDeviceProperties2 Device_Properties = {};
 	VkQueueFamilyProperties* QueueFamilyProperties; unsigned int QueueFamiliesCount = 0;
 	unsigned int TRANSFERs_supportedqueuecount = 0, COMPUTE_supportedqueuecount = 0, GRAPHICS_supportedqueuecount = 0;
 	VkDevice Logical_Device = {};
@@ -50,7 +50,7 @@ public:
 	inline const bool COMPUTESUPPORTED() { return COMPUTE_supportedqueuecount; }
 	inline const bool TRANSFERSUPPORTED() { return TRANSFERs_supportedqueuecount; }
 	inline VkPhysicalDevice PHYSICALDEVICE() { return Physical_Device; }
-	inline const VkPhysicalDeviceProperties& DEVICEPROPERTIES() const { return Device_Properties; }
+	inline const VkPhysicalDeviceProperties& DEVICEPROPERTIES() const { return Device_Properties.properties; }
 	inline const VkPhysicalDeviceMemoryProperties& MEMORYPROPERTIES() const { return MemoryProperties; }
 	inline VkQueueFamilyProperties* QUEUEFAMILYPROPERTIES() const { return QueueFamilyProperties; }
 	inline queuefam_vk** QUEUEFAMS() const { return queuefams; }

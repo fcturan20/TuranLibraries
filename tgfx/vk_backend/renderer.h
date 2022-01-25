@@ -13,9 +13,11 @@ enum class RenderGraphStatus : unsigned char {
 };
 
 //Renderer data that other parts of the backend can access
+struct renderer_funcs;
 struct renderer_public {
 private:
-	friend class framegraphsys_vk;
+	friend struct framegraphsys_vk;
+	friend struct renderer_funcs;
 	friend result_tgfx Execute_RenderGraph();
 	friend void Start_RenderGraphConstruction();
 	friend unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpass);
@@ -60,7 +62,7 @@ struct VK_Pass {
 	unsigned int LastUsedBranchID = UINT32_MAX;
 
 
-	VK_Pass(const std::string& name, PassType type, unsigned int WAITSCOUNT);
+	VK_Pass(const std::string& name, PassType type, unsigned int waitsCount) : WAITs(new WaitDescription[waitsCount]), WAITsCOUNT(waitsCount), TYPE(type), NAME(name) {}
 };
 
 template<class T>
@@ -96,6 +98,7 @@ struct subdrawpass_vk {
 	drawpass_vk* DrawPass;
 	threadlocal_vector<nonindexeddrawcall_vk> NonIndexedDrawCalls;
 	threadlocal_vector<indexeddrawcall_vk> IndexedDrawCalls;
+	subdrawpass_vk() : IndexedDrawCalls(1024), NonIndexedDrawCalls(1024){}
 	bool isThereWorkload();
 };
 struct drawpass_vk {
@@ -108,6 +111,7 @@ struct drawpass_vk {
 	VkFramebuffer FBs[2]{ VK_NULL_HANDLE };
 	boxregion_tgfx RenderRegion;
 
+	drawpass_vk(const std::string& name, unsigned int waitsCount) : base_data(name, VK_Pass::PassType::DP, waitsCount){}
 	bool isWorkloaded();
 };
 
@@ -151,7 +155,7 @@ struct transferpass_vk {
 	void* TransferDatas;
 	transferpasstype_tgfx TYPE;
 
-	transferpass_vk(const char* name, unsigned int WAITSCOUNT);
+	transferpass_vk(const char* name, unsigned int WAITSCOUNT) : base_data(name, VK_Pass::PassType::TP, WAITSCOUNT) {}
 	bool isWorkloaded();
 };
 
@@ -162,6 +166,8 @@ struct windowpass_vk {
 	VK_Pass base_data;
 	//Element 0 is the Penultimate, Element 1 is the Last, Element 2 is the Current buffers.
 	std::vector<windowcall_vk> WindowCalls[3];
+
+	windowpass_vk(const char* name, unsigned int waitsCount) : base_data(name, VK_Pass::PassType::WP, waitsCount){}
 	bool isWorkloaded();
 };
 struct dispatchcall_vk {

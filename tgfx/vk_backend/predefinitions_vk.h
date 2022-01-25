@@ -58,6 +58,7 @@ struct texture_vk;
 struct memorytype_vk;
 struct queuefam_vk;
 struct extension_manager;	//Stores activated extensions and set function pointers according to that
+struct pass_vk;
 struct drawpass_vk;
 struct transferpass_vk;
 struct windowpass_vk;

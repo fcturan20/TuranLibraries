@@ -188,7 +188,7 @@ void CopyDescriptorSets(descset_vk& Set, std::vector<VkCopyDescriptorSet>& CopyV
 		CopyTargetSets.push_back(&Set.Set);
 	}
 }
-void Apply_ResourceChanges() {
+void gpudatamanager_public::Apply_ResourceChanges() {
 	const unsigned char FrameIndex = renderer->Get_FrameIndex(false);
 
 

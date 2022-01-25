@@ -57,3 +57,8 @@ struct irtslotset_vk {
 	operationtype_tgfx DEPTH_OPTYPE;
 	operationtype_tgfx STENCIL_OPTYPE;
 };
+struct subdrawpassdesc_vk {
+	irtslotset_vk* INHERITEDSLOTSET;
+	subdrawpassaccess_tgfx WaitOp, ContinueOp;
+	unsigned char SubDrawPass_Index;
+};

@@ -168,15 +168,17 @@ void allocatorsys_vk::do_allocations(gpu_public* gpu) {
 		vkGetBufferMemoryRequirements(rendergpu->LOGICALDEVICE(), GPULOCAL_buf, &memrequirements);
 		if (!(memrequirements.memoryTypeBits & (1 << memtype.MemoryTypeIndex))) {
 			printer(result_tgfx_FAIL, "GPU Local Memory Allocation doesn't support the MemoryType!");
-			return;
+			continue;
 		}
 		VkMemoryAllocateInfo ci{};
 		ci.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		ci.allocationSize = memrequirements.size;
 		ci.memoryTypeIndex = memtype.MemoryTypeIndex;
 		VkDeviceMemory allocated_memory;
-		if (vkAllocateMemory(rendergpu->LOGICALDEVICE(), &ci, nullptr, &allocated_memory) != VK_SUCCESS) {
-			printer(result_tgfx_FAIL, "vk_gpudatamanager initialization has failed because vkAllocateMemory GPULocalBuffer has failed!");
+		auto allocatememorycode = vkAllocateMemory(rendergpu->LOGICALDEVICE(), &ci, nullptr, &allocated_memory);
+		if (allocatememorycode != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, ("vk_gpudatamanager initialization has failed because vkAllocateMemory has failed with code: " + std::to_string(allocatememorycode) + "!").c_str());
+			continue;
 		}
 		memtype.Allocated_Memory = allocated_memory;
 		memtype.UnusedSize.store(AllocSize);
@@ -193,7 +195,7 @@ void allocatorsys_vk::do_allocations(gpu_public* gpu) {
 
 		if (vkMapMemory(rendergpu->LOGICALDEVICE(), allocated_memory, 0, memrequirements.size, 0, &memtype.MappedMemory) != VK_SUCCESS) {
 			printer(result_tgfx_FAIL, "Mapping the HOSTVISIBLE memory has failed!");
-			return;
+			continue;
 		}
 	}
 }

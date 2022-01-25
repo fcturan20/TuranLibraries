@@ -26,10 +26,13 @@ public:
 	std::vector<window_vk*> WINDOWs;
 
 	//Instead of checking each window each frame, just check this
-	bool isAnyWindowResized = false, isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = false;
+	bool isAnyWindowResized = false, isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = true;
 };
 static core_private* hidden = nullptr;
 
+const std::vector<window_vk*>& core_public::GET_WINDOWs() {
+	return hidden->WINDOWs;
+}
 
 void GFX_Error_Callback(int error_code, const char* description) {
 	printf("TGFX_FAIL: %s\n", description);
@@ -149,6 +152,7 @@ extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi* regsys, c
 //While enabling features, some struct should be chained. This struct is to keep data object lifetimes optimal
 struct device_features_chainedstructs {
 	VkPhysicalDeviceDescriptorIndexingFeatures DescIndexingFeatures = {};
+	VkPhysicalDeviceMaintenance3Properties device_props2_main3 = {};
 };
 //You have to enable some features to use some device extensions
 inline void core_functions::ActivateDeviceFeatures(gpu_public* VKGPU, VkDeviceCreateInfo& device_ci, device_features_chainedstructs& chainer) {
@@ -188,6 +192,8 @@ inline void core_functions::ActivateDeviceFeatures(gpu_public* VKGPU, VkDeviceCr
 			extending_Next = &chainer.DescIndexingFeatures.pNext;
 		}
 	}
+
+	
 }
 inline void core_functions::CheckDeviceLimits(gpu_public* VKGPU) {
 	//Check Descriptor Limits
@@ -209,11 +215,11 @@ inline void core_functions::CheckDeviceLimits(gpu_public* VKGPU) {
 			delete descindexinglimits;
 		}
 		else {
-			VKGPU->extensions->GETMAXDESC(desctype_vk::SAMPLER) = VKGPU->Device_Properties.limits.maxPerStageDescriptorSampledImages;
-			VKGPU->extensions->GETMAXDESC(desctype_vk::IMAGE) = VKGPU->Device_Properties.limits.maxPerStageDescriptorStorageImages;
-			VKGPU->extensions->GETMAXDESC(desctype_vk::SBUFFER) = VKGPU->Device_Properties.limits.maxPerStageDescriptorStorageBuffers;
-			VKGPU->extensions->GETMAXDESC(desctype_vk::UBUFFER) = VKGPU->Device_Properties.limits.maxPerStageDescriptorUniformBuffers;
-			VKGPU->extensions->GETMAXDESCALL() = VKGPU->Device_Properties.limits.maxPerStageResources;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::SAMPLER) = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorSampledImages;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::IMAGE) = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorStorageImages;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::SBUFFER) = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorStorageBuffers;
+			VKGPU->extensions->GETMAXDESC(desctype_vk::UBUFFER) = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorUniformBuffers;
+			VKGPU->extensions->GETMAXDESCALL() = VKGPU->DEVICEPROPERTIES().limits.maxPerStageResources;
 			VKGPU->extensions->GETMAXDESCPERSTAGE() = UINT32_MAX;
 		}
 	}
@@ -366,14 +372,14 @@ void core_functions::Save_Monitors() {
 
 std::vector<const char*> Active_InstanceExtensionNames;
 std::vector<VkExtensionProperties> Supported_InstanceExtensionList;
-inline void Check_InstanceExtensions() {
+bool Check_InstanceExtensions() {
 	uint32_t glfwExtensionCount = 0;
 	const char** glfwExtensions;
 	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 	for (unsigned int i = 0; i < glfwExtensionCount; i++) {
 		if (!IsExtensionSupported(glfwExtensions[i], Supported_InstanceExtensionList.data(), Supported_InstanceExtensionList.size())) {
 			printer(result_tgfx_INVALIDARGUMENT, "Your vulkan instance doesn't support extensions that're required by GLFW. This situation is not tested, so report your device to the author!");
-			return;
+			return false;
 		}
 		Active_InstanceExtensionNames.push_back(glfwExtensions[i]);
 	}
@@ -386,24 +392,22 @@ inline void Check_InstanceExtensions() {
 	else {
 		printer(result_tgfx_WARNING, "Your Vulkan instance doesn't support to display a window, so you shouldn't use any window related functionality such as: GFXRENDERER->Create_WindowPass, GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
 	}
-
+	
+	//Check PhysicalDeviceProperties2KHR
+	if (Application_Info.apiVersion == VK_API_VERSION_1_0){
+		if (!IsExtensionSupported(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, Supported_InstanceExtensionList.data(), Supported_InstanceExtensionList.size())) {
+			hidden->isSupported_PhysicalDeviceProperties2 = false;
+			printer(result_tgfx_FAIL, "Your OS doesn't support Physical Device Properties 2 extension which should be supported, so Vulkan device creation has failed!");
+			return false;
+		}
+		else{ Active_InstanceExtensionNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME); }
+	}
 
 #ifdef VULKAN_DEBUGGING
 	if (IsExtensionSupported(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, Supported_InstanceExtensionList.data(), Supported_InstanceExtensionList.size())) {
 		Active_InstanceExtensionNames.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
 #endif
-
-
-	//Check isActive_GetPhysicalDeviceProperties2KHR
-	if ((Application_Info.apiVersion == VK_API_VERSION_1_0 &&
-		IsExtensionSupported(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, Supported_InstanceExtensionList.data(), Supported_InstanceExtensionList.size())
-		) || Application_Info.apiVersion != VK_API_VERSION_1_0) {
-		hidden->isSupported_PhysicalDeviceProperties2 = true;
-		if (Application_Info.apiVersion == VK_API_VERSION_1_0) {
-			Active_InstanceExtensionNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-		}
-	}
 }
 
 void core_functions::Create_Instance() {
@@ -422,7 +426,9 @@ void core_functions::Create_Instance() {
 	//Doesn't construct VkExtensionProperties object, so we have to use resize!
 	Supported_InstanceExtensionList.resize(extension_count);
 	vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, Supported_InstanceExtensionList.data());
-	Check_InstanceExtensions();
+	if (!Check_InstanceExtensions()) {
+		return;
+	}
 
 	//CHECK SUPPORTED LAYERS
 	unsigned int Supported_LayerNumber = 0;
@@ -481,8 +487,12 @@ void core_functions::Setup_Debugging() {
 
 
 void core_functions::Gather_PhysicalDeviceInformations(gpu_public* VKGPU) {
-	vkGetPhysicalDeviceProperties(VKGPU->PHYSICALDEVICE(), &VKGPU->Device_Properties);
 	vkGetPhysicalDeviceFeatures(VKGPU->Physical_Device, &VKGPU->Supported_Features);
+
+	VKGPU->Device_Properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+	VkPhysicalDeviceMaintenance3Properties props; props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES; props.pNext = nullptr;
+	VKGPU->Device_Properties.pNext = &props;
+	vkGetPhysicalDeviceProperties2(VKGPU->PHYSICALDEVICE(), &VKGPU->Device_Properties);
 
 	//GET QUEUE FAMILIES, SAVE THEM TO GPU OBJECT, CHECK AND SAVE GRAPHICS,COMPUTE,TRANSFER QUEUEFAMILIES INDEX
 	vkGetPhysicalDeviceQueueFamilyProperties(VKGPU->Physical_Device, &VKGPU->QueueFamiliesCount, nullptr);
@@ -540,13 +550,12 @@ inline void core_functions::Check_Computer_Specs() {
 		vkgpu->Physical_Device = DiscreteGPUs[i];
 		hidden->DEVICE_GPUs.push_back(vkgpu);
 
-
 		Gather_PhysicalDeviceInformations(vkgpu);
 		//SAVE BASIC INFOs TO THE GPU DESC
 		vkgpu->desc.NAME = vkgpu->DEVICEPROPERTIES().deviceName;
-		vkgpu->desc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
-		vkgpu->desc.API_VERSION = vkgpu->Device_Properties.apiVersion;
-		vkgpu->desc.DRIVER_VERSION = vkgpu->Device_Properties.driverVersion;
+		vkgpu->desc.DRIVER_VERSION = vkgpu->DEVICEPROPERTIES().driverVersion;
+		vkgpu->desc.API_VERSION = vkgpu->DEVICEPROPERTIES().apiVersion;
+		vkgpu->desc.DRIVER_VERSION = vkgpu->DEVICEPROPERTIES().driverVersion;
 
 		allocatorsys->analize_gpumemory(vkgpu);
 		queuesys->analize_queues(vkgpu);
@@ -554,10 +563,8 @@ inline void core_functions::Check_Computer_Specs() {
 		Describe_SupportedExtensions(vkgpu);
 		CheckDeviceLimits(vkgpu);
 
-
 		printer(result_tgfx_SUCCESS, "Finished checking Computer Specifications!");
 	}
-
 }
 
 

@@ -67,7 +67,7 @@ struct gpudatamanager_private {
 	//These are the texture that will be added to the list above after clearing the above list
 	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
 
-	gpudatamanager_private() : DescSets_toCreate(1024, nullptr), DescSets_toCreateUpdate(1024, descset_updatecall_vk()), DescSets_toJustUpdate(1024, descset_updatecall_vk()), DeleteTextureList(1024, nullptr), NextFrameDeleteTextureCalls(1024, nullptr) {}
+	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024) {}
 };
 static gpudatamanager_private* hidden = nullptr;
 
@@ -466,6 +466,8 @@ void gpudatamanager_public::Apply_ResourceChanges() {
 
 }
 
+VkDescriptorSet gpudatamanager_public::get_GlobalBuffersDescSet() { return hidden->GlobalBuffers_DescSet.Set; }
+VkDescriptorSet gpudatamanager_public::get_GlobalTexturesDescsSet() {return hidden->GlobalTextures_DescSet.Set;}
 void gpudatamanager_public::Resource_Finalizations() {
 	//If Descriptor Indexing isn't supported, check if any global descriptor isn't set before!
 	if (!rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {

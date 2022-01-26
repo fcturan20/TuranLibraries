@@ -96,9 +96,6 @@ int main(){
 	auto profilersysdll = DLIB_LOAD_TAPI("tapi_profiler.dll");
 	load_plugin_func profilersysloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(profilersysdll, "load_plugin");
 	PROFILER_TAPI_PLUGIN_LOAD_TYPE profilersys = (PROFILER_TAPI_PLUGIN_LOAD_TYPE)profilersysloader(sys, 0);
-	profiledscope_handle_tapi firstprofiling_handle;
-	unsigned long long firstprofiling_duration = 0;
-	profilersys->funcs->start_profiling(&firstprofiling_handle, "First Profiling", &firstprofiling_duration, 2);
 
 
 	auto tgfxdll = DLIB_LOAD_TAPI("tgfx_core.dll");
@@ -129,15 +126,16 @@ int main(){
 	window_tgfx_handle firstwindow;
 	tgfxsys->api->create_window(1280, 720, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
 	tgfxsys->api->renderer->Start_RenderGraphConstruction();
+	transferpass_tgfx_handle firstbarriertp;
+	tgfxsys->api->renderer->Create_TransferPass((passwaitdescription_tgfx_listhandle)&tgfxsys->api->INVALIDHANDLE, transferpasstype_tgfx_BARRIER, "FirstBarrierTP", &firstbarriertp);
+	tgfxsys->api->renderer->Finish_RenderGraphConstruction(nullptr);
 
-	printf("Application waits for an input: ");
-	scanf("%c", &stop_char);
-	threadingsys->funcs->wait_all_otherjobs();
-	Sleep(100);
-	char new_char;
-	scanf(" %c", &new_char);
-	profilersys->funcs->finish_profiling(&firstprofiling_handle, 1);
-	printf("Profiling Duration: %llu\n", firstprofiling_duration);
+	while (true) {
+		profiledscope_handle_tapi scope;	unsigned long long duration;
+		profilersys->funcs->start_profiling(&scope, "Run Loop", &duration, 1);
+		tgfxsys->api->renderer->Run();
+		profilersys->funcs->finish_profiling(&scope, 1);
+	}
 	printf("Application is finished!");
 
 	return 1;

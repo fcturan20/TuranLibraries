@@ -11,7 +11,7 @@ typedef struct core_tgfx{
     helper_tgfx* helpers;
 
 	//Invalid handle is used to terminate array of i/o. NULL is used to say i/o is a failed handle and ignored if possible.
-	const void* INVALIDHANDLE;
+	void* INVALIDHANDLE;
 
     /*
     If isMultiThreaded is 0 :

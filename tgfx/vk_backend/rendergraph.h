@@ -82,8 +82,6 @@ enum class BranchType : unsigned char {
 
 
 
-class rendergraph_functions {
-};
 
 
 

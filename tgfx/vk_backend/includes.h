@@ -30,9 +30,9 @@ public:
 	threadlocal_vector(const threadlocal_vector& copy) {
 		unsigned int threadcount = (threadingsys) ? (threadingsys->thread_count()) : 1;
 		lists = new T * [threadcount];
-		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count()) : 1];
+		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count() * 2) : 2];
 		for (unsigned int thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
-			lists[thread_i] = new T[copy.sizes_and_capacities[thread_i * 2]];
+			lists[thread_i] = new T[copy.sizes_and_capacities[(thread_i * 2) + 1]];
 			for (unsigned int element_i = 0; element_i < copy.sizes_and_capacities[thread_i * 2]; element_i++) {
 				lists[thread_i][element_i] = copy.lists[thread_i][element_i];
 			}
@@ -40,22 +40,24 @@ public:
 			sizes_and_capacities[(thread_i * 2) + 1] = copy.sizes_and_capacities[(thread_i * 2) + 1];
 		}
 	}
+	//This constructor allocates initial_sizes * 2 memory but doesn't add any element to it, so you should use push_back()
 	threadlocal_vector(unsigned long initial_sizes) {
 		unsigned int threadcount = (threadingsys) ? (threadingsys->thread_count()) : 1;
 		lists = new T * [threadcount];
-		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count()) : 1];
+		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count() * 2) : 2];
 		if (initial_sizes) {
 			for (unsigned int thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
 				lists[thread_i] = new T[initial_sizes * 2];
-				sizes_and_capacities[thread_i * 2] = initial_sizes;
+				sizes_and_capacities[thread_i * 2] = 0;
 				sizes_and_capacities[(thread_i * 2) + 1] = initial_sizes * 2;
 			}
 		}
 	}
+	//This constructor allocates initial_sizes * 2 memory and fills it with initial_sizes number of ref objects
 	threadlocal_vector(unsigned long initial_sizes, const T& ref) {
 		unsigned int threadcount = (threadingsys) ? (threadingsys->thread_count()) : 1;
 		lists = new T * [threadcount];
-		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count()) : 1];
+		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count() * 2) : 2];
 		if (initial_sizes) {
 			for (unsigned int thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
 				lists[thread_i] = new T[initial_sizes * 2];
@@ -68,7 +70,7 @@ public:
 		}
 	}
 	unsigned long size(unsigned int ThreadIndex = UINT32_MAX) {
-		return sizes_and_capacities[(threadingsys) ? (threadingsys->this_thread_index()) : 0];
+		return sizes_and_capacities[(threadingsys) ? (threadingsys->this_thread_index() * 2) : 0];
 	}
 	void push_back(const T& ref, unsigned int ThreadIndex = UINT32_MAX) {
 		const unsigned int thread_i = (ThreadIndex == UINT32_MAX) ? (ThreadIndex) : ((threadingsys) ? (threadingsys->this_thread_index()) : 0);
@@ -77,10 +79,10 @@ public:
 		sizes_and_capacities[thread_i * 2] += 1;
 	}
 	T* data(unsigned int ThreadIndex = UINT32_MAX) {
-		return lists[(ThreadIndex == UINT32_MAX) ? (ThreadIndex) : ((threadingsys) ? (threadingsys->this_thread_index()) : 0)];
+		return lists[(ThreadIndex != UINT32_MAX) ? (ThreadIndex) : ((threadingsys) ? (threadingsys->this_thread_index()) : 0)];
 	}
 	void clear(unsigned int ThreadIndex = UINT32_MAX) {
-		sizes_and_capacities[(ThreadIndex == UINT32_MAX) ? (ThreadIndex * 2) : ((threadingsys) ? (threadingsys->this_thread_index() * 2) : 0)] = 0;
+		sizes_and_capacities[(ThreadIndex != UINT32_MAX) ? (ThreadIndex * 2) : ((threadingsys) ? (threadingsys->this_thread_index() * 2) : 0)] = 0;
 	}
 	T& get(unsigned int ThreadIndex, unsigned int ElementIndex) {
 		return lists[ThreadIndex][ElementIndex];

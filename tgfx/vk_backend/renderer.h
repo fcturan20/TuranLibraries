@@ -27,7 +27,7 @@ private:
 	std::vector<windowpass_vk*> WindowPasses;
 	std::vector<computepass_vk*> ComputePasses;
 	RenderGraphStatus RG_Status = RenderGraphStatus::Invalid;
-	unsigned char FrameIndex;
+	unsigned char FrameIndex = 0;
 public:
 	inline unsigned char Get_FrameIndex(bool is_LastFrame){
 		return (is_LastFrame) ? ((FrameIndex + 1) % 2) : (FrameIndex);
@@ -42,7 +42,7 @@ struct VK_Pass {
 	struct WaitDescription {
 		VK_Pass** WaitedPass = nullptr;
 		bool WaitLastFramesPass = false;
-		bool isValid() const { printer(result_tgfx_NOTCODED, "PassDescription::isValid isn't coded"); }
+		bool isValid() const { printer(result_tgfx_NOTCODED, "PassDescription::isValid isn't coded"); return false; }
 	};
 	enum class PassType : unsigned char {
 		INVALID = 0,
@@ -134,7 +134,7 @@ struct VK_TPCopyDatas {
 	threadlocal_vector<VK_BUFtoIMinfo> BUFIMCopies;
 	threadlocal_vector<VK_BUFtoBUFinfo> BUFBUFCopies;
 	threadlocal_vector<VK_IMtoIMinfo> IMIMCopies;
-	VK_TPCopyDatas();
+	VK_TPCopyDatas(): BUFIMCopies(1024), BUFBUFCopies(1024), IMIMCopies(1024) {}
 };
 
 struct VK_ImBarrierInfo {

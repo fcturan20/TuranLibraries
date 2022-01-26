@@ -13,7 +13,7 @@ public:
 		used_status = 2
 	};
 private:
-	friend class semaphoresys_vk;
+	friend struct semaphoresys_vk;
 	VkSemaphore SPHandle = VK_NULL_HANDLE;
 #ifdef VULKAN_DEBUGGING
 	semaphore_idtype_vk ID;
@@ -168,7 +168,7 @@ public:
 	inline void DestroyFence(fence_idtype_vk& FenceID) {
 		fence_vk& fence = getfence_byid(FenceID);
 		fence.current_status = fence_vk::invalid;
-		FenceID = INVALID_FenceID;
+		FenceID = invalid_fenceid;
 	}
 	inline fence_vk& getfence_byid(fence_idtype_vk id) {
 #ifdef VULKAN_DEBUGGING
@@ -182,6 +182,7 @@ public:
 #endif
 	}
 	inline void waitfor_fences(const std::vector<fence_idtype_vk>& fences) {
+		if (!fences.size()) { return; }
 		std::vector<VkFence> Fence_objects(fences.size());
 		for (unsigned int fence_i = 0; fence_i < fences.size(); fence_i++) {
 			Fence_objects[fence_i] = getfence_byid(fences[fence_i]).Fence_o;

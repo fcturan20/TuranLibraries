@@ -5,16 +5,6 @@
 struct commandbuffer_vk {
 	VkCommandBuffer CB;
 	bool is_Used = false;
-	commandbuffer_idtype_vk GetID() {
-#ifdef VULKAN_DEBUGGING
-		return ID;
-#else
-		return this;
-#endif
-	}
-#ifdef VULKAN_DEBUGGING
-	commandbuffer_idtype_vk ID = INVALID_CommandBufferID;
-#endif
 };
 struct commandpool_vk {
 	commandpool_vk() = default;
@@ -23,7 +13,7 @@ struct commandpool_vk {
 	commandbuffer_vk& CreateCommandBuffer();
 	void DestroyCommandBuffer();
 	VkCommandPool CPHandle = VK_NULL_HANDLE;
-	std::vector<commandbuffer_vk> CBs;
+	std::vector<commandbuffer_vk*> CBs;
 private:
 	std::mutex Sync;
 };
@@ -178,7 +168,7 @@ bool queuesys_vk::check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR WindowSurf
 	}
 	return issupported;
 }
-commandbuffer_idtype_vk queuesys_vk::get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex) {
+commandbuffer_vk* queuesys_vk::get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex) {
 	commandpool_vk& CP = family->CommandPools[FrameIndex];
 
 	VkCommandBufferAllocateInfo cb_ai = {};
@@ -188,22 +178,22 @@ commandbuffer_idtype_vk queuesys_vk::get_commandbuffer(gpu_public* vkgpu, queuef
 	cb_ai.pNext = nullptr;
 	cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 
-	commandbuffer_vk VK_CB;
-	if (vkAllocateCommandBuffers(rendergpu->LOGICALDEVICE(), &cb_ai, &VK_CB.CB) != VK_SUCCESS) {
+	commandbuffer_vk* VK_CB = new commandbuffer_vk;
+	if (vkAllocateCommandBuffers(rendergpu->LOGICALDEVICE(), &cb_ai, &VK_CB->CB) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
-		return INVALID_CommandBufferID;
+		return nullptr;
 	}
-	VK_CB.is_Used = false;
-#ifdef TURAN_DEBUGGING
-	VK_CB.ID = CP.CBs.size();
-#endif
+	VK_CB->is_Used = false;
 
 	CP.CBs.push_back(VK_CB);
 
-	return VK_CB.ID;
+	return VK_CB;
+}
+VkCommandBuffer queuesys_vk::get_commandbufferobj(commandbuffer_vk* id) {
+	return id->CB;
 }
 fence_idtype_vk queuesys_vk::queueSubmit(gpu_public* vkgpu, queuefam_vk* family, VkSubmitInfo info) {
-	return INVALID_FenceID;
+	return invalid_fenceid;
 }
 bool queuesys_vk::does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag) {
 	printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");

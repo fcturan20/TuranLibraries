@@ -1,6 +1,6 @@
 #pragma once
 //Vulkan Libs
-#include <vulkan/vulkan.h>
+#include <vulkan\vulkan.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <tgfx_forwarddeclarations.h>
@@ -41,7 +41,7 @@ extern fencesys_vk* fencesys;
 typedef unsigned int semaphore_idtype_vk;
 static constexpr semaphore_idtype_vk invalid_semaphoreid = UINT32_MAX;
 typedef unsigned int fence_idtype_vk;
-static constexpr fence_idtype_vk INVALID_FenceID = UINT32_MAX;
+static constexpr fence_idtype_vk invalid_fenceid = UINT32_MAX;
 #else
 struct semaphore_vk;
 typedef semaphore_vk* semaphore_idtype_vk;

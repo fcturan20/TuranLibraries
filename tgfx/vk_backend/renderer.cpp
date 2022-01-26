@@ -179,6 +179,9 @@ struct renderer_funcs {
 		VKDrawPass->SLOTSET = SLOTSET;
 		VKDrawPass->Subpass_Count = SubDrawPassesCount;
 		VKDrawPass->Subpasses = Final_Subpasses;
+		if ((VK_Pass*)VKDrawPass != & VKDrawPass->base_data) {
+			printer(result_tgfx_FAIL, "DrawPass' first variable should be base_data!");
+		}
 
 		for (unsigned int S_i = 0, T_i = 0; S_i < WAITSCOUNT; S_i++) {
 			if (DrawPassWAITs[S_i] == nullptr) {
@@ -435,13 +438,15 @@ struct renderer_funcs {
 	static void PrepareForNextFrame() {
 		renderer->FrameIndex = (renderer->FrameIndex + 1) % 2;
 
-
-		imgui->NewFrame();
+		if(imgui){ imgui->NewFrame(); }
+		
 	}
 
 	//Rendering operations
 	static void Run() {
 		printer(result_tgfx_SUCCESS, "Before cb waiting()!");
+
+		unsigned char frame_i = renderer->Get_FrameIndex(false);
 
 		//Wait for command buffers that are sent to render N-2th frame (N is the current frame)
 		//As the name says, this function stops the thread while waiting for render calls (raster-compute-transfer-barrier calls).
@@ -459,7 +464,7 @@ struct renderer_funcs {
 
 			uint32_t SwapchainImage_Index;
 			vkAcquireNextImageKHR(rendergpu->LOGICALDEVICE(), VKWINDOW->Window_SwapChain, UINT64_MAX,
-				semaphoresys->GetSemaphore_byID(VKWINDOW->PresentationSemaphores[1]).vksemaphore(), VK_NULL_HANDLE, &SwapchainImage_Index);
+				semaphoresys->GetSemaphore_byID(VKWINDOW->PresentationSemaphores[frame_i]).vksemaphore(), VK_NULL_HANDLE, &SwapchainImage_Index);
 			if (SwapchainImage_Index != VKWINDOW->CurrentFrameSWPCHNIndex) {
 				std::stringstream ErrorStream;
 				ErrorStream << "Vulkan's reported SwapchainImage_Index: " << SwapchainImage_Index <<
@@ -470,9 +475,15 @@ struct renderer_funcs {
 		}
 
 
-		//This function is defined in FGAlgorithm.cpp
+		//This function is defined in rendergraph_primitive.cpp
+		//Recording command buffers, sending them to queues and presenting swapchain to window happen in this function
 		Execute_RenderGraph();
 
+
+		for (unsigned char WindowIndex = 0; WindowIndex < windows.size(); WindowIndex++) {
+			window_vk* VKWINDOW = (window_vk*)(windows[WindowIndex]);
+			glfwSwapBuffers(VKWINDOW->GLFW_WINDOW);
+		}
 
 		//Current frame has finished, so every call after this call affects to the next frame
 		//That means we should make some changes/clean-ups for every system to work fine
@@ -533,6 +544,10 @@ inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->Start_RenderGraphConstruction = &Start_RenderGraphConstruction;
 	core_tgfx_main->renderer->Finish_RenderGraphConstruction = &Finish_RenderGraphConstruction;
 	core_tgfx_main->renderer->Destroy_RenderGraph = &Destroy_RenderGraph;
+
+	core_tgfx_main->renderer->Create_TransferPass = &renderer_funcs::Create_TransferPass;
+	core_tgfx_main->renderer->Run = &renderer_funcs::Run;
+	
 }
 extern void Create_Renderer() {
 	renderer = new renderer_public;

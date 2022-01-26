@@ -5,13 +5,6 @@
 struct commandpool_vk;
 struct commandbuffer_vk;
 struct queuesys_data;
-#ifdef VULKAN_DEBUGGING
-typedef unsigned int commandbuffer_idtype_vk;
-static constexpr commandbuffer_idtype_vk INVALID_CommandBufferID = UINT32_MAX;
-#else
-typedef commandbuffer_vk* CommandBufferIDType;
-static constexpr CommandBufferIDType INVALID_CommandBufferID = nullptr;
-#endif
 
 
 //Initializes as everything is false (same as CreateInvalidNullFlag)
@@ -53,7 +46,8 @@ struct queuesys_vk {
 	//Get VkQueue objects from logical device
 	void get_queue_objects(gpu_public* vkgpu);
 	//Searches for an available command buffer, if not found creates one
-	commandbuffer_idtype_vk get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex);
+	commandbuffer_vk* get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex);
+	VkCommandBuffer get_commandbufferobj(commandbuffer_vk* id);
 	fence_idtype_vk queueSubmit(gpu_public* vkgpu, queuefam_vk* family, VkSubmitInfo info);
 	uint32_t get_queuefam_index(gpu_public* vkgpu, queuefam_vk* fam);
 	bool check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR surface);

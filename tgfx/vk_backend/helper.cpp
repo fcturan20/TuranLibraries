@@ -6,7 +6,9 @@
 #include <tgfx_helper.h>
 #include "core.h"
 #include "extension.h"
+#include "resource.h"
 #include "predefinitions_vk.h"
+#include "includes.h"
 
 
 //Hardware Capability Helpers
@@ -27,10 +29,11 @@ static unsigned char  GetTextureTypeLimits(texture_dimensions_tgfx dims, texture
     textureusageflag_tgfx_handle usageflag, gpu_tgfx_handle GPUHandle, unsigned int* MAXWIDTH, unsigned int* MAXHEIGHT, unsigned int* MAXDEPTH,
     unsigned int* MAXMIPLEVEL) {
     VkImageFormatProperties props;
-    if (vkGetPhysicalDeviceImageFormatProperties(rendergpu->PHYSICALDEVICE(), Find_VkFormat_byTEXTURECHANNELs(channeltype),
+    VkResult result = vkGetPhysicalDeviceImageFormatProperties(rendergpu->PHYSICALDEVICE(), Find_VkFormat_byTEXTURECHANNELs(channeltype),
         Find_VkImageType(dims), Find_VkTiling(dataorder), *(VkImageUsageFlags*)usageflag,
-        0, &props) != VK_SUCCESS) {
-        printer(result_tgfx_FAIL, "GFX->GetTextureTypeLimits() has failed!");
+        0, &props);
+    if (result != VK_SUCCESS) {
+        printer(result_tgfx_FAIL, ("GFX->GetTextureTypeLimits() has failed with: " + std::to_string(result)).c_str());
         return false;
     }
     printer(result_tgfx_SUCCESS, "After vkGetPhysicalDeviceImageFormatProperties()!");
@@ -120,6 +123,9 @@ static waitsignaldescription_tgfx_handle CreateWaitSignal_ComputeShader(unsigned
 static waitsignaldescription_tgfx_handle CreateWaitSignal_FragmentTests(unsigned char isEarly, unsigned char isRead, unsigned char isWrite) {
     return nullptr;
 }
+static waitsignaldescription_tgfx_handle CreateWaitSignal_Transfer(unsigned char UniformRead, unsigned char StorageRead) {
+    return nullptr;
+}
 
 //RENDERNODE HELPERS
 
@@ -135,7 +141,7 @@ static passwaitdescription_tgfx_handle CreatePassWait_ComputePass(computepass_tg
     return nullptr;
 }
 //WaitInfo is single, because function expects only one wait and it should be created with CreateWaitSignal_Transfer()
-static passwaitdescription_tgfx_handle CreatePassWait_TransferPass(transferpasstype_tgfx* PassHandle,
+static passwaitdescription_tgfx_handle CreatePassWait_TransferPass(transferpass_tgfx_handle* PassHandle,
     transferpasstype_tgfx Type, waitsignaldescription_tgfx_handle WaitInfo, unsigned char isLastFrame) {
     return nullptr;
 }
@@ -145,8 +151,12 @@ static passwaitdescription_tgfx_handle CreatePassWait_WindowPass(windowpass_tgfx
     return nullptr;
 }
 
-static subdrawpassdescription_tgfx_handle CreateSubDrawPassDescription() {
-    return nullptr;
+static subdrawpassdescription_tgfx_handle CreateSubDrawPassDescription(inheritedrtslotset_tgfx_handle irtslotset, subdrawpassaccess_tgfx WaitOP, subdrawpassaccess_tgfx ContinueOP) {
+    subdrawpassdesc_vk* desc = new subdrawpassdesc_vk;
+    desc->INHERITEDSLOTSET = (irtslotset_vk*)irtslotset;
+    desc->WaitOp = WaitOP;
+    desc->ContinueOp = ContinueOP;
+    return (subdrawpassdescription_tgfx_handle)desc;
 }
 
 
@@ -155,8 +165,15 @@ static shaderinputdescription_tgfx_handle CreateShaderInputDescription(unsigned 
     return nullptr;
 }
 static rtslotdescription_tgfx_handle CreateRTSlotDescription_Color(texture_tgfx_handle Texture0, texture_tgfx_handle Texture1,
-    operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE, unsigned char isUsedLater, unsigned char SLOTINDEX, vec4_tgfx CLEARVALUE) {
-    return nullptr;
+    operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE, unsigned char isUsedLater, unsigned char SLOTINDEX, vec4_tgfx clear_value) {
+    rtslotdesc_vk* desc = new rtslotdesc_vk;
+    desc->clear_value = clear_value;
+    desc->isUsedLater = isUsedLater;
+    desc->loadtype = LOADTYPE;
+    desc->optype = OPTYPE;
+    desc->textures[0] = (texture_vk*)Texture0;
+    desc->textures[1] = (texture_vk*)Texture1;
+    return (rtslotdescription_tgfx_handle)desc;
 }
 static rtslotdescription_tgfx_handle CreateRTSlotDescription_DepthStencil(texture_tgfx_handle Texture0, texture_tgfx_handle Texture1,
     operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD, operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD,
@@ -210,6 +227,7 @@ extern void set_helper_functions() {
     core_tgfx_main->helpers->CreateWaitSignal_DrawIndirectConsume = &CreateWaitSignal_DrawIndirectConsume;
     core_tgfx_main->helpers->CreateWaitSignal_FragmentShader = &CreateWaitSignal_FragmentShader;
     core_tgfx_main->helpers->CreateWaitSignal_FragmentTests = &CreateWaitSignal_FragmentTests;
+    core_tgfx_main->helpers->CreateWaitSignal_Transfer = &CreateWaitSignal_Transfer;
     core_tgfx_main->helpers->CreateWaitSignal_VertexInput = &CreateWaitSignal_VertexInput;
     core_tgfx_main->helpers->CreateWaitSignal_VertexShader = &CreateWaitSignal_VertexShader;
     core_tgfx_main->helpers->Create_GFXInitializationSecondStageInfo = &Create_GFXInitializationSecondStageInfo;

@@ -78,32 +78,6 @@ enum class desctype_vk : unsigned char {
 	UBUFFER = 3
 };
 
-
-//Simple enumaration functions
-extern VkFormat Find_VkFormat_byDataType(datatype_tgfx datatype);
-extern VkFormat Find_VkFormat_byTEXTURECHANNELs(texture_channels_tgfx channels);
-extern VkDescriptorType Find_VkDescType_byMATDATATYPE(shaderinputtype_tgfx TYPE);
-extern VkSamplerAddressMode Find_AddressMode_byWRAPPING(texture_wrapping_tgfx Wrapping);
-extern VkFilter Find_VkFilter_byGFXFilter(texture_mipmapfilter_tgfx filter);
-extern VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(texture_mipmapfilter_tgfx filter);
-extern VkCullModeFlags Find_CullMode_byGFXCullMode(cullmode_tgfx mode);
-extern VkPolygonMode Find_PolygonMode_byGFXPolygonMode(polygonmode_tgfx mode);
-extern VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(vertexlisttypes_tgfx type);
-extern VkIndexType Find_IndexType_byGFXDATATYPE(datatype_tgfx datatype);
-extern VkCompareOp Find_CompareOp_byGFXDepthTest(depthtest_tgfx test);
-extern void Find_DepthMode_byGFXDepthMode(depthmode_tgfx mode, VkBool32& ShouldTest, VkBool32& ShouldWrite);
-extern VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(drawpassload_tgfx load);
-extern VkCompareOp Find_CompareOp_byGFXStencilCompare(stencilcompare_tgfx op);
-extern VkStencilOp Find_StencilOp_byGFXStencilOp(stencilop_tgfx op);
-extern VkBlendOp Find_BlendOp_byGFXBlendMode(blendmode_tgfx mode);
-extern VkBlendFactor Find_BlendFactor_byGFXBlendFactor(blendfactor_tgfx factor);
-extern void Fill_ComponentMapping_byCHANNELs(texture_channels_tgfx channels, VkComponentMapping& mapping);
-extern void Find_SubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSource, VkPipelineStageFlags& stageflag, VkAccessFlags& accessflag);
-extern desctype_vk Find_DescType_byGFXShaderInputType(shaderinputtype_tgfx type);
-extern VkDescriptorType Find_VkDescType_byDescTypeCategoryless(desctype_vk type);
-extern VkImageType Find_VkImageType(texture_dimensions_tgfx dimensions);
-extern VkImageTiling Find_VkTiling(texture_order_tgfx order);
-
 //Resources
 struct texture_vk;
 

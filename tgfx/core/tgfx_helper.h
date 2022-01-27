@@ -32,9 +32,11 @@ typedef struct helper_tgfx {
     waitsignaldescription_tgfx_handle(*CreateWaitSignal_DrawIndirectConsume)();
     waitsignaldescription_tgfx_handle(*CreateWaitSignal_VertexInput)	(unsigned char IndexBuffer, unsigned char VertexAttrib);
     waitsignaldescription_tgfx_handle(*CreateWaitSignal_VertexShader)	(unsigned char UniformRead, unsigned char StorageRead, unsigned char StorageWrite);
-    waitsignaldescription_tgfx_handle(*CreateWaitSignal_FragmentShader)(unsigned char UniformRead, unsigned char StorageRead, unsigned char StorageWrite);
+    waitsignaldescription_tgfx_handle(*CreateWaitSignal_FragmentShader) (unsigned char UniformRead, unsigned char StorageRead, unsigned char StorageWrite);
     waitsignaldescription_tgfx_handle(*CreateWaitSignal_ComputeShader)	(unsigned char UniformRead, unsigned char StorageRead, unsigned char StorageWrite);
     waitsignaldescription_tgfx_handle(*CreateWaitSignal_FragmentTests)	(unsigned char isEarly, unsigned char isRead, unsigned char isWrite);
+    //Don't remember how a transfer signal should be, just added for now
+    waitsignaldescription_tgfx_handle(*CreateWaitSignal_Transfer)       (unsigned char UniformRead, unsigned char StorageRead);
 
     //RENDERNODE HELPERS
 
@@ -46,13 +48,13 @@ typedef struct helper_tgfx {
     passwaitdescription_tgfx_handle(*CreatePassWait_ComputePass)(computepass_tgfx_handle* PassHandle, unsigned char SubpassIndex,
         waitsignaldescription_tgfx_handle WaitInfo, unsigned char isLastFrame);
     //WaitInfo is single, because function expects only one wait and it should be created with CreateWaitSignal_Transfer()
-    passwaitdescription_tgfx_handle(*CreatePassWait_TransferPass)(transferpasstype_tgfx* PassHandle,
+    passwaitdescription_tgfx_handle(*CreatePassWait_TransferPass)(transferpass_tgfx_handle* PassHandle,
         transferpasstype_tgfx Type, waitsignaldescription_tgfx_handle WaitInfo, unsigned char isLastFrame);
     //There is no option because you can only wait for a penultimate window pass
     //I'd like to support last frame wait too but it confuses the users and it doesn't have much use
     passwaitdescription_tgfx_handle(*CreatePassWait_WindowPass)(windowpass_tgfx_handle* PassHandle);
 
-    subdrawpassdescription_tgfx_handle(*CreateSubDrawPassDescription)();
+    subdrawpassdescription_tgfx_handle(*CreateSubDrawPassDescription)(inheritedrtslotset_tgfx_handle irtslotset, subdrawpassaccess_tgfx WaitOP, subdrawpassaccess_tgfx ContinueOP);
 
 
     shaderinputdescription_tgfx_handle(*CreateShaderInputDescription)(unsigned char isGeneral, shaderinputtype_tgfx Type, unsigned int BINDINDEX,

@@ -94,6 +94,7 @@ struct indexeddrawcall_vk {
 struct subdrawpass_vk {
 	unsigned char Binding_Index;
 	bool render_dearIMGUI = false;
+	subdrawpassaccess_tgfx waitop, continueop;
 	irtslotset_vk* SLOTSET;
 	drawpass_vk* DrawPass;
 	threadlocal_vector<nonindexeddrawcall_vk> NonIndexedDrawCalls;

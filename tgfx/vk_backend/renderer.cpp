@@ -221,9 +221,9 @@ struct renderer_funcs {
 			const subdrawpassdesc_vk* Subpass_gfxdesc = SubDrawPassDescs[i];
 			irtslotset_vk* Subpass_Slotset = Subpass_gfxdesc->INHERITEDSLOTSET;
 
-			Fill_SubpassStructs(Subpass_Slotset, Subpass_gfxdesc->WaitOp, Subpass_gfxdesc->ContinueOp, Subpass_gfxdesc->SubDrawPass_Index, SubpassDescs[i], SubpassDepends[i]);
+			Fill_SubpassStructs(Subpass_Slotset, Subpass_gfxdesc->WaitOp, Subpass_gfxdesc->ContinueOp, i, SubpassDescs[i], SubpassDepends[i]);
 
-			Final_Subpasses[i].Binding_Index = Subpass_gfxdesc->SubDrawPass_Index;
+			Final_Subpasses[i].Binding_Index = i;
 			Final_Subpasses[i].SLOTSET = Subpass_Slotset;
 			Final_Subpasses[i].DrawPass = VKDrawPass;
 			SubDrawPassHandles[i] = (subdrawpass_tgfx_handle)&Final_Subpasses[i];
@@ -439,7 +439,6 @@ struct renderer_funcs {
 		renderer->FrameIndex = (renderer->FrameIndex + 1) % 2;
 
 		if(imgui){ imgui->NewFrame(); }
-		
 	}
 
 	//Rendering operations
@@ -546,6 +545,7 @@ inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->Destroy_RenderGraph = &Destroy_RenderGraph;
 
 	core_tgfx_main->renderer->Create_TransferPass = &renderer_funcs::Create_TransferPass;
+	core_tgfx_main->renderer->Create_DrawPass = &renderer_funcs::Create_DrawPass;
 	core_tgfx_main->renderer->Run = &renderer_funcs::Run;
 	
 }

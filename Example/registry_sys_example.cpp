@@ -18,6 +18,7 @@
 #include "tgfx_helper.h"
 #include "tgfx_core.h"
 #include "tgfx_renderer.h"
+#include "tgfx_gpucontentmanager.h"
 
 
 #include <stdint.h>
@@ -112,8 +113,11 @@ int main(){
 	const memory_description_tgfx* memtypelist; unsigned int memtypelistcount;
 	tgfxsys->api->helpers->GetGPUInfo_General(gpulist[0], &gpuname, nullptr, nullptr, nullptr, &memtypelist, &memtypelistcount, nullptr, nullptr, nullptr);
 	std::cout << "Memory Type Count: " << memtypelistcount << " and GPU Name: " << gpuname << "\n";
+	unsigned int devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = UINT32_MAX;
 	for (unsigned int i = 0; i < memtypelistcount; i++) {
 		tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 10 * 1024 * 1024, nullptr);
+		if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) { devicelocalmemtype_id = memtypelist[i].memorytype_id; }
+		if (memtypelist[i].allocationtype == memoryallocationtype_FASTHOSTVISIBLE) { fastvisiblememtype_id = memtypelist[i].memorytype_id; }
 	}
 	initializationsecondstageinfo_tgfx_handle secondinfo = tgfxsys->api->helpers->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, true, true, true, (extension_tgfx_listhandle)tgfxsys->api->INVALIDHANDLE);
 	tgfxsys->api->initialize_secondstage(secondinfo);
@@ -128,6 +132,30 @@ int main(){
 	tgfxsys->api->renderer->Start_RenderGraphConstruction();
 	transferpass_tgfx_handle firstbarriertp;
 	tgfxsys->api->renderer->Create_TransferPass((passwaitdescription_tgfx_listhandle)&tgfxsys->api->INVALIDHANDLE, transferpasstype_tgfx_BARRIER, "FirstBarrierTP", &firstbarriertp);
+
+	texture_tgfx_handle first_rt, second_rt;
+	textureusageflag_tgfx_handle usageflag_tgfx = tgfxsys->api->helpers->CreateTextureUsageFlag(false, true, false, true, false);
+	unsigned int WIDTH, HEIGHT, MIP = 0;
+	tgfxsys->api->helpers->GetTextureTypeLimits(texture_dimensions_tgfx_2D, texture_order_tgfx_SWIZZLE, texture_channels_tgfx_RGBA8UB, usageflag_tgfx, gpulist[0], &WIDTH, &HEIGHT, nullptr, &MIP);
+	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA8UB, 1, usageflag_tgfx, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &first_rt);
+	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA8UB, 1, usageflag_tgfx, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &second_rt);
+
+
+
+	vec4_tgfx white; white.x = 255; white.y = 255; white.z = 255; white.w = 0;
+	rtslotusage_tgfx_handle rtslotusages[2] = { tgfxsys->api->helpers->CreateRTSlotUsage_Color(0, operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	rtslotdescription_tgfx_handle rtslot_descs[2] = { 
+		tgfxsys->api->helpers->CreateRTSlotDescription_Color(first_rt, second_rt, operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white), (rtslotdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	rtslotset_tgfx_handle rtslotset_handle;
+	tgfxsys->api->contentmanager->Create_RTSlotset(rtslot_descs, &rtslotset_handle);
+	inheritedrtslotset_tgfx_handle irtslotset; 
+	tgfxsys->api->contentmanager->Inherite_RTSlotSet(rtslotusages, rtslotset_handle, &irtslotset);
+	subdrawpassdescription_tgfx_handle subdp_descs[2] = {	tgfxsys->api->helpers->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	passwaitdescription_tgfx_handle dp_waits[2] = {			tgfxsys->api->helpers->CreatePassWait_TransferPass(&firstbarriertp, transferpasstype_tgfx_BARRIER, 
+		tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	subdrawpass_tgfx_handle sub_dp;
+	drawpass_tgfx_handle dp;
+	tgfxsys->api->renderer->Create_DrawPass(subdp_descs, rtslotset_handle, dp_waits, "First DP", &sub_dp, &dp);
 	tgfxsys->api->renderer->Finish_RenderGraphConstruction(nullptr);
 
 	while (true) {

@@ -5,6 +5,7 @@
 #include <tgfx_structs.h>
 #include "core.h"
 #include "includes.h"
+#include "resource.h"
 #include <map>
 
 extern VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage);
@@ -13,6 +14,7 @@ struct suballocation_vk {
 	std::atomic<bool> isEmpty;
 	suballocation_vk();
 	suballocation_vk(const suballocation_vk& copyblock);
+	VkDeviceSize FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment);
 };
 struct memoryHeap_vk {
 
@@ -199,9 +201,93 @@ void allocatorsys_vk::do_allocations(gpu_public* gpu) {
 		}
 	}
 }
+unsigned int allocatorsys_vk::get_memorytypeindex_byID(gpu_public* gpu, unsigned int memorytype_id) {
+	return allocatorsys->data->get_memtype_byid(memorytype_id).MemoryTypeIndex;
+}
 
-VkDeviceSize allocatorsys_vk::suballocate_memoryblock(unsigned int memoryid, VkDevice RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
-	return 0;
+//Don't use this functions outside of the FindAvailableOffset
+VkDeviceSize CalculateOffset(VkDeviceSize baseoffset, VkDeviceSize AlignmentOffset, VkDeviceSize ReqAlignment) {
+	VkDeviceSize FinalOffset = 0;
+	printer(result_tgfx_NOTCODED, "VulkanBackend was using C++17's LCM before, but because LCM is a basic math please fix the backend to use a custom math code. C++17 for this feature is unnecessary!");
+	//VkDeviceSize LCM = std::lcm(AlignmentOffset, ReqAlignment);
+	//FinalOffset = (baseoffset % LCM) ? (((baseoffset / LCM) + 1) * LCM) : baseoffset;
+	return FinalOffset;
+}
+VkDeviceSize suballocation_vk::FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
+	/*
+	VkDeviceSize FurthestOffset = 0;
+	if (AlignmentOffset && !RequiredAlignment) {
+		RequiredAlignment = AlignmentOffset;
+	}
+	else if (!AlignmentOffset && RequiredAlignment) {
+		AlignmentOffset = RequiredAlignment;
+	}
+	else if (!AlignmentOffset && !RequiredAlignment) {
+		AlignmentOffset = 1;
+		RequiredAlignment = 1;
+	}
+	for (unsigned int ThreadID = 0; ThreadID < threadcount; ThreadID++) {
+		for (unsigned int i = 0; i < Allocated_Blocks.size(ThreadID); i++) {
+			suballocation_vk& Block = Allocated_Blocks.get(ThreadID, i);
+			if (FurthestOffset <= Block.Offset) {
+				FurthestOffset = Block.Offset + Block.Size;
+			}
+			if (!Block.isEmpty.load()) {
+				continue;
+			}
+
+			VkDeviceSize Offset = CalculateOffset(Block.Offset, AlignmentOffset, RequiredAlignment);
+
+			if (Offset + RequiredSize - Block.Offset > Block.Size ||
+				Offset + RequiredSize - Block.Offset < (Block.Size / 5) * 3) {
+				continue;
+			}
+			bool x = true, y = false;
+			//Try to get the block first (Concurrent usages are prevented that way)
+			if (!Block.isEmpty.compare_exchange_strong(x, y)) {
+				continue;
+			}
+			//Don't change the block's own offset, because that'd probably cause shifting offset the memory block after free-reuse-free-reuse sequences
+			return Offset;
+		}
+	}
+
+	//None of the current blocks is suitable, so create a new block in this thread's local memoryblocks list
+	VK_SubAllocation newblock;
+	newblock.isEmpty.store(false);
+	newblock.Offset = CalculateOffset(FurthestOffset, AlignmentOffset, RequiredAlignment);
+	newblock.Size = RequiredSize + newblock.Offset - FurthestOffset;
+	Allocated_Blocks.push_back(tapi_GetThisThreadIndex(JobSys), newblock);
+	return newblock.Offset;*/
+	return UINT32_MAX;
+}
+result_tgfx allocatorsys_vk::suballocate_memoryblock(unsigned int memoryid, VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment, VkDeviceSize* found_offset) {
+	memorytype_vk& memtype = allocatorsys->data->get_memtype_byid(memoryid);
+	//if(memtype.UnusedSize.fetch_sub())
+	return result_tgfx_FAIL;
+}
+result_tgfx allocatorsys_vk::suballocate_image(texture_vk* texture) {
+	VkMemoryRequirements req;
+	vkGetImageMemoryRequirements(rendergpu->LOGICALDEVICE(), texture->Image, &req);
+	VkDeviceSize size = req.size;
+
+	VkDeviceSize Offset = 0;
+	unsigned int memorytypeindex = allocatorsys->get_memorytypeindex_byID(rendergpu, texture->Block.MemAllocIndex);
+	if (!(req.memoryTypeBits & (1u << memorytypeindex))) {
+		printer(result_tgfx_FAIL, "Intended texture doesn't support to be stored in the specified memory region!");
+		return result_tgfx_FAIL;
+	}
+	if (allocatorsys->suballocate_memoryblock(texture->Block.MemAllocIndex, size, 0, req.alignment, &Offset) != result_tgfx_SUCCESS) {
+		printer(result_tgfx_FAIL, "Suballocation from memory block has failed for the texture!");
+		return result_tgfx_FAIL;
+	}
+
+	if (vkBindImageMemory(rendergpu->LOGICALDEVICE(), texture->Image, allocatorsys->data->get_memtype_byid(texture->Block.MemAllocIndex).Allocated_Memory, Offset) != VK_SUCCESS) {
+		printer(result_tgfx_FAIL, "VKContentManager->Suballocate_Image() has failed at VkBindImageMemory()!");
+		return result_tgfx_FAIL;
+	}
+	texture->Block.Offset = Offset;
+	return result_tgfx_SUCCESS;
 }
 void allocatorsys_vk::free_memoryblock(unsigned int memoryid, VkDeviceSize offset) {
 

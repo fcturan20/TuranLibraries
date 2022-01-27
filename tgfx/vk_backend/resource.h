@@ -3,7 +3,7 @@
 #include <atomic>
 #include <vector>
 #include "predefinitions_vk.h"
-
+#include <tgfx_structs.h>
 
 
 struct texture_vk {
@@ -60,5 +60,12 @@ struct irtslotset_vk {
 struct subdrawpassdesc_vk {
 	irtslotset_vk* INHERITEDSLOTSET;
 	subdrawpassaccess_tgfx WaitOp, ContinueOp;
-	unsigned char SubDrawPass_Index;
+};
+struct rtslotdesc_vk {
+	texture_vk* textures[2];
+	operationtype_tgfx optype;
+	drawpassload_tgfx loadtype;
+	bool isUsedLater;
+	unsigned char SLOTINDEX;
+	vec4_tgfx clear_value;
 };

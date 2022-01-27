@@ -4,6 +4,7 @@
 #include <atomic>
 #include <glm/glm.hpp>
 #include "resource.h"
+#include "includes.h"
 
 void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
 void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);

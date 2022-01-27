@@ -9,6 +9,7 @@
 #include <mutex>
 #include "resource.h"
 #include "memory.h"
+#include "includes.h"
 
 
 struct descelement_buffer_vk {
@@ -46,6 +47,10 @@ struct descpool_vk {
 };
 
 struct gpudatamanager_private {
+	threadlocal_vector<rtslotset_vk*> rtslotsets;
+	threadlocal_vector<texture_vk*> textures;
+
+
 	//This vector contains descriptor sets that are for material types/instances that are created this frame
 	threadlocal_vector<descset_vk*> DescSets_toCreate;
 	//This vector contains descriptor sets that needs update
@@ -67,7 +72,7 @@ struct gpudatamanager_private {
 	//These are the texture that will be added to the list above after clearing the above list
 	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
 
-	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024) {}
+	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100) {}
 };
 static gpudatamanager_private* hidden = nullptr;
 
@@ -604,11 +609,108 @@ void  Unload_IndexBuffer (buffer_tgfx_handle BufferHandle){}
 
 result_tgfx Create_Texture (texture_dimensions_tgfx DIMENSION, unsigned int WIDTH, unsigned int HEIGHT, texture_channels_tgfx CHANNEL_TYPE,
 	unsigned char MIPCOUNT, textureusageflag_tgfx_handle USAGE, texture_order_tgfx DATAORDER, unsigned int MemoryTypeIndex, texture_tgfx_handle* TextureHandle){
-	return result_tgfx_FAIL;
+	if (MIPCOUNT > std::floor(std::log2(std::max(WIDTH, HEIGHT))) + 1 || !MIPCOUNT) {
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_Texture() has failed because mip count of the texture is wrong!");
+		return result_tgfx_FAIL;
+	}
+	texture_vk* texture = new texture_vk;
+	texture->CHANNELs = CHANNEL_TYPE;
+	texture->HEIGHT = HEIGHT;
+	texture->WIDTH = WIDTH;
+	texture->DATA_SIZE = WIDTH * HEIGHT * GetByteSizeOf_TextureChannels(CHANNEL_TYPE);
+	texture->USAGE = *(VkImageUsageFlags*)USAGE;
+	delete (VkImageUsageFlags*)USAGE;
+	texture->Block.MemAllocIndex = MemoryTypeIndex;
+	texture->DIMENSION = DIMENSION;
+	texture->MIPCOUNT = MIPCOUNT;
+
+
+	//Create VkImage
+	{
+		VkImageCreateInfo im_ci = {};
+		im_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		im_ci.extent.width = texture->WIDTH;
+		im_ci.extent.height = texture->HEIGHT;
+		im_ci.extent.depth = 1;
+		if (DIMENSION == texture_dimensions_tgfx_2DCUBE) {
+			im_ci.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+			im_ci.arrayLayers = 6;
+		}
+		else {
+			im_ci.flags = 0;
+			im_ci.arrayLayers = 1;
+		}
+		im_ci.format = Find_VkFormat_byTEXTURECHANNELs(texture->CHANNELs);
+		im_ci.imageType = Find_VkImageType(DIMENSION);
+		im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		im_ci.mipLevels = static_cast<uint32_t>(MIPCOUNT);
+		im_ci.pNext = nullptr;
+		if (rendergpu->QUEUEFAMSCOUNT() > 1) { im_ci.sharingMode = VK_SHARING_MODE_CONCURRENT; }
+		else { im_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE; }
+		im_ci.pQueueFamilyIndices = rendergpu->ALLQUEUEFAMILIES();
+		im_ci.queueFamilyIndexCount = rendergpu->QUEUEFAMSCOUNT();
+		im_ci.tiling = Find_VkTiling(DATAORDER);
+		im_ci.usage = texture->USAGE;
+		im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+
+		if (vkCreateImage(rendergpu->LOGICALDEVICE(), &im_ci, nullptr, &texture->Image) != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, "GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
+			delete texture;
+			return result_tgfx_FAIL;
+		}
+
+		if (allocatorsys->suballocate_image(texture) != result_tgfx_SUCCESS) {
+			printer(result_tgfx_FAIL, "Suballocation of the texture has failed! Please re-create later.");
+			delete texture;
+			return result_tgfx_FAIL;
+		}
+	}
+
+	//Create Image View
+	{
+		VkImageViewCreateInfo ci = {};
+		ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		ci.flags = 0;
+		ci.pNext = nullptr;
+
+		ci.image = texture->Image;
+		if (DIMENSION == texture_dimensions_tgfx_2DCUBE) {
+			ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE;
+			ci.subresourceRange.layerCount = 6;
+		}
+		else {
+			ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+			ci.subresourceRange.layerCount = 1;
+		}
+		ci.subresourceRange.baseArrayLayer = 0;
+		ci.subresourceRange.baseMipLevel = 0;
+		ci.subresourceRange.levelCount = 1;
+		ci.format = Find_VkFormat_byTEXTURECHANNELs(texture->CHANNELs);
+		if (texture->CHANNELs == texture_channels_tgfx_D32) {
+			ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		}
+		else if (texture->CHANNELs == texture_channels_tgfx_D24S8) {
+			ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+		else {
+			ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		}
+
+		Fill_ComponentMapping_byCHANNELs(texture->CHANNELs, ci.components);
+
+		if (vkCreateImageView(rendergpu->LOGICALDEVICE(), &ci, nullptr, &texture->ImageView) != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, "GFXContentManager->Upload_Texture() has failed in vkCreateImageView()!");
+			return result_tgfx_FAIL;
+		}
+	}
+
+	hidden->textures.push_back(texture);
+	*TextureHandle = (texture_tgfx_handle)texture;
+	return result_tgfx_SUCCESS;
 }
 //TARGET OFFSET is the offset in the texture's buffer to copy to
 result_tgfx Upload_Texture (texture_tgfx_handle TextureHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset){ return result_tgfx_FAIL; }
-void  Delete_Texture (texture_tgfx_handle TEXTUREHANDLE, unsigned char isUsedLastFrame){}
+void  Delete_Texture (texture_tgfx_handle textureHANDLE, unsigned char isUsedLastFrame){}
 
 result_tgfx Create_GlobalBuffer (const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned char isUniform,
 	unsigned int MemoryTypeIndex, buffer_tgfx_handle* GlobalBufferHandle) {
@@ -677,7 +779,140 @@ result_tgfx SetComputeInst_Texture (computeshaderinstance_tgfx_handle ComputeIns
 }
 
 
-result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rtslotset_tgfx_handle* RTSlotSetHandle){ return result_tgfx_FAIL; }
+result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rtslotset_tgfx_handle* RTSlotSetHandle){ 
+	TGFXLISTCOUNT(core_tgfx_main, Descriptions, DescriptionsCount);
+	for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
+		const rtslotdesc_vk* desc = (rtslotdesc_vk*)Descriptions[SlotIndex];
+		texture_vk* FirstHandle = desc->textures[0];
+		texture_vk* SecondHandle = desc->textures[1];
+		if ((FirstHandle->CHANNELs != SecondHandle->CHANNELs) ||
+			(FirstHandle->WIDTH != SecondHandle->WIDTH) ||
+			(FirstHandle->HEIGHT != SecondHandle->HEIGHT)
+			) {
+			printer(result_tgfx_FAIL, "GFXContentManager->Create_RTSlotSet() has failed because one of the slots has texture handles that doesn't match channel type, width or height!");
+			return result_tgfx_INVALIDARGUMENT;
+		}
+		if (!(FirstHandle->USAGE & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) || !(SecondHandle->USAGE & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))) {
+			printer(result_tgfx_FAIL, "GFXContentManager->Create_RTSlotSet() has failed because one of the slots has a handle that doesn't use is_RenderableTo in its USAGEFLAG!");
+			return result_tgfx_INVALIDARGUMENT;
+		}
+	}
+	unsigned int DEPTHSLOT_VECTORINDEX = UINT32_MAX;
+	//Validate the list and find Depth Slot if there is any
+	for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
+		const rtslotdesc_vk* desc = (rtslotdesc_vk*)Descriptions[SlotIndex];
+		for (unsigned int RTIndex = 0; RTIndex < 2; RTIndex++) {
+			texture_vk* RT = (desc->textures[RTIndex]);
+			if (!RT) {
+				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because intended RT isn't found!");
+				return result_tgfx_INVALIDARGUMENT;
+			}
+			if (desc->optype == operationtype_tgfx_UNUSED) {
+				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because you can't create a Base RT SlotSet that has unused attachment!");
+				return result_tgfx_INVALIDARGUMENT;
+			}
+			if (RT->CHANNELs == texture_channels_tgfx_D24S8 || RT->CHANNELs == texture_channels_tgfx_D32) {
+				if (DEPTHSLOT_VECTORINDEX != UINT32_MAX && DEPTHSLOT_VECTORINDEX != SlotIndex) {
+					printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because you can't use two depth buffers at the same slot set!");
+					return result_tgfx_INVALIDARGUMENT;
+				}
+				DEPTHSLOT_VECTORINDEX = SlotIndex;
+				continue;
+			}
+			if (desc->SLOTINDEX > DescriptionsCount - 1) {
+				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because you gave a overflowing SLOTINDEX to a RTSLOT!");
+				return result_tgfx_INVALIDARGUMENT;
+			}
+		}
+	}
+	unsigned char COLORRT_COUNT = (DEPTHSLOT_VECTORINDEX != UINT32_MAX) ? DescriptionsCount - 1 : DescriptionsCount;
+
+	unsigned int i = 0;
+	unsigned int j = 0;
+	for (i = 0; i < COLORRT_COUNT; i++) {
+		if (i == DEPTHSLOT_VECTORINDEX) {
+			continue;
+		}
+		for (j = 1; i + j < COLORRT_COUNT; j++) {
+			if (i + j == DEPTHSLOT_VECTORINDEX) {
+				continue;
+			}
+			if (((rtslotdesc_vk*)Descriptions[i])->SLOTINDEX == ((rtslotdesc_vk*)Descriptions[i + j])->SLOTINDEX) {
+				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because some SLOTINDEXes are same, but each SLOTINDEX should be unique and lower then COLOR SLOT COUNT!");
+				return result_tgfx_INVALIDARGUMENT;
+			}
+		}
+	}
+
+	unsigned int FBWIDTH = ((rtslotdesc_vk*)Descriptions[0])->textures[0]->WIDTH;
+	unsigned int FBHEIGHT = ((rtslotdesc_vk*)Descriptions[0])->textures[0]->HEIGHT;
+	for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
+		texture_vk* Texture = ((rtslotdesc_vk*)Descriptions[SlotIndex])->textures[0];
+		if (Texture->WIDTH != FBWIDTH || Texture->HEIGHT != FBHEIGHT) {
+			printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because one of your slot's texture has wrong resolution!");
+			return result_tgfx_INVALIDARGUMENT;
+		}
+	}
+	
+
+	rtslotset_vk* VKSLOTSET = new rtslotset_vk;
+	for (unsigned int SlotSetIndex = 0; SlotSetIndex < 2; SlotSetIndex++) {
+		rtslots_vk& PF_SLOTSET = VKSLOTSET->PERFRAME_SLOTSETs[SlotSetIndex];
+
+		PF_SLOTSET.COLOR_SLOTs = new colorslot_vk[COLORRT_COUNT];
+		PF_SLOTSET.COLORSLOTs_COUNT = COLORRT_COUNT;
+		if (DEPTHSLOT_VECTORINDEX != DescriptionsCount) {
+			PF_SLOTSET.DEPTHSTENCIL_SLOT = new depthstencilslot_vk;
+			depthstencilslot_vk* slot = PF_SLOTSET.DEPTHSTENCIL_SLOT;
+			const rtslotdesc_vk* DEPTHDESC = (rtslotdesc_vk*)Descriptions[DEPTHSLOT_VECTORINDEX];
+			slot->CLEAR_COLOR = glm::vec2(DEPTHDESC->clear_value.x, DEPTHDESC->clear_value.y);
+			slot->DEPTH_OPTYPE = DEPTHDESC->optype;
+			slot->RT = (DEPTHDESC->textures[SlotSetIndex]);
+			slot->STENCIL_OPTYPE = DEPTHDESC->optype;
+			slot->IS_USED_LATER = DEPTHDESC->isUsedLater;
+			slot->DEPTH_LOAD = DEPTHDESC->loadtype;
+			slot->STENCIL_LOAD = DEPTHDESC->loadtype;
+		}
+		for (unsigned int i = 0; i < COLORRT_COUNT; i++) {
+			const rtslotdesc_vk* desc = (rtslotdesc_vk*)Descriptions[i];
+			texture_vk* RT = desc->textures[SlotSetIndex];
+			colorslot_vk& SLOT = PF_SLOTSET.COLOR_SLOTs[desc->SLOTINDEX];
+			SLOT.RT_OPERATIONTYPE = desc->optype;
+			SLOT.LOADSTATE = desc->loadtype;
+			SLOT.RT = RT;
+			SLOT.IS_USED_LATER = desc->isUsedLater;
+			SLOT.CLEAR_COLOR = glm::vec4(desc->clear_value.x, desc->clear_value.y, desc->clear_value.z, desc->clear_value.w);
+		}
+
+
+		for (unsigned int i = 0; i < PF_SLOTSET.COLORSLOTs_COUNT; i++) {
+			texture_vk* VKTexture = PF_SLOTSET.COLOR_SLOTs[i].RT;
+			if (!VKTexture->ImageView) {
+				printer(result_tgfx_FAIL, "One of your RTs doesn't have a VkImageView! You can't use such a texture as RT. Generally this case happens when you forgot to specify your swapchain texture's usage (while creating a window).");
+				return result_tgfx_FAIL;
+			}
+			VKSLOTSET->ImageViews[SlotSetIndex].push_back(VKTexture->ImageView);
+		}
+		if (PF_SLOTSET.DEPTHSTENCIL_SLOT) {
+			VKSLOTSET->ImageViews[SlotSetIndex].push_back(PF_SLOTSET.DEPTHSTENCIL_SLOT->RT->ImageView);
+		}
+
+		VkFramebufferCreateInfo& fb_ci = VKSLOTSET->FB_ci[SlotSetIndex];
+		fb_ci.attachmentCount = VKSLOTSET->ImageViews[SlotSetIndex].size();
+		fb_ci.pAttachments = VKSLOTSET->ImageViews[SlotSetIndex].data();
+		fb_ci.flags = 0;
+		fb_ci.height = FBHEIGHT;
+		fb_ci.width = FBWIDTH;
+		fb_ci.layers = 1;
+		fb_ci.pNext = nullptr;
+		fb_ci.renderPass = VK_NULL_HANDLE;
+		fb_ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	}
+
+	hidden->rtslotsets.push_back(VKSLOTSET);
+	*RTSlotSetHandle = (rtslotset_tgfx_handle)VKSLOTSET;
+	return result_tgfx_SUCCESS;
+}
 void  Delete_RTSlotSet (rtslotset_tgfx_handle RTSlotSetHandle){}
 //Changes on RTSlots only happens at the frame slot is gonna be used
 //For example; if you change next frame's slot, necessary API calls are gonna be called next frame

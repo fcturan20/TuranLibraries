@@ -40,6 +40,11 @@ void thread_print(){
 }
 void printf_log_tgfx(result_tgfx result, const char* text) {
 	printf("TGFX Result %u: %s\n", (unsigned int)result, text);
+	if (result == result_tgfx_NOTCODED) {
+		int i = 0;
+		printf("TGFX RESULT ISN'T CODED HERE, PLEASE ENTER IF YOU WANT TO CONTINUE: ");
+		scanf("%u", &i);
+	}
 }
 
 int main(){
@@ -102,7 +107,7 @@ int main(){
 	auto tgfxdll = DLIB_LOAD_TAPI("tgfx_core.dll");
 	load_plugin_func tgfxloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(tgfxdll, "load_plugin");
 	TGFX_PLUGIN_LOAD_TYPE tgfxsys = (TGFX_PLUGIN_LOAD_TYPE)tgfxloader(sys, 0);
-	result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_VULKAN, nullptr);
+	result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_VULKAN, printf_log_tgfx);
 	printf("%c", result);
 
 	gpu_tgfx_listhandle gpulist;
@@ -115,7 +120,7 @@ int main(){
 	std::cout << "Memory Type Count: " << memtypelistcount << " and GPU Name: " << gpuname << "\n";
 	unsigned int devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = UINT32_MAX;
 	for (unsigned int i = 0; i < memtypelistcount; i++) {
-		tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 10 * 1024 * 1024, nullptr);
+		tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 20 * 1024 * 1024, nullptr);
 		if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) { devicelocalmemtype_id = memtypelist[i].memorytype_id; }
 		if (memtypelist[i].allocationtype == memoryallocationtype_FASTHOSTVISIBLE) { fastvisiblememtype_id = memtypelist[i].memorytype_id; }
 	}
@@ -125,7 +130,7 @@ int main(){
 	tgfxsys->api->getmonitorlist(&monitorlist);
 	TGFXLISTCOUNT(tgfxsys->api, monitorlist, monitorcount);
 	printf("Monitor Count: %u", monitorcount);
-	textureusageflag_tgfx_handle usageflag = tgfxsys->api->helpers->CreateTextureUsageFlag(true, true, true, true, true);
+	textureusageflag_tgfx_handle usageflag = tgfxsys->api->helpers->CreateTextureUsageFlag(false, true, true, true, false);
 	texture_tgfx_handle swapchain_textures[2];
 	window_tgfx_handle firstwindow;
 	tgfxsys->api->create_window(1280, 720, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
@@ -136,18 +141,18 @@ int main(){
 	texture_tgfx_handle first_rt, second_rt;
 	textureusageflag_tgfx_handle usageflag_tgfx = tgfxsys->api->helpers->CreateTextureUsageFlag(false, true, false, true, false);
 	unsigned int WIDTH, HEIGHT, MIP = 0;
-	tgfxsys->api->helpers->GetTextureTypeLimits(texture_dimensions_tgfx_2D, texture_order_tgfx_SWIZZLE, texture_channels_tgfx_RGBA8UB, usageflag_tgfx, gpulist[0], &WIDTH, &HEIGHT, nullptr, &MIP);
-	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA8UB, 1, usageflag_tgfx, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &first_rt);
-	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA8UB, 1, usageflag_tgfx, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &second_rt);
+	tgfxsys->api->helpers->GetTextureTypeLimits(texture_dimensions_tgfx_2D, texture_order_tgfx_SWIZZLE, texture_channels_tgfx_RGBA8UB, usageflag, gpulist[0], &WIDTH, &HEIGHT, nullptr, &MIP);
+	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA8UB, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &first_rt);
+	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA8UB, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &second_rt);
 
 
 
 	vec4_tgfx white; white.x = 255; white.y = 255; white.z = 255; white.w = 0;
-	rtslotusage_tgfx_handle rtslotusages[2] = { tgfxsys->api->helpers->CreateRTSlotUsage_Color(0, operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
 	rtslotdescription_tgfx_handle rtslot_descs[2] = { 
 		tgfxsys->api->helpers->CreateRTSlotDescription_Color(first_rt, second_rt, operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white), (rtslotdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
 	rtslotset_tgfx_handle rtslotset_handle;
 	tgfxsys->api->contentmanager->Create_RTSlotset(rtslot_descs, &rtslotset_handle);
+	rtslotusage_tgfx_handle rtslotusages[2] = { tgfxsys->api->helpers->CreateRTSlotUsage_Color(rtslot_descs[0], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
 	inheritedrtslotset_tgfx_handle irtslotset; 
 	tgfxsys->api->contentmanager->Inherite_RTSlotSet(rtslotusages, rtslotset_handle, &irtslotset);
 	subdrawpassdescription_tgfx_handle subdp_descs[2] = {	tgfxsys->api->helpers->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};

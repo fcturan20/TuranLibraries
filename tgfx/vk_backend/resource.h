@@ -66,6 +66,10 @@ struct rtslotdesc_vk {
 	operationtype_tgfx optype;
 	drawpassload_tgfx loadtype;
 	bool isUsedLater;
-	unsigned char SLOTINDEX;
 	vec4_tgfx clear_value;
+};
+struct rtslotusage_vk {
+	bool IS_DEPTH = false;
+	operationtype_tgfx OPTYPE = operationtype_tgfx_UNUSED, OPTYPESTENCIL = operationtype_tgfx_UNUSED;
+	drawpassload_tgfx LOADTYPE = drawpassload_tgfx_CLEAR, LOADTYPESTENCIL = drawpassload_tgfx_CLEAR;
 };

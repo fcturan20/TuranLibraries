@@ -29,8 +29,11 @@ static unsigned char  GetTextureTypeLimits(texture_dimensions_tgfx dims, texture
     textureusageflag_tgfx_handle usageflag, gpu_tgfx_handle GPUHandle, unsigned int* MAXWIDTH, unsigned int* MAXHEIGHT, unsigned int* MAXDEPTH,
     unsigned int* MAXMIPLEVEL) {
     VkImageFormatProperties props;
+    VkImageUsageFlags flag = *(VkImageUsageFlags*)usageflag;
+    if (channeltype == texture_channels_tgfx_D24S8 || channeltype == texture_channels_tgfx_D32) { flag &= ~(1UL << 4); }
+    else { flag &= ~(1UL << 5); }
     VkResult result = vkGetPhysicalDeviceImageFormatProperties(rendergpu->PHYSICALDEVICE(), Find_VkFormat_byTEXTURECHANNELs(channeltype),
-        Find_VkImageType(dims), Find_VkTiling(dataorder), *(VkImageUsageFlags*)usageflag,
+        Find_VkImageType(dims), Find_VkTiling(dataorder), flag,
         0, &props);
     if (result != VK_SUCCESS) {
         printer(result_tgfx_FAIL, ("GFX->GetTextureTypeLimits() has failed with: " + std::to_string(result)).c_str());
@@ -180,10 +183,26 @@ static rtslotdescription_tgfx_handle CreateRTSlotDescription_DepthStencil(textur
     float DEPTHCLEARVALUE, unsigned char STENCILCLEARVALUE) {
     return nullptr;
 }
-static rtslotusage_tgfx_handle CreateRTSlotUsage_Color(unsigned char SLOTINDEX, operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE){
-    return nullptr;
+static rtslotusage_tgfx_handle CreateRTSlotUsage_Color(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE){
+    printer(result_tgfx_WARNING, "Vulkan backend doesn't use LOADTYPE for now!");
+    if (!base_slot) { printer(result_tgfx_INVALIDARGUMENT, "CreateRTSlotUsage_Color() has failed because base_slot is nullptr!"); return nullptr; }
+    rtslotdesc_vk* baseslot = (rtslotdesc_vk*)base_slot;
+    if (baseslot->optype == operationtype_tgfx_READ_ONLY &&
+        (OPTYPE == operationtype_tgfx_WRITE_ONLY || OPTYPE == operationtype_tgfx_READ_AND_WRITE)
+        )
+    {
+        printer(result_tgfx_INVALIDARGUMENT, "Inherite_RTSlotSet() has failed because you can't use a Read-Only ColorSlot with Write Access in a Inherited Set!");
+        return nullptr;
+    }
+    rtslotusage_vk* usage = new rtslotusage_vk;
+    usage->IS_DEPTH = false;
+    usage->OPTYPE = OPTYPE;
+    usage->OPTYPESTENCIL = operationtype_tgfx_UNUSED;
+    usage->LOADTYPE = LOADTYPE;
+    usage->LOADTYPESTENCIL = drawpassload_tgfx_CLEAR;
+    return (rtslotusage_tgfx_handle)usage;
 }
-static rtslotusage_tgfx_handle CreateRTSlotUsage_Depth(operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD,
+static rtslotusage_tgfx_handle CreateRTSlotUsage_Depth(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD,
     operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD) {
     return nullptr;
 }

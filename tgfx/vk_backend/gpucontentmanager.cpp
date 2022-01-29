@@ -49,6 +49,7 @@ struct descpool_vk {
 struct gpudatamanager_private {
 	threadlocal_vector<rtslotset_vk*> rtslotsets;
 	threadlocal_vector<texture_vk*> textures;
+	threadlocal_vector<irtslotset_vk*> irtslotsets;
 
 
 	//This vector contains descriptor sets that are for material types/instances that are created this frame
@@ -72,7 +73,8 @@ struct gpudatamanager_private {
 	//These are the texture that will be added to the list above after clearing the above list
 	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
 
-	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100) {}
+	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100), 
+	irtslotsets(100) {}
 };
 static gpudatamanager_private* hidden = nullptr;
 
@@ -435,8 +437,10 @@ void gpudatamanager_public::Apply_ResourceChanges() {
 			vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
 		}
 	}
+
+	//Re-create VkFramebuffers etc.
 	renderer->RendererResource_Finalizations();
-	
+
 	//Delete textures
 	{
 		std::unique_lock<std::mutex> Locker;
@@ -618,8 +622,10 @@ result_tgfx Create_Texture (texture_dimensions_tgfx DIMENSION, unsigned int WIDT
 	texture->HEIGHT = HEIGHT;
 	texture->WIDTH = WIDTH;
 	texture->DATA_SIZE = WIDTH * HEIGHT * GetByteSizeOf_TextureChannels(CHANNEL_TYPE);
-	texture->USAGE = *(VkImageUsageFlags*)USAGE;
-	delete (VkImageUsageFlags*)USAGE;
+	VkImageUsageFlags flag = *(VkImageUsageFlags*)USAGE;
+	if (texture->CHANNELs == texture_channels_tgfx_D24S8 || texture->CHANNELs == texture_channels_tgfx_D32) { flag &= ~(1UL << 4); }
+	else { flag &= ~(1UL << 5); }
+	texture->USAGE = flag;
 	texture->Block.MemAllocIndex = MemoryTypeIndex;
 	texture->DIMENSION = DIMENSION;
 	texture->MIPCOUNT = MIPCOUNT;
@@ -819,30 +825,9 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 				DEPTHSLOT_VECTORINDEX = SlotIndex;
 				continue;
 			}
-			if (desc->SLOTINDEX > DescriptionsCount - 1) {
-				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because you gave a overflowing SLOTINDEX to a RTSLOT!");
-				return result_tgfx_INVALIDARGUMENT;
-			}
 		}
 	}
 	unsigned char COLORRT_COUNT = (DEPTHSLOT_VECTORINDEX != UINT32_MAX) ? DescriptionsCount - 1 : DescriptionsCount;
-
-	unsigned int i = 0;
-	unsigned int j = 0;
-	for (i = 0; i < COLORRT_COUNT; i++) {
-		if (i == DEPTHSLOT_VECTORINDEX) {
-			continue;
-		}
-		for (j = 1; i + j < COLORRT_COUNT; j++) {
-			if (i + j == DEPTHSLOT_VECTORINDEX) {
-				continue;
-			}
-			if (((rtslotdesc_vk*)Descriptions[i])->SLOTINDEX == ((rtslotdesc_vk*)Descriptions[i + j])->SLOTINDEX) {
-				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because some SLOTINDEXes are same, but each SLOTINDEX should be unique and lower then COLOR SLOT COUNT!");
-				return result_tgfx_INVALIDARGUMENT;
-			}
-		}
-	}
 
 	unsigned int FBWIDTH = ((rtslotdesc_vk*)Descriptions[0])->textures[0]->WIDTH;
 	unsigned int FBHEIGHT = ((rtslotdesc_vk*)Descriptions[0])->textures[0]->HEIGHT;
@@ -861,7 +846,7 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 
 		PF_SLOTSET.COLOR_SLOTs = new colorslot_vk[COLORRT_COUNT];
 		PF_SLOTSET.COLORSLOTs_COUNT = COLORRT_COUNT;
-		if (DEPTHSLOT_VECTORINDEX != DescriptionsCount) {
+		if (DEPTHSLOT_VECTORINDEX != UINT32_MAX) {
 			PF_SLOTSET.DEPTHSTENCIL_SLOT = new depthstencilslot_vk;
 			depthstencilslot_vk* slot = PF_SLOTSET.DEPTHSTENCIL_SLOT;
 			const rtslotdesc_vk* DEPTHDESC = (rtslotdesc_vk*)Descriptions[DEPTHSLOT_VECTORINDEX];
@@ -873,10 +858,12 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 			slot->DEPTH_LOAD = DEPTHDESC->loadtype;
 			slot->STENCIL_LOAD = DEPTHDESC->loadtype;
 		}
-		for (unsigned int i = 0; i < COLORRT_COUNT; i++) {
+		for (unsigned int i = 0; i < DescriptionsCount; i++) {
+			if (i == DEPTHSLOT_VECTORINDEX) { continue; }
+			unsigned int slotindex = ((i > DEPTHSLOT_VECTORINDEX) ? (i - 1) : (i));
 			const rtslotdesc_vk* desc = (rtslotdesc_vk*)Descriptions[i];
 			texture_vk* RT = desc->textures[SlotSetIndex];
-			colorslot_vk& SLOT = PF_SLOTSET.COLOR_SLOTs[desc->SLOTINDEX];
+			colorslot_vk& SLOT = PF_SLOTSET.COLOR_SLOTs[slotindex];
 			SLOT.RT_OPERATIONTYPE = desc->optype;
 			SLOT.LOADSTATE = desc->loadtype;
 			SLOT.RT = RT;
@@ -896,6 +883,7 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 		if (PF_SLOTSET.DEPTHSTENCIL_SLOT) {
 			VKSLOTSET->ImageViews[SlotSetIndex].push_back(PF_SLOTSET.DEPTHSTENCIL_SLOT->RT->ImageView);
 		}
+		
 
 		VkFramebufferCreateInfo& fb_ci = VKSLOTSET->FB_ci[SlotSetIndex];
 		fb_ci.attachmentCount = VKSLOTSET->ImageViews[SlotSetIndex].size();
@@ -918,7 +906,71 @@ void  Delete_RTSlotSet (rtslotset_tgfx_handle RTSlotSetHandle){}
 //For example; if you change next frame's slot, necessary API calls are gonna be called next frame
 //For example; if you change slot but related slotset isn't used by drawpass, it doesn't happen until it is used
 result_tgfx Change_RTSlotTexture (rtslotset_tgfx_handle RTSlotHandle, unsigned char isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, texture_tgfx_handle TextureHandle){ return result_tgfx_FAIL; }
-result_tgfx Inherite_RTSlotSet (rtslotusage_tgfx_listhandle Descriptions, rtslotset_tgfx_handle RTSlotSetHandle, inheritedrtslotset_tgfx_handle* InheritedSlotSetHandle){ return result_tgfx_FAIL; }
+result_tgfx Inherite_RTSlotSet (rtslotusage_tgfx_listhandle DescriptionsGFX, rtslotset_tgfx_handle RTSlotSetHandle, inheritedrtslotset_tgfx_handle* InheritedSlotSetHandle){
+	if (!RTSlotSetHandle) {
+		printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because Handle is invalid!");
+		return result_tgfx_INVALIDARGUMENT;
+	}
+	rtslotset_vk* BaseSet = (rtslotset_vk*)RTSlotSetHandle;
+	irtslotset_vk* InheritedSet = new irtslotset_vk;
+	InheritedSet->BASESLOTSET = BaseSet;
+	rtslotusage_vk** Descriptions = (rtslotusage_vk**)DescriptionsGFX;
+
+	//Find Depth/Stencil Slots and count Color Slots
+	bool DEPTH_FOUND = false;
+	unsigned char COLORSLOT_COUNT = 0, DEPTHDESC_VECINDEX = 0;
+	TGFXLISTCOUNT(core_tgfx_main, Descriptions, DESCCOUNT);
+	for (unsigned char i = 0; i < DESCCOUNT; i++) {
+		const rtslotusage_vk* DESC = Descriptions[i];
+		if (DESC->IS_DEPTH) {
+			if (DEPTH_FOUND) {
+				printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because there are two depth buffers in the description, which is not supported!");
+				delete InheritedSet;
+				return result_tgfx_INVALIDARGUMENT;
+			}
+			DEPTH_FOUND = true;
+			DEPTHDESC_VECINDEX = i;
+			if (BaseSet->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->DEPTH_OPTYPE == operationtype_tgfx_READ_ONLY &&
+				(DESC->OPTYPE == operationtype_tgfx_WRITE_ONLY || DESC->OPTYPE == operationtype_tgfx_READ_AND_WRITE)
+				)
+			{
+				printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because you can't use a Read-Only DepthSlot with Write Access in a Inherited Set!");
+				delete InheritedSet;
+				return result_tgfx_INVALIDARGUMENT;
+			}
+			InheritedSet->DEPTH_OPTYPE = DESC->OPTYPE;
+			InheritedSet->STENCIL_OPTYPE = DESC->OPTYPESTENCIL;
+		}
+		else {
+			COLORSLOT_COUNT++;
+		}
+	}
+	if (!DEPTH_FOUND) {
+		InheritedSet->DEPTH_OPTYPE = operationtype_tgfx_UNUSED;
+	}
+	if (COLORSLOT_COUNT != BaseSet->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT) {
+		printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because BaseSet's Color Slot count doesn't match given Descriptions's one!");
+		delete InheritedSet;
+		return result_tgfx_INVALIDARGUMENT;
+	}
+
+
+	InheritedSet->COLOR_OPTYPEs = new operationtype_tgfx[COLORSLOT_COUNT];
+	//Set OPTYPEs of inherited slotset
+	for (unsigned int i = 0; i < COLORSLOT_COUNT; i++) {
+		if (i == DEPTHDESC_VECINDEX) {
+			continue;
+		}
+		unsigned char slotindex = ((i > DEPTHDESC_VECINDEX) ? (i - 1) : i);
+		
+		//FIX: LoadType isn't supported natively while changing subpass, it may be supported by adding a VkCmdPipelineBarrier but don't want to bother with it for now!
+		InheritedSet->COLOR_OPTYPEs[slotindex] = Descriptions[i]->OPTYPE;
+	}
+
+	*InheritedSlotSetHandle = (inheritedrtslotset_tgfx_handle)InheritedSet;
+	hidden->irtslotsets.push_back(InheritedSet);
+	return result_tgfx_SUCCESS;
+}
 void  Delete_InheritedRTSlotSet (inheritedrtslotset_tgfx_handle InheritedRTSlotSetHandle){}
 
 inline void set_functionpointers() {

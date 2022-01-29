@@ -106,7 +106,7 @@ struct drawpass_vk {
 	VK_Pass base_data;
 	VkRenderPass RenderPassObject;
 	rtslotset_vk* SLOTSET;
-	std::atomic<unsigned char> SlotSetChanged = false;
+	std::atomic<unsigned char> SlotSetChanged = true;
 	unsigned char Subpass_Count;
 	subdrawpass_vk* Subpasses;
 	VkFramebuffer FBs[2]{ VK_NULL_HANDLE };

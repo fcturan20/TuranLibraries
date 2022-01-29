@@ -6,10 +6,10 @@ void Job() {
 	std::cout << "Job is called!" << std::endl;
 }
 
-void Callback(tgfx_result result, const char* Text) {
-	std::cout << ((result == tgfx_result_NOTCODED || result == tgfx_result_FAIL) ? ("A notcoded or failed GFX function is called: ") : (""))<< Text << std::endl;
+void Callback(result_tgfx result, const char* Text) {
+	std::cout << ((result == result_tgfx_NOTCODED || result == result_tgfx_FAIL) ? ("A notcoded or failed GFX function is called: ") : (""))<< Text << std::endl;
 #ifdef _DEBUG
-	if (result == tgfx_result_NOTCODED || result == tgfx_result_FAIL) {
+	if (result == result_tgfx_NOTCODED || result == result_tgfx_FAIL) {
 		std::cout << "Error breakpoint!\n";
 	}
 #endif
@@ -39,7 +39,7 @@ void ThreadedMain() {
 		core->Helpers.SetMemoryTypeInfo(MemoryAllocList[i], 10 * 1024 * 1024, nullptr);
 		std::cout << std::endl;
 	}
-	tgfx_result extensionresult;
+	result_tgfx extensionresult;
 	std::cout << "Desc indexing support: " << unsigned int(core->Helpers.DoesGPUsupportsVKDESCINDEXING(DeviceGPUs[0])) << std::endl;
 	tgfx_initializationsecondstageinfo secondinitialize = core->Helpers.Create_GFXInitializationSecondStageInfo(DeviceGPUs[0], 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 1, nullptr);
 	core->Initialize_SecondStage(secondinitialize);

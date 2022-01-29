@@ -9,3 +9,4 @@ imgui.ini
 build
 dynamic_libs
 Example_runnables
+tgfx/vk/VK_GPUContentManager.cpp

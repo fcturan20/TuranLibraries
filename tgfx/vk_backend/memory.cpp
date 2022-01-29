@@ -7,14 +7,20 @@
 #include "includes.h"
 #include "resource.h"
 #include <map>
+#include <numeric>
 
 extern VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage);
 struct suballocation_vk {
 	VkDeviceSize Size = 0, Offset = 0;
 	std::atomic<bool> isEmpty;
-	suballocation_vk();
-	suballocation_vk(const suballocation_vk& copyblock);
-	VkDeviceSize FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment);
+	suballocation_vk() : isEmpty(true){}
+	suballocation_vk(const suballocation_vk& copyblock) : isEmpty(copyblock.isEmpty.load()), Size(copyblock.Size), Offset(copyblock.Offset) {}
+	suballocation_vk operator=(const suballocation_vk& copyblock) {
+		Size = copyblock.Size;
+		Offset = copyblock.Offset;
+		isEmpty.store(copyblock.isEmpty.load());
+		return *this;
+	}
 };
 struct memoryHeap_vk {
 
@@ -26,11 +32,14 @@ struct memorytype_vk {
 	VkBuffer Buffer;
 	std::atomic<uint32_t> UnusedSize = 0;
 	uint32_t MemoryTypeIndex;	//Vulkan's index
-	unsigned long long MaxSize = 0, ALLOCATIONSIZE = 0;
+	VkDeviceSize MaxSize = 0, ALLOCATIONSIZE = 0;
 	void* MappedMemory;
 	memoryallocationtype_tgfx TYPE;
-	memorytype_vk() = default;
-	memorytype_vk(const memorytype_vk& copy) {
+	threadlocal_vector<suballocation_vk> Allocated_Blocks;
+	memorytype_vk() : Allocated_Blocks(1024) {
+
+	}
+	memorytype_vk(const memorytype_vk& copy) : Allocated_Blocks(copy.Allocated_Blocks) {
 		Allocated_Memory = copy.Allocated_Memory;
 		Buffer = copy.Buffer;
 		UnusedSize.store(UnusedSize.load());
@@ -38,6 +47,65 @@ struct memorytype_vk {
 		MaxSize = copy.MaxSize;
 		ALLOCATIONSIZE = copy.ALLOCATIONSIZE;
 		MappedMemory = copy.MappedMemory;
+	}
+	inline VkDeviceSize FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
+		VkDeviceSize FurthestOffset = 0;
+		if (AlignmentOffset && !RequiredAlignment) {
+			RequiredAlignment = AlignmentOffset;
+		}
+		else if (!AlignmentOffset && RequiredAlignment) {
+			AlignmentOffset = RequiredAlignment;
+		}
+		else if (!AlignmentOffset && !RequiredAlignment) {
+			AlignmentOffset = 1;
+			RequiredAlignment = 1;
+		}
+		for (unsigned int ThreadID = 0; ThreadID < threadcount; ThreadID++) {
+			for (unsigned int i = 0; i < Allocated_Blocks.size(ThreadID); i++) {
+				suballocation_vk& Block = Allocated_Blocks.get(ThreadID, i);
+				if (FurthestOffset <= Block.Offset) {
+					FurthestOffset = Block.Offset + Block.Size;
+				}
+				if (!Block.isEmpty.load()) {
+					continue;
+				}
+
+				VkDeviceSize Offset = CalculateOffset(Block.Offset, AlignmentOffset, RequiredAlignment);
+
+				if (Offset + RequiredSize - Block.Offset > Block.Size ||
+					Offset + RequiredSize - Block.Offset < (Block.Size / 5) * 3) {
+					continue;
+				}
+				bool x = true, y = false;
+				//Try to get the block first (Concurrent usages are prevented that way)
+				if (!Block.isEmpty.compare_exchange_strong(x, y)) {
+					continue;
+				}
+				//Don't change the block's own offset, because that'd probably cause shifting offset the memory block after free-reuse-free-reuse sequences
+				return Offset;
+			}
+		}
+
+		VkDeviceSize finaloffset = CalculateOffset(FurthestOffset, AlignmentOffset, RequiredAlignment);
+		if (finaloffset + RequiredSize > ALLOCATIONSIZE) {
+			printer(result_tgfx_FAIL, "Suballocation failed because memory type has not enough space for the data!");
+			return UINT64_MAX;
+		}
+		//None of the current blocks is suitable, so create a new block in this thread's local memoryblocks list
+		suballocation_vk newblock;
+		newblock.isEmpty.store(false);
+		newblock.Offset = finaloffset;
+		newblock.Size = RequiredSize + newblock.Offset - FurthestOffset;
+		Allocated_Blocks.push_back(newblock);
+		return newblock.Offset;
+	}
+private:
+	//Don't use this functions outside of the FindAvailableOffset
+	inline VkDeviceSize CalculateOffset(VkDeviceSize baseoffset, VkDeviceSize AlignmentOffset, VkDeviceSize ReqAlignment) {
+		VkDeviceSize FinalOffset = 0;
+		VkDeviceSize LCM = std::lcm(AlignmentOffset, ReqAlignment);
+		FinalOffset = (baseoffset % LCM) ? (((baseoffset / LCM) + 1) * LCM) : baseoffset;
+		return FinalOffset;
 	}
 };
 struct allocatorsys_data {
@@ -50,6 +118,19 @@ private:
 	unsigned int next_emptyid = 0;
 };
 
+//Returns the given offset
+//RequiredSize: You should use vkGetBuffer/ImageRequirements' output size here
+//AligmentOffset: You should use GPU's own aligment offset limitation for the specified type of data
+//RequiredAlignment: You should use vkGetBuffer/ImageRequirements' output alignment here
+inline result_tgfx suballocate_memoryblock(unsigned int memoryid, VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment, VkDeviceSize* ResultOffset) {
+	memorytype_vk& memtype = allocatorsys->data->get_memtype_byid(memoryid);
+	*ResultOffset = memtype.FindAvailableOffset(RequiredSize, AlignmentOffset, RequiredAlignment);
+	if (*ResultOffset == UINT64_MAX) {
+		printer(result_tgfx_NOTCODED, "There is not enough space in the memory allocation, Vulkan backend should support multiple memory allocations");
+		return result_tgfx_NOTCODED;
+	}
+	return result_tgfx_SUCCESS;
+}
 
 void allocatorsys_vk::analize_gpumemory(gpu_public* VKGPU) {
 	std::vector<memory_description_tgfx> mem_descs;
@@ -205,67 +286,6 @@ unsigned int allocatorsys_vk::get_memorytypeindex_byID(gpu_public* gpu, unsigned
 	return allocatorsys->data->get_memtype_byid(memorytype_id).MemoryTypeIndex;
 }
 
-//Don't use this functions outside of the FindAvailableOffset
-VkDeviceSize CalculateOffset(VkDeviceSize baseoffset, VkDeviceSize AlignmentOffset, VkDeviceSize ReqAlignment) {
-	VkDeviceSize FinalOffset = 0;
-	printer(result_tgfx_NOTCODED, "VulkanBackend was using C++17's LCM before, but because LCM is a basic math please fix the backend to use a custom math code. C++17 for this feature is unnecessary!");
-	//VkDeviceSize LCM = std::lcm(AlignmentOffset, ReqAlignment);
-	//FinalOffset = (baseoffset % LCM) ? (((baseoffset / LCM) + 1) * LCM) : baseoffset;
-	return FinalOffset;
-}
-VkDeviceSize suballocation_vk::FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
-	/*
-	VkDeviceSize FurthestOffset = 0;
-	if (AlignmentOffset && !RequiredAlignment) {
-		RequiredAlignment = AlignmentOffset;
-	}
-	else if (!AlignmentOffset && RequiredAlignment) {
-		AlignmentOffset = RequiredAlignment;
-	}
-	else if (!AlignmentOffset && !RequiredAlignment) {
-		AlignmentOffset = 1;
-		RequiredAlignment = 1;
-	}
-	for (unsigned int ThreadID = 0; ThreadID < threadcount; ThreadID++) {
-		for (unsigned int i = 0; i < Allocated_Blocks.size(ThreadID); i++) {
-			suballocation_vk& Block = Allocated_Blocks.get(ThreadID, i);
-			if (FurthestOffset <= Block.Offset) {
-				FurthestOffset = Block.Offset + Block.Size;
-			}
-			if (!Block.isEmpty.load()) {
-				continue;
-			}
-
-			VkDeviceSize Offset = CalculateOffset(Block.Offset, AlignmentOffset, RequiredAlignment);
-
-			if (Offset + RequiredSize - Block.Offset > Block.Size ||
-				Offset + RequiredSize - Block.Offset < (Block.Size / 5) * 3) {
-				continue;
-			}
-			bool x = true, y = false;
-			//Try to get the block first (Concurrent usages are prevented that way)
-			if (!Block.isEmpty.compare_exchange_strong(x, y)) {
-				continue;
-			}
-			//Don't change the block's own offset, because that'd probably cause shifting offset the memory block after free-reuse-free-reuse sequences
-			return Offset;
-		}
-	}
-
-	//None of the current blocks is suitable, so create a new block in this thread's local memoryblocks list
-	VK_SubAllocation newblock;
-	newblock.isEmpty.store(false);
-	newblock.Offset = CalculateOffset(FurthestOffset, AlignmentOffset, RequiredAlignment);
-	newblock.Size = RequiredSize + newblock.Offset - FurthestOffset;
-	Allocated_Blocks.push_back(tapi_GetThisThreadIndex(JobSys), newblock);
-	return newblock.Offset;*/
-	return UINT32_MAX;
-}
-result_tgfx allocatorsys_vk::suballocate_memoryblock(unsigned int memoryid, VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment, VkDeviceSize* found_offset) {
-	memorytype_vk& memtype = allocatorsys->data->get_memtype_byid(memoryid);
-	//if(memtype.UnusedSize.fetch_sub())
-	return result_tgfx_FAIL;
-}
 result_tgfx allocatorsys_vk::suballocate_image(texture_vk* texture) {
 	VkMemoryRequirements req;
 	vkGetImageMemoryRequirements(rendergpu->LOGICALDEVICE(), texture->Image, &req);
@@ -277,7 +297,7 @@ result_tgfx allocatorsys_vk::suballocate_image(texture_vk* texture) {
 		printer(result_tgfx_FAIL, "Intended texture doesn't support to be stored in the specified memory region!");
 		return result_tgfx_FAIL;
 	}
-	if (allocatorsys->suballocate_memoryblock(texture->Block.MemAllocIndex, size, 0, req.alignment, &Offset) != result_tgfx_SUCCESS) {
+	if (suballocate_memoryblock(texture->Block.MemAllocIndex, size, 0, req.alignment, &Offset) != result_tgfx_SUCCESS) {
 		printer(result_tgfx_FAIL, "Suballocation from memory block has failed for the texture!");
 		return result_tgfx_FAIL;
 	}

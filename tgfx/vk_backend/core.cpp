@@ -721,7 +721,6 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 	Vulkan_Window->NAME = NAME;
 	Vulkan_Window->GLFW_WINDOW = glfw_window;
 	Vulkan_Window->SWAPCHAINUSAGE = *(VkImageUsageFlags*)SwapchainUsage;
-	delete SwapchainUsage;
 	Vulkan_Window->resize_cb = ResizeCB;
 	Vulkan_Window->UserPTR = UserPointer;
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);

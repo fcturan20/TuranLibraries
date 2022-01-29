@@ -256,6 +256,7 @@ struct renderer_funcs {
 			RenderPass_CreationInfo.pAttachments = AttachmentDescs.data();
 			RenderPass_CreationInfo.dependencyCount = SubpassDepends.size();
 			RenderPass_CreationInfo.pDependencies = SubpassDepends.data();
+			VKDrawPass->SlotSetChanged.store(3);
 
 			if (vkCreateRenderPass(rendergpu->LOGICALDEVICE(), &RenderPass_CreationInfo, nullptr, &VKDrawPass->RenderPassObject) != VK_SUCCESS) {
 				printer(result_tgfx_FAIL, "VkCreateRenderPass() has failed!");
@@ -510,15 +511,16 @@ struct renderer_funcs {
 };
 
 void renderer_public::RendererResource_Finalizations() {
-	/*
 	//Handle RTSlotSet changes by recreating framebuffers of draw passes
 	//by "RTSlotSet changes": DrawPass' slotset is changed to different one or slotset's slots is changed.
 	for (unsigned int DrawPassIndex = 0; DrawPassIndex < renderer->DrawPasses.size(); DrawPassIndex++) {
 		drawpass_vk* DP = renderer->DrawPasses[DrawPassIndex];
 		unsigned char ChangeInfo = DP->SlotSetChanged.load();
 		if (ChangeInfo == FrameIndex + 1 || ChangeInfo == 3 || DP->SLOTSET->PERFRAME_SLOTSETs[FrameIndex].IsChanged.load()) {
-			//This is safe because this FB is used 2 frames ago and CPU already waits for the frame's GPU process to end
-			vkDestroyFramebuffer(rendergpu->LOGICALDEVICE(), DP->FBs[FrameIndex], nullptr);
+			if(DP->FBs[FrameIndex]){
+				//This is safe because this FB is used 2 frames ago and CPU already waits for the frame's GPU process to end
+				vkDestroyFramebuffer(rendergpu->LOGICALDEVICE(), DP->FBs[FrameIndex], nullptr);
+			}
 
 			VkFramebufferCreateInfo fb_ci = DP->SLOTSET->FB_ci[FrameIndex];
 			fb_ci.renderPass = DP->RenderPassObject;
@@ -537,7 +539,6 @@ void renderer_public::RendererResource_Finalizations() {
 			}
 		}
 	}
-	*/
 }
 inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->Start_RenderGraphConstruction = &Start_RenderGraphConstruction;
@@ -547,7 +548,6 @@ inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->Create_TransferPass = &renderer_funcs::Create_TransferPass;
 	core_tgfx_main->renderer->Create_DrawPass = &renderer_funcs::Create_DrawPass;
 	core_tgfx_main->renderer->Run = &renderer_funcs::Run;
-	
 }
 extern void Create_Renderer() {
 	renderer = new renderer_public;

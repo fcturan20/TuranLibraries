@@ -70,10 +70,10 @@ public:
 		}
 	}
 	unsigned long size(unsigned int ThreadIndex = UINT32_MAX) {
-		return sizes_and_capacities[(threadingsys) ? (threadingsys->this_thread_index() * 2) : 0];
+		return sizes_and_capacities[(ThreadIndex != UINT32_MAX) ? (ThreadIndex) : ((threadingsys) ? (threadingsys->this_thread_index() * 2) : 0)];
 	}
 	void push_back(const T& ref, unsigned int ThreadIndex = UINT32_MAX) {
-		const unsigned int thread_i = (ThreadIndex == UINT32_MAX) ? (ThreadIndex) : ((threadingsys) ? (threadingsys->this_thread_index()) : 0);
+		const unsigned int thread_i = ((ThreadIndex != UINT32_MAX) ? (ThreadIndex) : ((threadingsys) ? (threadingsys->this_thread_index()) : 0));
 		expand_if_necessary(thread_i);
 		lists[thread_i][sizes_and_capacities[thread_i * 2]] = ref;
 		sizes_and_capacities[thread_i * 2] += 1;

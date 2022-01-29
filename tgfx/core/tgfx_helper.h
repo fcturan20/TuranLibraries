@@ -64,8 +64,8 @@ typedef struct helper_tgfx {
     rtslotdescription_tgfx_handle(*CreateRTSlotDescription_DepthStencil)(texture_tgfx_handle Texture0, texture_tgfx_handle Texture1,
         operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD, operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD,
         float DEPTHCLEARVALUE, unsigned char STENCILCLEARVALUE);
-    rtslotusage_tgfx_handle(*CreateRTSlotUsage_Color)(unsigned char SLOTINDEX, operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE);
-    rtslotusage_tgfx_handle(*CreateRTSlotUsage_Depth)(operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD,
+    rtslotusage_tgfx_handle(*CreateRTSlotUsage_Color)(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE);
+    rtslotusage_tgfx_handle(*CreateRTSlotUsage_Depth)(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD,
         operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD);
     depthsettings_tgfx_handle(*CreateDepthConfiguration)(unsigned char ShouldWrite, depthtest_tgfx COMPAREOP);
     stencilsettings_tgfx_handle(*CreateStencilConfiguration)(unsigned char Reference, unsigned char WriteMask, unsigned char CompareMask,

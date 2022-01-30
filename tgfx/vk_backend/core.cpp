@@ -750,8 +750,8 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 
 
 	//Finding GPU_TO_RENDER's Surface Capabilities
-
-	if (!queuesys->check_windowsupport(rendergpu, Vulkan_Window->Window_Surface)) {
+	Vulkan_Window->presentationqueue = queuesys->check_windowsupport(rendergpu, Vulkan_Window->Window_Surface);
+	if (!Vulkan_Window->presentationqueue) {
 		printer(result_tgfx_FAIL, "Vulkan backend supports windows that your GPU supports but your GPU doesn't support current window. So window creation has failed!");
 		return;
 	}

@@ -50,6 +50,8 @@ struct queuesys_vk {
 	VkCommandBuffer get_commandbufferobj(commandbuffer_vk* id);
 	fence_idtype_vk queueSubmit(gpu_public* vkgpu, queuefam_vk* family, VkSubmitInfo info);
 	uint32_t get_queuefam_index(gpu_public* vkgpu, queuefam_vk* fam);
-	bool check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR surface);
+	queuefam_vk* check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR surface);
 	bool does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag);
+	//Use this for 3rd party libraries (like dear ImGui)
+	VkQueue get_queue(gpu_public* vkgpu, queuefam_vk* queuefam);
 };

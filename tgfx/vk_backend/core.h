@@ -138,8 +138,10 @@ struct window_vk {
 	VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
 	std::vector<VkSurfaceFormatKHR> SurfaceFormats;
 	std::vector<VkPresentModeKHR> PresentationModes;
-	bool isResized = false;
 	semaphore_idtype_vk PresentationSemaphores[2];
+	queuefam_vk* presentationqueue = nullptr;
+	//To avoid calling resize or swapbuffer twice in a frame!
+	std::atomic<bool> isResized = false, isSwapped = false;
 };
 
 struct initialization_secondstageinfo{

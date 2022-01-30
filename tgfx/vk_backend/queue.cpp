@@ -155,18 +155,18 @@ uint32_t queuesys_vk::get_queuefam_index(gpu_public* vkgpu, queuefam_vk* fam) {
 #endif
 	return fam->queueFamIndex;
 }
-bool queuesys_vk::check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR WindowSurface) {
-	bool issupported = false;
+queuefam_vk* queuesys_vk::check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR WindowSurface) {
+	queuefam_vk* supported_queue = nullptr;
 	for (unsigned int i = 0; i < rendergpu->QUEUEFAMSCOUNT(); i++) {
 		VkBool32 Does_Support = 0;
 		queuefam_vk* queuefam = rendergpu->QUEUEFAMS()[i];
 		vkGetPhysicalDeviceSurfaceSupportKHR(rendergpu->PHYSICALDEVICE(), queuefam->queueFamIndex, WindowSurface, &Does_Support);
 		if (Does_Support) {
 			if (!queuefam->supportflag.is_PRESENTATIONsupported) { queuefam->supportflag.is_PRESENTATIONsupported = true; queuefam->featurescore++; }
-			issupported = true;
+			supported_queue = queuefam;
 		}
 	}
-	return issupported;
+	return supported_queue;
 }
 commandbuffer_vk* queuesys_vk::get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex) {
 	commandpool_vk& CP = family->CommandPools[FrameIndex];
@@ -198,6 +198,9 @@ fence_idtype_vk queuesys_vk::queueSubmit(gpu_public* vkgpu, queuefam_vk* family,
 bool queuesys_vk::does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag) {
 	printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");
 	return false;
+}
+VkQueue queuesys_vk::get_queue(gpu_public* vkgpu, queuefam_vk* queuefam) {
+	return queuefam->queues[0].Queue;
 }
 extern void Create_QueueSys() {
 	queuesys = new queuesys_vk;

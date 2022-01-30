@@ -120,7 +120,7 @@ int main(){
 	std::cout << "Memory Type Count: " << memtypelistcount << " and GPU Name: " << gpuname << "\n";
 	unsigned int devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = UINT32_MAX;
 	for (unsigned int i = 0; i < memtypelistcount; i++) {
-		tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 20 * 1024 * 1024, nullptr);
+		tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 40 * 1024 * 1024, nullptr);
 		if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) { devicelocalmemtype_id = memtypelist[i].memorytype_id; }
 		if (memtypelist[i].allocationtype == memoryallocationtype_FASTHOSTVISIBLE) { fastvisiblememtype_id = memtypelist[i].memorytype_id; }
 	}
@@ -141,9 +141,9 @@ int main(){
 	texture_tgfx_handle first_rt, second_rt;
 	textureusageflag_tgfx_handle usageflag_tgfx = tgfxsys->api->helpers->CreateTextureUsageFlag(false, true, false, true, false);
 	unsigned int WIDTH, HEIGHT, MIP = 0;
-	tgfxsys->api->helpers->GetTextureTypeLimits(texture_dimensions_tgfx_2D, texture_order_tgfx_SWIZZLE, texture_channels_tgfx_RGBA8UB, usageflag, gpulist[0], &WIDTH, &HEIGHT, nullptr, &MIP);
-	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA8UB, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &first_rt);
-	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA8UB, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &second_rt);
+	tgfxsys->api->helpers->GetTextureTypeLimits(texture_dimensions_tgfx_2D, texture_order_tgfx_SWIZZLE, texture_channels_tgfx_RGBA32F, usageflag, gpulist[0], &WIDTH, &HEIGHT, nullptr, &MIP);
+	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &first_rt);
+	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &second_rt);
 
 
 
@@ -158,10 +158,14 @@ int main(){
 	subdrawpassdescription_tgfx_handle subdp_descs[2] = {	tgfxsys->api->helpers->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
 	passwaitdescription_tgfx_handle dp_waits[2] = {			tgfxsys->api->helpers->CreatePassWait_TransferPass(&firstbarriertp, transferpasstype_tgfx_BARRIER, 
 		tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
-	subdrawpass_tgfx_handle sub_dp;
+	subdrawpass_tgfx_listhandle sub_dps;
 	drawpass_tgfx_handle dp;
-	tgfxsys->api->renderer->Create_DrawPass(subdp_descs, rtslotset_handle, dp_waits, "First DP", &sub_dp, &dp);
-	tgfxsys->api->renderer->Finish_RenderGraphConstruction(nullptr);
+	tgfxsys->api->renderer->Create_DrawPass(subdp_descs, rtslotset_handle, dp_waits, "First DP", &sub_dps, &dp);
+	windowpass_tgfx_handle first_wp;
+	waitsignaldescription_tgfx_handle wait_for_dp_signal = tgfxsys->api->helpers->CreateWaitSignal_FragmentShader(true, true, true);
+	passwaitdescription_tgfx_handle wait_for_dp[2] = { tgfxsys->api->helpers->CreatePassWait_DrawPass(&dp, 0, &wait_for_dp_signal, false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	tgfxsys->api->renderer->Create_WindowPass(wait_for_dp, "First WP", &first_wp);
+	tgfxsys->api->renderer->Finish_RenderGraphConstruction(sub_dps[0]);
 
 	while (true) {
 		profiledscope_handle_tapi scope;	unsigned long long duration;
@@ -170,6 +174,6 @@ int main(){
 		profilersys->funcs->finish_profiling(&scope, 1);
 	}
 	printf("Application is finished!");
-
+	
 	return 1;
 }

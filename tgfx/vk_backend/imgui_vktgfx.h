@@ -18,9 +18,12 @@ public:
 	//Creates command pool/buffer and sends font textures
 	void UploadFontTextures();
 	void Destroy_IMGUIResources();
+	struct imgui_vk_hidden;
+	imgui_vk_hidden* hidden;
 private:
 	IMGUI_STATUS STAT = IMGUI_STATUS::UNINITIALIZED;
 	subdrawpass_tgfx_handle Subdrawpass;
 	VkDescriptorPool descpool;
+	friend void Create_IMGUI();
 };
 #endif

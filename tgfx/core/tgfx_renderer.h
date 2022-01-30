@@ -17,7 +17,7 @@ typedef struct renderer_tgfx {
     //SubDrawPassIDs argument array's order is in the order of passed SubDrawPass_Description vector
     result_tgfx(*Create_DrawPass)(subdrawpassdescription_tgfx_listhandle SubDrawPasses,
         rtslotset_tgfx_handle RTSLOTSET_ID, passwaitdescription_tgfx_listhandle DrawPassWAITs,
-        const char* NAME, subdrawpass_tgfx_handle* SubDrawPassHandles, drawpass_tgfx_handle* DPHandle);
+        const char* NAME, subdrawpass_tgfx_listhandle* SubDrawPassHandles, drawpass_tgfx_handle* DPHandle);
     /*
     * There are 4 types of TransferPasses and each type only support its type of GFXContentManager command: Barrier, Copy, Upload, Download
     * Barrier means passes waits for the given resources (also image usage changes may happen that may change layout of the image)

@@ -6,6 +6,7 @@
 #include <tgfx_forwarddeclarations.h>
 #include "queue.h"
 #include "core.h"
+#include "synchronization_sys.h"
 
 void Start_RenderGraphConstruction() {
 	//Apply resource changes made by user
@@ -428,9 +429,9 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 				((subdrawpass_vk*)IMGUI_Subpass)->render_dearIMGUI = true;
 				imgui->Change_DrawPass(IMGUI_Subpass);
 			}
-		}
 
-		imgui->NewFrame();
+			imgui->NewFrame();
+		}
 	}
 #endif
 
@@ -710,7 +711,7 @@ void Record_ComputePass(VkCommandBuffer CB, computepass_vk* CP) {
 	}
 }
 
-
+static std::vector<VkSemaphore> SwapchainAcquireSemaphores;
 
 result_tgfx Execute_RenderGraph() {
 	commandbuffer_vk* cb = queuesys->get_commandbuffer(rendergpu, rendergpu->GRAPHICSQUEUEFAM(), renderer->Get_FrameIndex(false));
@@ -764,7 +765,6 @@ result_tgfx Execute_RenderGraph() {
 			if (pass_i != framegraphsys_vk::Execution_Order.size() - 1) {
 				printer(result_tgfx_FAIL, "Primitive Rendergraph supports windows passes only to be in last in the execution order, please fix your execution order!");
 			}
-			//Present Swapchain Here!
 			break;
 		case VK_Pass::PassType::CP:
 			Record_ComputePass(CB, (computepass_vk*)CurrentPass);
@@ -777,6 +777,81 @@ result_tgfx Execute_RenderGraph() {
 	if (vkEndCommandBuffer(CB) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "vkEndCommandBuffer() has failed!");
 		return result_tgfx_FAIL;
+	}
+
+	//Find how many display queues will be used (to detect how many semaphores render command buffers should signal)
+	struct PresentationInfos {
+		std::vector<VkSwapchainKHR> swapchains;
+		std::vector<uint32_t> image_indexes;
+		queuefam_vk* queuefam;
+	};
+	std::vector<PresentationInfos> PresentationInfo_PerQueue;
+	//Send displays (primitive rendergraph supports to have only one window pass and it is at the end)
+	for (unsigned char i = 0; i < 1; i++) {
+		windowpass_vk* WP = renderer->WindowPasses[0];
+		if (!WP->WindowCalls[2].size()) {
+			continue;
+		}
+		for (unsigned char WindowIndex = 0; WindowIndex < WP->WindowCalls[2].size(); WindowIndex++) {
+			queuefam_vk* window_qfam = WP->WindowCalls[2][WindowIndex].Window->presentationqueue;
+			bool is_found = false;
+			for (unsigned char queue_i = 0; queue_i < PresentationInfo_PerQueue.size() && !is_found; queue_i++) {
+				if (window_qfam == PresentationInfo_PerQueue[queue_i].queuefam) {
+					PresentationInfo_PerQueue[queue_i].image_indexes.push_back(WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex);
+					WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex = (WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex + 1) % 2;
+					PresentationInfo_PerQueue[queue_i].swapchains.push_back(WP->WindowCalls[2][WindowIndex].Window->Window_SwapChain);
+				}
+			}
+			if (!is_found) {
+				PresentationInfo_PerQueue.push_back(PresentationInfos());
+				PresentationInfos& presentation = PresentationInfo_PerQueue[PresentationInfo_PerQueue.size() - 1];
+				presentation.image_indexes.push_back(WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex);
+				WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex = (WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex + 1) % 2;
+				presentation.swapchains.push_back(WP->WindowCalls[2][WindowIndex].Window->Window_SwapChain);
+				presentation.queuefam = window_qfam;
+			}
+		}
+	}
+
+	//There is only one command buffer, so we need only one submit
+	//It should wait for penultimate frame's display presentation to end
+	VkSubmitInfo submit_info = {};
+	submit_info.commandBufferCount = 1;
+	submit_info.pCommandBuffers = &CB;
+	submit_info.pNext = nullptr;
+	submit_info.waitSemaphoreCount = SwapchainAcquireSemaphores.size();
+	submit_info.pWaitSemaphores = SwapchainAcquireSemaphores.data();
+	submit_info.signalSemaphoreCount = PresentationInfo_PerQueue.size();
+	std::vector<VkSemaphore> signalSemaphores(PresentationInfo_PerQueue.size());
+	for (unsigned char semaphore_i = 0; semaphore_i < signalSemaphores.size(); semaphore_i++) {
+		signalSemaphores[semaphore_i] = semaphoresys->Create_Semaphore().vksemaphore();
+	}
+	submit_info.pSignalSemaphores = signalSemaphores.data();
+	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	queuesys->queueSubmit(rendergpu, rendergpu->GRAPHICSQUEUEFAM(), submit_info);
+
+
+	if (imgui) { imgui->Render_toCB(CB); imgui->Render_AdditionalWindows(); }
+	//Send displays (primitive rendergraph supports to have only one window pass and it is at the end)
+	for (unsigned char i = 0; i < 1; i++) {
+		//Fill swapchain and image indices vectors
+		for (unsigned char presentation_i = 0; presentation_i < PresentationInfo_PerQueue.size(); presentation_i++) {
+			VkPresentInfoKHR SwapchainImage_PresentationInfo = {};
+			SwapchainImage_PresentationInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+			SwapchainImage_PresentationInfo.pNext = nullptr;
+			SwapchainImage_PresentationInfo.swapchainCount = PresentationInfo_PerQueue[presentation_i].swapchains.size();
+			SwapchainImage_PresentationInfo.pSwapchains = PresentationInfo_PerQueue[presentation_i].swapchains.data();
+			SwapchainImage_PresentationInfo.pImageIndices = PresentationInfo_PerQueue[presentation_i].image_indexes.data();
+			SwapchainImage_PresentationInfo.pResults = nullptr;
+			SwapchainImage_PresentationInfo.waitSemaphoreCount = signalSemaphores.size();
+			SwapchainImage_PresentationInfo.pWaitSemaphores = signalSemaphores.data();
+
+			VkQueue DisplayQueue = {};
+			if (vkQueuePresentKHR(DisplayQueue, &SwapchainImage_PresentationInfo) != VK_SUCCESS) {
+				printer(result_tgfx_FAIL, "Submitting Presentation Queue has failed!");
+				return result_tgfx_FAIL;
+			}
+		}
 	}
 
 	return result_tgfx_SUCCESS;

@@ -120,7 +120,7 @@ struct renderer_funcs {
 	}
 
 	static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle SubDrawPasses, rtslotset_tgfx_handle RTSLOTSET_ID, passwaitdescription_tgfx_listhandle DrawPassWAITs,
-		const char* NAME, subdrawpass_tgfx_handle* SubDrawPassHandles, drawpass_tgfx_handle* DPHandle) {
+		const char* NAME, subdrawpass_tgfx_listhandle* SubDrawPassHandles, drawpass_tgfx_handle* DPHandle) {
 		if (renderer->RGSTATUS() != RenderGraphStatus::StartedConstruction) {
 			printer(result_tgfx_FAIL, "GFXRENDERER->CreateDrawPass() has failed because you first need to call Start_RenderGraphCreation()!");
 			return result_tgfx_FAIL;
@@ -216,7 +216,7 @@ struct renderer_funcs {
 		std::vector<VkSubpassDependency> SubpassDepends(SubDrawPassesCount);
 		std::vector<VkSubpassDescription> SubpassDescs(SubDrawPassesCount);
 		std::vector<std::vector<VkAttachmentReference>> SubpassAttachments(SubDrawPassesCount);
-		SubDrawPassHandles = (subdrawpass_tgfx_listhandle)new subdrawpass_vk * [SubDrawPassesCount + 1]{ NULL };
+		(* SubDrawPassHandles) = (subdrawpass_tgfx_listhandle)new subdrawpass_vk *[SubDrawPassesCount + 1]{NULL};
 		for (unsigned int i = 0; i < SubDrawPassesCount; i++) {
 			const subdrawpassdesc_vk* Subpass_gfxdesc = SubDrawPassDescs[i];
 			irtslotset_vk* Subpass_Slotset = Subpass_gfxdesc->INHERITEDSLOTSET;
@@ -226,8 +226,9 @@ struct renderer_funcs {
 			Final_Subpasses[i].Binding_Index = i;
 			Final_Subpasses[i].SLOTSET = Subpass_Slotset;
 			Final_Subpasses[i].DrawPass = VKDrawPass;
-			SubDrawPassHandles[i] = (subdrawpass_tgfx_handle)&Final_Subpasses[i];
+			(*SubDrawPassHandles)[i] = (subdrawpass_tgfx_handle)&Final_Subpasses[i];
 		}
+		(*SubDrawPassHandles)[SubDrawPassesCount] = (subdrawpass_tgfx_handle)core_tgfx_main->INVALIDHANDLE;
 
 		//vkRenderPass generation
 		{
@@ -456,33 +457,19 @@ struct renderer_funcs {
 		//Descriptor Set changes, vkFramebuffer changes etc.
 		contentmanager->Apply_ResourceChanges();
 
-		//Ask to Vulkan about the swapchain's status and give it a semaphore to signal when the swapchain's texture is available to change
-		//Penultimate window pass waits in current frame's rendergraph passes waits for the semaphore here
-		const std::vector<window_vk*>& windows = core_vk->GET_WINDOWs();
-		for (unsigned char WindowIndex = 0; WindowIndex < windows.size(); WindowIndex++) {
-			window_vk* VKWINDOW = (window_vk*)(windows[WindowIndex]);
-
-			uint32_t SwapchainImage_Index;
-			vkAcquireNextImageKHR(rendergpu->LOGICALDEVICE(), VKWINDOW->Window_SwapChain, UINT64_MAX,
-				semaphoresys->GetSemaphore_byID(VKWINDOW->PresentationSemaphores[frame_i]).vksemaphore(), VK_NULL_HANDLE, &SwapchainImage_Index);
-			if (SwapchainImage_Index != VKWINDOW->CurrentFrameSWPCHNIndex) {
-				std::stringstream ErrorStream;
-				ErrorStream << "Vulkan's reported SwapchainImage_Index: " << SwapchainImage_Index <<
-					"\nGFX's stored SwapchainImage_Index: " << unsigned int(VKWINDOW->CurrentFrameSWPCHNIndex) <<
-					"\nGFX's SwapchainIndex and Vulkan's SwapchainIndex don't match, there is something missing!";
-				printer(result_tgfx_FAIL, ErrorStream.str().c_str());
-			}
-		}
-
 
 		//This function is defined in rendergraph_primitive.cpp
 		//Recording command buffers, sending them to queues and presenting swapchain to window happen in this function
 		Execute_RenderGraph();
 
-
+		//Shift window semaphores
+		const std::vector<window_vk*>& windows = core_vk->GET_WINDOWs();
 		for (unsigned char WindowIndex = 0; WindowIndex < windows.size(); WindowIndex++) {
 			window_vk* VKWINDOW = (window_vk*)(windows[WindowIndex]);
-			glfwSwapBuffers(VKWINDOW->GLFW_WINDOW);
+
+			semaphore_idtype_vk penultimate_semaphore = VKWINDOW->PresentationSemaphores[0];
+			VKWINDOW->PresentationSemaphores[0] = VKWINDOW->PresentationSemaphores[1];
+			VKWINDOW->PresentationSemaphores[1] = penultimate_semaphore;
 		}
 
 		//Current frame has finished, so every call after this call affects to the next frame
@@ -491,7 +478,21 @@ struct renderer_funcs {
 	}
 	static void DrawDirect(buffer_tgfx_handle VertexBuffer_ID, buffer_tgfx_handle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
 		unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, rasterpipelineinstance_tgfx_handle MaterialInstance_ID, subdrawpass_tgfx_handle SubDrawPass_ID);
-	static void SwapBuffers(window_tgfx_handle WindowHandle, windowpass_tgfx_handle WindowPassHandle);
+	static void SwapBuffers(window_tgfx_handle WindowHandle, windowpass_tgfx_handle WindowPassHandle) {
+		window_vk* VKWINDOW = (window_vk*)WindowHandle;
+
+		uint32_t SwapchainImage_Index;
+		vkAcquireNextImageKHR(rendergpu->LOGICALDEVICE(), VKWINDOW->Window_SwapChain, UINT64_MAX,
+			semaphoresys->GetSemaphore_byID(VKWINDOW->PresentationSemaphores[1]).vksemaphore(), VK_NULL_HANDLE, &SwapchainImage_Index);
+		if (SwapchainImage_Index != VKWINDOW->CurrentFrameSWPCHNIndex) {
+			std::stringstream ErrorStream;
+			ErrorStream << "Vulkan's reported SwapchainImage_Index: " << SwapchainImage_Index <<
+				"\nGFX's stored SwapchainImage_Index: " << unsigned int(VKWINDOW->CurrentFrameSWPCHNIndex) <<
+				"\nGFX's SwapchainIndex and Vulkan's SwapchainIndex don't match, there is something missing!";
+			printer(result_tgfx_FAIL, ErrorStream.str().c_str());
+		}
+		VKWINDOW->isSwapped.store(true);
+	}
 	//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 	//Target Buffer should be created with DEVICELOCAL
 	static void CopyBuffer_toBuffer(transferpass_tgfx_handle TransferPassHandle, buffer_tgfx_handle SourceBuffer_Handle, buffertype_tgfx SourceBufferTYPE,
@@ -547,6 +548,7 @@ inline void set_rendersysptrs() {
 
 	core_tgfx_main->renderer->Create_TransferPass = &renderer_funcs::Create_TransferPass;
 	core_tgfx_main->renderer->Create_DrawPass = &renderer_funcs::Create_DrawPass;
+	core_tgfx_main->renderer->Create_WindowPass = &renderer_funcs::Create_WindowPass;
 	core_tgfx_main->renderer->Run = &renderer_funcs::Run;
 }
 extern void Create_Renderer() {

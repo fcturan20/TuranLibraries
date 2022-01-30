@@ -7,6 +7,7 @@
 #include <imgui_impl_vulkan.h>
 #include <imgui_impl_glfw.h>
 #include "queue.h"
+#include "renderer.h"
 #ifndef NO_IMGUI
 
 unsigned char Check_IMGUI_Version();
@@ -109,6 +110,11 @@ void set_imguifuncptrs() {
 	core_tgfx_main->imgui->Text = Text;
 }
 
+void CheckIMGUIVKResults(VkResult result) {
+	if (result != VK_SUCCESS) {
+		printer(result_tgfx_FAIL, "IMGUI's Vulkan backend has failed, please report!");
+	}
+}
 result_tgfx imgui_vk::Initialize(subdrawpass_tgfx_handle SubPass) {
 	//Create a special Descriptor Pool for IMGUI
 	VkDescriptorPoolSize pool_sizes[] =
@@ -128,6 +134,27 @@ result_tgfx imgui_vk::Initialize(subdrawpass_tgfx_handle SubPass) {
 		return result_tgfx_FAIL;
 	}
 
+	if (!core_vk->GET_WINDOWs().size()) {
+		printer(result_tgfx_FAIL, "Initialization of dear IMGUI has failed because you didn't create a window!");
+		return result_tgfx_FAIL;
+	}
+	ImGui_ImplGlfw_InitForVulkan(core_vk->GET_WINDOWs()[0]->GLFW_WINDOW, true);
+	ImGui_ImplVulkan_InitInfo init_info = {};
+	init_info.Instance = Vulkan_Instance;
+	init_info.PhysicalDevice = rendergpu->PHYSICALDEVICE();
+	init_info.Device = rendergpu->LOGICALDEVICE();
+	init_info.Queue = queuesys->get_queue(rendergpu, core_vk->GET_WINDOWs()[0]->presentationqueue);
+	init_info.QueueFamily = queuesys->get_queuefam_index(rendergpu, core_vk->GET_WINDOWs()[0]->presentationqueue);
+	init_info.PipelineCache = VK_NULL_HANDLE;
+	init_info.DescriptorPool = descpool;
+	init_info.Allocator = nullptr;
+	init_info.MinImageCount = 2;
+	init_info.ImageCount = 2;
+	init_info.CheckVkResultFn = CheckIMGUIVKResults;
+	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+	subdrawpass_vk* SP = (subdrawpass_vk*)SubPass;
+	init_info.Subpass = static_cast<uint32_t>(SP->Binding_Index);
+	ImGui_ImplVulkan_Init(&init_info, ((drawpass_vk*)SP->DrawPass)->RenderPassObject);
 
 	return result_tgfx_SUCCESS;
 }
@@ -227,9 +254,40 @@ void imgui_vk::Destroy_IMGUIResources() {
 	ImGui::DestroyContext();
 }
 
+struct imgui_vk::imgui_vk_hidden {
+	ImGuiContext* Context = nullptr;
+};
+static imgui_vk::imgui_vk_hidden* hidden = nullptr;
 
 extern void Create_IMGUI() {
-	printf("Create imgui!");
+	imgui = new imgui_vk;
+	imgui->hidden = new imgui_vk::imgui_vk_hidden;
+	hidden = imgui->hidden;
+	set_imguifuncptrs();
+	imgui->STAT = imgui_vk::IMGUI_STATUS::UNINITIALIZED;
+
+
+	//Create Context here!
+	IMGUI_CHECKVERSION();
+	hidden->Context = ImGui::CreateContext();
+	if (hidden->Context == nullptr) {
+		printer(result_tgfx_FAIL, "dear ImGui Context is nullptr after creation!");
+		delete imgui->hidden;
+		delete imgui;
+		imgui = nullptr;
+		hidden = nullptr;
+		return;
+	}
+
+	//Set Input Handling settings here! 
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+
+	//Set color style to dark by default for now!
+	ImGui::StyleColorsDark();
 }
 
 

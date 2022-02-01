@@ -1,12 +1,13 @@
 #pragma once
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 #include <stdio.h>
 #include "predefinitions_vk.h"
 #include <threadingsys_tapi.h>
 #include <iostream>
-#include <algorithm>
 #include <mutex>
+#include <algorithm>
 
 //Some algorithms and data structures to help in C++ (like threadlocalvector)
 
@@ -16,14 +17,19 @@ class threadlocal_vector {
 	std::mutex Sync;
 	//Element order: thread0-size, thread0-capacity, thread1-size, thread1-capacity...
 	unsigned long* sizes_and_capacities;
-	inline void expand_if_necessary(const unsigned int thread_i) {
+	inline void expand_if_necessary(unsigned int thread_i) {
 		if (sizes_and_capacities[(thread_i * 2)] == sizes_and_capacities[(thread_i * 2) + 1]) {
-			T* newlist = new T[std::max((unsigned long)1, sizes_and_capacities[thread_i * 2])];
-			memcpy(newlist, lists[thread_i], sizeof(T) * sizes_and_capacities[thread_i * 2]);
-			delete[] lists[thread_i];
+			T* newlist = nullptr;
+			if (sizes_and_capacities[thread_i * 2] > 0) { newlist = new T[sizes_and_capacities[(thread_i * 2) + 1] * 2];}
+			else { 
+				newlist = new T; 
+				memcpy(newlist, lists[thread_i], sizeof(T) * sizes_and_capacities[thread_i * 2]);
+				delete[] lists[thread_i];
+			}
+			
 			lists[thread_i] = newlist;
-			sizes_and_capacities[(thread_i * 2) + 1] = std::max((unsigned long)1, sizes_and_capacities[(thread_i * 2) + 1]);
-			sizes_and_capacities[(thread_i * 2) + 1] *= 2;
+			if (sizes_and_capacities[(thread_i * 2) + 1] == 0) { sizes_and_capacities[(thread_i * 2) + 1] = 1; }
+			else{ sizes_and_capacities[(thread_i * 2) + 1] *= 2; }
 		}
 	}
 public:
@@ -745,6 +751,99 @@ inline VkDescriptorType Find_VkDescType_byDescTypeCategoryless(desctype_vk type)
 	}
 }
 
+inline void Find_AccessPattern_byIMAGEACCESS(const image_access_tgfx& Access, VkAccessFlags& TargetAccessFlag, VkImageLayout& TargetImageLayout) {
+	switch (Access)
+	{
+	case image_access_tgfx_DEPTHSTENCIL_READONLY:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTHSTENCIL_READWRITE:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTHSTENCIL_WRITEONLY:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTHREADWRITE_STENCILREAD:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTHREADWRITE_STENCILWRITE:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTHREAD_STENCILREADWRITE:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTHREAD_STENCILWRITE:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTHWRITE_STENCILREAD:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTHWRITE_STENCILREADWRITE:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTH_READONLY:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+		return;
+	case image_access_tgfx_DEPTH_READWRITE:
+	case image_access_tgfx_DEPTH_WRITEONLY:
+		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_NO_ACCESS:
+		TargetAccessFlag = 0;
+		TargetImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		return;
+	case image_access_tgfx_RTCOLOR_READONLY:
+		TargetAccessFlag = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_RTCOLOR_READWRITE:
+		TargetAccessFlag = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_RTCOLOR_WRITEONLY:
+		TargetAccessFlag = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		return;
+	case image_access_tgfx_SHADER_SAMPLEONLY:
+		TargetAccessFlag = VK_ACCESS_SHADER_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		return;
+	case image_access_tgfx_SHADER_SAMPLEWRITE:
+		TargetAccessFlag = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		return;
+	case image_access_tgfx_SHADER_WRITEONLY:
+		TargetAccessFlag = VK_ACCESS_SHADER_WRITE_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		return;
+	case image_access_tgfx_SWAPCHAIN_DISPLAY:
+		TargetAccessFlag = 0;
+		TargetImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		return;
+	case image_access_tgfx_TRANSFER_DIST:
+		TargetAccessFlag = VK_ACCESS_TRANSFER_WRITE_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		return;
+	case image_access_tgfx_TRANSFER_SRC:
+		TargetAccessFlag = VK_ACCESS_TRANSFER_READ_BIT;
+		TargetImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		return;
+	default:
+		printer(result_tgfx_NOTCODED, "Find_AccessPattern_byIMAGEACCESS() doesn't support this access type!");
+		return;
+	}
+}
 inline VkImageType Find_VkImageType(texture_dimensions_tgfx dimensions) {
 	switch (dimensions) {
 	case texture_dimensions_tgfx_2D:
@@ -766,5 +865,24 @@ inline VkImageTiling Find_VkTiling(texture_order_tgfx order) {
 	default:
 		printer(result_tgfx_NOTCODED, "Find_VkTiling() doesn't support this order!");
 		return VkImageTiling::VK_IMAGE_TILING_MAX_ENUM;
+	}
+}
+inline unsigned int Find_TextureLayer_fromtgfx_cubeface(cubeface_tgfx cubeface) {
+	switch (cubeface)
+	{
+	case cubeface_tgfx_FRONT:
+		return 0;
+	case cubeface_tgfx_BACK:
+		return 1;
+	case cubeface_tgfx_LEFT:
+		return 2;
+	case cubeface_tgfx_RIGHT:
+		return 3;
+	case cubeface_tgfx_TOP:
+		return 4;
+	case cubeface_tgfx_BOTTOM:
+		return 5;
+	default:
+		printer(result_tgfx_FAIL, "Find_TextureLayer_fromGFXtgfx_cubeface() in Vulkan backend doesn't support this type of CubeFace!");
 	}
 }

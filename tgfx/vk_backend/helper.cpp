@@ -9,6 +9,7 @@
 #include "resource.h"
 #include "predefinitions_vk.h"
 #include "includes.h"
+#include "renderer.h"
 
 
 //Hardware Capability Helpers
@@ -136,21 +137,39 @@ static waitsignaldescription_tgfx_handle CreateWaitSignal_Transfer(unsigned char
 //WaitInfos is a pointer because function expects a list of waits (Color attachment output and also VertexShader-UniformReads etc)
 static passwaitdescription_tgfx_handle CreatePassWait_DrawPass(drawpass_tgfx_handle* PassHandle, unsigned char SubpassIndex,
     waitsignaldescription_tgfx_handle* WaitInfos, unsigned char isLastFrame) {
-    return nullptr;
+    printer(result_tgfx_WARNING, "CreatePassWait_DrawPass() isn't implemented properly.");
+    if (!PassHandle) { printer(result_tgfx_INVALIDARGUMENT, "CreatePassWait_DrawPass()'s first argument can't be nullptr!"); return nullptr; }
+    if (SubpassIndex == 255) { printer(result_tgfx_INVALIDARGUMENT, "CreatePassWait_DrawPass()'s SubpassIndex should be below 255!"); return nullptr; }
+    VK_Pass::WaitDescription* waitdesc = new VK_Pass::WaitDescription;
+    waitdesc->WaitedPass = (VK_Pass**)PassHandle;
+    waitdesc->WaitLastFramesPass = false;
+    return (passwaitdescription_tgfx_handle)waitdesc;
 }
 //WaitInfo is single, because function expects only one wait and it should be created with CreateWaitSignal_ComputeShader()
 static passwaitdescription_tgfx_handle CreatePassWait_ComputePass(computepass_tgfx_handle* PassHandle, unsigned char SubpassIndex,
     waitsignaldescription_tgfx_handle WaitInfo, unsigned char isLastFrame) {
-    return nullptr;
+    printer(result_tgfx_WARNING, "CreatePassWait_ComputePass() isn't implemented properly.");
+    if (!PassHandle) { printer(result_tgfx_INVALIDARGUMENT, "CreatePassWait_ComputePass()'s first argument can't be nullptr!"); return nullptr; }
+    if (SubpassIndex == 255) { printer(result_tgfx_INVALIDARGUMENT, "CreatePassWait_ComputePass()'s SubpassIndex should be below 255!"); return nullptr; }
+    VK_Pass::WaitDescription* waitdesc = new VK_Pass::WaitDescription;
+    waitdesc->WaitedPass = (VK_Pass**)PassHandle;
+    waitdesc->WaitLastFramesPass = false;
+    return (passwaitdescription_tgfx_handle)waitdesc;
 }
 //WaitInfo is single, because function expects only one wait and it should be created with CreateWaitSignal_Transfer()
 static passwaitdescription_tgfx_handle CreatePassWait_TransferPass(transferpass_tgfx_handle* PassHandle,
     transferpasstype_tgfx Type, waitsignaldescription_tgfx_handle WaitInfo, unsigned char isLastFrame) {
-    return nullptr;
+    printer(result_tgfx_WARNING, "CreatePassWait_TransferPass() isn't implemented properly.");
+    if (!PassHandle) { printer(result_tgfx_INVALIDARGUMENT, "CreatePassWait_TransferPass()'s first argument can't be nullptr!"); return nullptr; }
+    VK_Pass::WaitDescription* waitdesc = new VK_Pass::WaitDescription;
+    waitdesc->WaitedPass = (VK_Pass**)PassHandle;
+    waitdesc->WaitLastFramesPass = false;
+    return (passwaitdescription_tgfx_handle)waitdesc;
 }
 //There is no option because you can only wait for a penultimate window pass
 //I'd like to support last frame wait too but it confuses the users and it doesn't have much use
 static passwaitdescription_tgfx_handle CreatePassWait_WindowPass(windowpass_tgfx_handle* PassHandle) {
+    printer(result_tgfx_FAIL, "You can not wait for a window pass for now!");
     return nullptr;
 }
 

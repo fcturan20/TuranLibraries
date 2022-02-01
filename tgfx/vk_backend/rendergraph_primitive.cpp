@@ -411,7 +411,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 	if (imgui) {
 		//Initialize IMGUI if it isn't initialized
 		if (IMGUI_Subpass) {
-			//If subdrawpass has only one color slot, return false
+			//If subdrawpass has more than one color slot, return false
 			if (((drawpass_vk*)((subdrawpass_vk*)IMGUI_Subpass)->DrawPass)->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT != 1) {
 				printer(result_tgfx_FAIL, "The Drawpass that's gonna render dear IMGUI should only have one color slot!");
 				renderer->RG_Status = RenderGraphStatus::Invalid;	//User can delete a draw pass, dear Imgui fails in this case.
@@ -440,7 +440,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 }
 
 void SetBarrier_BetweenPasses(VkCommandBuffer CB, VK_Pass* CurrentPass, VK_Pass* LastPass, VkPipelineStageFlags& srcPipelineStage) {
-	printer(result_tgfx_NOTCODED, "SetBarrier_BetweenPasses() isn't coded");
+	printer(result_tgfx_WARNING, "SetBarrier_BetweenPasses() isn't coded");
 }
 void Record_RenderPass(VkCommandBuffer CB, drawpass_vk* DrawPass) {
 	const unsigned char FRAMEINDEX = renderer->Get_FrameIndex(false);
@@ -800,6 +800,7 @@ result_tgfx Execute_RenderGraph() {
 					PresentationInfo_PerQueue[queue_i].image_indexes.push_back(WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex);
 					WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex = (WP->WindowCalls[2][WindowIndex].Window->CurrentFrameSWPCHNIndex + 1) % 2;
 					PresentationInfo_PerQueue[queue_i].swapchains.push_back(WP->WindowCalls[2][WindowIndex].Window->Window_SwapChain);
+					is_found = true;
 				}
 			}
 			if (!is_found) {
@@ -811,6 +812,11 @@ result_tgfx Execute_RenderGraph() {
 				presentation.queuefam = window_qfam;
 			}
 		}
+
+		std::vector<windowcall_vk> windowcall0 = WP->WindowCalls[0];
+		WP->WindowCalls[0] = WP->WindowCalls[1];
+		WP->WindowCalls[1] = WP->WindowCalls[2];
+		WP->WindowCalls[2] = windowcall0;
 	}
 
 	//There is only one command buffer, so we need only one submit
@@ -831,23 +837,23 @@ result_tgfx Execute_RenderGraph() {
 	queuesys->queueSubmit(rendergpu, rendergpu->GRAPHICSQUEUEFAM(), submit_info);
 
 
-	if (imgui) { imgui->Render_toCB(CB); imgui->Render_AdditionalWindows(); }
+	if (imgui) { imgui->Render_AdditionalWindows(); }
 	//Send displays (primitive rendergraph supports to have only one window pass and it is at the end)
 	for (unsigned char i = 0; i < 1; i++) {
 		//Fill swapchain and image indices vectors
 		for (unsigned char presentation_i = 0; presentation_i < PresentationInfo_PerQueue.size(); presentation_i++) {
+			VkResult result;
 			VkPresentInfoKHR SwapchainImage_PresentationInfo = {};
 			SwapchainImage_PresentationInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 			SwapchainImage_PresentationInfo.pNext = nullptr;
 			SwapchainImage_PresentationInfo.swapchainCount = PresentationInfo_PerQueue[presentation_i].swapchains.size();
 			SwapchainImage_PresentationInfo.pSwapchains = PresentationInfo_PerQueue[presentation_i].swapchains.data();
 			SwapchainImage_PresentationInfo.pImageIndices = PresentationInfo_PerQueue[presentation_i].image_indexes.data();
-			SwapchainImage_PresentationInfo.pResults = nullptr;
+			SwapchainImage_PresentationInfo.pResults = &result;
 			SwapchainImage_PresentationInfo.waitSemaphoreCount = signalSemaphores.size();
 			SwapchainImage_PresentationInfo.pWaitSemaphores = signalSemaphores.data();
 
-			VkQueue DisplayQueue = {};
-			if (vkQueuePresentKHR(DisplayQueue, &SwapchainImage_PresentationInfo) != VK_SUCCESS) {
+			if (vkQueuePresentKHR(queuesys->get_queue(rendergpu, PresentationInfo_PerQueue[presentation_i].queuefam), &SwapchainImage_PresentationInfo) != VK_SUCCESS) {
 				printer(result_tgfx_FAIL, "Submitting Presentation Queue has failed!");
 				return result_tgfx_FAIL;
 			}

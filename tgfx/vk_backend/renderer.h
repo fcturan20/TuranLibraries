@@ -42,7 +42,6 @@ struct VK_Pass {
 	struct WaitDescription {
 		VK_Pass** WaitedPass = nullptr;
 		bool WaitLastFramesPass = false;
-		bool isValid() const { printer(result_tgfx_NOTCODED, "PassDescription::isValid isn't coded"); return false; }
 	};
 	enum class PassType : unsigned char {
 		INVALID = 0,

@@ -1,6 +1,7 @@
 #include "queue.h"
 #include "core.h"
 #include <mutex>
+#include "synchronization_sys.h"
 
 struct commandbuffer_vk {
 	VkCommandBuffer CB;
@@ -193,7 +194,13 @@ VkCommandBuffer queuesys_vk::get_commandbufferobj(commandbuffer_vk* id) {
 	return id->CB;
 }
 fence_idtype_vk queuesys_vk::queueSubmit(gpu_public* vkgpu, queuefam_vk* family, VkSubmitInfo info) {
-	return invalid_fenceid;
+	printer(result_tgfx_WARNING, "QueueSystem->queueSubmit() isn't properly implemented. Queue Submission should keep track of semaphores and fences, then set-clear them. Also should keep track of empty queues.");
+	fence_vk& fence = fencesys->CreateFence();
+	if (vkQueueSubmit(family->queues[0].Queue, 1, &info, fence.Fence_o) != VK_SUCCESS) {
+		printer(result_tgfx_FAIL, "Queue Submission has failed!");
+		return invalid_fenceid;
+	}
+	return fence.getID();
 }
 bool queuesys_vk::does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag) {
 	printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");

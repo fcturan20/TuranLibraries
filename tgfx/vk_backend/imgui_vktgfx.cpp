@@ -154,6 +154,7 @@ result_tgfx imgui_vk::Initialize(subdrawpass_tgfx_handle SubPass) {
 	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 	subdrawpass_vk* SP = (subdrawpass_vk*)SubPass;
 	init_info.Subpass = static_cast<uint32_t>(SP->Binding_Index);
+	SP->render_dearIMGUI = true;
 	ImGui_ImplVulkan_Init(&init_info, ((drawpass_vk*)SP->DrawPass)->RenderPassObject);
 
 	return result_tgfx_SUCCESS;
@@ -232,7 +233,7 @@ void imgui_vk::UploadFontTextures() {
 	if (vkEndCommandBuffer(cb) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "vkEndCommandBuffer() for dear IMGUI Font Upload has failed!");
 	}
-	if (queuesys->queueSubmit(rendergpu, rendergpu->GRAPHICSQUEUEFAM(), end_info) != VK_SUCCESS) {
+	if (queuesys->queueSubmit(rendergpu, rendergpu->GRAPHICSQUEUEFAM(), end_info) == invalid_fenceid) {
 		printer(result_tgfx_FAIL, "VkQueueSubmit() for dear IMGUI Font Upload has failed!");
 	}
 

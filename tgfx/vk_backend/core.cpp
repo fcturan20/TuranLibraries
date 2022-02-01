@@ -783,6 +783,8 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 		glfwDestroyWindow(Vulkan_Window->GLFW_WINDOW);
 		delete Vulkan_Window;
 	}
+	SWPCHNTEXTUREHANDLESVK[0]->USAGE = Vulkan_Window->SWAPCHAINUSAGE;
+	SWPCHNTEXTUREHANDLESVK[1]->USAGE = Vulkan_Window->SWAPCHAINUSAGE;
 	Vulkan_Window->Swapchain_Textures[0] = SWPCHNTEXTUREHANDLESVK[0];
 	Vulkan_Window->Swapchain_Textures[1] = SWPCHNTEXTUREHANDLESVK[1];
 	SwapchainTextureHandles[0] = (texture_tgfx_handle)Vulkan_Window->Swapchain_Textures[0];
@@ -791,12 +793,13 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 	//Create presentation wait semaphores
 	//We are creating 2 semaphores because if 2 frames combined is faster than vertical blank, there is tearing!
 	//Previously, this was 3 but I moved command buffer waiting so there is no command buffer collision with display
-	for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < 2; SemaphoreIndex++) {
+	for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < 3; SemaphoreIndex++) {
 		Vulkan_Window->PresentationSemaphores[SemaphoreIndex] = semaphoresys->Create_Semaphore().get_id();
 	}
 
 
 	printer(result_tgfx_SUCCESS, "Window creation is successful!");
+	*window = (window_tgfx_handle)Vulkan_Window;
 	hidden->WINDOWs.push_back(Vulkan_Window);
 }
 

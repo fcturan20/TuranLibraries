@@ -36,7 +36,7 @@ struct semaphoresys_vk {
 	//Then creates a new VkSemaphore object
 	inline static semaphore_vk & Create_Semaphore() {
 		for (unsigned int i = 0; i < semaphoresys->Semaphores.size(); i++) {
-			if (semaphoresys->Semaphores[i]->current_status != semaphore_vk::used_status) {
+			if (semaphoresys->Semaphores[i]->current_status == semaphore_vk::unused_status) {
 				semaphoresys->Semaphores[i]->current_status = semaphore_vk::used_status;
 				return *semaphoresys->Semaphores[i];
 			}
@@ -72,8 +72,7 @@ struct semaphoresys_vk {
 	//Create_Semaphore() will return the destroyed semaphore (because it is just marked as "invalid").
 	inline static void DestroySemaphore(semaphore_idtype_vk& SemaphoreID) {
 		semaphore_vk& semaphore = GetSemaphore_byID(SemaphoreID);
-		semaphore.current_status = semaphore_vk::invalid_status;
-		SemaphoreID = invalid_semaphoreid;
+		semaphore.current_status = semaphore_vk::unused_status;
 	}
 	inline static semaphore_vk& GetSemaphore_byID(semaphore_idtype_vk ID) {
 #ifdef VULKAN_DEBUGGING
@@ -125,6 +124,13 @@ struct fence_vk {
 #else
 	fence_vk() {}
 #endif
+	inline fence_idtype_vk getID(){
+#ifdef VULKAN_DEBUGGING
+	return ID;
+#else
+	return this;
+#endif
+	}
 };
 
 struct fencesys_vk {
@@ -139,8 +145,8 @@ public:
 		VkFenceCreateInfo fence_ci = {};
 		fence_ci.flags = 0;
 		fence_ci.pNext = nullptr;
-		fence_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
+		fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		
 		VkFence vk_fence = VK_NULL_HANDLE;
 		if (vkCreateFence(rendergpu->LOGICALDEVICE(), &fence_ci, nullptr, &vk_fence) != VK_SUCCESS) {
 			printer(result_tgfx_FAIL, "Window creation has failed while creating semaphores for each swapchain texture!");

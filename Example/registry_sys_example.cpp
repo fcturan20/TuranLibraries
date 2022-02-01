@@ -40,7 +40,7 @@ void thread_print(){
 }
 void printf_log_tgfx(result_tgfx result, const char* text) {
 	printf("TGFX Result %u: %s\n", (unsigned int)result, text);
-	if (result == result_tgfx_NOTCODED) {
+	if (result == result_tgfx_NOTCODED || result == result_tgfx_FAIL) {
 		int i = 0;
 		printf("TGFX RESULT ISN'T CODED HERE, PLEASE ENTER IF YOU WANT TO CONTINUE: ");
 		scanf("%u", &i);
@@ -120,9 +120,10 @@ int main(){
 	std::cout << "Memory Type Count: " << memtypelistcount << " and GPU Name: " << gpuname << "\n";
 	unsigned int devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = UINT32_MAX;
 	for (unsigned int i = 0; i < memtypelistcount; i++) {
-		tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 40 * 1024 * 1024, nullptr);
-		if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) { devicelocalmemtype_id = memtypelist[i].memorytype_id; }
-		if (memtypelist[i].allocationtype == memoryallocationtype_FASTHOSTVISIBLE) { fastvisiblememtype_id = memtypelist[i].memorytype_id; }
+		if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) { 
+			tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 40 * 1024 * 1024, nullptr); 
+			devicelocalmemtype_id = memtypelist[i].memorytype_id; 
+		}
 	}
 	initializationsecondstageinfo_tgfx_handle secondinfo = tgfxsys->api->helpers->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, true, true, true, (extension_tgfx_listhandle)tgfxsys->api->INVALIDHANDLE);
 	tgfxsys->api->initialize_secondstage(secondinfo);
@@ -135,6 +136,9 @@ int main(){
 	window_tgfx_handle firstwindow;
 	tgfxsys->api->create_window(1280, 720, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
 	tgfxsys->api->renderer->Start_RenderGraphConstruction();
+
+	//First Barrier TP Creation
+
 	transferpass_tgfx_handle firstbarriertp;
 	tgfxsys->api->renderer->Create_TransferPass((passwaitdescription_tgfx_listhandle)&tgfxsys->api->INVALIDHANDLE, transferpasstype_tgfx_BARRIER, "FirstBarrierTP", &firstbarriertp);
 
@@ -146,10 +150,11 @@ int main(){
 	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &second_rt);
 
 
+	//Draw Pass Creation
 
 	vec4_tgfx white; white.x = 255; white.y = 255; white.z = 255; white.w = 0;
 	rtslotdescription_tgfx_handle rtslot_descs[2] = { 
-		tgfxsys->api->helpers->CreateRTSlotDescription_Color(first_rt, second_rt, operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white), (rtslotdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+		tgfxsys->api->helpers->CreateRTSlotDescription_Color(swapchain_textures[0], swapchain_textures[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white), (rtslotdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
 	rtslotset_tgfx_handle rtslotset_handle;
 	tgfxsys->api->contentmanager->Create_RTSlotset(rtslot_descs, &rtslotset_handle);
 	rtslotusage_tgfx_handle rtslotusages[2] = { tgfxsys->api->helpers->CreateRTSlotUsage_Color(rtslot_descs[0], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
@@ -161,15 +166,30 @@ int main(){
 	subdrawpass_tgfx_listhandle sub_dps;
 	drawpass_tgfx_handle dp;
 	tgfxsys->api->renderer->Create_DrawPass(subdp_descs, rtslotset_handle, dp_waits, "First DP", &sub_dps, &dp);
+
+	//Final Barrier TP Creation
+	waitsignaldescription_tgfx_handle waitsignaldescs[2] = { tgfxsys->api->helpers->CreateWaitSignal_FragmentShader(true, true, true), (waitsignaldescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	passwaitdescription_tgfx_handle final_tp_waits[2] = { tgfxsys->api->helpers->CreatePassWait_DrawPass(&dp, 0, waitsignaldescs, false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	transferpass_tgfx_handle final_tp;
+	tgfxsys->api->renderer->Create_TransferPass(final_tp_waits, transferpasstype_tgfx_BARRIER, "Final TP", &final_tp);
+
 	windowpass_tgfx_handle first_wp;
-	waitsignaldescription_tgfx_handle wait_for_dp_signal = tgfxsys->api->helpers->CreateWaitSignal_FragmentShader(true, true, true);
-	passwaitdescription_tgfx_handle wait_for_dp[2] = { tgfxsys->api->helpers->CreatePassWait_DrawPass(&dp, 0, &wait_for_dp_signal, false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	waitsignaldescription_tgfx_handle wait_for_finaltp_signal = tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true);
+	passwaitdescription_tgfx_handle wait_for_dp[2] = { tgfxsys->api->helpers->CreatePassWait_TransferPass(&final_tp, transferpasstype_tgfx_BARRIER, wait_for_finaltp_signal, false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
 	tgfxsys->api->renderer->Create_WindowPass(wait_for_dp, "First WP", &first_wp);
 	tgfxsys->api->renderer->Finish_RenderGraphConstruction(sub_dps[0]);
 
+
+	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[0], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
+	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
 	while (true) {
 		profiledscope_handle_tapi scope;	unsigned long long duration;
 		profilersys->funcs->start_profiling(&scope, "Run Loop", &duration, 1);
+		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[0], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
+		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
+		tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[0], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+		tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[1], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+		tgfxsys->api->renderer->SwapBuffers(firstwindow, first_wp);
 		tgfxsys->api->renderer->Run();
 		profilersys->funcs->finish_profiling(&scope, 1);
 	}

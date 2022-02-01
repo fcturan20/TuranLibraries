@@ -10,6 +10,8 @@
 #include "synchronization_sys.h"
 #include "queue.h"
 #include <sstream>
+#include <algorithm>
+#include <utility>
 #include "imgui_vktgfx.h"
 
 
@@ -165,12 +167,6 @@ struct renderer_funcs {
 				continue;
 			}
 			VK_Pass::WaitDescription* Wait = (VK_Pass::WaitDescription*)DrawPassWAITs[i];
-#ifdef VULKAN_DEBUGGING
-			if (!Wait->isValid()) {
-				printer(result_tgfx_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
-				continue;
-			}
-#endif
 			ValidWAITsCount++;
 		}
 
@@ -189,11 +185,6 @@ struct renderer_funcs {
 			}
 
 			VK_Pass::WaitDescription* Wait = (VK_Pass::WaitDescription*)DrawPassWAITs[S_i];
-#ifdef VULKAN_DEBUGGING
-			if (!Wait->isValid()) {
-				continue;
-			}
-#endif
 			VKDrawPass->base_data.WAITs[T_i] = *Wait;
 			T_i++;
 		}
@@ -279,12 +270,6 @@ struct renderer_funcs {
 				continue;
 			}
 			VK_Pass::WaitDescription* Wait = (VK_Pass::WaitDescription*)WaitDescriptions[i];
-#ifdef VULKAN_DEBUGGING
-			if (!Wait->isValid()) {
-				printer(result_tgfx_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
-				continue;
-			}
-#endif
 			ValidWAITsCount++;
 		}
 
@@ -301,11 +286,6 @@ struct renderer_funcs {
 			}
 
 			VK_Pass::WaitDescription* Wait = (VK_Pass::WaitDescription*)WaitDescriptions[S_i];
-#ifdef VULKAN_DEBUGGING
-			if (!Wait->isValid()) {
-				continue;
-			}
-#endif
 			TRANSFERPASS->base_data.WAITs[T_i] = *Wait;
 			T_i++;
 		}
@@ -341,12 +321,6 @@ struct renderer_funcs {
 				continue;
 			}
 			VK_Pass::WaitDescription* Wait = (VK_Pass::WaitDescription*)WaitDescriptions[i];
-#ifdef VULKAN_DEBUGGING
-			if (!Wait->isValid()) {
-				printer(result_tgfx_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
-				continue;
-			}
-#endif
 			ValidWAITsCount++;
 		}
 
@@ -358,11 +332,6 @@ struct renderer_funcs {
 			}
 
 			VK_Pass::WaitDescription* Wait = (VK_Pass::WaitDescription*)WaitDescriptions[S_i];
-#ifdef VULKAN_DEBUGGING
-			if (!Wait->isValid()) {
-				continue;
-			}
-#endif
 			CP->base_data.WAITs[T_i] = *Wait;
 			T_i++;
 		}
@@ -385,12 +354,6 @@ struct renderer_funcs {
 				continue;
 			}
 			VK_Pass::WaitDescription* Wait = (VK_Pass::WaitDescription*)WaitDescriptions[i];
-#ifdef VULKAN_DEBUGGING
-			if (!Wait->isValid()) {
-				printer(result_tgfx_WARNING, "You passed a wait description that isn't nullptr but points to somewhere that's not created by Helper::Create_PassWaitDescription() to the function Create_DrawPass(). You shouldn't do this in release mode!");
-				continue;
-			}
-#endif
 			ValidWAITsCount++;
 		}
 		windowpass_vk* WP = new windowpass_vk(NAME, ValidWAITsCount);
@@ -402,11 +365,6 @@ struct renderer_funcs {
 			}
 
 			VK_Pass::WaitDescription* Wait = (VK_Pass::WaitDescription*)WaitDescriptions[S_i];
-#ifdef VULKAN_DEBUGGING
-			if (!Wait->isValid()) {
-				continue;
-			}
-#endif
 			WP->base_data.WAITs[T_i] = *Wait;
 			T_i++;
 		}
@@ -469,7 +427,8 @@ struct renderer_funcs {
 
 			semaphore_idtype_vk penultimate_semaphore = VKWINDOW->PresentationSemaphores[0];
 			VKWINDOW->PresentationSemaphores[0] = VKWINDOW->PresentationSemaphores[1];
-			VKWINDOW->PresentationSemaphores[1] = penultimate_semaphore;
+			VKWINDOW->PresentationSemaphores[1] = VKWINDOW->PresentationSemaphores[2];
+			VKWINDOW->PresentationSemaphores[2] = penultimate_semaphore;
 		}
 
 		//Current frame has finished, so every call after this call affects to the next frame
@@ -483,7 +442,7 @@ struct renderer_funcs {
 
 		uint32_t SwapchainImage_Index;
 		vkAcquireNextImageKHR(rendergpu->LOGICALDEVICE(), VKWINDOW->Window_SwapChain, UINT64_MAX,
-			semaphoresys->GetSemaphore_byID(VKWINDOW->PresentationSemaphores[1]).vksemaphore(), VK_NULL_HANDLE, &SwapchainImage_Index);
+			semaphoresys->GetSemaphore_byID(VKWINDOW->PresentationSemaphores[2]).vksemaphore(), VK_NULL_HANDLE, &SwapchainImage_Index);
 		if (SwapchainImage_Index != VKWINDOW->CurrentFrameSWPCHNIndex) {
 			std::stringstream ErrorStream;
 			ErrorStream << "Vulkan's reported SwapchainImage_Index: " << SwapchainImage_Index <<
@@ -492,6 +451,11 @@ struct renderer_funcs {
 			printer(result_tgfx_FAIL, ErrorStream.str().c_str());
 		}
 		VKWINDOW->isSwapped.store(true);
+
+		windowpass_vk* wp = (windowpass_vk*)WindowPassHandle;
+		windowcall_vk call;
+		call.Window = VKWINDOW;
+		wp->WindowCalls[2].push_back(call);
 	}
 	//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 	//Target Buffer should be created with DEVICELOCAL
@@ -505,7 +469,53 @@ struct renderer_funcs {
 		uvec3_tgfx SourceTextureOffset, uvec3_tgfx CopySize, uvec3_tgfx TargetTextureOffset, unsigned int SourceMipLevel, unsigned int TargetMipLevel,
 		cubeface_tgfx SourceCubeMapFace, cubeface_tgfx TargetCubeMapFace);
 	static void ImageBarrier(transferpass_tgfx_handle BarrierTPHandle, texture_tgfx_handle TextureHandle, image_access_tgfx LAST_ACCESS,
-		image_access_tgfx NEXT_ACCESS, unsigned int TargetMipLevel, cubeface_tgfx TargetCubeMapFace);
+		image_access_tgfx NEXT_ACCESS, unsigned int TargetMipLevel, cubeface_tgfx TargetCubeMapFace) {
+		texture_vk* Texture = (texture_vk*)TextureHandle;
+		transferpass_vk* TP = (transferpass_vk*)BarrierTPHandle;
+		if (TP->TYPE != transferpasstype_tgfx_BARRIER) {
+			printer(result_tgfx_FAIL, "You should give the handle of a Barrier Transfer Pass! Given Transfer Pass' type isn't Barrier.");
+			return;
+		}
+		VK_TPBarrierDatas* TPDatas = (VK_TPBarrierDatas*)TP->TransferDatas;
+
+
+		VK_ImBarrierInfo im_bi;
+		im_bi.Barrier.image = Texture->Image;
+		Find_AccessPattern_byIMAGEACCESS(LAST_ACCESS, im_bi.Barrier.srcAccessMask, im_bi.Barrier.oldLayout);
+		Find_AccessPattern_byIMAGEACCESS(NEXT_ACCESS, im_bi.Barrier.dstAccessMask, im_bi.Barrier.newLayout);
+		if (Texture->CHANNELs == texture_channels_tgfx_D24S8) {
+			im_bi.Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+		else if (Texture->CHANNELs == texture_channels_tgfx_D32) {
+			im_bi.Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		}
+		else {
+			im_bi.Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		}
+		if (Texture->DIMENSION == texture_dimensions_tgfx_2DCUBE) {
+			im_bi.Barrier.subresourceRange.baseArrayLayer = Find_TextureLayer_fromtgfx_cubeface(TargetCubeMapFace);
+		}
+		else {
+			im_bi.Barrier.subresourceRange.baseArrayLayer = 0;
+		}
+		im_bi.Barrier.subresourceRange.layerCount = 1;
+		im_bi.Barrier.subresourceRange.levelCount = 1;
+		if (TargetMipLevel == UINT32_MAX) {
+			im_bi.Barrier.subresourceRange.baseMipLevel = 0;
+			im_bi.Barrier.subresourceRange.levelCount = static_cast<uint32_t>(Texture->MIPCOUNT);
+		}
+		else {
+			im_bi.Barrier.subresourceRange.baseMipLevel = TargetMipLevel;
+			im_bi.Barrier.subresourceRange.levelCount = 1;
+		}
+		im_bi.Barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		im_bi.Barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		im_bi.Barrier.pNext = nullptr;
+		im_bi.Barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+
+
+		TPDatas->TextureBarriers.push_back(im_bi);
+	}
 	static void Dispatch_Compute(computepass_tgfx_handle ComputePassHandle, computeshaderinstance_tgfx_handle CSInstanceHandle,
 		unsigned int SubComputePassIndex, uvec3_tgfx DispatchSize);
 	static void ChangeDrawPass_RTSlotSet(drawpass_tgfx_handle DrawPassHandle, rtslotset_tgfx_handle RTSlotSetHandle);
@@ -550,6 +560,8 @@ inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->Create_DrawPass = &renderer_funcs::Create_DrawPass;
 	core_tgfx_main->renderer->Create_WindowPass = &renderer_funcs::Create_WindowPass;
 	core_tgfx_main->renderer->Run = &renderer_funcs::Run;
+	core_tgfx_main->renderer->ImageBarrier = &renderer_funcs::ImageBarrier;
+	core_tgfx_main->renderer->SwapBuffers = &renderer_funcs::SwapBuffers;
 }
 extern void Create_Renderer() {
 	renderer = new renderer_public;

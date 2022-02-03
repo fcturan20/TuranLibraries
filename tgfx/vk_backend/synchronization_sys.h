@@ -9,7 +9,7 @@ struct semaphore_vk {
 public:
 	enum semaphore_status : unsigned char {
 		invalid_status = 0,
-		unused_status = 1,
+		unused_status = 1,	//No pending execution, state unknown (rendergraph or you should handle it)
 		used_status = 2
 	};
 private:
@@ -29,6 +29,7 @@ public:
 	}
 	inline VkSemaphore vksemaphore() { return SPHandle; }
 	inline semaphore_status status() { return current_status; };
+	friend class fencesys_vk;
 };
 struct semaphoresys_vk {
 	inline static void ClearList() { printer(result_tgfx_NOTCODED, "SemaphoreSys->ClearList() isn't coded!"); }
@@ -118,12 +119,16 @@ struct fence_vk {
 	};
 	VkFence Fence_o = VK_NULL_HANDLE;
 	fence_status current_status;
+	//Vulkan wants signal semaphores and a fence while submitting a queue
+	//Store signal semaphores to know semaphore's state (if the fence is signaled, then semaphores are signaled too)
+	//This way, we can avoid destroying vkSemaphore objects and minimize creation of vkSemaphore objects.
+	std::vector<semaphore_idtype_vk> signal_semaphores;
+	fence_vk(fence_idtype_vk id)
 #ifdef VULKAN_DEBUGGING
-	const fence_idtype_vk ID;
-	fence_vk(fence_idtype_vk id) : ID(id){}
-#else
-	fence_vk() {}
+		: ID(id) 
 #endif
+	{}
+	const fence_idtype_vk ID;
 	inline fence_idtype_vk getID(){
 #ifdef VULKAN_DEBUGGING
 	return ID;
@@ -201,7 +206,9 @@ public:
 			printer(result_tgfx_FAIL, "VulkanRenderer: Fence reset has failed!");
 		}
 		for (unsigned int fence_i = 0; fence_i < fences.size(); fence_i++) {
-			getfence_byid(fences[fence_i]).current_status = fence_vk::unused;
+			fence_vk& fence = getfence_byid(fences[fence_i]);
+			fence.current_status = fence_vk::unused;
+			fence.signal_semaphores.clear();
 		}
 	}
 private:

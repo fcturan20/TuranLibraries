@@ -779,6 +779,23 @@ result_tgfx Execute_RenderGraph() {
 		return result_tgfx_FAIL;
 	}
 
+
+	//Before sending render command buffers, wait for presentation of penultimate frame to end
+	//We can avoid tearing this way
+	const std::vector<window_vk*>& windows = core_vk->GET_WINDOWs();
+	std::vector<fence_idtype_vk> fences;
+	for (unsigned char WindowIndex = 0; WindowIndex < windows.size(); WindowIndex++) {
+		window_vk* VKWINDOW = (window_vk*)(windows[WindowIndex]);
+		if (!VKWINDOW->isSwapped.load()) { continue; }
+		if (!VKWINDOW->is_recently_created()) {
+			fences.push_back(VKWINDOW->PresentationFences[1]);
+		}
+		VKWINDOW->isSwapped.store(false);
+	}
+	fencesys->waitfor_fences(fences);
+
+
+
 	//Find how many display queues will be used (to detect how many semaphores render command buffers should signal)
 	struct PresentationInfos {
 		std::vector<VkSwapchainKHR> swapchains;
@@ -812,6 +829,7 @@ result_tgfx Execute_RenderGraph() {
 				presentation.queuefam = window_qfam;
 			}
 		}
+		WP->WindowCalls[2].clear();
 
 		std::vector<windowcall_vk> windowcall0 = WP->WindowCalls[0];
 		WP->WindowCalls[0] = WP->WindowCalls[1];

@@ -138,11 +138,15 @@ struct window_vk {
 	VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
 	std::vector<VkSurfaceFormatKHR> SurfaceFormats;
 	std::vector<VkPresentModeKHR> PresentationModes;
-	//VkAcquireNextImageKHR is called before recording render commands, that's why we need 3 semaphores
-	semaphore_idtype_vk PresentationSemaphores[3];
+	//Don't make these 3 again! There should 3 textures to be able to use 3 semaphores, otherwise 2 different semaphores for the same texture doesn't work as you expect!
+	semaphore_idtype_vk PresentationSemaphores[2];
+	fence_idtype_vk PresentationFences[2];
 	queuefam_vk* presentationqueue = nullptr;
 	//To avoid calling resize or swapbuffer twice in a frame!
 	std::atomic<bool> isResized = false, isSwapped = false;
+	inline bool is_recently_created() { if (is_created_in_last_2frames) { is_created_in_last_2frames--; return true; } return false; }
+private:
+	unsigned char is_created_in_last_2frames = 2;
 };
 
 struct initialization_secondstageinfo{

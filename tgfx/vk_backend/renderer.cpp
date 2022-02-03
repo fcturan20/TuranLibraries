@@ -412,13 +412,17 @@ struct renderer_funcs {
 		//With this way, we are sure that no command buffer execution will collide so we can change descriptor sets according to that.
 		WaitForRenderGraphCommandBuffers();
 
+
 		//Descriptor Set changes, vkFramebuffer changes etc.
 		contentmanager->Apply_ResourceChanges();
 
 
 		//This function is defined in rendergraph_primitive.cpp
-		//Recording command buffers, sending them to queues and presenting swapchain to window happen in this function
+		//Recording command buffers and queue submissions is handled here
+		//That means: Sending CBs to queues and presenting swapchain to window happens here.
 		Execute_RenderGraph();
+
+
 
 		//Shift window semaphores
 		const std::vector<window_vk*>& windows = core_vk->GET_WINDOWs();
@@ -427,8 +431,11 @@ struct renderer_funcs {
 
 			semaphore_idtype_vk penultimate_semaphore = VKWINDOW->PresentationSemaphores[0];
 			VKWINDOW->PresentationSemaphores[0] = VKWINDOW->PresentationSemaphores[1];
-			VKWINDOW->PresentationSemaphores[1] = VKWINDOW->PresentationSemaphores[2];
-			VKWINDOW->PresentationSemaphores[2] = penultimate_semaphore;
+			VKWINDOW->PresentationSemaphores[1] = penultimate_semaphore;
+
+			fence_idtype_vk penultimate_fence = VKWINDOW->PresentationFences[0];
+			VKWINDOW->PresentationFences[0] = VKWINDOW->PresentationFences[1];
+			VKWINDOW->PresentationFences[1] = penultimate_fence;
 		}
 
 		//Current frame has finished, so every call after this call affects to the next frame
@@ -437,12 +444,20 @@ struct renderer_funcs {
 	}
 	static void DrawDirect(buffer_tgfx_handle VertexBuffer_ID, buffer_tgfx_handle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
 		unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, rasterpipelineinstance_tgfx_handle MaterialInstance_ID, subdrawpass_tgfx_handle SubDrawPass_ID);
+
 	static void SwapBuffers(window_tgfx_handle WindowHandle, windowpass_tgfx_handle WindowPassHandle) {
 		window_vk* VKWINDOW = (window_vk*)WindowHandle;
+		if (VKWINDOW->isSwapped.load()) {
+			return;
+		}
+
+		VKWINDOW->isSwapped.store(true);
 
 		uint32_t SwapchainImage_Index;
+		semaphore_vk& semaphore = semaphoresys->Create_Semaphore();
+		fence_vk& fence = fencesys->CreateFence();
 		vkAcquireNextImageKHR(rendergpu->LOGICALDEVICE(), VKWINDOW->Window_SwapChain, UINT64_MAX,
-			semaphoresys->GetSemaphore_byID(VKWINDOW->PresentationSemaphores[2]).vksemaphore(), VK_NULL_HANDLE, &SwapchainImage_Index);
+			semaphore.vksemaphore(), fence.Fence_o, &SwapchainImage_Index);
 		if (SwapchainImage_Index != VKWINDOW->CurrentFrameSWPCHNIndex) {
 			std::stringstream ErrorStream;
 			ErrorStream << "Vulkan's reported SwapchainImage_Index: " << SwapchainImage_Index <<
@@ -450,24 +465,30 @@ struct renderer_funcs {
 				"\nGFX's SwapchainIndex and Vulkan's SwapchainIndex don't match, there is something missing!";
 			printer(result_tgfx_FAIL, ErrorStream.str().c_str());
 		}
-		VKWINDOW->isSwapped.store(true);
 
+		VKWINDOW->PresentationSemaphores[1] = semaphore.get_id();
+		VKWINDOW->PresentationFences[1] = fence.getID();
+		fence.signal_semaphores.push_back(semaphore.get_id());
 		windowpass_vk* wp = (windowpass_vk*)WindowPassHandle;
 		windowcall_vk call;
 		call.Window = VKWINDOW;
 		wp->WindowCalls[2].push_back(call);
 	}
+
 	//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 	//Target Buffer should be created with DEVICELOCAL
 	static void CopyBuffer_toBuffer(transferpass_tgfx_handle TransferPassHandle, buffer_tgfx_handle SourceBuffer_Handle, buffertype_tgfx SourceBufferTYPE,
 		buffer_tgfx_handle TargetBuffer_Handle, buffertype_tgfx TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size);
+
 	//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 	static void CopyBuffer_toImage(transferpass_tgfx_handle TransferPassHandle, buffer_tgfx_handle SourceBuffer_Handle, texture_tgfx_handle TextureHandle,
 		unsigned int SourceBuffer_offset, boxregion_tgfx TargetTextureRegion, buffertype_tgfx SourceBufferTYPE, unsigned int TargetMipLevel,
 		cubeface_tgfx TargetCubeMapFace);
+
 	static void CopyImage_toImage(transferpass_tgfx_handle TransferPassHandle, texture_tgfx_handle SourceTextureHandle, texture_tgfx_handle TargetTextureHandle,
 		uvec3_tgfx SourceTextureOffset, uvec3_tgfx CopySize, uvec3_tgfx TargetTextureOffset, unsigned int SourceMipLevel, unsigned int TargetMipLevel,
 		cubeface_tgfx SourceCubeMapFace, cubeface_tgfx TargetCubeMapFace);
+
 	static void ImageBarrier(transferpass_tgfx_handle BarrierTPHandle, texture_tgfx_handle TextureHandle, image_access_tgfx LAST_ACCESS,
 		image_access_tgfx NEXT_ACCESS, unsigned int TargetMipLevel, cubeface_tgfx TargetCubeMapFace) {
 		texture_vk* Texture = (texture_vk*)TextureHandle;
@@ -516,8 +537,10 @@ struct renderer_funcs {
 
 		TPDatas->TextureBarriers.push_back(im_bi);
 	}
+
 	static void Dispatch_Compute(computepass_tgfx_handle ComputePassHandle, computeshaderinstance_tgfx_handle CSInstanceHandle,
 		unsigned int SubComputePassIndex, uvec3_tgfx DispatchSize);
+
 	static void ChangeDrawPass_RTSlotSet(drawpass_tgfx_handle DrawPassHandle, rtslotset_tgfx_handle RTSlotSetHandle);
 };
 
@@ -704,4 +727,4 @@ bool subcomputepass_vk::isThereWorkload() {
 		}
 	}
 	return false;
-}
+} 

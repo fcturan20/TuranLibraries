@@ -790,11 +790,12 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 	SwapchainTextureHandles[0] = (texture_tgfx_handle)Vulkan_Window->Swapchain_Textures[0];
 	SwapchainTextureHandles[1] = (texture_tgfx_handle)Vulkan_Window->Swapchain_Textures[1];
 
-	//Create presentation wait semaphores
-	//We are creating 2 semaphores because if 2 frames combined is faster than vertical blank, there is tearing!
-	//Previously, this was 3 but I moved command buffer waiting so there is no command buffer collision with display
-	for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < 3; SemaphoreIndex++) {
-		Vulkan_Window->PresentationSemaphores[SemaphoreIndex] = semaphoresys->Create_Semaphore().get_id();
+	//Create presentation wait semaphores and fences
+	for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < 2; SemaphoreIndex++) {
+		semaphore_vk& semaphore = semaphoresys->Create_Semaphore();
+		fence_vk& fence = fencesys->CreateFence();
+		Vulkan_Window->PresentationSemaphores[SemaphoreIndex] = semaphore.get_id();
+		Vulkan_Window->PresentationFences[SemaphoreIndex] = fence.getID();
 	}
 
 

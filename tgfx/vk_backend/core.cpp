@@ -790,14 +790,6 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 	SwapchainTextureHandles[0] = (texture_tgfx_handle)Vulkan_Window->Swapchain_Textures[0];
 	SwapchainTextureHandles[1] = (texture_tgfx_handle)Vulkan_Window->Swapchain_Textures[1];
 
-	//Create presentation wait semaphores and fences
-	for (unsigned char SemaphoreIndex = 0; SemaphoreIndex < 2; SemaphoreIndex++) {
-		semaphore_vk& semaphore = semaphoresys->Create_Semaphore();
-		fence_vk& fence = fencesys->CreateFence();
-		Vulkan_Window->PresentationSemaphores[SemaphoreIndex] = semaphore.get_id();
-		Vulkan_Window->PresentationFences[SemaphoreIndex] = fence.getID();
-	}
-
 
 	printer(result_tgfx_SUCCESS, "Window creation is successful!");
 	*window = (window_tgfx_handle)Vulkan_Window;

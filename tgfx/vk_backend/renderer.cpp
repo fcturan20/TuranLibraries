@@ -17,11 +17,12 @@
 
 typedef struct renderer_private{
 	VkDescriptorPool IMGUIPOOL = VK_NULL_HANDLE;
-	std::vector<fence_idtype_vk> FENCEs[2];
 } renderer_private;
 static renderer_private* hidden = nullptr;
 
-//RenderGraph operations
+			//RENDERGRAPH OPERATIONS
+
+extern void WaitForRenderGraphCommandBuffers();
 extern void Start_RenderGraphConstruction();
 extern unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpass);
 //This function is defined in the FGAlgorithm.cpp
@@ -376,25 +377,6 @@ struct renderer_funcs {
 		renderer->WindowPasses.push_back(WP);
 		return result_tgfx_SUCCESS;
 	}
-	static void WaitForRenderGraphCommandBuffers() {
-		unsigned char FrameIndex = renderer->Get_FrameIndex(false);
-		//Wait for command buffers to end
-		fencesys->waitfor_fences(hidden->FENCEs[FrameIndex]);
-
-		/* SEMAPHORES SHOULD BE RE-CYCLED IN SEMAPHORESYS!
-		//Because current frame's framegraph isn't constructed (changes in rendergraph isn't processed yet), this is Penultimate Framegraph
-		VK_FrameGraph& PenultimateFG = renderer->FrameGraphs[FrameIndex];
-		//Set all semaphores used in PenultimateFG as unused
-		for (VK_RGBranch::BranchIDType i = 0; i < PenultimateFG.BranchCount; i++) {
-			VK_RGBranch& PenultimateBranch = ((VK_RGBranch*)PenultimateFG.FrameGraphTree)[i];
-			VK_Submit& Submit = PenultimateBranch.Get_AttachedSubmit();
-			const std::vector<VK_Semaphore::SemaphoreIDType>& SemaphoreIDs = Submit.Get_SignalSemaphoreIDs();
-			//There is a iterator because I may use pointers as IDs later
-			for (std::vector<VK_Semaphore::SemaphoreIDType>::const_iterator SignalElement = SemaphoreIDs.begin(); SignalElement < SemaphoreIDs.end(); SignalElement++) {
-				SEMAPHORESYS->DestroySemaphore(*SignalElement);
-			}
-		}*/
-	}
 	static void PrepareForNextFrame() {
 		renderer->FrameIndex = (renderer->FrameIndex + 1) % 2;
 
@@ -468,7 +450,7 @@ struct renderer_funcs {
 
 		VKWINDOW->PresentationSemaphores[1] = semaphore.get_id();
 		VKWINDOW->PresentationFences[1] = fence.getID();
-		fence.signal_semaphores.push_back(semaphore.get_id());
+
 		windowpass_vk* wp = (windowpass_vk*)WindowPassHandle;
 		windowcall_vk call;
 		call.Window = VKWINDOW;

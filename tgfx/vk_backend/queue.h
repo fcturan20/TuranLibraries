@@ -48,7 +48,7 @@ struct queuesys_vk {
 	//Searches for an available command buffer, if not found creates one
 	commandbuffer_vk* get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex);
 	VkCommandBuffer get_commandbufferobj(commandbuffer_vk* id);
-	fence_idtype_vk queueSubmit(gpu_public* vkgpu, queuefam_vk* family, VkSubmitInfo info);
+	fence_idtype_vk queueSubmit(gpu_public* vkgpu, queuefam_vk* family, const std::vector<semaphore_idtype_vk>& WaitSemaphores, const std::vector<semaphore_idtype_vk>& SignalSemaphores, const VkCommandBuffer* commandbuffers, const VkPipelineStageFlags* cb_flags, unsigned int CBCount);
 	uint32_t get_queuefam_index(gpu_public* vkgpu, queuefam_vk* fam);
 	queuefam_vk* check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR surface);
 	bool does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag);

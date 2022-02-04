@@ -139,14 +139,13 @@ struct window_vk {
 	std::vector<VkSurfaceFormatKHR> SurfaceFormats;
 	std::vector<VkPresentModeKHR> PresentationModes;
 	//Don't make these 3 again! There should 3 textures to be able to use 3 semaphores, otherwise 2 different semaphores for the same texture doesn't work as you expect!
+	//Presentation Semaphores should only be used for rendergraph submission as wait
 	semaphore_idtype_vk PresentationSemaphores[2];
+	//Presentation Fences should only be used for CPU to wait
 	fence_idtype_vk PresentationFences[2];
 	queuefam_vk* presentationqueue = nullptr;
 	//To avoid calling resize or swapbuffer twice in a frame!
 	std::atomic<bool> isResized = false, isSwapped = false;
-	inline bool is_recently_created() { if (is_created_in_last_2frames) { is_created_in_last_2frames--; return true; } return false; }
-private:
-	unsigned char is_created_in_last_2frames = 2;
 };
 
 struct initialization_secondstageinfo{

@@ -29,7 +29,6 @@ public:
 	}
 	inline VkSemaphore vksemaphore() { return SPHandle; }
 	inline semaphore_status status() { return current_status; };
-	friend class fencesys_vk;
 };
 struct semaphoresys_vk {
 	inline static void ClearList() { printer(result_tgfx_NOTCODED, "SemaphoreSys->ClearList() isn't coded!"); }
@@ -118,17 +117,12 @@ struct fence_vk {
 		used = 2
 	};
 	VkFence Fence_o = VK_NULL_HANDLE;
-	fence_status current_status;
-	//Vulkan wants signal semaphores and a fence while submitting a queue
-	//Store signal semaphores to know semaphore's state (if the fence is signaled, then semaphores are signaled too)
-	//This way, we can avoid destroying vkSemaphore objects and minimize creation of vkSemaphore objects.
-	std::vector<semaphore_idtype_vk> signal_semaphores;
-	fence_vk(fence_idtype_vk id)
+	fence_status current_status = fence_status::invalid;
+	//Each wait semaphore in a queue submission is unsignaled and never signaled in the same submission
+	std::vector<semaphore_idtype_vk> wait_semaphores;
 #ifdef VULKAN_DEBUGGING
-		: ID(id) 
+	fence_idtype_vk ID;
 #endif
-	{}
-	const fence_idtype_vk ID;
 	inline fence_idtype_vk getID(){
 #ifdef VULKAN_DEBUGGING
 	return ID;
@@ -136,6 +130,7 @@ struct fence_vk {
 	return this;
 #endif
 	}
+	friend struct fencesys_vk;
 };
 
 struct fencesys_vk {
@@ -164,13 +159,10 @@ public:
 		}
 #endif
 
-		fence_vk* new_fence = 
+		fence_vk* new_fence = new fence_vk();
 #ifdef VULKAN_DEBUGGING
-			new fence_vk(fencesys->Fences.size())
-#else
-			new fence_vk()
+		new_fence->ID = fencesys->Fences.size();
 #endif
-			;
 		new_fence->current_status = fence_vk::used;
 		new_fence->Fence_o = vk_fence;
 		fencesys->Fences.push_back(new_fence);
@@ -208,7 +200,10 @@ public:
 		for (unsigned int fence_i = 0; fence_i < fences.size(); fence_i++) {
 			fence_vk& fence = getfence_byid(fences[fence_i]);
 			fence.current_status = fence_vk::unused;
-			fence.signal_semaphores.clear();
+			for (unsigned int semaphore_i = 0; semaphore_i < fence.wait_semaphores.size(); semaphore_i++) {
+				semaphoresys->DestroySemaphore(fence.wait_semaphores[semaphore_i]);
+			}
+			fence.wait_semaphores.clear();
 		}
 	}
 private:

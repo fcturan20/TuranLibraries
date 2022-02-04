@@ -193,13 +193,35 @@ commandbuffer_vk* queuesys_vk::get_commandbuffer(gpu_public* vkgpu, queuefam_vk*
 VkCommandBuffer queuesys_vk::get_commandbufferobj(commandbuffer_vk* id) {
 	return id->CB;
 }
-fence_idtype_vk queuesys_vk::queueSubmit(gpu_public* vkgpu, queuefam_vk* family, VkSubmitInfo info) {
-	printer(result_tgfx_WARNING, "QueueSystem->queueSubmit() isn't properly implemented. Queue Submission should keep track of semaphores and fences, then set-clear them. Also should keep track of empty queues.");
+fence_idtype_vk queuesys_vk::queueSubmit(gpu_public* vkgpu, queuefam_vk* family, const std::vector<semaphore_idtype_vk>& WaitSemaphores, const std::vector<semaphore_idtype_vk>& SignalSemaphores, const VkCommandBuffer* commandbuffers, const VkPipelineStageFlags* cb_flags, unsigned int CBCount) {
+	printer(result_tgfx_WARNING, "QueueSystem->queueSubmit() isn't properly implemented. We should keep track of command buffers");
 	fence_vk& fence = fencesys->CreateFence();
+	
+	std::vector<VkSemaphore> waits(WaitSemaphores.size()), signals(SignalSemaphores.size());
+	for (unsigned int wait_i = 0; wait_i < WaitSemaphores.size(); wait_i++) {
+		waits[wait_i] = semaphoresys->GetSemaphore_byID(WaitSemaphores[wait_i]).vksemaphore();
+	}
+	for (unsigned int signal_i = 0; signal_i < SignalSemaphores.size(); signal_i++) {
+		signals[signal_i] = semaphoresys->GetSemaphore_byID(SignalSemaphores[signal_i]).vksemaphore();
+	}
+
+	VkSubmitInfo info = {};
+	info.commandBufferCount = CBCount;
+	info.pCommandBuffers = commandbuffers;
+	info.pNext = nullptr;
+	info.pWaitDstStageMask = cb_flags;
+	info.pWaitSemaphores = waits.data();
+	info.waitSemaphoreCount = waits.size();
+	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	info.signalSemaphoreCount = signals.size();
+	info.pSignalSemaphores = signals.data();
 	if (vkQueueSubmit(family->queues[0].Queue, 1, &info, fence.Fence_o) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "Queue Submission has failed!");
+		fence_idtype_vk fenceid = fence.getID();
+		fencesys->DestroyFence(fenceid);
 		return invalid_fenceid;
 	}
+	fence.wait_semaphores = WaitSemaphores;
 	return fence.getID();
 }
 bool queuesys_vk::does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag) {

@@ -226,14 +226,11 @@ void imgui_vk::UploadFontTextures() {
 
 	ImGui_ImplVulkan_CreateFontsTexture(cb);
 
-	VkSubmitInfo end_info = {};
-	end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	end_info.commandBufferCount = 1;
-	end_info.pCommandBuffers = &cb;
+	VkPipelineStageFlags flag = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 	if (vkEndCommandBuffer(cb) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "vkEndCommandBuffer() for dear IMGUI Font Upload has failed!");
 	}
-	if (queuesys->queueSubmit(rendergpu, rendergpu->GRAPHICSQUEUEFAM(), end_info) == invalid_fenceid) {
+	if (queuesys->queueSubmit(rendergpu, rendergpu->GRAPHICSQUEUEFAM(), {}, {}, &cb, &flag, 1) == invalid_fenceid) {
 		printer(result_tgfx_FAIL, "VkQueueSubmit() for dear IMGUI Font Upload has failed!");
 	}
 

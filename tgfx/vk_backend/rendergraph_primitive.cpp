@@ -470,6 +470,7 @@ void SetBarrier_BetweenPasses(VkCommandBuffer CB, VK_Pass* CurrentPass, VK_Pass*
 void Record_RenderPass(VkCommandBuffer CB, drawpass_vk* DrawPass) {
 	const unsigned char FRAMEINDEX = renderer->Get_FrameIndex(false);
 
+	if (!DrawPass->isWorkloaded()) { return; }
 	rtslots_vk& CF_SLOTs = DrawPass->SLOTSET->PERFRAME_SLOTSETs[FRAMEINDEX];
 	VkRenderPassBeginInfo rp_bi = {};
 	rp_bi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

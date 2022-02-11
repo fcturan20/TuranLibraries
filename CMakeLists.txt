@@ -6,7 +6,6 @@ include("D:/dev/Extras/vcpkg/scripts/buildsystems/vcpkg.cmake")
 project ("TuranLibraries")
 set(CMAKE_CXX_STANDARD 17)
 
-
 # Include sub-projects.
 add_subdirectory ("turanapi")
 add_subdirectory ("tgfx")

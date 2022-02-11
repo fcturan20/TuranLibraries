@@ -10,3 +10,13 @@ build
 dynamic_libs
 Example_runnables
 tgfx/vk/VK_GPUContentManager.cpp
+tgfx/vk/Vulkan_Core.cpp
+tgfx/vk/IMGUI_VK.cpp
+tgfx/vk/IMGUI_VK.h
+tgfx/vk/VK_GPUContentManager.cpp
+tgfx/vk/VK_GPUContentManager.h
+tgfx/vk/Vulkan_Core.cpp
+tgfx/vk/Vulkan_Core.h
+.gitignore
+tgfx/vk/Vulkan_Renderer_Core.cpp
+tgfx/vk/Vulkan_Renderer_Core.h

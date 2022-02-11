@@ -33,6 +33,7 @@ extern void Destroy_RenderGraph();
 //Implemented in rendergraph_main.cpp
 extern result_tgfx Execute_RenderGraph();
 struct renderer_funcs {
+
 	static void Fill_ColorVkAttachmentDescription(VkAttachmentDescription& Desc, const colorslot_vk* Attachment) {
 		Desc = {};
 		Desc.format = Find_VkFormat_byTEXTURECHANNELs(Attachment->RT->CHANNELs);

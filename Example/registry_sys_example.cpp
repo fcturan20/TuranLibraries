@@ -47,15 +47,15 @@ void printf_log_tgfx(result_tgfx result, const char* text) {
 	}
 }
 
-int main(){
+int main() {
 	auto registrydll = DLIB_LOAD_TAPI("tapi_registrysys.dll");
-	if(registrydll == NULL){
+	if (registrydll == NULL) {
 		printf("Registry System DLL load failed!");
 	}
 	load_plugin_func loader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(registrydll, "load_plugin");
 	registrysys_tapi* sys = ((registrysys_tapi_type*)loader(NULL, 0))->funcs;
 	const char* first_pluginname = sys->list(NULL)[0];
-	virtualmemorysys_tapi* virmemsys = ((VIRTUALMEMORY_TAPI_PLUGIN_TYPE)sys->get("tapi_virtualmemsys", MAKE_PLUGIN_VERSION_TAPI(0,0,0), 0))->funcs;
+	virtualmemorysys_tapi* virmemsys = ((VIRTUALMEMORY_TAPI_PLUGIN_TYPE)sys->get("tapi_virtualmemsys", MAKE_PLUGIN_VERSION_TAPI(0, 0, 0), 0))->funcs;
 
 	//Generally, I recommend you to load unit test system after registry system
 	//Because other systems may implement unit tests but if unittestsys isn't loaded, they can't implement them.
@@ -81,12 +81,12 @@ int main(){
 	auto threadingsysdll = DLIB_LOAD_TAPI("tapi_threadedjobsys.dll");
 	load_plugin_func threadingloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(threadingsysdll, "load_plugin");
 	threadingsys = (THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE)threadingloader(sys, 0);
-	
+
 	auto filesysdll = DLIB_LOAD_TAPI("tapi_filesys.dll");
 	load_plugin_func filesysloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(filesysdll, "load_plugin");
 	FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys = (FILESYS_TAPI_PLUGIN_LOAD_TYPE)filesysloader(sys, 0);
 	filesys->funcs->write_textfile("naber?", "first.txt", false);
-	
+
 	auto loggerdll = DLIB_LOAD_TAPI("tapi_logger.dll");
 	load_plugin_func loggerloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(loggerdll, "load_plugin");
 	LOGGER_TAPI_PLUGIN_LOAD_TYPE loggersys = (LOGGER_TAPI_PLUGIN_LOAD_TYPE)loggerloader(sys, 0);
@@ -120,9 +120,9 @@ int main(){
 	std::cout << "Memory Type Count: " << memtypelistcount << " and GPU Name: " << gpuname << "\n";
 	unsigned int devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = UINT32_MAX;
 	for (unsigned int i = 0; i < memtypelistcount; i++) {
-		if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) { 
-			tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 40 * 1024 * 1024, nullptr); 
-			devicelocalmemtype_id = memtypelist[i].memorytype_id; 
+		if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) {
+			tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 40 * 1024 * 1024, nullptr);
+			devicelocalmemtype_id = memtypelist[i].memorytype_id;
 		}
 	}
 	initializationsecondstageinfo_tgfx_handle secondinfo = tgfxsys->api->helpers->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, true, true, true, (extension_tgfx_listhandle)tgfxsys->api->INVALIDHANDLE);
@@ -153,35 +153,51 @@ int main(){
 	//Draw Pass Creation
 
 	vec4_tgfx white; white.x = 255; white.y = 255; white.z = 255; white.w = 0;
-	rtslotdescription_tgfx_handle rtslot_descs[2] = { 
-		tgfxsys->api->helpers->CreateRTSlotDescription_Color(swapchain_textures[0], swapchain_textures[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white), (rtslotdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	rtslotdescription_tgfx_handle rtslot_descs[2] = {
+		tgfxsys->api->helpers->CreateRTSlotDescription_Color(swapchain_textures[0], swapchain_textures[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white), (rtslotdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
 	rtslotset_tgfx_handle rtslotset_handle;
 	tgfxsys->api->contentmanager->Create_RTSlotset(rtslot_descs, &rtslotset_handle);
-	rtslotusage_tgfx_handle rtslotusages[2] = { tgfxsys->api->helpers->CreateRTSlotUsage_Color(rtslot_descs[0], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
-	inheritedrtslotset_tgfx_handle irtslotset; 
+	rtslotusage_tgfx_handle rtslotusages[2] = { tgfxsys->api->helpers->CreateRTSlotUsage_Color(rtslot_descs[0], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	inheritedrtslotset_tgfx_handle irtslotset;
 	tgfxsys->api->contentmanager->Inherite_RTSlotSet(rtslotusages, rtslotset_handle, &irtslotset);
-	subdrawpassdescription_tgfx_handle subdp_descs[2] = {	tgfxsys->api->helpers->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
-	passwaitdescription_tgfx_handle dp_waits[2] = {			tgfxsys->api->helpers->CreatePassWait_TransferPass(&firstbarriertp, transferpasstype_tgfx_BARRIER, 
-		tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	subdrawpassdescription_tgfx_handle subdp_descs[2] = { tgfxsys->api->helpers->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	passwaitdescription_tgfx_handle dp_waits[2] = { tgfxsys->api->helpers->CreatePassWait_TransferPass(&firstbarriertp, transferpasstype_tgfx_BARRIER,
+		tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
 	subdrawpass_tgfx_listhandle sub_dps;
 	drawpass_tgfx_handle dp;
 	tgfxsys->api->renderer->Create_DrawPass(subdp_descs, rtslotset_handle, dp_waits, "First DP", &sub_dps, &dp);
 
 	//Final Barrier TP Creation
-	waitsignaldescription_tgfx_handle waitsignaldescs[2] = { tgfxsys->api->helpers->CreateWaitSignal_FragmentShader(true, true, true), (waitsignaldescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	waitsignaldescription_tgfx_handle waitsignaldescs[2] = { tgfxsys->api->helpers->CreateWaitSignal_FragmentShader(true, true, true), (waitsignaldescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
 	passwaitdescription_tgfx_handle final_tp_waits[2] = { tgfxsys->api->helpers->CreatePassWait_DrawPass(&dp, 0, waitsignaldescs, false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
 	transferpass_tgfx_handle final_tp;
 	tgfxsys->api->renderer->Create_TransferPass(final_tp_waits, transferpasstype_tgfx_BARRIER, "Final TP", &final_tp);
 
 	windowpass_tgfx_handle first_wp;
 	waitsignaldescription_tgfx_handle wait_for_finaltp_signal = tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true);
-	passwaitdescription_tgfx_handle wait_for_dp[2] = { tgfxsys->api->helpers->CreatePassWait_TransferPass(&final_tp, transferpasstype_tgfx_BARRIER, wait_for_finaltp_signal, false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE};
+	passwaitdescription_tgfx_handle wait_for_dp[2] = { tgfxsys->api->helpers->CreatePassWait_TransferPass(&final_tp, transferpasstype_tgfx_BARRIER, wait_for_finaltp_signal, false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
 	tgfxsys->api->renderer->Create_WindowPass(wait_for_dp, "First WP", &first_wp);
 	tgfxsys->api->renderer->Finish_RenderGraphConstruction(sub_dps[0]);
 
+	unsigned long vertsize = 0, fragsize = 0;
+	void* vert_binary = filesys->funcs->read_binaryfile(CMAKE_SOURCE_FOLDER"/Example/FirstVert.spv", &vertsize); if (!vert_binary) { printf("Vertex Shader SPIR-V read has failed!"); }
+	void* frag_binary = filesys->funcs->read_binaryfile(CMAKE_SOURCE_FOLDER"/Example/FirstFrag.spv", &fragsize); if (!frag_binary) { printf("Fragment Shader SPIR-V read has failed!"); }
+	shadersource_tgfx_handle compiled_sources[3]{(shadersource_tgfx_handle)tgfxsys->api->INVALIDHANDLE, (shadersource_tgfx_handle)tgfxsys->api->INVALIDHANDLE, (shadersource_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	tgfxsys->api->contentmanager->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_VERTEXSHADER, vert_binary, vertsize, &compiled_sources[0]);
+	tgfxsys->api->contentmanager->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_FRAGMENTSHADER, frag_binary, fragsize, &compiled_sources[1]);
+	rasterpipelinetype_tgfx_handle first_material;
+	tgfxsys->api->contentmanager->Link_MaterialType(compiled_sources, (shaderinputdescription_tgfx_handle*)&tgfxsys->api->INVALIDHANDLE, nullptr, sub_dps[0], cullmode_tgfx_BACK, polygonmode_tgfx_FILL, nullptr, nullptr, nullptr,
+		(blendinginfo_tgfx_listhandle)&tgfxsys->api->INVALIDHANDLE, &first_material);
 
+
+	//Swapchain images should be converted from no_access layout in the first frame
 	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[0], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
 	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
+	tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[0], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+	tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[1], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+	tgfxsys->api->renderer->SwapBuffers(firstwindow, first_wp);
+	tgfxsys->api->renderer->Run();
+
 	while (true) {
 		profiledscope_handle_tapi scope;	unsigned long long duration;
 		profilersys->funcs->start_profiling(&scope, "Run Loop", &duration, 1);

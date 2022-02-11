@@ -24,19 +24,6 @@ struct descelement_image_vk {
 	descelement_image_vk(){}
 	descelement_image_vk(const descelement_image_vk& copyDesc){}
 };
-struct descriptor_vk {
-	desctype_vk Type;
-	void* Elements = nullptr;
-	unsigned int ElementCount = 0;
-};
-struct descset_vk {
-	VkDescriptorSet Set = VK_NULL_HANDLE;
-	VkDescriptorSetLayout Layout = VK_NULL_HANDLE;
-	descriptor_vk* Descs = nullptr;
-	//DescCount is size of the "Descs" pointer above, others are including element counts of each descriptor
-	unsigned int DescCount = 0, DescUBuffersCount = 0, DescSBuffersCount = 0, DescSamplersCount = 0, DescImagesCount = 0;
-	std::atomic_bool ShouldRecreate = false;
-};
 struct descset_updatecall_vk {
 	descset_vk* Set = nullptr;
 	unsigned int BindingIndex = UINT32_MAX, ElementIndex = UINT32_MAX;
@@ -50,6 +37,8 @@ struct gpudatamanager_private {
 	threadlocal_vector<rtslotset_vk*> rtslotsets;
 	threadlocal_vector<texture_vk*> textures;
 	threadlocal_vector<irtslotset_vk*> irtslotsets;
+	threadlocal_vector<graphicspipelinetype_vk*> graphicspipelinetypes;
+	threadlocal_vector<graphicspipelineinst_vk*> graphicspipelineinstances;
 
 
 	//This vector contains descriptor sets that are for material types/instances that are created this frame
@@ -74,7 +63,7 @@ struct gpudatamanager_private {
 	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
 
 	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100), 
-	irtslotsets(100) {}
+	irtslotsets(100), graphicspipelineinstances(1024), graphicspipelinetypes(1024) {}
 };
 static gpudatamanager_private* hidden = nullptr;
 
@@ -474,6 +463,290 @@ void gpudatamanager_public::Apply_ResourceChanges() {
 	
 
 }
+//General DescriptorSet Layout Creation
+struct shaderinputdesc_vk {
+	bool isGeneral = false;
+	shaderinputtype_tgfx TYPE = shaderinputtype_tgfx_UNDEFINED;
+	unsigned int BINDINDEX = UINT32_MAX;
+	unsigned int ELEMENTCOUNT = 0;
+	VK_ShaderStageFlag ShaderStages;
+};
+bool Create_DescSet(descset_vk* Set) {
+	if (!Set->DescCount) {
+		return true;
+	}
+	if (!hidden->MaterialRelated_DescPool.REMAINING_IMAGE.fetch_sub(Set->DescImagesCount) ||
+		!hidden->MaterialRelated_DescPool.REMAINING_SAMPLER.fetch_sub(Set->DescSamplersCount) ||
+		!hidden->MaterialRelated_DescPool.REMAINING_SBUFFER.fetch_sub(Set->DescSBuffersCount) ||
+		!hidden->MaterialRelated_DescPool.REMAINING_UBUFFER.fetch_sub(Set->DescUBuffersCount) ||
+		!hidden->MaterialRelated_DescPool.REMAINING_SET.fetch_sub(1)) {
+		printer(result_tgfx_FAIL, "Create_DescSets() has failed because descriptor pool doesn't have enough space!");
+		return false;
+	}
+	hidden->DescSets_toCreate.push_back(Set);
+	return true;
+}
+bool VKDescSet_PipelineLayoutCreation(const shaderinputdesc_vk** inputdescs, descset_vk* GeneralDescSet, descset_vk* InstanceDescSet, VkPipelineLayout* layout) {
+	TGFXLISTCOUNT(core_tgfx_main, inputdescs, inputdesccount);
+	//General DescSet creation
+	{
+		std::vector<VkDescriptorSetLayoutBinding> bindings;
+		for (unsigned int i = 0; i < inputdesccount; i++) {
+			const shaderinputdesc_vk* desc = inputdescs[i];
+			if (!inputdescs[i]) {
+				continue;
+			}
+			
+			if (!(desc->TYPE == shaderinputtype_tgfx_IMAGE_G ||
+				desc->TYPE == shaderinputtype_tgfx_SAMPLER_G ||
+				desc->TYPE == shaderinputtype_tgfx_SBUFFER_G ||
+				desc->TYPE == shaderinputtype_tgfx_UBUFFER_G)) {
+				continue;
+			}
+
+			unsigned int BP = desc->BINDINDEX;
+			for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
+				if (BP == bindings[bpsearchindex].binding) {
+					printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed because there are colliding binding points!");
+					return false;
+				}
+			}
+
+			if (!desc->ELEMENTCOUNT) {
+				printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed because one of the shader inputs have 0 element count!");
+				return false;
+			}
+
+			VkDescriptorSetLayoutBinding bn = {};
+			bn.stageFlags = desc->ShaderStages.flag;
+			bn.pImmutableSamplers = VK_NULL_HANDLE;
+			bn.descriptorType = Find_VkDescType_byMATDATATYPE(desc->TYPE);
+			bn.descriptorCount = desc->ELEMENTCOUNT;
+			bn.binding = BP;
+			bindings.push_back(bn);
+
+			GeneralDescSet->DescCount++;
+			switch (desc->TYPE) {
+			case shaderinputtype_tgfx_IMAGE_G:
+				GeneralDescSet->DescImagesCount += desc->ELEMENTCOUNT;
+				break;
+			case shaderinputtype_tgfx_SAMPLER_G:
+				GeneralDescSet->DescSamplersCount += desc->ELEMENTCOUNT;
+				break;
+			case shaderinputtype_tgfx_UBUFFER_G:
+				GeneralDescSet->DescUBuffersCount += desc->ELEMENTCOUNT;
+				break;
+			case shaderinputtype_tgfx_SBUFFER_G:
+				GeneralDescSet->DescSBuffersCount += desc->ELEMENTCOUNT;
+				break;
+			}
+		}
+
+		if (GeneralDescSet->DescCount) {
+			GeneralDescSet->Descs = new descriptor_vk[GeneralDescSet->DescCount];
+			for (unsigned int i = 0; i < inputdesccount; i++) {
+				const shaderinputdesc_vk* desc = inputdescs[i];
+				if (!(desc->TYPE == shaderinputtype_tgfx_IMAGE_G ||
+					desc->TYPE == shaderinputtype_tgfx_SAMPLER_G ||
+					desc->TYPE == shaderinputtype_tgfx_SBUFFER_G ||
+					desc->TYPE == shaderinputtype_tgfx_UBUFFER_G)) {
+					continue;
+				}
+				if (desc->BINDINDEX >= GeneralDescSet->DescCount) {
+					printer(result_tgfx_FAIL, "One of your General shaderinputs uses a binding point that is exceeding the number of general shaderinputs. You have to use a binding point that's lower than size of the general shader inputs!");
+					return false;
+				}
+
+				descriptor_vk& vkdesc = GeneralDescSet->Descs[desc->BINDINDEX];
+				switch (desc->TYPE) {
+				case shaderinputtype_tgfx_IMAGE_G:
+				{
+					vkdesc.ElementCount = desc->ELEMENTCOUNT;
+					vkdesc.Elements = new descelement_image_vk[desc->ELEMENTCOUNT];
+					vkdesc.Type = desctype_vk::IMAGE;
+				}
+				break;
+				case shaderinputtype_tgfx_SAMPLER_G:
+				{
+					vkdesc.ElementCount = desc->ELEMENTCOUNT;
+					vkdesc.Elements = new descelement_image_vk[desc->ELEMENTCOUNT];
+					vkdesc.Type = desctype_vk::SAMPLER;
+				}
+				break;
+				case shaderinputtype_tgfx_UBUFFER_G:
+				{
+					vkdesc.ElementCount = desc->ELEMENTCOUNT;
+					vkdesc.Elements = new descelement_buffer_vk[desc->ELEMENTCOUNT];
+					vkdesc.Type = desctype_vk::UBUFFER;
+				}
+				break;
+				case shaderinputtype_tgfx_SBUFFER_G:
+				{
+					vkdesc.ElementCount = desc->ELEMENTCOUNT;
+					vkdesc.Elements = new descelement_buffer_vk[desc->ELEMENTCOUNT];
+					vkdesc.Type = desctype_vk::SBUFFER;
+				}
+				break;
+				}
+			}
+			GeneralDescSet->ShouldRecreate.store(0);
+		}
+
+		if (bindings.size()) {
+			VkDescriptorSetLayoutCreateInfo ci = {};
+			ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			ci.pNext = nullptr;
+			ci.flags = 0;
+			ci.bindingCount = bindings.size();
+			ci.pBindings = bindings.data();
+
+			if (vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &ci, nullptr, &GeneralDescSet->Layout) != VK_SUCCESS) {
+				printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed at General DescriptorSetLayout Creation vkCreateDescriptorSetLayout()");
+				return false;
+			}
+		}
+	}
+
+	//Instance DescriptorSet Layout Creation
+	if (true) {
+		std::vector<VkDescriptorSetLayoutBinding> bindings;
+		for (unsigned int i = 0; i < inputdesccount; i++) {
+			const shaderinputdesc_vk* desc = inputdescs[i];
+
+			if (!(desc->TYPE == shaderinputtype_tgfx_IMAGE_PI ||
+				desc->TYPE == shaderinputtype_tgfx_SAMPLER_PI ||
+				desc->TYPE == shaderinputtype_tgfx_SBUFFER_PI ||
+				desc->TYPE == shaderinputtype_tgfx_UBUFFER_PI)) {
+				continue;
+			}
+			unsigned int BP = desc->BINDINDEX;
+			for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
+				if (BP == bindings[bpsearchindex].binding) {
+					printer(result_tgfx_FAIL, "Link_MaterialType() has failed because there are colliding binding points!");
+					return false;
+				}
+			}
+			VkDescriptorSetLayoutBinding bn = {};
+			bn.stageFlags = desc->ShaderStages.flag;
+			bn.pImmutableSamplers = VK_NULL_HANDLE;
+			bn.descriptorType = Find_VkDescType_byMATDATATYPE(desc->TYPE);
+			bn.descriptorCount = 1;		//I don't support array descriptors for now!
+			bn.binding = BP;
+			bindings.push_back(bn);
+
+			InstanceDescSet->DescCount++;
+			switch (desc->TYPE) {
+			case shaderinputtype_tgfx_IMAGE_PI:
+			{
+				InstanceDescSet->DescImagesCount += desc->ELEMENTCOUNT;
+			}
+			break;
+			case shaderinputtype_tgfx_SAMPLER_PI:
+			{
+				InstanceDescSet->DescSamplersCount += desc->ELEMENTCOUNT;
+			}
+			break;
+			case shaderinputtype_tgfx_UBUFFER_PI:
+			{
+				InstanceDescSet->DescUBuffersCount += desc->ELEMENTCOUNT;
+			}
+			break;
+			case shaderinputtype_tgfx_SBUFFER_PI:
+			{
+				InstanceDescSet->DescSBuffersCount += desc->ELEMENTCOUNT;
+			}
+			break;
+			}
+		}
+
+		if (InstanceDescSet->DescCount) {
+			InstanceDescSet->Descs = new descriptor_vk[InstanceDescSet->DescCount];
+			for (unsigned int i = 0; i < inputdesccount; i++) {
+				const shaderinputdesc_vk* desc = inputdescs[i];
+				if (!(desc->TYPE == shaderinputtype_tgfx_IMAGE_PI ||
+					desc->TYPE == shaderinputtype_tgfx_SAMPLER_PI ||
+					desc->TYPE == shaderinputtype_tgfx_SBUFFER_PI ||
+					desc->TYPE == shaderinputtype_tgfx_UBUFFER_PI)) {
+					continue;
+				}
+
+				if (desc->BINDINDEX >= InstanceDescSet->DescCount) {
+					printer(result_tgfx_FAIL, "One of your Material Data Descriptors (Per Instance) uses a binding point that is exceeding the number of Material Data Descriptors (Per Instance). You have to use a binding point that's lower than size of the Material Data Descriptors (Per Instance)!");
+					return false;
+				}
+
+				//We don't need to create each descriptor's array elements
+				descriptor_vk& vkdesc = InstanceDescSet->Descs[desc->BINDINDEX];
+				vkdesc.ElementCount = desc->ELEMENTCOUNT;
+				switch (desc->TYPE) {
+				case shaderinputtype_tgfx_IMAGE_PI:
+					vkdesc.Type = desctype_vk::IMAGE;
+					break;
+				case shaderinputtype_tgfx_SAMPLER_PI:
+					vkdesc.Type = desctype_vk::SAMPLER;
+					break;
+				case shaderinputtype_tgfx_UBUFFER_PI:
+					vkdesc.Type = desctype_vk::UBUFFER;
+					break;
+				case shaderinputtype_tgfx_SBUFFER_PI:
+					vkdesc.Type = desctype_vk::SBUFFER;
+					break;
+				}
+			}
+			InstanceDescSet->ShouldRecreate.store(0);
+		}
+
+		if (bindings.size()) {
+			VkDescriptorSetLayoutCreateInfo ci = {};
+			ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			ci.pNext = nullptr;
+			ci.flags = 0;
+			ci.bindingCount = bindings.size();
+			ci.pBindings = bindings.data();
+
+			if (vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &ci, nullptr, &InstanceDescSet->Layout) != VK_SUCCESS) {
+				printer(result_tgfx_FAIL, "Link_MaterialType() has failed at Instance DesciptorSetLayout Creation vkCreateDescriptorSetLayout()");
+				return false;
+			}
+		}
+	}
+
+	//General DescriptorSet Creation
+	if (!Create_DescSet(GeneralDescSet)) {
+		printer(result_tgfx_FAIL, "Descriptor pool is full, that means you should expand its size!");
+		return false;
+	}
+
+	//Pipeline Layout Creation
+	{
+		VkPipelineLayoutCreateInfo pl_ci = {};
+		pl_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pl_ci.pNext = nullptr;
+		pl_ci.flags = 0;
+
+		VkDescriptorSetLayout descsetlays[4] = { hidden->GlobalBuffers_DescSet.Layout, hidden->GlobalTextures_DescSet.Layout, VK_NULL_HANDLE, VK_NULL_HANDLE };
+		pl_ci.setLayoutCount = 2;
+		if (GeneralDescSet->Layout != VK_NULL_HANDLE) {
+			descsetlays[pl_ci.setLayoutCount] = GeneralDescSet->Layout;
+			pl_ci.setLayoutCount++;
+		}
+		if (InstanceDescSet->Layout != VK_NULL_HANDLE) {
+			descsetlays[pl_ci.setLayoutCount] = InstanceDescSet->Layout;
+			pl_ci.setLayoutCount++;
+		}
+		pl_ci.pSetLayouts = descsetlays;
+		//Don't support for now!
+		pl_ci.pushConstantRangeCount = 0;
+		pl_ci.pPushConstantRanges = nullptr;
+
+		if (vkCreatePipelineLayout(rendergpu->LOGICALDEVICE(), &pl_ci, nullptr, layout) != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, "Link_MaterialType() failed at vkCreatePipelineLayout()!");
+			return false;
+		}
+	}
+	return true;
+}
+
 
 VkDescriptorSet gpudatamanager_public::get_GlobalBuffersDescSet() { return hidden->GlobalBuffers_DescSet.Set; }
 VkDescriptorSet gpudatamanager_public::get_GlobalTexturesDescsSet() {return hidden->GlobalTextures_DescSet.Set;}
@@ -731,15 +1004,352 @@ result_tgfx SetGlobalShaderInput_Texture (unsigned char isSampledTexture, unsign
 	texture_tgfx_handle TextureHandle, samplingtype_tgfx_handle sampler, image_access_tgfx access) { return result_tgfx_FAIL;}
 
 
+struct shadersource_vk {
+	VkShaderModule Module;
+	shaderstage_tgfx stage;
+	void* SOURCE_CODE = nullptr;
+	unsigned int DATA_SIZE = 0;
+};
 result_tgfx Compile_ShaderSource (shaderlanguages_tgfx language, shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE,
 	shadersource_tgfx_handle* ShaderSourceHandle) { return result_tgfx_FAIL;}
 void  Delete_ShaderSource (shadersource_tgfx_handle ShaderSourceHandle){}
-result_tgfx Link_MaterialType (shadersource_tgfx_listhandle ShaderSourcesList, shaderinputdescription_tgfx_listhandle ShaderInputDescs,
+VkColorComponentFlags Find_ColorWriteMask_byChannels(texture_channels_tgfx channels) {
+	switch (channels)
+	{
+	case texture_channels_tgfx_BGRA8UB:
+	case texture_channels_tgfx_BGRA8UNORM:
+	case texture_channels_tgfx_RGBA32F:
+	case texture_channels_tgfx_RGBA32UI:
+	case texture_channels_tgfx_RGBA32I:
+	case texture_channels_tgfx_RGBA8UB:
+	case texture_channels_tgfx_RGBA8B:
+		return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	case texture_channels_tgfx_RGB32F:
+	case texture_channels_tgfx_RGB32UI:
+	case texture_channels_tgfx_RGB32I:
+	case texture_channels_tgfx_RGB8UB:
+	case texture_channels_tgfx_RGB8B:
+		return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+	case texture_channels_tgfx_RA32F:
+	case texture_channels_tgfx_RA32UI:
+	case texture_channels_tgfx_RA32I:
+	case texture_channels_tgfx_RA8UB:
+	case texture_channels_tgfx_RA8B:
+		return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT;
+	case texture_channels_tgfx_R32F:
+	case texture_channels_tgfx_R32UI:
+	case texture_channels_tgfx_R32I:
+		return VK_COLOR_COMPONENT_R_BIT;
+	case texture_channels_tgfx_R8UB:
+	case texture_channels_tgfx_R8B:
+		return VK_COLOR_COMPONENT_R_BIT;
+	case texture_channels_tgfx_D32:
+	case texture_channels_tgfx_D24S8:
+	default:
+		printer(result_tgfx_NOTCODED, "Find_ColorWriteMask_byChannels() doesn't support this type of RTSlot channel!");
+		return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
+	}
+}
+
+result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, shaderinputdescription_tgfx_listhandle ShaderInputDescs,
 	vertexattributelayout_tgfx_handle AttributeLayout, subdrawpass_tgfx_handle Subdrawpass, cullmode_tgfx culling,
 	polygonmode_tgfx polygonmode, depthsettings_tgfx_handle depthtest, stencilsettings_tgfx_handle StencilFrontFaced,
-	stencilsettings_tgfx_handle StencilBackFaced, blendinginfo_tgfx_listhandle BLENDINGs, rasterpipelinetype_tgfx_handle* MaterialHandle){ return result_tgfx_FAIL;}
-void  Delete_MaterialType (rasterpipelinetype_tgfx_handle ID){}
-result_tgfx Create_MaterialInst (rasterpipelinetype_tgfx_handle MaterialType, rasterpipelineinstance_tgfx_handle* MaterialInstHandle){ return result_tgfx_FAIL; }
+	stencilsettings_tgfx_handle StencilBackFaced, blendinginfo_tgfx_listhandle BLENDINGs, rasterpipelinetype_tgfx_handle* MaterialHandle) {
+	if (renderer->RGSTATUS() == RenderGraphStatus::StartedConstruction) {
+		printer(result_tgfx_FAIL, "You can't link a Material Type while recording RenderGraph!");
+		return result_tgfx_WRONGTIMING;
+	}
+	vertexattriblayout_vk* LAYOUT = (vertexattriblayout_vk*)AttributeLayout;
+	if (!LAYOUT) {
+		printer(result_tgfx_FAIL, "Link_MaterialType() has failed because Material Type has invalid Vertex Attribute Layout!");
+		return result_tgfx_INVALIDARGUMENT;
+	}
+	subdrawpass_vk* Subpass = (subdrawpass_vk*)Subdrawpass;
+	drawpass_vk* MainPass = (drawpass_vk*)Subpass->DrawPass;
+
+	shadersource_vk* VertexSource = nullptr, *FragmentSource = nullptr;
+	unsigned int ShaderSourceCount = 0;
+	while (ShaderSourcesList[ShaderSourceCount] != NULL) {
+		shadersource_vk* ShaderSource = ((shadersource_vk*)ShaderSourcesList[ShaderSourceCount]);
+		switch (ShaderSource->stage) {
+		case shaderstage_tgfx_VERTEXSHADER:
+			if (VertexSource) { printer(result_tgfx_FAIL, "Link_MaterialType() has failed because there 2 vertex shaders in the list!"); return result_tgfx_FAIL; }
+			VertexSource = ShaderSource;	break;
+		case shaderstage_tgfx_FRAGMENTSHADER:
+			if (FragmentSource) { printer(result_tgfx_FAIL, "Link_MaterialType() has failed because there 2 fragment shaders in the list!"); return result_tgfx_FAIL; }
+			FragmentSource = ShaderSource; 	break;
+		default:
+			printer(result_tgfx_NOTCODED, "Link_MaterialType() has failed because list has unsupported shader source type!");
+			return result_tgfx_NOTCODED;
+		}
+		ShaderSourceCount++;
+	}
+
+
+	//Subpass attachment should happen here!
+	graphicspipelinetype_vk* VKPipeline = new graphicspipelinetype_vk;
+
+	VkPipelineShaderStageCreateInfo Vertex_ShaderStage = {};
+	VkPipelineShaderStageCreateInfo Fragment_ShaderStage = {};
+	{
+		Vertex_ShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		Vertex_ShaderStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+		VkShaderModule* VS_Module = &VertexSource->Module;
+		Vertex_ShaderStage.module = *VS_Module;
+		Vertex_ShaderStage.pName = "main";
+
+		Fragment_ShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		Fragment_ShaderStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+		VkShaderModule* FS_Module = &FragmentSource->Module;
+		Fragment_ShaderStage.module = *FS_Module;
+		Fragment_ShaderStage.pName = "main";
+	}
+	VkPipelineShaderStageCreateInfo STAGEs[2] = { Vertex_ShaderStage, Fragment_ShaderStage };
+
+	VkPipelineVertexInputStateCreateInfo VertexInputState_ci = {};
+	{
+		VertexInputState_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		VertexInputState_ci.pVertexBindingDescriptions = &LAYOUT->BindingDesc;
+		VertexInputState_ci.vertexBindingDescriptionCount = 1;
+		VertexInputState_ci.pVertexAttributeDescriptions = LAYOUT->AttribDescs;
+		VertexInputState_ci.vertexAttributeDescriptionCount = LAYOUT->AttribDesc_Count;
+		VertexInputState_ci.flags = 0;
+		VertexInputState_ci.pNext = nullptr;
+	}
+	VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
+	{
+		InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		InputAssemblyState.topology = LAYOUT->PrimitiveTopology;
+		InputAssemblyState.primitiveRestartEnable = false;
+		InputAssemblyState.flags = 0;
+		InputAssemblyState.pNext = nullptr;
+	}
+	VkPipelineViewportStateCreateInfo RenderViewportState = {};
+	{
+		RenderViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		RenderViewportState.scissorCount = 1;
+		RenderViewportState.pScissors = nullptr;
+		RenderViewportState.viewportCount = 1;
+		RenderViewportState.pViewports = nullptr;
+		RenderViewportState.pNext = nullptr;
+		RenderViewportState.flags = 0;
+	}
+	VkPipelineRasterizationStateCreateInfo RasterizationState = {};
+	{
+		RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		RasterizationState.polygonMode = Find_PolygonMode_byGFXPolygonMode(polygonmode);
+		RasterizationState.cullMode = Find_CullMode_byGFXCullMode(culling);
+		RasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		RasterizationState.lineWidth = 1.0f;
+		RasterizationState.depthClampEnable = VK_FALSE;
+		RasterizationState.rasterizerDiscardEnable = VK_FALSE;
+
+		RasterizationState.depthBiasEnable = VK_FALSE;
+		RasterizationState.depthBiasClamp = 0.0f;
+		RasterizationState.depthBiasConstantFactor = 0.0f;
+		RasterizationState.depthBiasSlopeFactor = 0.0f;
+	}
+	//Draw pass dependent data but draw passes doesn't support MSAA right now
+	VkPipelineMultisampleStateCreateInfo MSAAState = {};
+	{
+		MSAAState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		MSAAState.sampleShadingEnable = VK_FALSE;
+		MSAAState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		MSAAState.minSampleShading = 1.0f;
+		MSAAState.pSampleMask = nullptr;
+		MSAAState.alphaToCoverageEnable = VK_FALSE;
+		MSAAState.alphaToOneEnable = VK_FALSE;
+	}
+
+	
+	TGFXLISTCOUNT(core_tgfx_main, BLENDINGs, BlendingsCount);
+	blendinginfo_vk** BLENDINGINFOS = (blendinginfo_vk**)BLENDINGs;
+	std::vector<VkPipelineColorBlendAttachmentState> States(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT);
+	VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
+	{
+		VkPipelineColorBlendAttachmentState NonBlendState = {};
+		//Non-blend settings
+		NonBlendState.blendEnable = VK_FALSE;
+		NonBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+		NonBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+		NonBlendState.colorBlendOp = VkBlendOp::VK_BLEND_OP_ADD;
+		NonBlendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+		NonBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		NonBlendState.alphaBlendOp = VK_BLEND_OP_ADD;
+
+		for (unsigned int RTSlotIndex = 0; RTSlotIndex < States.size(); RTSlotIndex++) {
+			bool isFound = false;
+			for (unsigned int BlendingInfoIndex = 0; BlendingInfoIndex < BlendingsCount; BlendingInfoIndex++) {
+				const blendinginfo_vk* blendinginfo = BLENDINGINFOS[BlendingInfoIndex];
+				if (blendinginfo->COLORSLOT_INDEX == RTSlotIndex) {
+					States[RTSlotIndex] = blendinginfo->BlendState;
+					States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
+					isFound = true;
+					break;
+				}
+			}
+			if (!isFound) {
+				States[RTSlotIndex] = NonBlendState;
+				States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
+			}
+		}
+
+		Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+		Pipeline_ColorBlendState.attachmentCount = States.size();
+		Pipeline_ColorBlendState.pAttachments = States.data();
+		if (BlendingsCount) {
+			Pipeline_ColorBlendState.blendConstants[0] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.x;
+			Pipeline_ColorBlendState.blendConstants[1] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.y;
+			Pipeline_ColorBlendState.blendConstants[2] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.z;
+			Pipeline_ColorBlendState.blendConstants[3] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.w;
+		}
+		else {
+			Pipeline_ColorBlendState.blendConstants[0] = 0.0f;
+			Pipeline_ColorBlendState.blendConstants[1] = 0.0f;
+			Pipeline_ColorBlendState.blendConstants[2] = 0.0f;
+			Pipeline_ColorBlendState.blendConstants[3] = 0.0f;
+		}
+		//I won't use logical operations
+		Pipeline_ColorBlendState.logicOpEnable = VK_FALSE;
+		Pipeline_ColorBlendState.logicOp = VK_LOGIC_OP_COPY;
+	}
+
+	VkPipelineDynamicStateCreateInfo Dynamic_States = {};
+	std::vector<VkDynamicState> DynamicStatesList;
+	{
+		DynamicStatesList.push_back(VK_DYNAMIC_STATE_VIEWPORT);
+		DynamicStatesList.push_back(VK_DYNAMIC_STATE_SCISSOR);
+
+		Dynamic_States.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		Dynamic_States.dynamicStateCount = DynamicStatesList.size();
+		Dynamic_States.pDynamicStates = DynamicStatesList.data();
+	}
+
+	if (!VKDescSet_PipelineLayoutCreation((const shaderinputdesc_vk**)ShaderInputDescs, &VKPipeline->General_DescSet, &VKPipeline->Instance_DescSet, &VKPipeline->PipelineLayout)) {
+		printer(result_tgfx_FAIL, "Link_MaterialType() has failed at VKDescSet_PipelineLayoutCreation!");
+		delete VKPipeline;
+		return result_tgfx_FAIL;
+	}
+
+	VkPipelineDepthStencilStateCreateInfo depth_state = {};
+	if (Subpass->SLOTSET->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
+		depth_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		if (depthtest) {
+			depthsettingsdesc_vk* depthsettings = (depthsettingsdesc_vk*)depthtest;
+			depth_state.depthTestEnable = VK_TRUE;
+			depth_state.depthCompareOp = depthsettings->DepthCompareOP;
+			depth_state.depthWriteEnable = depthsettings->ShouldWrite;
+			depth_state.depthBoundsTestEnable = VK_FALSE;
+			depth_state.maxDepthBounds = depthsettings->DepthBoundsMax;
+			depth_state.minDepthBounds = depthsettings->DepthBoundsMin;
+		}
+		else {
+			depth_state.depthTestEnable = VK_FALSE;
+			depth_state.depthBoundsTestEnable = VK_FALSE;
+		}
+		depth_state.flags = 0;
+		depth_state.pNext = nullptr;
+
+		if (StencilFrontFaced || StencilBackFaced) {
+			depth_state.stencilTestEnable = VK_TRUE;
+			stencildesc_vk* frontfacestencil = (stencildesc_vk*)StencilFrontFaced;
+			stencildesc_vk* backfacestencil = (stencildesc_vk*)StencilBackFaced;
+			if (backfacestencil) { depth_state.back = backfacestencil->OPSTATE; }
+			else { depth_state.back = {}; }
+			if (frontfacestencil) { depth_state.front = frontfacestencil->OPSTATE; }
+			else { depth_state.front = {}; }
+		}
+		else { depth_state.stencilTestEnable = VK_FALSE;	depth_state.back = {};	depth_state.front = {}; }
+	}
+
+	VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfo = {};
+	{
+		GraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		GraphicsPipelineCreateInfo.pColorBlendState = &Pipeline_ColorBlendState;
+		if (Subpass->SLOTSET->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
+			GraphicsPipelineCreateInfo.pDepthStencilState = &depth_state;
+		}
+		else {
+			GraphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+		}
+		GraphicsPipelineCreateInfo.pDynamicState = &Dynamic_States;
+		GraphicsPipelineCreateInfo.pInputAssemblyState = &InputAssemblyState;
+		GraphicsPipelineCreateInfo.pMultisampleState = &MSAAState;
+		GraphicsPipelineCreateInfo.pRasterizationState = &RasterizationState;
+		GraphicsPipelineCreateInfo.pVertexInputState = &VertexInputState_ci;
+		GraphicsPipelineCreateInfo.pViewportState = &RenderViewportState;
+		GraphicsPipelineCreateInfo.layout = VKPipeline->PipelineLayout;
+		GraphicsPipelineCreateInfo.renderPass = MainPass->RenderPassObject;
+		GraphicsPipelineCreateInfo.subpass = Subpass->Binding_Index;
+		GraphicsPipelineCreateInfo.stageCount = 2;
+		GraphicsPipelineCreateInfo.pStages = STAGEs;
+		GraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;		//Optional
+		GraphicsPipelineCreateInfo.basePipelineIndex = -1;					//Optional
+		GraphicsPipelineCreateInfo.flags = 0;
+		GraphicsPipelineCreateInfo.pNext = nullptr;
+		if (vkCreateGraphicsPipelines(rendergpu->LOGICALDEVICE(), nullptr, 1, &GraphicsPipelineCreateInfo, nullptr, &VKPipeline->PipelineObject) != VK_SUCCESS) {
+			delete VKPipeline;
+			delete STAGEs;
+			printer(result_tgfx_FAIL, "vkCreateGraphicsPipelines has failed!");
+			return result_tgfx_FAIL;
+		}
+	}
+
+	VKPipeline->GFX_Subpass = Subpass;
+	hidden->graphicspipelinetypes.push_back(VKPipeline);
+
+
+	printer(result_tgfx_SUCCESS, "Finished creating Graphics Pipeline");
+	*MaterialHandle = (rasterpipelinetype_tgfx_handle)VKPipeline;
+	return result_tgfx_SUCCESS;
+}
+
+void  Delete_MaterialType(rasterpipelinetype_tgfx_handle ID) { printer(result_tgfx_NOTCODED, "Delete_MaterialType() isn't implemented!"); }
+result_tgfx Create_MaterialInst (rasterpipelinetype_tgfx_handle MaterialType, rasterpipelineinstance_tgfx_handle* MaterialInstHandle){
+	graphicspipelinetype_vk* VKPSO = (graphicspipelinetype_vk*)MaterialType;
+	if (!VKPSO) {
+		printer(result_tgfx_FAIL, "Create_MaterialInst() has failed because Material Type isn't found!");
+		return result_tgfx_INVALIDARGUMENT;
+	}
+
+	//Descriptor Set Creation
+	graphicspipelineinst_vk* VKPInstance = new graphicspipelineinst_vk;
+
+	VKPInstance->DescSet.Layout = VKPSO->Instance_DescSet.Layout;
+	VKPInstance->DescSet.ShouldRecreate.store(0);
+	VKPInstance->DescSet.DescImagesCount = VKPSO->Instance_DescSet.DescImagesCount;
+	VKPInstance->DescSet.DescSamplersCount = VKPSO->Instance_DescSet.DescSamplersCount;
+	VKPInstance->DescSet.DescSBuffersCount = VKPSO->Instance_DescSet.DescSBuffersCount;
+	VKPInstance->DescSet.DescUBuffersCount = VKPSO->Instance_DescSet.DescUBuffersCount;
+	VKPInstance->DescSet.DescCount = VKPSO->Instance_DescSet.DescCount;
+
+	if (VKPInstance->DescSet.DescCount) {
+		VKPInstance->DescSet.Descs = new descriptor_vk[VKPInstance->DescSet.DescCount];
+
+		for (unsigned int i = 0; i < VKPInstance->DescSet.DescCount; i++) {
+			descriptor_vk& desc = VKPInstance->DescSet.Descs[i];
+			desc.ElementCount = VKPSO->Instance_DescSet.Descs[i].ElementCount;
+			desc.Type = VKPSO->Instance_DescSet.Descs[i].Type;
+			switch (desc.Type)
+			{
+			case desctype_vk::IMAGE:
+			case desctype_vk::SAMPLER:
+				desc.Elements = new descelement_image_vk[desc.ElementCount];
+			case desctype_vk::SBUFFER:
+			case desctype_vk::UBUFFER:
+				desc.Elements = new descelement_buffer_vk[desc.ElementCount];
+			}
+		}
+
+		Create_DescSet(&VKPInstance->DescSet);
+	}
+
+
+	VKPInstance->PROGRAM = VKPSO;
+	hidden->graphicspipelineinstances.push_back(VKPInstance);
+	*MaterialInstHandle = (rasterpipelineinstance_tgfx_handle)VKPInstance;
+	return result_tgfx_SUCCESS;
+}
 void  Delete_MaterialInst (rasterpipelineinstance_tgfx_handle ID){}
 
 result_tgfx Create_ComputeType (shadersource_tgfx_handle Source, shaderinputdescription_tgfx_listhandle ShaderInputDescs, computeshadertype_tgfx_handle* ComputeTypeHandle){ return result_tgfx_FAIL; }

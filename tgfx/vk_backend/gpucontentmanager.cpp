@@ -32,6 +32,12 @@ struct descpool_vk {
 	VkDescriptorPool pool;
 	std::atomic<uint32_t> REMAINING_SET, REMAINING_UBUFFER, REMAINING_SBUFFER, REMAINING_SAMPLER, REMAINING_IMAGE;
 };
+struct shadersource_vk {
+	VkShaderModule Module;
+	shaderstage_tgfx stage;
+	void* SOURCE_CODE = nullptr;
+	unsigned int DATA_SIZE = 0;
+};
 
 struct gpudatamanager_private {
 	threadlocal_vector<rtslotset_vk*> rtslotsets;
@@ -39,6 +45,10 @@ struct gpudatamanager_private {
 	threadlocal_vector<irtslotset_vk*> irtslotsets;
 	threadlocal_vector<graphicspipelinetype_vk*> graphicspipelinetypes;
 	threadlocal_vector<graphicspipelineinst_vk*> graphicspipelineinstances;
+	threadlocal_vector<vertexattriblayout_vk*> vertexattributelayouts;
+	threadlocal_vector<shadersource_vk*> shadersources;
+	threadlocal_vector<vertexbuffer_vk*> vertexbuffers;
+	threadlocal_vector<memoryblock_vk*> stagingbuffers;
 
 
 	//This vector contains descriptor sets that are for material types/instances that are created this frame
@@ -63,7 +73,7 @@ struct gpudatamanager_private {
 	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
 
 	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100), 
-	irtslotsets(100), graphicspipelineinstances(1024), graphicspipelinetypes(1024) {}
+	irtslotsets(100), graphicspipelineinstances(1024), graphicspipelinetypes(1024), vertexattributelayouts(1024), shadersources(1024), vertexbuffers(1024), stagingbuffers(100) {}
 };
 static gpudatamanager_private* hidden = nullptr;
 
@@ -861,15 +871,112 @@ result_tgfx Create_SamplingType (unsigned int MinimumMipLevel, unsigned int Maxi
 * So you should gather your vertex buffer data according to that
 */
 
+inline unsigned int Calculate_sizeofVertexLayout(const datatype_tgfx* ATTRIBUTEs, unsigned int count) {
+	unsigned int size = 0;
+	for (unsigned int i = 0; i < count; i++) {
+		size += get_uniformtypes_sizeinbytes(ATTRIBUTEs[i]);
+	}
+	return size;
+}
 result_tgfx Create_VertexAttributeLayout (const datatype_tgfx* Attributes, vertexlisttypes_tgfx listtype,
 	vertexattributelayout_tgfx_handle* VertexAttributeLayoutHandle){
-	return result_tgfx_FAIL;
+	vertexattriblayout_vk* Layout = new vertexattriblayout_vk;
+	unsigned int AttributesCount = 0;
+	while (Attributes[AttributesCount] != datatype_tgfx_UNDEFINED) {
+		AttributesCount++;
+	}
+	Layout->Attribute_Number = AttributesCount;
+	Layout->Attributes = new datatype_tgfx[Layout->Attribute_Number];
+	for (unsigned int i = 0; i < Layout->Attribute_Number; i++) {
+		Layout->Attributes[i] = Attributes[i];
+	}
+	unsigned int size_pervertex = Calculate_sizeofVertexLayout(Layout->Attributes, Layout->Attribute_Number);
+	Layout->size_perVertex = size_pervertex;
+	Layout->BindingDesc.binding = 0;
+	Layout->BindingDesc.stride = size_pervertex;
+	Layout->BindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+	Layout->PrimitiveTopology = Find_PrimitiveTopology_byGFXVertexListType(listtype);
+
+	Layout->AttribDescs = new VkVertexInputAttributeDescription[Layout->Attribute_Number];
+	Layout->AttribDesc_Count = Layout->Attribute_Number;
+	unsigned int stride_ofcurrentattribute = 0;
+	for (unsigned int i = 0; i < Layout->Attribute_Number; i++) {
+		Layout->AttribDescs[i].binding = 0;
+		Layout->AttribDescs[i].location = i;
+		Layout->AttribDescs[i].offset = stride_ofcurrentattribute;
+		Layout->AttribDescs[i].format = Find_VkFormat_byDataType(Layout->Attributes[i]);
+		stride_ofcurrentattribute += get_uniformtypes_sizeinbytes(Layout->Attributes[i]);
+	}
+	hidden->vertexattributelayouts.push_back(Layout);
+	*VertexAttributeLayoutHandle = (vertexattributelayout_tgfx_handle)Layout;
+	return result_tgfx_SUCCESS;
 }
 void  Delete_VertexAttributeLayout (vertexattributelayout_tgfx_handle VertexAttributeLayoutHandle){}
 
-result_tgfx Upload_toBuffer (buffer_tgfx_handle Handle, buffertype_tgfx Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET){ return result_tgfx_FAIL; }
+result_tgfx Upload_toBuffer (buffer_tgfx_handle Handle, buffertype_tgfx Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET){
+	VkDeviceSize UploadOFFSET = static_cast<VkDeviceSize>(OFFSET);
+	unsigned int MEMALLOCINDEX = UINT32_MAX;
+	switch (Type) {
+	case buffertype_tgfx_STAGING:
+		MEMALLOCINDEX = ((memoryblock_vk*)Handle)->MemAllocIndex;
+		UploadOFFSET += ((memoryblock_vk*)Handle)->Offset;
+		break;
+	case buffertype_tgfx_VERTEX:
+		MEMALLOCINDEX = ((vertexbuffer_vk*)Handle)->Block.MemAllocIndex;
+		UploadOFFSET += ((vertexbuffer_vk*)Handle)->Block.Offset;
+		break;
+	case buffertype_tgfx_INDEX:
+	case buffertype_tgfx_GLOBAL:
+		printer(result_tgfx_NOTCODED, "Upload_toBuffer() doesn't support this type for now!");
+		return result_tgfx_NOTCODED;
+	}
 
-result_tgfx Create_StagingBuffer (unsigned int DATASIZE, unsigned int MemoryTypeIndex, buffer_tgfx_handle* Handle){ return result_tgfx_FAIL; }
+	return allocatorsys->copy_to_mappedmemory(rendergpu, MEMALLOCINDEX, DATA, DATA_SIZE, UploadOFFSET);
+}
+
+result_tgfx Create_StagingBuffer (unsigned int DATASIZE, unsigned int MemoryTypeIndex, buffer_tgfx_handle* Handle){
+	if (!DATASIZE) {
+		printer(result_tgfx_FAIL, "Staging Buffer DATASIZE is zero!");
+		return result_tgfx_INVALIDARGUMENT;
+	}
+	if (allocatorsys->get_memorytype_byID(rendergpu, MemoryTypeIndex) == memoryallocationtype_DEVICELOCAL) {
+		printer(result_tgfx_FAIL, "You can't create a staging buffer in DEVICELOCAL memory!");
+		return result_tgfx_INVALIDARGUMENT;
+	}
+	VkBufferCreateInfo psuedo_ci = {};
+	psuedo_ci.flags = 0;
+	psuedo_ci.pNext = nullptr;
+	if (rendergpu->QUEUEFAMSCOUNT() > 1) {
+		psuedo_ci.sharingMode = VK_SHARING_MODE_CONCURRENT;
+	}
+	else {
+		psuedo_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	}
+	psuedo_ci.pQueueFamilyIndices = rendergpu->ALLQUEUEFAMILIES();
+	psuedo_ci.queueFamilyIndexCount = rendergpu->QUEUEFAMSCOUNT();
+	psuedo_ci.size = DATASIZE;
+	psuedo_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	psuedo_ci.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+		| VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	VkBuffer Bufferobj;
+	if (vkCreateBuffer(rendergpu->LOGICALDEVICE(), &psuedo_ci, nullptr, &Bufferobj) != VK_SUCCESS) {
+		printer(result_tgfx_FAIL, "Intended staging buffer's creation failed at vkCreateBuffer()!");
+		return result_tgfx_FAIL;
+	}
+
+
+	memoryblock_vk* StagingBuffer = new memoryblock_vk;
+	StagingBuffer->MemAllocIndex = MemoryTypeIndex;
+	if (allocatorsys->suballocate_buffer(Bufferobj, psuedo_ci.usage, *StagingBuffer) != result_tgfx_SUCCESS) {
+		delete StagingBuffer;
+		printer(result_tgfx_FAIL, "Suballocation has failed, so staging buffer creation too!");
+		return result_tgfx_FAIL;
+	}
+	vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Bufferobj, nullptr);
+	*Handle = (buffer_tgfx_handle)StagingBuffer;
+	hidden->stagingbuffers.push_back(StagingBuffer);
+	return result_tgfx_SUCCESS;
+}
 void  Delete_StagingBuffer (buffer_tgfx_handle StagingBufferHandle){}
 /*
 * You should sort your vertex data according to attribute layout, don't forget that
@@ -877,7 +984,38 @@ void  Delete_StagingBuffer (buffer_tgfx_handle StagingBufferHandle){}
 */
 result_tgfx Create_VertexBuffer (vertexattributelayout_tgfx_handle VertexAttributeLayoutHandle, unsigned int VertexCount,
 	unsigned int MemoryTypeIndex, buffer_tgfx_handle* VertexBufferHandle){
-	return result_tgfx_FAIL;
+	if (!VertexCount) {
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_MeshBuffer() has failed because vertex_count is zero!");
+		return result_tgfx_INVALIDARGUMENT;
+	}
+
+	vertexattriblayout_vk* Layout = ((vertexattriblayout_vk*)VertexAttributeLayoutHandle);
+	if (!Layout) {
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_MeshBuffer() has failed because Attribute Layout ID is invalid!");
+		return result_tgfx_INVALIDARGUMENT;
+	}
+
+	unsigned int TOTALDATA_SIZE = Layout->size_perVertex * VertexCount;
+
+	vertexbuffer_vk* VKMesh = new vertexbuffer_vk;
+	VKMesh->Block.MemAllocIndex = MemoryTypeIndex;
+	VKMesh->Layout = Layout;
+	VKMesh->VERTEX_COUNT = VertexCount;
+
+	VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	VkBuffer Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
+	if (allocatorsys->suballocate_buffer(Buffer, BufferUsageFlag, VKMesh->Block) != result_tgfx_SUCCESS) {
+		delete VKMesh;
+		printer(result_tgfx_FAIL, "There is no memory left in specified memory region!");
+		vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Buffer, nullptr);
+		return result_tgfx_FAIL;
+	}
+	vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Buffer, nullptr);
+
+
+	hidden->vertexbuffers.push_back(VKMesh);
+	*VertexBufferHandle = (buffer_tgfx_handle)VKMesh;
+	return result_tgfx_SUCCESS;
 }
 void  Unload_VertexBuffer (buffer_tgfx_handle BufferHandle){}
 
@@ -1004,14 +1142,30 @@ result_tgfx SetGlobalShaderInput_Texture (unsigned char isSampledTexture, unsign
 	texture_tgfx_handle TextureHandle, samplingtype_tgfx_handle sampler, image_access_tgfx access) { return result_tgfx_FAIL;}
 
 
-struct shadersource_vk {
-	VkShaderModule Module;
-	shaderstage_tgfx stage;
-	void* SOURCE_CODE = nullptr;
-	unsigned int DATA_SIZE = 0;
-};
 result_tgfx Compile_ShaderSource (shaderlanguages_tgfx language, shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE,
-	shadersource_tgfx_handle* ShaderSourceHandle) { return result_tgfx_FAIL;}
+	shadersource_tgfx_handle* ShaderSourceHandle) {
+	//Create Vertex Shader Module
+	VkShaderModuleCreateInfo ci = {};
+	ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	ci.flags = 0;
+	ci.pNext = nullptr;
+	ci.pCode = reinterpret_cast<const uint32_t*>(DATA);
+	ci.codeSize = static_cast<size_t>(DATA_SIZE);
+
+	VkShaderModule Module;
+	if (vkCreateShaderModule(rendergpu->LOGICALDEVICE(), &ci, 0, &Module) != VK_SUCCESS) {
+		printer(result_tgfx_FAIL, "Shader Source is failed at creation!");
+		return result_tgfx_FAIL;
+	}
+
+	shadersource_vk* SHADERSOURCE = new shadersource_vk;
+	SHADERSOURCE->Module = Module;
+	SHADERSOURCE->stage = shaderstage;
+	hidden->shadersources.push_back(SHADERSOURCE);
+	printer(result_tgfx_SUCCESS, "Shader Module is successfully created!");
+	*ShaderSourceHandle = (shadersource_tgfx_handle)SHADERSOURCE;
+	return result_tgfx_SUCCESS;
+}
 void  Delete_ShaderSource (shadersource_tgfx_handle ShaderSourceHandle){}
 VkColorComponentFlags Find_ColorWriteMask_byChannels(texture_channels_tgfx channels) {
 	switch (channels)
@@ -1069,7 +1223,7 @@ result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, sh
 
 	shadersource_vk* VertexSource = nullptr, *FragmentSource = nullptr;
 	unsigned int ShaderSourceCount = 0;
-	while (ShaderSourcesList[ShaderSourceCount] != NULL) {
+	while (ShaderSourcesList[ShaderSourceCount] != core_tgfx_main->INVALIDHANDLE) {
 		shadersource_vk* ShaderSource = ((shadersource_vk*)ShaderSourcesList[ShaderSourceCount]);
 		switch (ShaderSource->stage) {
 		case shaderstage_tgfx_VERTEXSHADER:
@@ -1799,12 +1953,12 @@ extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 				TextureBinding[0].descriptorCount = IMAGE_COUNT;
 				TextureBinding[1].descriptorCount = SAMPLER_COUNT;
 				TextureBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				TextureBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+				TextureBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			}
 			else {
 				TextureBinding[0].descriptorCount = SAMPLER_COUNT;
 				TextureBinding[1].descriptorCount = IMAGE_COUNT;
-				TextureBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+				TextureBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				TextureBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 			}
 

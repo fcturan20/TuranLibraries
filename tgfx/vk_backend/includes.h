@@ -46,16 +46,16 @@ public:
 			sizes_and_capacities[(thread_i * 2) + 1] = copy.sizes_and_capacities[(thread_i * 2) + 1];
 		}
 	}
-	//This constructor allocates initial_sizes * 2 memory but doesn't add any element to it, so you should use push_back()
-	threadlocal_vector(unsigned long initial_sizes) {
+	//This constructor allocates initial_sizes memory but doesn't add any element to it, so you should use push_back()
+	threadlocal_vector(unsigned long initial_capacities) {
 		unsigned int threadcount = (threadingsys) ? (threadingsys->thread_count()) : 1;
 		lists = new T * [threadcount];
 		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count() * 2) : 2];
-		if (initial_sizes) {
+		if (initial_capacities) {
 			for (unsigned int thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
-				lists[thread_i] = new T[initial_sizes * 2];
+				lists[thread_i] = new T[initial_capacities];
 				sizes_and_capacities[thread_i * 2] = 0;
-				sizes_and_capacities[(thread_i * 2) + 1] = initial_sizes * 2;
+				sizes_and_capacities[(thread_i * 2) + 1] = initial_capacities;
 			}
 		}
 	}
@@ -884,5 +884,31 @@ inline unsigned int Find_TextureLayer_fromtgfx_cubeface(cubeface_tgfx cubeface) 
 		return 5;
 	default:
 		printer(result_tgfx_FAIL, "Find_TextureLayer_fromGFXtgfx_cubeface() in Vulkan backend doesn't support this type of CubeFace!");
+	}
+}
+inline unsigned int get_uniformtypes_sizeinbytes(datatype_tgfx data) {
+	switch (data) {
+	case datatype_tgfx_VAR_BYTE8:
+	case datatype_tgfx_VAR_UBYTE8:
+		return 1;
+	case datatype_tgfx_VAR_INT16:
+	case datatype_tgfx_VAR_UINT16:
+		return 2;
+	case datatype_tgfx_VAR_FLOAT32:
+	case datatype_tgfx_VAR_INT32:
+	case datatype_tgfx_VAR_UINT32:
+		return 4;
+	case datatype_tgfx_VAR_VEC2:
+		return 8;
+	case datatype_tgfx_VAR_VEC3:
+		return 12;
+	case datatype_tgfx_VAR_VEC4:
+		return 16;
+	case datatype_tgfx_VAR_MAT4x4:
+		return 64;
+	case datatype_tgfx_UNDEFINED:
+	default:
+		printer(result_tgfx_INVALIDARGUMENT, "get_uniformtypes_sizeinbytes() has failed because input isn't supported!");
+		return 0;
 	}
 }

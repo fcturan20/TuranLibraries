@@ -57,10 +57,7 @@
 			texture_mipmapfilter_tgfx MINFILTER, texture_mipmapfilter_tgfx MAGFILTER, texture_wrapping_tgfx WRAPPING_WIDTH,
 			texture_wrapping_tgfx WRAPPING_HEIGHT, texture_wrapping_tgfx WRAPPING_DEPTH, samplingtype_tgfx_handle* SamplingTypeHandle);
 
-		/*Attributes are ordered as the same order of input vector
-		* For example: Same attribute ID may have different location/order in another attribute layout
-		* So you should gather your vertex buffer data according to that
-		*/
+		//Attributes list should end with datatype_tgfx_UNDEFINED (one extra element at the end)
     
 		result_tgfx (*Create_VertexAttributeLayout)(const datatype_tgfx* Attributes, vertexlisttypes_tgfx listtype, 
 			vertexattributelayout_tgfx_handle* VertexAttributeLayoutHandle);

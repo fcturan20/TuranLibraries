@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <utility>
 #include "imgui_vktgfx.h"
+#include "memory.h"
 
 
 typedef struct renderer_private{
@@ -458,10 +459,64 @@ struct renderer_funcs {
 		wp->WindowCalls[2].push_back(call);
 	}
 
+	static void FindBufferOBJ_byBufType(buffer_tgfx_handle Handle, buffertype_tgfx TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
+		switch (TYPE) {
+		case buffertype_tgfx_GLOBAL:
+		{
+			printer(result_tgfx_NOTCODED, "FindBufferOBJ_byBufType() isn't implemented for global buffer");
+			/*
+			VK_GlobalBuffer* buf = (VK_GlobalBuffer*)Handle;
+			TargetBuffer = RENDERGPU->ALLOCS()[buf->Block.MemAllocIndex].Buffer;
+			TargetOffset += buf->Block.Offset;*/
+		}
+		break;
+		case buffertype_tgfx_VERTEX:
+		{
+			vertexbuffer_vk* buf = (vertexbuffer_vk*)Handle;
+			TargetBuffer = allocatorsys->get_memorybufferhandle_byID(rendergpu, buf->Block.MemAllocIndex);
+			TargetOffset += buf->Block.Offset;
+		}
+		break;
+		case buffertype_tgfx_STAGING:
+		{
+			memoryblock_vk* Staging = (memoryblock_vk*)Handle;
+			TargetBuffer = allocatorsys->get_memorybufferhandle_byID(rendergpu, Staging->MemAllocIndex);
+			TargetOffset += Staging->Offset;
+		}
+		break;
+		case buffertype_tgfx_INDEX:
+		{
+			printer(result_tgfx_NOTCODED, "FindBufferOBJ_byBufType() isn't implemented for global buffer");
+			/*
+			VK_IndexBuffer* IB = (VK_IndexBuffer*)Handle;
+			TargetBuffer = RENDERGPU->ALLOCS()[IB->Block.MemAllocIndex].Buffer;
+			TargetOffset += IB->Block.Offset;*/
+		}
+		break;
+		default:
+			printer(result_tgfx_FAIL, "FindBufferOBJ_byBufType() doesn't support this type of buffer!");
+		}
+	}
+
 	//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 	//Target Buffer should be created with DEVICELOCAL
 	static void CopyBuffer_toBuffer(transferpass_tgfx_handle TransferPassHandle, buffer_tgfx_handle SourceBuffer_Handle, buffertype_tgfx SourceBufferTYPE,
-		buffer_tgfx_handle TargetBuffer_Handle, buffertype_tgfx TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size);
+		buffer_tgfx_handle TargetBuffer_Handle, buffertype_tgfx TargetBufferTYPE, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) {
+		VkBuffer SourceBuffer, DistanceBuffer;
+		VkDeviceSize SourceOffset = static_cast<VkDeviceSize>(SourceBuffer_Offset), DistanceOffset = static_cast<VkDeviceSize>(TargetBuffer_Offset);
+		FindBufferOBJ_byBufType(SourceBuffer_Handle, SourceBufferTYPE, SourceBuffer, SourceOffset);
+		FindBufferOBJ_byBufType(TargetBuffer_Handle, TargetBufferTYPE, DistanceBuffer, DistanceOffset);
+		VkBufferCopy Copy_i = {};
+		Copy_i.dstOffset = DistanceOffset;
+		Copy_i.srcOffset = SourceOffset;
+		Copy_i.size = static_cast<VkDeviceSize>(Size);
+		VK_TPCopyDatas* DATAs = (VK_TPCopyDatas*)((transferpass_vk*)TransferPassHandle)->TransferDatas;
+		VK_BUFtoBUFinfo finalinfo;
+		finalinfo.DistanceBuffer = DistanceBuffer;
+		finalinfo.SourceBuffer = SourceBuffer;
+		finalinfo.info = Copy_i;
+		DATAs->BUFBUFCopies.push_back(finalinfo);
+	}
 
 	//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 	static void CopyBuffer_toImage(transferpass_tgfx_handle TransferPassHandle, buffer_tgfx_handle SourceBuffer_Handle, texture_tgfx_handle TextureHandle,
@@ -568,6 +623,7 @@ inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->Run = &renderer_funcs::Run;
 	core_tgfx_main->renderer->ImageBarrier = &renderer_funcs::ImageBarrier;
 	core_tgfx_main->renderer->SwapBuffers = &renderer_funcs::SwapBuffers;
+	core_tgfx_main->renderer->CopyBuffer_toBuffer = &renderer_funcs::CopyBuffer_toBuffer;
 }
 extern void Create_Renderer() {
 	renderer = new renderer_public;

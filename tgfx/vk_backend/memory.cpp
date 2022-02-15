@@ -33,7 +33,7 @@ struct memorytype_vk {
 	std::atomic<uint32_t> UnusedSize = 0;
 	uint32_t MemoryTypeIndex;	//Vulkan's index
 	VkDeviceSize MaxSize = 0, ALLOCATIONSIZE = 0;
-	void* MappedMemory;
+	void* MappedMemory = nullptr;
 	memoryallocationtype_tgfx TYPE;
 	threadlocal_vector<suballocation_vk> Allocated_Blocks;
 	memorytype_vk() : Allocated_Blocks(1024) {
@@ -283,7 +283,22 @@ void allocatorsys_vk::do_allocations(gpu_public* gpu) {
 	}
 }
 unsigned int allocatorsys_vk::get_memorytypeindex_byID(gpu_public* gpu, unsigned int memorytype_id) {
-	return allocatorsys->data->get_memtype_byid(memorytype_id).MemoryTypeIndex;
+	return data->get_memtype_byid(memorytype_id).MemoryTypeIndex;
+}
+memoryallocationtype_tgfx allocatorsys_vk::get_memorytype_byID(gpu_public* gpu, unsigned int memorytype_id) {
+	return data->get_memtype_byid(memorytype_id).TYPE;
+}
+VkBuffer allocatorsys_vk::get_memorybufferhandle_byID(gpu_public* gpu, unsigned int memorytype_id) {
+	return data->get_memtype_byid(memorytype_id).Buffer;
+}
+result_tgfx allocatorsys_vk::copy_to_mappedmemory(gpu_public* gpu, unsigned int memorytype_id, const void* dataptr, unsigned long data_size, unsigned long offset) {
+	void* MappedMemory = data->get_memtype_byid(memorytype_id).MappedMemory;
+	if (!MappedMemory) {
+		printer(result_tgfx_FAIL, "Memory is not mapped, so you are either trying to upload to an GPU Local buffer or MemoryTypeIndex is not allocated memory type's index!");
+		return result_tgfx_FAIL;
+	}
+	memcpy(((char*)MappedMemory) + offset, dataptr, data_size);
+	return result_tgfx_SUCCESS;
 }
 
 result_tgfx allocatorsys_vk::suballocate_image(texture_vk* texture) {
@@ -307,6 +322,34 @@ result_tgfx allocatorsys_vk::suballocate_image(texture_vk* texture) {
 		return result_tgfx_FAIL;
 	}
 	texture->Block.Offset = Offset;
+	return result_tgfx_SUCCESS;
+}
+result_tgfx allocatorsys_vk::suballocate_buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, memoryblock_vk& Block) {
+	VkMemoryRequirements bufferreq;
+	vkGetBufferMemoryRequirements(rendergpu->LOGICALDEVICE(), BUFFER, &bufferreq);
+	VkDeviceSize size = bufferreq.size;
+
+	VkDeviceSize Offset = 0;
+	unsigned int memorytypeindex = allocatorsys->get_memorytypeindex_byID(rendergpu, Block.MemAllocIndex);
+
+	if (!(bufferreq.memoryTypeBits & (1u << memorytypeindex))) {
+		printer(result_tgfx_FAIL, "Intended buffer doesn't support to be stored in specified memory region!");
+		return result_tgfx_FAIL;
+	}
+
+	VkDeviceSize AlignmentOffset_ofGPU = 0;
+	if (UsageFlags & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) {
+		AlignmentOffset_ofGPU = rendergpu->DEVICEPROPERTIES().limits.minStorageBufferOffsetAlignment;
+	}
+	if (UsageFlags & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) {
+		AlignmentOffset_ofGPU = rendergpu->DEVICEPROPERTIES().limits.minUniformBufferOffsetAlignment;
+	}
+	if (suballocate_memoryblock(Block.MemAllocIndex, size, AlignmentOffset_ofGPU, bufferreq.alignment, &Offset) != result_tgfx_SUCCESS) {
+		printer(result_tgfx_FAIL, "Suballocation from memory block has failed for the buffer!");
+		return result_tgfx_FAIL;
+	}
+	Block.Offset = Offset;
+
 	return result_tgfx_SUCCESS;
 }
 void allocatorsys_vk::free_memoryblock(unsigned int memoryid, VkDeviceSize offset) {

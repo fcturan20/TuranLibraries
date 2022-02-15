@@ -6,11 +6,11 @@
 #include <tgfx_structs.h>
 
 
+struct memoryblock_vk {
+	unsigned int MemAllocIndex = UINT32_MAX;
+	VkDeviceSize Offset;
+};
 struct texture_vk {
-	struct MemoryBlock {
-		unsigned int MemAllocIndex = UINT32_MAX;
-		VkDeviceSize Offset;
-	};
 	unsigned int WIDTH, HEIGHT, DATA_SIZE;
 	unsigned char MIPCOUNT;
 	texture_channels_tgfx CHANNELs;
@@ -19,7 +19,7 @@ struct texture_vk {
 
 	VkImage Image = {};
 	VkImageView ImageView = {};
-	MemoryBlock Block;
+	memoryblock_vk Block;
 };
 
 struct colorslot_vk {
@@ -127,4 +127,9 @@ struct vertexattriblayout_vk {
 	VkVertexInputAttributeDescription* AttribDescs;
 	VkPrimitiveTopology PrimitiveTopology;
 	unsigned char AttribDesc_Count;
+};
+struct vertexbuffer_vk {
+	unsigned int VERTEX_COUNT;
+	vertexattriblayout_vk* Layout;
+	memoryblock_vk Block;
 };

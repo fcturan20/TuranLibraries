@@ -133,3 +133,11 @@ struct vertexbuffer_vk {
 	vertexattriblayout_vk* Layout;
 	memoryblock_vk Block;
 };
+struct indexbuffer_vk {
+	VkIndexType DATATYPE;
+	VkDeviceSize IndexCount = 0;
+	memoryblock_vk Block;
+};
+struct sampler_vk {
+	VkSampler Sampler;
+};

@@ -22,6 +22,8 @@
 
 
 #include <stdint.h>
+#include <vector>
+
 
 THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadingsys = NULL;
 char stop_char;
@@ -125,7 +127,7 @@ int main() {
 			devicelocalmemtype_id = memtypelist[i].memorytype_id;
 		}
 		if (memtypelist[i].allocationtype == memoryallocationtype_FASTHOSTVISIBLE) {
-			tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 1 * 1024 * 1024, nullptr);
+			tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 20 * 1024 * 1024, nullptr);
 			fastvisiblememtype_id = memtypelist[i].memorytype_id;
 		}
 	}
@@ -150,14 +152,6 @@ int main() {
 	passwaitdescription_tgfx_handle wait_for_copytp[2] = { tgfxsys->api->helpers->CreatePassWait_TransferPass(&first_copytp, transferpasstype_tgfx_COPY, tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
 	transferpass_tgfx_handle firstbarriertp;
 	tgfxsys->api->renderer->Create_TransferPass(wait_for_copytp, transferpasstype_tgfx_BARRIER, "FirstBarrierTP", &firstbarriertp);
-
-	texture_tgfx_handle first_rt, second_rt;
-	textureusageflag_tgfx_handle usageflag_tgfx = tgfxsys->api->helpers->CreateTextureUsageFlag(false, true, false, true, false);
-	unsigned int WIDTH, HEIGHT, MIP = 0;
-	tgfxsys->api->helpers->GetTextureTypeLimits(texture_dimensions_tgfx_2D, texture_order_tgfx_SWIZZLE, texture_channels_tgfx_RGBA32F, usageflag, gpulist[0], &WIDTH, &HEIGHT, nullptr, &MIP);
-	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &first_rt);
-	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &second_rt);
-	
 
 	//Draw Pass Creation
 
@@ -193,18 +187,30 @@ int main() {
 	vertexattributelayout_tgfx_handle vertexattriblayout;
 	tgfxsys->api->contentmanager->Create_VertexAttributeLayout(vertexattribs_datatypes, vertexlisttypes_tgfx_TRIANGLELIST, &vertexattriblayout);
 
+	//Create vertex buffer, staging buffer to upload to and upload data
+
 	float vertexbufferdata[]{ -1.0, -1.0, 0.0, 0.0,
 		-1.0, 1.0, 0.0, 1.0, 
 		1.0, -1.0, 1.0, 0.0,
 		1.0, -1.0, 1.0, 0.0,
 		-1.0, 1.0, 0.0, 1.0,
 		1.0, 1.0, 1.0, 1.0};
-
 	buffer_tgfx_handle firstvertexbuffer, firststagingbuffer;
 	tgfxsys->api->contentmanager->Create_VertexBuffer(vertexattriblayout, 6, devicelocalmemtype_id, &firstvertexbuffer);
 	tgfxsys->api->contentmanager->Create_StagingBuffer(6 * 20, fastvisiblememtype_id, &firststagingbuffer);	//Allocate a little bit much
 	tgfxsys->api->contentmanager->Upload_toBuffer(firststagingbuffer, buffertype_tgfx_STAGING, vertexbufferdata, 6 * 4 * 4, 0);
 	tgfxsys->api->renderer->CopyBuffer_toBuffer(first_copytp, firststagingbuffer, buffertype_tgfx_STAGING, firstvertexbuffer, buffertype_tgfx_VERTEX, 0, 0, 6 * 4 * 4);
+
+	//Create texture, staging buffer upload data to and upload data
+
+	texture_tgfx_handle first_texture; buffer_tgfx_handle texturestagingbuffer;
+	textureusageflag_tgfx_handle usageflag_tgfx = tgfxsys->api->helpers->CreateTextureUsageFlag(false, true, false, true, false);
+	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &first_texture);
+	vec4_tgfx color; color.x = 1.0f; color.y = 0.5f; color.z = 0.2f; color.w = 1.0f;
+	std::vector<vec4_tgfx> texture_data(1280 * 720, color);
+	tgfxsys->api->contentmanager->Create_StagingBuffer(1280 * 720 * 20, fastvisiblememtype_id, &texturestagingbuffer);
+	tgfxsys->api->contentmanager->Upload_toBuffer(texturestagingbuffer, buffertype_tgfx_STAGING, texture_data.data(), texture_data.size() * 16, 0);
+
 
 	unsigned long vertsize = 0, fragsize = 0;
 	void* vert_binary = filesys->funcs->read_binaryfile(CMAKE_SOURCE_FOLDER"/Example/FirstVert.spv", &vertsize); if (!vert_binary) { printf("Vertex Shader SPIR-V read has failed!"); }
@@ -213,19 +219,36 @@ int main() {
 	tgfxsys->api->contentmanager->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_VERTEXSHADER, vert_binary, vertsize, &compiled_sources[0]);
 	tgfxsys->api->contentmanager->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_FRAGMENTSHADER, frag_binary, fragsize, &compiled_sources[1]);
 	rasterpipelinetype_tgfx_handle first_material;
-	tgfxsys->api->contentmanager->Link_MaterialType(compiled_sources, (shaderinputdescription_tgfx_handle*)&tgfxsys->api->INVALIDHANDLE, vertexattriblayout, sub_dps[0], cullmode_tgfx_BACK, polygonmode_tgfx_FILL, nullptr, nullptr, nullptr,
+	tgfxsys->api->contentmanager->Link_MaterialType(compiled_sources, (shaderinputdescription_tgfx_handle*)&tgfxsys->api->INVALIDHANDLE, vertexattriblayout, sub_dps[0], cullmode_tgfx_OFF, polygonmode_tgfx_FILL, nullptr, nullptr, nullptr,
 		(blendinginfo_tgfx_listhandle)&tgfxsys->api->INVALIDHANDLE, &first_material);
+	rasterpipelineinstance_tgfx_handle first_matinst;
+	tgfxsys->api->contentmanager->Create_MaterialInst(first_material, &first_matinst);
+	samplingtype_tgfx_handle first_samplingtype;
+	tgfxsys->api->contentmanager->Create_SamplingType(0, 1, texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP, texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP, texture_wrapping_tgfx_REPEAT, texture_wrapping_tgfx_REPEAT, texture_wrapping_tgfx_REPEAT, &first_samplingtype);
+	tgfxsys->api->contentmanager->SetGlobalShaderInput_Texture(true, 0, false, first_texture, first_samplingtype, image_access_tgfx_SHADER_SAMPLEONLY);
 
 	//Swapchain images should be converted from no_access layout in the first frame
+	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, first_texture, image_access_tgfx_NO_ACCESS, image_access_tgfx_TRANSFER_DIST, 0, cubeface_tgfx_FRONT);
 	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[0], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
 	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
 	tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[0], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
 	tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[1], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+
 	tgfxsys->api->renderer->SwapBuffers(firstwindow, first_wp);
 	tgfxsys->api->renderer->Run();
 
+
+
+
 	while (true) {
 		profiledscope_handle_tapi scope;	unsigned long long duration;
+
+		boxregion_tgfx region;
+		region.WIDTH = 1280; region.HEIGHT = 720; region.XOffset = 0; region.YOffset = 0;
+		tgfxsys->api->renderer->CopyBuffer_toImage(first_copytp, texturestagingbuffer, first_texture, 0, region, buffertype_tgfx_STAGING, 0, cubeface_tgfx_FRONT);
+		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, first_texture, image_access_tgfx_TRANSFER_DIST, image_access_tgfx_SHADER_SAMPLEONLY, 0, cubeface_tgfx_FRONT);
+		tgfxsys->api->renderer->ImageBarrier(final_tp, first_texture, image_access_tgfx_SHADER_SAMPLEONLY, image_access_tgfx_TRANSFER_DIST, 0, cubeface_tgfx_FRONT);
+
 		profilersys->funcs->start_profiling(&scope, "Run Loop", &duration, 1);
 		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[0], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
 		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
@@ -234,6 +257,7 @@ int main() {
 		tgfxsys->api->renderer->SwapBuffers(firstwindow, first_wp);
 		tgfxsys->api->renderer->CopyBuffer_toBuffer(first_copytp, firststagingbuffer, buffertype_tgfx_STAGING, firstvertexbuffer, buffertype_tgfx_VERTEX, 0, 0, 6 * 4 * 4);
 		tgfxsys->api->renderer->Run();
+		tgfxsys->api->renderer->DrawDirect(firstvertexbuffer, nullptr, 6, 0, 0, 1, 0, first_matinst, sub_dps[0]);
 		profilersys->funcs->finish_profiling(&scope, 1);
 	}
 	printf("Application is finished!");

@@ -49,6 +49,7 @@ struct gpudatamanager_private {
 	threadlocal_vector<shadersource_vk*> shadersources;
 	threadlocal_vector<vertexbuffer_vk*> vertexbuffers;
 	threadlocal_vector<memoryblock_vk*> stagingbuffers;
+	threadlocal_vector<sampler_vk*> samplers;
 
 
 	//This vector contains descriptor sets that are for material types/instances that are created this frame
@@ -73,7 +74,7 @@ struct gpudatamanager_private {
 	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
 
 	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100), 
-	irtslotsets(100), graphicspipelineinstances(1024), graphicspipelinetypes(1024), vertexattributelayouts(1024), shadersources(1024), vertexbuffers(1024), stagingbuffers(100) {}
+	irtslotsets(100), graphicspipelineinstances(1024), graphicspipelinetypes(1024), vertexattributelayouts(1024), shadersources(1024), vertexbuffers(1024), stagingbuffers(100), samplers(100) {}
 };
 static gpudatamanager_private* hidden = nullptr;
 
@@ -863,7 +864,33 @@ unsigned int Find_MeaningfulDescriptorPoolSize(unsigned int needed_descriptorcou
 result_tgfx Create_SamplingType (unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
 	texture_mipmapfilter_tgfx MINFILTER, texture_mipmapfilter_tgfx MAGFILTER, texture_wrapping_tgfx WRAPPING_WIDTH,
 	texture_wrapping_tgfx WRAPPING_HEIGHT, texture_wrapping_tgfx WRAPPING_DEPTH, samplingtype_tgfx_handle* SamplingTypeHandle){
-	return result_tgfx_FAIL;
+	VkSamplerCreateInfo s_ci = {};
+	s_ci.addressModeU = Find_AddressMode_byWRAPPING(WRAPPING_WIDTH);
+	s_ci.addressModeV = Find_AddressMode_byWRAPPING(WRAPPING_HEIGHT);
+	s_ci.addressModeW = Find_AddressMode_byWRAPPING(WRAPPING_DEPTH);
+	s_ci.anisotropyEnable = VK_FALSE;
+	s_ci.borderColor = VkBorderColor::VK_BORDER_COLOR_MAX_ENUM;
+	s_ci.compareEnable = VK_FALSE;
+	s_ci.flags = 0;
+	s_ci.magFilter = Find_VkFilter_byGFXFilter(MAGFILTER);
+	s_ci.minFilter = Find_VkFilter_byGFXFilter(MINFILTER);
+	s_ci.maxLod = static_cast<float>(MaximumMipLevel);
+	s_ci.minLod = static_cast<float>(MinimumMipLevel);
+	s_ci.mipLodBias = 0.0f;
+	s_ci.mipmapMode = Find_MipmapMode_byGFXFilter(MINFILTER);
+	s_ci.pNext = nullptr;
+	s_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	s_ci.unnormalizedCoordinates = VK_FALSE;
+
+	sampler_vk* SAMPLER = new sampler_vk;
+	if (vkCreateSampler(rendergpu->LOGICALDEVICE(), &s_ci, nullptr, &SAMPLER->Sampler) != VK_SUCCESS) {
+		delete SAMPLER;
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_SamplingType() has failed at vkCreateSampler!");
+		return result_tgfx_FAIL;
+	}
+	*SamplingTypeHandle = (samplingtype_tgfx_handle)SAMPLER;
+	hidden->samplers.push_back(SAMPLER);
+	return result_tgfx_SUCCESS;
 }
 
 /*Attributes are ordered as the same order of input vector
@@ -1139,7 +1166,40 @@ result_tgfx SetGlobalShaderInput_Buffer (unsigned char isUniformBuffer, unsigned
 	return result_tgfx_FAIL;
 }
 result_tgfx SetGlobalShaderInput_Texture (unsigned char isSampledTexture, unsigned int ElementIndex, unsigned char isUsedLastFrame,
-	texture_tgfx_handle TextureHandle, samplingtype_tgfx_handle sampler, image_access_tgfx access) { return result_tgfx_FAIL;}
+	texture_tgfx_handle TextureHandle, samplingtype_tgfx_handle sampler, image_access_tgfx access) {
+	desctype_vk intendedDescType = (isSampledTexture) ? desctype_vk::SAMPLER : desctype_vk::IMAGE;
+	descelement_image_vk* element = nullptr;
+	for (unsigned char i = 0; i < 2; i++) {
+		if (hidden->GlobalTextures_DescSet.Descs[i].Type == intendedDescType) {
+			if (hidden->GlobalTextures_DescSet.Descs[i].ElementCount <= ElementIndex) {
+				printer(result_tgfx_FAIL, "SetGlobalTexture() has failed because ElementIndex isn't smaller than TextureCount of the GlobalTexture!");
+				return result_tgfx_FAIL;
+			}
+			element = &((descelement_image_vk*)hidden->GlobalTextures_DescSet.Descs[i].Elements)[ElementIndex];
+		}
+	}
+
+	unsigned char x = 0;
+	if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
+		if (x != 255) {
+			printer(result_tgfx_FAIL, "You already changed the global texture this frame, second or concurrent one will fail!");
+			return result_tgfx_WRONGTIMING;
+		}
+		//If value is 255, this means global texture isn't set before so try to set it again!
+		if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
+			printer(result_tgfx_FAIL, "You already changed the global texture this frame, second or concurrent one will fail!");
+			return result_tgfx_WRONGTIMING;
+		}
+	}
+	element->info.imageView = ((texture_vk*)TextureHandle)->ImageView;
+	element->info.sampler = ((sampler_vk*)sampler)->Sampler;
+	VkAccessFlags unused;
+	Find_AccessPattern_byIMAGEACCESS(access, unused, element->info.imageLayout);
+	if (isUsedLastFrame) {
+		hidden->GlobalTextures_DescSet.ShouldRecreate.store(true);
+	}
+	return result_tgfx_SUCCESS;
+}
 
 
 result_tgfx Compile_ShaderSource (shaderlanguages_tgfx language, shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE,
@@ -1461,10 +1521,12 @@ result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, sh
 void  Delete_MaterialType(rasterpipelinetype_tgfx_handle ID) { printer(result_tgfx_NOTCODED, "Delete_MaterialType() isn't implemented!"); }
 result_tgfx Create_MaterialInst (rasterpipelinetype_tgfx_handle MaterialType, rasterpipelineinstance_tgfx_handle* MaterialInstHandle){
 	graphicspipelinetype_vk* VKPSO = (graphicspipelinetype_vk*)MaterialType;
+#ifdef VULKAN_DEBUGGING
 	if (!VKPSO) {
 		printer(result_tgfx_FAIL, "Create_MaterialInst() has failed because Material Type isn't found!");
 		return result_tgfx_INVALIDARGUMENT;
 	}
+#endif
 
 	//Descriptor Set Creation
 	graphicspipelineinst_vk* VKPInstance = new graphicspipelineinst_vk;

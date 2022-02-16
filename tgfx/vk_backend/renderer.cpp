@@ -427,7 +427,60 @@ struct renderer_funcs {
 		PrepareForNextFrame();
 	}
 	static void DrawDirect(buffer_tgfx_handle VertexBuffer_ID, buffer_tgfx_handle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
-		unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, rasterpipelineinstance_tgfx_handle MaterialInstance_ID, subdrawpass_tgfx_handle SubDrawPass_ID);
+		unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, rasterpipelineinstance_tgfx_handle MaterialInstance_ID, subdrawpass_tgfx_handle SubDrawPass_ID) {
+		subdrawpass_vk* SP = (subdrawpass_vk*)SubDrawPass_ID;
+		if (IndexBuffer_ID) {
+			indexeddrawcall_vk call;
+			if (VertexBuffer_ID) {
+				FindBufferOBJ_byBufType(VertexBuffer_ID, buffertype_tgfx_VERTEX, call.VBuffer, call.VBOffset);
+			}
+			else {
+				call.VBuffer = VK_NULL_HANDLE;
+			}
+			FindBufferOBJ_byBufType(IndexBuffer_ID, buffertype_tgfx_INDEX, call.IBuffer, call.IBOffset);
+			call.IType = ((indexbuffer_vk*)IndexBuffer_ID)->DATATYPE;
+			if (Count) {
+				call.IndexCount = Count;
+			}
+			else {
+				call.IndexCount = ((indexbuffer_vk*)IndexBuffer_ID)->IndexCount;
+			}
+			call.FirstIndex = FirstIndex;
+			call.VOffset = VertexOffset;
+			graphicspipelineinst_vk* PI = (graphicspipelineinst_vk*)MaterialInstance_ID;
+			call.MatTypeObj = PI->PROGRAM->PipelineObject;
+			call.MatTypeLayout = PI->PROGRAM->PipelineLayout;
+			call.GeneralSet = &PI->PROGRAM->General_DescSet.Set;
+			call.PerInstanceSet = &PI->DescSet.Set;
+			call.FirstInstance = FirstInstance;
+			call.InstanceCount = InstanceCount;
+			SP->IndexedDrawCalls.push_back(call);
+		}
+		else {
+			nonindexeddrawcall_vk call;
+			if (VertexBuffer_ID) {
+				FindBufferOBJ_byBufType(VertexBuffer_ID, buffertype_tgfx_VERTEX, call.VBuffer, call.VOffset);
+			}
+			else {
+				call.VBuffer = VK_NULL_HANDLE;
+			}
+			if (Count) {
+				call.VertexCount = Count;
+			}
+			else {
+				call.VertexCount = static_cast<VkDeviceSize>(((vertexbuffer_vk*)VertexBuffer_ID)->VERTEX_COUNT);
+			}
+			call.FirstVertex = VertexOffset;
+			call.FirstInstance = FirstInstance;
+			call.InstanceCount = InstanceCount;
+			graphicspipelineinst_vk* PI = (graphicspipelineinst_vk*)MaterialInstance_ID;
+			call.MatTypeObj = PI->PROGRAM->PipelineObject;
+			call.MatTypeLayout = PI->PROGRAM->PipelineLayout;
+			call.GeneralSet = &PI->PROGRAM->General_DescSet.Set;
+			call.PerInstanceSet = &PI->DescSet.Set;
+			SP->NonIndexedDrawCalls.push_back(call);
+		}
+	}
 
 	static void SwapBuffers(window_tgfx_handle WindowHandle, windowpass_tgfx_handle WindowPassHandle) {
 		window_vk* VKWINDOW = (window_vk*)WindowHandle;
@@ -521,7 +574,56 @@ struct renderer_funcs {
 	//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 	static void CopyBuffer_toImage(transferpass_tgfx_handle TransferPassHandle, buffer_tgfx_handle SourceBuffer_Handle, texture_tgfx_handle TextureHandle,
 		unsigned int SourceBuffer_offset, boxregion_tgfx TargetTextureRegion, buffertype_tgfx SourceBufferTYPE, unsigned int TargetMipLevel,
-		cubeface_tgfx TargetCubeMapFace);
+		cubeface_tgfx TargetCubeMapFace) {
+		texture_vk* TEXTURE = (texture_vk*)TextureHandle;
+		VkDeviceSize finaloffset = static_cast<VkDeviceSize>(SourceBuffer_offset);
+		VK_BUFtoIMinfo x;
+		x.BufferImageCopy.bufferImageHeight = 0;
+		x.BufferImageCopy.bufferRowLength = 0;
+		x.BufferImageCopy.imageExtent.depth = 1;
+		if (TargetTextureRegion.HEIGHT) {
+			x.BufferImageCopy.imageExtent.height = TargetTextureRegion.HEIGHT;
+		}
+		else {
+			x.BufferImageCopy.imageExtent.height = std::floor(TEXTURE->HEIGHT / std::pow(2, TargetMipLevel));
+		}
+		if (TargetTextureRegion.WIDTH) {
+			x.BufferImageCopy.imageExtent.width = TargetTextureRegion.WIDTH;
+		}
+		else {
+			x.BufferImageCopy.imageExtent.width = std::floor(TEXTURE->WIDTH / std::pow(2, TargetMipLevel));
+		}
+		x.BufferImageCopy.imageOffset.x = TargetTextureRegion.XOffset;
+		x.BufferImageCopy.imageOffset.y = TargetTextureRegion.YOffset;
+		x.BufferImageCopy.imageOffset.z = 0;
+		if (TEXTURE->CHANNELs == texture_channels_tgfx_D24S8) {
+			x.BufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+		else if (TEXTURE->CHANNELs == texture_channels_tgfx_D32) {
+			x.BufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		}
+		else {
+			x.BufferImageCopy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		}
+		if (TEXTURE->DIMENSION == texture_dimensions_tgfx_2DCUBE) {
+			x.BufferImageCopy.imageSubresource.baseArrayLayer = Find_TextureLayer_fromtgfx_cubeface(TargetCubeMapFace);
+		}
+		else {
+			x.BufferImageCopy.imageSubresource.baseArrayLayer = 0;
+		}
+		x.BufferImageCopy.imageSubresource.layerCount = 1;
+		x.BufferImageCopy.imageSubresource.mipLevel = TargetMipLevel;
+		x.TargetImage = TEXTURE->Image;
+		FindBufferOBJ_byBufType(SourceBuffer_Handle, SourceBufferTYPE, x.SourceBuffer, finaloffset);
+		x.BufferImageCopy.bufferOffset = finaloffset;
+		transferpass_vk* TP = (transferpass_vk*)TransferPassHandle;
+		if (TP->TYPE == transferpasstype_tgfx_BARRIER) {
+			printer(result_tgfx_FAIL, "You gave an barrier TP handle to CopyBuffer_toImage(), this is wrong!");
+			return;
+		}
+		VK_TPCopyDatas* DATAs = (VK_TPCopyDatas*)TP->TransferDatas;
+		DATAs->BUFIMCopies.push_back(x);
+	}
 
 	static void CopyImage_toImage(transferpass_tgfx_handle TransferPassHandle, texture_tgfx_handle SourceTextureHandle, texture_tgfx_handle TargetTextureHandle,
 		uvec3_tgfx SourceTextureOffset, uvec3_tgfx CopySize, uvec3_tgfx TargetTextureOffset, unsigned int SourceMipLevel, unsigned int TargetMipLevel,
@@ -624,6 +726,8 @@ inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->ImageBarrier = &renderer_funcs::ImageBarrier;
 	core_tgfx_main->renderer->SwapBuffers = &renderer_funcs::SwapBuffers;
 	core_tgfx_main->renderer->CopyBuffer_toBuffer = &renderer_funcs::CopyBuffer_toBuffer;
+	core_tgfx_main->renderer->DrawDirect = &renderer_funcs::DrawDirect;
+	core_tgfx_main->renderer->CopyBuffer_toImage = &renderer_funcs::CopyBuffer_toImage;
 }
 extern void Create_Renderer() {
 	renderer = new renderer_public;

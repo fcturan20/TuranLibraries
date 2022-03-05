@@ -155,6 +155,3 @@ struct initialization_secondstageinfo{
 		GlobalShaderInput_UniformBufferCount, GlobalShaderInput_StorageBufferCount, GlobalShaderInput_SampledTextureCount, GlobalShaderInput_ImageTextureCount;
 	bool shouldActivate_DearIMGUI : 1, isUniformBuffer_Index1 : 1, isSampledTexture_Index1 : 1;
 };
-struct VK_ShaderStageFlag {
-	VkShaderStageFlags flag;
-};

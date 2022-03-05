@@ -141,3 +141,9 @@ struct indexbuffer_vk {
 struct sampler_vk {
 	VkSampler Sampler;
 };
+struct shaderinputdesc_vk {
+	shaderinputtype_tgfx TYPE = shaderinputtype_tgfx_UNDEFINED;
+	unsigned int BINDINDEX = UINT32_MAX;
+	unsigned int ELEMENTCOUNT = 0;
+	VkShaderStageFlags ShaderStages;
+};

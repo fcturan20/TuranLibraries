@@ -475,13 +475,6 @@ void gpudatamanager_public::Apply_ResourceChanges() {
 
 }
 //General DescriptorSet Layout Creation
-struct shaderinputdesc_vk {
-	bool isGeneral = false;
-	shaderinputtype_tgfx TYPE = shaderinputtype_tgfx_UNDEFINED;
-	unsigned int BINDINDEX = UINT32_MAX;
-	unsigned int ELEMENTCOUNT = 0;
-	VK_ShaderStageFlag ShaderStages;
-};
 bool Create_DescSet(descset_vk* Set) {
 	if (!Set->DescCount) {
 		return true;
@@ -529,7 +522,7 @@ bool VKDescSet_PipelineLayoutCreation(const shaderinputdesc_vk** inputdescs, des
 			}
 
 			VkDescriptorSetLayoutBinding bn = {};
-			bn.stageFlags = desc->ShaderStages.flag;
+			bn.stageFlags = desc->ShaderStages;
 			bn.pImmutableSamplers = VK_NULL_HANDLE;
 			bn.descriptorType = Find_VkDescType_byMATDATATYPE(desc->TYPE);
 			bn.descriptorCount = desc->ELEMENTCOUNT;
@@ -610,6 +603,7 @@ bool VKDescSet_PipelineLayoutCreation(const shaderinputdesc_vk** inputdescs, des
 			ci.flags = 0;
 			ci.bindingCount = bindings.size();
 			ci.pBindings = bindings.data();
+			
 
 			if (vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &ci, nullptr, &GeneralDescSet->Layout) != VK_SUCCESS) {
 				printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed at General DescriptorSetLayout Creation vkCreateDescriptorSetLayout()");
@@ -638,7 +632,7 @@ bool VKDescSet_PipelineLayoutCreation(const shaderinputdesc_vk** inputdescs, des
 				}
 			}
 			VkDescriptorSetLayoutBinding bn = {};
-			bn.stageFlags = desc->ShaderStages.flag;
+			bn.stageFlags = desc->ShaderStages;
 			bn.pImmutableSamplers = VK_NULL_HANDLE;
 			bn.descriptorType = Find_VkDescType_byMATDATATYPE(desc->TYPE);
 			bn.descriptorCount = 1;		//I don't support array descriptors for now!
@@ -1573,23 +1567,162 @@ result_tgfx Create_ComputeInstance(computeshadertype_tgfx_handle ComputeType, co
 void  Delete_ComputeShaderType (computeshadertype_tgfx_handle ID){}
 void  Delete_ComputeShaderInstance (computeshaderinstance_tgfx_handle ID){}
 
+
+result_tgfx SetDescSet_Buffer(descset_vk* Set, unsigned int BINDINDEX, bool isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset,
+	buffertype_tgfx BUFTYPE, buffer_tgfx_handle BufferHandle, unsigned int BoundDataSize, bool isUsedRecently) {
+
+	if (!Set->DescCount) {
+		printer(result_tgfx_FAIL, "Given Material Type/Instance doesn't have any shader input to set!");
+		return result_tgfx_FAIL;
+	}
+	if (BINDINDEX >= Set->DescCount) {
+		printer(result_tgfx_FAIL, "BINDINDEX is exceeding the shader input count in the Material Type/Instance");
+		return result_tgfx_FAIL;
+	}
+	descriptor_vk& Descriptor = Set->Descs[BINDINDEX];
+	if ((isUniformBufferShaderInput && Descriptor.Type != desctype_vk::UBUFFER) ||
+		(!isUniformBufferShaderInput && Descriptor.Type != desctype_vk::SBUFFER)) {
+		printer(result_tgfx_FAIL, "BINDINDEX is pointing to some other type of shader input!");
+		return result_tgfx_FAIL;
+	}
+	if (ELEMENTINDEX >= Descriptor.ElementCount) {
+		printer(result_tgfx_FAIL, "You gave SetMaterialBuffer() an overflowing ELEMENTINDEX!");
+		return result_tgfx_FAIL;
+	}
+
+	descelement_buffer_vk& DescElement = ((descelement_buffer_vk*)Descriptor.Elements)[ELEMENTINDEX];
+
+	//Check alignment offset
+
+	VkDeviceSize reqalignmentoffset = (isUniformBufferShaderInput) ? rendergpu->DEVICEPROPERTIES().limits.minUniformBufferOffsetAlignment : rendergpu->DEVICEPROPERTIES().limits.minStorageBufferOffsetAlignment;
+	if (TargetOffset % reqalignmentoffset) {
+		printer(result_tgfx_WARNING, ("This TargetOffset in SetMaterialBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + std::to_string(reqalignmentoffset)).c_str());
+	}
+
+	unsigned char x = 0;
+	if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+		if (x != 255) {
+			printer(result_tgfx_FAIL, "You already set shader input buffer, you can't change it at the same frame!");
+			return result_tgfx_WRONGTIMING;
+		}
+		//If value is 255, this means this shader input isn't set before. So try again!
+		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+			printer(result_tgfx_FAIL, "You already set shader input buffer, you can't change it at the same frame!");
+			return result_tgfx_WRONGTIMING;
+		}
+	}
+	VkDeviceSize FinalOffset = static_cast<VkDeviceSize>(TargetOffset);
+	switch (BUFTYPE) {
+	case buffertype_tgfx_STAGING:
+	case buffertype_tgfx_GLOBAL:
+		FindBufferOBJ_byBufType(BufferHandle, BUFTYPE, DescElement.Info.buffer, FinalOffset);
+		break;
+	default:
+		printer(result_tgfx_NOTCODED, "SetMaterial_UniformBuffer() doesn't support this type of target buffers!");
+		return result_tgfx_NOTCODED;
+	}
+	DescElement.Info.offset = FinalOffset;
+	DescElement.Info.range = static_cast<VkDeviceSize>(BoundDataSize);
+	DescElement.IsUpdated.store(1);
+	descset_updatecall_vk call;
+	call.Set = Set;
+	call.BindingIndex = BINDINDEX;
+	call.ElementIndex = ELEMENTINDEX;
+	if (isUsedRecently) {
+		call.Set->ShouldRecreate.store(1);
+		hidden->DescSets_toCreateUpdate.push_back(call);
+	}
+	else {
+		hidden->DescSets_toJustUpdate.push_back(call);
+	}
+	return result_tgfx_SUCCESS;
+}
+result_tgfx SetDescSet_Texture(descset_vk* Set, unsigned int BINDINDEX, bool isSampledTexture, unsigned int ELEMENTINDEX, sampler_vk* Sampler, texture_vk* TextureHandle,
+	image_access_tgfx usage, bool isUsedRecently) {
+	if (!Set->DescCount) {
+		printer(result_tgfx_FAIL, "Given Material Type/Instance doesn't have any shader input to set!");
+		return result_tgfx_FAIL;
+	}
+	if (BINDINDEX >= Set->DescCount) {
+		printer(result_tgfx_FAIL, "BINDINDEX is exceeding the shader input count in the Material Type/Instance");
+		return result_tgfx_FAIL;
+	}
+	descriptor_vk& Descriptor = Set->Descs[BINDINDEX];
+	if ((isSampledTexture && Descriptor.Type != desctype_vk::SAMPLER) ||
+		(!isSampledTexture && Descriptor.Type != desctype_vk::IMAGE)) {
+		printer(result_tgfx_FAIL, "BINDINDEX is pointing to some other type of shader input!");
+		return result_tgfx_FAIL;
+	}
+	if (ELEMENTINDEX >= Descriptor.ElementCount) {
+		printer(result_tgfx_FAIL, "You gave SetMaterialTexture() an overflowing ELEMENTINDEX!");
+		return result_tgfx_FAIL;
+	}
+	descelement_image_vk& DescElement = ((descelement_image_vk*)Descriptor.Elements)[ELEMENTINDEX];
+
+
+	unsigned char x = 0;
+	if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+		if (x != 255) {
+			printer(result_tgfx_FAIL, "You already set shader input texture, you can't change it at the same frame!");
+			return result_tgfx_WRONGTIMING;
+		}
+		//If value is 255, this means this shader input isn't set before. So try again!
+		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
+			printer(result_tgfx_FAIL, "You already set shader input texture, you can't change it at the same frame!");
+			return result_tgfx_WRONGTIMING;
+		}
+	}
+	VkAccessFlags unused;
+	Find_AccessPattern_byIMAGEACCESS(usage, unused, DescElement.info.imageLayout);
+	texture_vk* TEXTURE = ((texture_vk*)TextureHandle);
+	DescElement.info.imageView = TEXTURE->ImageView;
+	DescElement.info.sampler = Sampler->Sampler;
+
+	descset_updatecall_vk call;
+	call.Set = Set;
+	call.BindingIndex = BINDINDEX;
+	call.ElementIndex = ELEMENTINDEX;
+	if (isUsedRecently) {
+		call.Set->ShouldRecreate.store(1);
+		hidden->DescSets_toCreateUpdate.push_back(call);
+	}
+	else {
+		hidden->DescSets_toJustUpdate.push_back(call);
+	}
+	return result_tgfx_SUCCESS;
+}
+
+
+
 //IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
 result_tgfx SetMaterialType_Buffer (rasterpipelinetype_tgfx_handle MaterialType, unsigned char isUsedRecently, unsigned int BINDINDEX,
 	buffer_tgfx_handle BufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize){
-	return result_tgfx_FAIL;
+	graphicspipelinetype_vk* PSO = (graphicspipelinetype_vk*)MaterialType;
+	descset_vk* Set = &PSO->General_DescSet;
+
+	return SetDescSet_Buffer(Set, BINDINDEX, isUniformBufferShaderInput, ELEMENTINDEX, TargetOffset, BUFTYPE, BufferHandle, BoundDataSize, isUsedRecently);
 }
 result_tgfx SetMaterialType_Texture (rasterpipelinetype_tgfx_handle MaterialType, unsigned char isUsedRecently, unsigned int BINDINDEX,
 	texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage){
-	return result_tgfx_FAIL;
+	graphicspipelinetype_vk* PSO = ((graphicspipelinetype_vk*)MaterialType);
+	descset_vk* Set = &PSO->General_DescSet;
+
+	return SetDescSet_Texture(Set, BINDINDEX, isSampledTexture, ELEMENTINDEX, (sampler_vk*)Sampler, (texture_vk*)TextureHandle, usage, isUsedRecently);
 }
 
 result_tgfx SetMaterialInst_Buffer (rasterpipelineinstance_tgfx_handle MaterialInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
 	buffer_tgfx_handle BufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize){
-	return result_tgfx_FAIL;
+	graphicspipelineinst_vk* PSO = (graphicspipelineinst_vk*)MaterialInstance;
+	descset_vk* Set = &PSO->DescSet;
+
+	return SetDescSet_Buffer(Set, BINDINDEX, isUniformBufferShaderInput, ELEMENTINDEX, TargetOffset, BUFTYPE, BufferHandle, BoundDataSize, isUsedRecently);
 }
 result_tgfx SetMaterialInst_Texture (rasterpipelineinstance_tgfx_handle MaterialInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
 	texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage){
-	return result_tgfx_FAIL;
+	graphicspipelineinst_vk* PSO = (graphicspipelineinst_vk*)MaterialInstance;
+	descset_vk* Set = &PSO->DescSet;
+
+	return SetDescSet_Texture(Set, BINDINDEX, isSampledTexture, ELEMENTINDEX, (sampler_vk*)Sampler, (texture_vk*)TextureHandle, usage, isUsedRecently);
 }
 //IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
 result_tgfx SetComputeType_Buffer (computeshadertype_tgfx_handle ComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,

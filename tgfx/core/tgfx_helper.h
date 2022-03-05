@@ -57,7 +57,8 @@ typedef struct helper_tgfx {
     subdrawpassdescription_tgfx_handle(*CreateSubDrawPassDescription)(inheritedrtslotset_tgfx_handle irtslotset, subdrawpassaccess_tgfx WaitOP, subdrawpassaccess_tgfx ContinueOP);
 
 
-    shaderinputdescription_tgfx_handle(*CreateShaderInputDescription)(unsigned char isGeneral, shaderinputtype_tgfx Type, unsigned int BINDINDEX,
+    shaderstageflag_tgfx_handle(*CreateShaderStageFlag)(unsigned char count, ...);
+    shaderinputdescription_tgfx_handle(*CreateShaderInputDescription)(shaderinputtype_tgfx Type, unsigned int BINDINDEX,
         unsigned int ELEMENTCOUNT, shaderstageflag_tgfx_handle Stages);
     rtslotdescription_tgfx_handle(*CreateRTSlotDescription_Color)(texture_tgfx_handle Texture0, texture_tgfx_handle Texture1,
         operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE, unsigned char isUsedLater, unsigned char SLOTINDEX, vec4_tgfx CLEARVALUE);

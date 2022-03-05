@@ -182,9 +182,34 @@ static subdrawpassdescription_tgfx_handle CreateSubDrawPassDescription(inherited
 }
 
 
-static shaderinputdescription_tgfx_handle CreateShaderInputDescription(unsigned char isGeneral, shaderinputtype_tgfx Type, unsigned int BINDINDEX,
+static constexpr bool is_pointersize_biggerthan_flagsize = (sizeof(shaderstageflag_tgfx_handle) > sizeof(VkShaderStageFlags));
+static shaderinputdescription_tgfx_handle CreateShaderInputDescription(shaderinputtype_tgfx Type, unsigned int BINDINDEX,
     unsigned int ELEMENTCOUNT, shaderstageflag_tgfx_handle Stages) {
-    return nullptr;
+    shaderinputdesc_vk* desc = new shaderinputdesc_vk;
+    desc->BINDINDEX = BINDINDEX;
+    desc->ELEMENTCOUNT = ELEMENTCOUNT;
+    if(is_pointersize_biggerthan_flagsize){desc->ShaderStages = (VkShaderStageFlags)Stages;}
+    else { desc->ShaderStages = *(VkShaderStageFlags*)Stages; }
+    desc->TYPE = Type;
+    return (shaderinputdescription_tgfx_handle)desc;
+}
+static shaderstageflag_tgfx_handle CreateShaderStageFlag(unsigned char count, ...) {
+    //If size of a pointer isn't bigger than or equal to a VkShaderStageFlag, we should return a pointer to the flag otherwise data is lost
+    VkShaderStageFlags* flag = nullptr;
+    VkShaderStageFlags flag_d = 0;
+    if (is_pointersize_biggerthan_flagsize) { flag = &flag_d; }
+    else { flag = new VkShaderStageFlags; *flag = flag_d; }
+    va_list args;
+    va_start(args, count);
+    for (unsigned char i = 0; i < count; i++) {
+        shaderstage_tgfx type = va_arg(args, shaderstage_tgfx);
+        printf("type: %d", type);
+        if (type == shaderstage_tgfx_VERTEXSHADER) { *flag = *flag | VK_SHADER_STAGE_VERTEX_BIT; }
+        if (type == shaderstage_tgfx_FRAGMENTSHADER) { *flag = *flag | VK_SHADER_STAGE_FRAGMENT_BIT; }
+    }
+    va_end(args);
+    if (is_pointersize_biggerthan_flagsize) { return (shaderstageflag_tgfx_handle)*flag; }
+    else { return (shaderstageflag_tgfx_handle)flag; }
 }
 static rtslotdescription_tgfx_handle CreateRTSlotDescription_Color(texture_tgfx_handle Texture0, texture_tgfx_handle Texture1,
     operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE, unsigned char isUsedLater, unsigned char SLOTINDEX, vec4_tgfx clear_value) {
@@ -276,4 +301,5 @@ extern void set_helper_functions() {
     core_tgfx_main->helpers->GetSupportedAllocations_ofTexture = &GetSupportedAllocations_ofTexture;
     core_tgfx_main->helpers->GetTextureTypeLimits = &GetTextureTypeLimits;
     core_tgfx_main->helpers->SetMemoryTypeInfo = &SetMemoryTypeInfo;
+    core_tgfx_main->helpers->CreateShaderStageFlag = &CreateShaderStageFlag;
 }

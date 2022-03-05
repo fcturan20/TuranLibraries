@@ -190,11 +190,11 @@ int main() {
 	//Create vertex buffer, staging buffer to upload to and upload data
 
 	float vertexbufferdata[]{ -1.0, -1.0, 0.0, 0.0,
-		-1.0, 1.0, 0.0, 1.0, 
+		-1.0, 1.0, 0.0, 1.0,
 		1.0, -1.0, 1.0, 0.0,
 		1.0, -1.0, 1.0, 0.0,
 		-1.0, 1.0, 0.0, 1.0,
-		1.0, 1.0, 1.0, 1.0};
+		1.0, 1.0, 1.0, 1.0 };
 	buffer_tgfx_handle firstvertexbuffer, firststagingbuffer;
 	tgfxsys->api->contentmanager->Create_VertexBuffer(vertexattriblayout, 6, devicelocalmemtype_id, &firstvertexbuffer);
 	tgfxsys->api->contentmanager->Create_StagingBuffer(6 * 20, fastvisiblememtype_id, &firststagingbuffer);	//Allocate a little bit much
@@ -215,11 +215,14 @@ int main() {
 	unsigned long vertsize = 0, fragsize = 0;
 	void* vert_binary = filesys->funcs->read_binaryfile(CMAKE_SOURCE_FOLDER"/Example/FirstVert.spv", &vertsize); if (!vert_binary) { printf("Vertex Shader SPIR-V read has failed!"); }
 	void* frag_binary = filesys->funcs->read_binaryfile(CMAKE_SOURCE_FOLDER"/Example/FirstFrag.spv", &fragsize); if (!frag_binary) { printf("Fragment Shader SPIR-V read has failed!"); }
-	shadersource_tgfx_handle compiled_sources[3]{(shadersource_tgfx_handle)tgfxsys->api->INVALIDHANDLE, (shadersource_tgfx_handle)tgfxsys->api->INVALIDHANDLE, (shadersource_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	shadersource_tgfx_handle compiled_sources[3];
 	tgfxsys->api->contentmanager->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_VERTEXSHADER, vert_binary, vertsize, &compiled_sources[0]);
 	tgfxsys->api->contentmanager->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_FRAGMENTSHADER, frag_binary, fragsize, &compiled_sources[1]);
+	compiled_sources[2] = (shadersource_tgfx_handle)tgfxsys->api->INVALIDHANDLE;
 	rasterpipelinetype_tgfx_handle first_material;
-	tgfxsys->api->contentmanager->Link_MaterialType(compiled_sources, (shaderinputdescription_tgfx_handle*)&tgfxsys->api->INVALIDHANDLE, vertexattriblayout, sub_dps[0], cullmode_tgfx_OFF, polygonmode_tgfx_FILL, nullptr, nullptr, nullptr,
+	shaderinputdescription_tgfx_handle inputdescs[2] = { tgfxsys->api->helpers->CreateShaderInputDescription(shaderinputtype_tgfx_SAMPLER_G, 0, 1, 
+		tgfxsys->api->helpers->CreateShaderStageFlag(1, shaderstage_tgfx_FRAGMENTSHADER)), (shaderinputdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	tgfxsys->api->contentmanager->Link_MaterialType(compiled_sources, inputdescs, vertexattriblayout, sub_dps[0], cullmode_tgfx_OFF, polygonmode_tgfx_FILL, nullptr, nullptr, nullptr,
 		(blendinginfo_tgfx_listhandle)&tgfxsys->api->INVALIDHANDLE, &first_material);
 	rasterpipelineinstance_tgfx_handle first_matinst;
 	tgfxsys->api->contentmanager->Create_MaterialInst(first_material, &first_matinst);
@@ -233,6 +236,7 @@ int main() {
 	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
 	tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[0], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
 	tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[1], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+	tgfxsys->api->contentmanager->SetMaterialType_Texture(first_material, false, 0, first_texture, true, 0, first_samplingtype, image_access_tgfx_SHADER_SAMPLEONLY);
 
 	tgfxsys->api->renderer->SwapBuffers(firstwindow, first_wp);
 	tgfxsys->api->renderer->Run();
@@ -242,6 +246,7 @@ int main() {
 
 	while (true) {
 		profiledscope_handle_tapi scope;	unsigned long long duration;
+		profilersys->funcs->start_profiling(&scope, "Run Loop", &duration, 1);
 
 		boxregion_tgfx region;
 		region.WIDTH = 1280; region.HEIGHT = 720; region.XOffset = 0; region.YOffset = 0;
@@ -249,7 +254,6 @@ int main() {
 		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, first_texture, image_access_tgfx_TRANSFER_DIST, image_access_tgfx_SHADER_SAMPLEONLY, 0, cubeface_tgfx_FRONT);
 		tgfxsys->api->renderer->ImageBarrier(final_tp, first_texture, image_access_tgfx_SHADER_SAMPLEONLY, image_access_tgfx_TRANSFER_DIST, 0, cubeface_tgfx_FRONT);
 
-		profilersys->funcs->start_profiling(&scope, "Run Loop", &duration, 1);
 		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[0], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
 		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
 		tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[0], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);

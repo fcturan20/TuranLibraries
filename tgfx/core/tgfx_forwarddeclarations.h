@@ -306,8 +306,8 @@ typedef enum shaderlanguages_tgfx {
 } shaderlanguages_tgfx;
 
 typedef enum shaderstage_tgfx {
-    shaderstage_tgfx_VERTEXSHADER,
-    shaderstage_tgfx_FRAGMENTSHADER
+    shaderstage_tgfx_VERTEXSHADER = 0,
+    shaderstage_tgfx_FRAGMENTSHADER = 1
 } shaderstage_tgfx;
 
 

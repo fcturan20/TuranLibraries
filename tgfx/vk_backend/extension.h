@@ -1,5 +1,5 @@
 #include "predefinitions_vk.h"
-
+#include <float.h>
 
 
 struct depthstencilslot_vk;
@@ -38,4 +38,15 @@ public:
 
     //ACTIVATORS : These are the supported extensions that doesn't only relaxes the rules but also adds new rules and usages.
 
+};
+
+//Each extension structure should contain its type as its first variable!
+enum VKEXT_TYPES {
+    VKEXT_ERROR = 0,
+    VKEXT_DEPTHBOUNDS
+};
+
+struct VKEXT_DEPTHBOUNDS_STRUCT {
+    VKEXT_TYPES type;
+    VkBool32 DepthBoundsEnable = VK_FALSE; float DepthBoundsMin = FLT_MIN, DepthBoundsMax = FLT_MAX;
 };

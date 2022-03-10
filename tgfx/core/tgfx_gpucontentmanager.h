@@ -122,7 +122,7 @@
 		//IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
 		result_tgfx (*SetComputeType_Buffer)(computeshadertype_tgfx_handle ComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
 			buffer_tgfx_handle TargetBufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize);
-		result_tgfx (*SetComputeType_Texture)(computeshadertype_tgfx_handle ComputeType, unsigned char isComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
+		result_tgfx (*SetComputeType_Texture)(computeshadertype_tgfx_handle ComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
 			texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage);
 		
 		result_tgfx (*SetComputeInst_Buffer)(computeshaderinstance_tgfx_handle ComputeInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,

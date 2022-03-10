@@ -17,5 +17,9 @@ target_include_directories(registry_sys_example PUBLIC ${CMAKE_SOURCE_DIR}/turan
 install(TARGETS registry_sys_example RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/Example_runnables)
 
 
+find_package(glm REQUIRED)
+target_include_directories(registry_sys_example PRIVATE ${glm_INCLUDE_DIRS})
+target_link_libraries(registry_sys_example PRIVATE glm::glm)
+
 
 

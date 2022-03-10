@@ -203,9 +203,9 @@ static shaderstageflag_tgfx_handle CreateShaderStageFlag(unsigned char count, ..
     va_start(args, count);
     for (unsigned char i = 0; i < count; i++) {
         shaderstage_tgfx type = va_arg(args, shaderstage_tgfx);
-        printf("type: %d", type);
         if (type == shaderstage_tgfx_VERTEXSHADER) { *flag = *flag | VK_SHADER_STAGE_VERTEX_BIT; }
         if (type == shaderstage_tgfx_FRAGMENTSHADER) { *flag = *flag | VK_SHADER_STAGE_FRAGMENT_BIT; }
+        if (type == shaderstage_tgfx_COMPUTESHADER) { *flag = *flag | VK_SHADER_STAGE_COMPUTE_BIT; }
     }
     va_end(args);
     if (is_pointersize_biggerthan_flagsize) { return (shaderstageflag_tgfx_handle)*flag; }
@@ -250,8 +250,20 @@ static rtslotusage_tgfx_handle CreateRTSlotUsage_Depth(rtslotdescription_tgfx_ha
     operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD) {
     return nullptr;
 }
-static depthsettings_tgfx_handle CreateDepthConfiguration(unsigned char ShouldWrite, depthtest_tgfx COMPAREOP) {
-    return nullptr;
+static depthsettings_tgfx_handle CreateDepthConfiguration(unsigned char ShouldWrite, depthtest_tgfx COMPAREOP, extension_tgfx_listhandle EXTENSIONS) {
+    depthsettingsdesc_vk* desc = new depthsettingsdesc_vk;
+    TGFXLISTCOUNT(core_tgfx_main, EXTENSIONS, extcount);
+    for (unsigned int ext_i = 0; ext_i < extcount; ext_i++) {
+        if (*(VKEXT_TYPES*)(EXTENSIONS[ext_i]) != VKEXT_DEPTHBOUNDS) {
+            VKEXT_DEPTHBOUNDS_STRUCT* ext = (VKEXT_DEPTHBOUNDS_STRUCT*)EXTENSIONS[ext_i];
+            desc->DepthBoundsEnable = ext->DepthBoundsEnable;
+            desc->DepthBoundsMax = ext->DepthBoundsMax;
+            desc->DepthBoundsMin = ext->DepthBoundsMin;
+        }
+    }
+    desc->ShouldWrite = ShouldWrite;
+    desc->DepthCompareOP = Find_CompareOp_byGFXDepthTest(COMPAREOP);
+    return (depthsettings_tgfx_handle)desc;
 }
 static stencilsettings_tgfx_handle CreateStencilConfiguration(unsigned char Reference, unsigned char WriteMask, unsigned char CompareMask,
     stencilcompare_tgfx CompareOP, stencilop_tgfx DepthFailOP, stencilop_tgfx StencilFailOP, stencilop_tgfx AllSuccessOP) {
@@ -269,7 +281,14 @@ static void Destroy_ExtensionData(extension_tgfx_handle ExtensionToDestroy) {
 
 }
 static unsigned char DoesGPUsupportsVKDESCINDEXING(gpu_tgfx_handle GPU) { gpu_public* VKGPU = (gpu_public*)GPU; return VKGPU->EXTMANAGER()->ISSUPPORTED_DESCINDEXING(); }
-
+static extension_tgfx_handle EXT_DepthBoundsInfo(float BoundMin, float BoundMax) {
+    VKEXT_DEPTHBOUNDS_STRUCT* ext = new VKEXT_DEPTHBOUNDS_STRUCT;
+    ext->type = VKEXT_DEPTHBOUNDS;
+    ext->DepthBoundsEnable = VK_TRUE;
+    ext->DepthBoundsMin = BoundMin;
+    ext->DepthBoundsMax = BoundMax;
+    return (extension_tgfx_handle)ext;
+}
 
 extern void set_helper_functions() {
     core_tgfx_main->helpers->CreateBlendingConfiguration = &CreateBlendingConfiguration;
@@ -302,4 +321,6 @@ extern void set_helper_functions() {
     core_tgfx_main->helpers->GetTextureTypeLimits = &GetTextureTypeLimits;
     core_tgfx_main->helpers->SetMemoryTypeInfo = &SetMemoryTypeInfo;
     core_tgfx_main->helpers->CreateShaderStageFlag = &CreateShaderStageFlag;
+
+    core_tgfx_main->helpers->EXT_DepthBoundsInfo = &EXT_DepthBoundsInfo;
 }

@@ -23,7 +23,8 @@
 
 #include <stdint.h>
 #include <vector>
-
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadingsys = NULL;
 char stop_char;
@@ -112,80 +113,101 @@ int main() {
 	result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_VULKAN, printf_log_tgfx);
 	printf("%c", result);
 
+	const void* const TGFXINVALID = tgfxsys->api->INVALIDHANDLE;
+	helper_tgfx* const TGFXHELPER = tgfxsys->api->helpers;
+	renderer_tgfx* const TGFXRENDERER = tgfxsys->api->renderer;
+	gpudatamanager_tgfx* const TGFXCONTENTMANAGER = tgfxsys->api->contentmanager;
+
 	gpu_tgfx_listhandle gpulist;
 	tgfxsys->api->getGPUlist(&gpulist);
 	TGFXLISTCOUNT(tgfxsys->api, gpulist, gpulist_count);
 	printf("GPU COUNT: %u\n", gpulist_count);
 	const char* gpuname;
 	const memory_description_tgfx* memtypelist; unsigned int memtypelistcount;
-	tgfxsys->api->helpers->GetGPUInfo_General(gpulist[0], &gpuname, nullptr, nullptr, nullptr, &memtypelist, &memtypelistcount, nullptr, nullptr, nullptr);
+	TGFXHELPER->GetGPUInfo_General(gpulist[0], &gpuname, nullptr, nullptr, nullptr, &memtypelist, &memtypelistcount, nullptr, nullptr, nullptr);
 	std::cout << "Memory Type Count: " << memtypelistcount << " and GPU Name: " << gpuname << "\n";
 	unsigned int devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = UINT32_MAX;
 	for (unsigned int i = 0; i < memtypelistcount; i++) {
 		if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) {
-			tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 40 * 1024 * 1024, nullptr);
+			TGFXHELPER->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 40 * 1024 * 1024, nullptr);
 			devicelocalmemtype_id = memtypelist[i].memorytype_id;
 		}
 		if (memtypelist[i].allocationtype == memoryallocationtype_FASTHOSTVISIBLE) {
-			tgfxsys->api->helpers->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 20 * 1024 * 1024, nullptr);
+			TGFXHELPER->SetMemoryTypeInfo(memtypelist[i].memorytype_id, 20 * 1024 * 1024, nullptr);
 			fastvisiblememtype_id = memtypelist[i].memorytype_id;
 		}
 	}
-	initializationsecondstageinfo_tgfx_handle secondinfo = tgfxsys->api->helpers->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, false, true, true, (extension_tgfx_listhandle)tgfxsys->api->INVALIDHANDLE);
+	initializationsecondstageinfo_tgfx_handle secondinfo = TGFXHELPER->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, false, true, true, (extension_tgfx_listhandle)TGFXINVALID);
 	tgfxsys->api->initialize_secondstage(secondinfo);
 	monitor_tgfx_listhandle monitorlist;
 	tgfxsys->api->getmonitorlist(&monitorlist);
 	TGFXLISTCOUNT(tgfxsys->api, monitorlist, monitorcount);
 	printf("Monitor Count: %u", monitorcount);
-	textureusageflag_tgfx_handle usageflag = tgfxsys->api->helpers->CreateTextureUsageFlag(false, true, true, true, false);
+	textureusageflag_tgfx_handle swapchaintexture_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, true, true, true, false);
 	texture_tgfx_handle swapchain_textures[2];
 	window_tgfx_handle firstwindow;
-	tgfxsys->api->create_window(1280, 720, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
-	tgfxsys->api->renderer->Start_RenderGraphConstruction();
+	tgfxsys->api->create_window(1280, 720, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", swapchaintexture_usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
+
+
+	//Create a global buffer for shader inputs
+	buffer_tgfx_handle shaderuniformbuffers_handle = nullptr;
+	TGFXCONTENTMANAGER->Create_GlobalBuffer("UniformBuffers", 1024, true, fastvisiblememtype_id, &shaderuniformbuffers_handle);
+
+
+
+	TGFXRENDERER->Start_RenderGraphConstruction();
 
 
 	//First Copy TP Creation
 	transferpass_tgfx_handle first_copytp;
-	tgfxsys->api->renderer->Create_TransferPass((passwaitdescription_tgfx_listhandle)&tgfxsys->api->INVALIDHANDLE, transferpasstype_tgfx_COPY, "FirstCopyTP", &first_copytp);
+	TGFXRENDERER->Create_TransferPass((passwaitdescription_tgfx_listhandle)&TGFXINVALID, transferpasstype_tgfx_COPY, "FirstCopyTP", &first_copytp);
+
 
 	//First Barrier TP Creation
-	passwaitdescription_tgfx_handle wait_for_copytp[2] = { tgfxsys->api->helpers->CreatePassWait_TransferPass(&first_copytp, transferpasstype_tgfx_COPY, tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	passwaitdescription_tgfx_handle wait_for_copytp[2] = { TGFXHELPER->CreatePassWait_TransferPass(&first_copytp, transferpasstype_tgfx_COPY, TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
 	transferpass_tgfx_handle firstbarriertp;
-	tgfxsys->api->renderer->Create_TransferPass(wait_for_copytp, transferpasstype_tgfx_BARRIER, "FirstBarrierTP", &firstbarriertp);
+	TGFXRENDERER->Create_TransferPass(wait_for_copytp, transferpasstype_tgfx_BARRIER, "FirstBarrierTP", &firstbarriertp);
+
+	//First Compute Pass Creation
+	computepass_tgfx_handle first_computepass;
+	passwaitdescription_tgfx_handle dp_waits[2] = { TGFXHELPER->CreatePassWait_TransferPass(&firstbarriertp, transferpasstype_tgfx_BARRIER,
+		TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+	TGFXRENDERER->Create_ComputePass(dp_waits, 1, "FirstCP", &first_computepass);
 
 	//Draw Pass Creation
 
 	vec4_tgfx white; white.x = 255; white.y = 255; white.z = 255; white.w = 0;
 	rtslotdescription_tgfx_handle rtslot_descs[2] = {
-		tgfxsys->api->helpers->CreateRTSlotDescription_Color(swapchain_textures[0], swapchain_textures[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white), (rtslotdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+		TGFXHELPER->CreateRTSlotDescription_Color(swapchain_textures[0], swapchain_textures[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white), (rtslotdescription_tgfx_handle)TGFXINVALID };
 	rtslotset_tgfx_handle rtslotset_handle;
-	tgfxsys->api->contentmanager->Create_RTSlotset(rtslot_descs, &rtslotset_handle);
-	rtslotusage_tgfx_handle rtslotusages[2] = { tgfxsys->api->helpers->CreateRTSlotUsage_Color(rtslot_descs[0], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	TGFXCONTENTMANAGER->Create_RTSlotset(rtslot_descs, &rtslotset_handle);
+	rtslotusage_tgfx_handle rtslotusages[2] = { TGFXHELPER->CreateRTSlotUsage_Color(rtslot_descs[0], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)TGFXINVALID };
 	inheritedrtslotset_tgfx_handle irtslotset;
-	tgfxsys->api->contentmanager->Inherite_RTSlotSet(rtslotusages, rtslotset_handle, &irtslotset);
-	subdrawpassdescription_tgfx_handle subdp_descs[2] = { tgfxsys->api->helpers->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
-	passwaitdescription_tgfx_handle dp_waits[2] = { tgfxsys->api->helpers->CreatePassWait_TransferPass(&firstbarriertp, transferpasstype_tgfx_BARRIER,
-		tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	TGFXCONTENTMANAGER->Inherite_RTSlotSet(rtslotusages, rtslotset_handle, &irtslotset);
+	subdrawpassdescription_tgfx_handle subdp_descs[2] = { TGFXHELPER->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)TGFXINVALID };
+	passwaitdescription_tgfx_handle cp_waits[2] = { TGFXHELPER->CreatePassWait_ComputePass(&first_computepass, 0,
+		TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
 	subdrawpass_tgfx_listhandle sub_dps;
 	drawpass_tgfx_handle dp;
-	tgfxsys->api->renderer->Create_DrawPass(subdp_descs, rtslotset_handle, dp_waits, "First DP", &sub_dps, &dp);
+	TGFXRENDERER->Create_DrawPass(subdp_descs, rtslotset_handle, cp_waits, "First DP", &sub_dps, &dp);
 
 	//Final Barrier TP Creation
-	waitsignaldescription_tgfx_handle waitsignaldescs[2] = { tgfxsys->api->helpers->CreateWaitSignal_FragmentShader(true, true, true), (waitsignaldescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
-	passwaitdescription_tgfx_handle final_tp_waits[2] = { tgfxsys->api->helpers->CreatePassWait_DrawPass(&dp, 0, waitsignaldescs, false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
+	waitsignaldescription_tgfx_handle waitsignaldescs[2] = { TGFXHELPER->CreateWaitSignal_FragmentShader(true, true, true), (waitsignaldescription_tgfx_handle)TGFXINVALID };
+	passwaitdescription_tgfx_handle final_tp_waits[2] = { TGFXHELPER->CreatePassWait_DrawPass(&dp, 0, waitsignaldescs, false), (passwaitdescription_tgfx_handle)TGFXINVALID };
 	transferpass_tgfx_handle final_tp;
-	tgfxsys->api->renderer->Create_TransferPass(final_tp_waits, transferpasstype_tgfx_BARRIER, "Final TP", &final_tp);
+	TGFXRENDERER->Create_TransferPass(final_tp_waits, transferpasstype_tgfx_BARRIER, "Final TP", &final_tp);
 
+	//Window Pass Creation
 	windowpass_tgfx_handle first_wp;
-	waitsignaldescription_tgfx_handle wait_for_finaltp_signal = tgfxsys->api->helpers->CreateWaitSignal_Transfer(true, true);
-	passwaitdescription_tgfx_handle wait_for_dp[2] = { tgfxsys->api->helpers->CreatePassWait_TransferPass(&final_tp, transferpasstype_tgfx_BARRIER, wait_for_finaltp_signal, false), (passwaitdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
-	tgfxsys->api->renderer->Create_WindowPass(wait_for_dp, "First WP", &first_wp);
-	tgfxsys->api->renderer->Finish_RenderGraphConstruction(sub_dps[0]);
+	waitsignaldescription_tgfx_handle wait_for_finaltp_signal = TGFXHELPER->CreateWaitSignal_Transfer(true, true);
+	passwaitdescription_tgfx_handle wait_for_dp[2] = { TGFXHELPER->CreatePassWait_TransferPass(&final_tp, transferpasstype_tgfx_BARRIER, wait_for_finaltp_signal, false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+	TGFXRENDERER->Create_WindowPass(wait_for_dp, "First WP", &first_wp);
+	TGFXRENDERER->Finish_RenderGraphConstruction(sub_dps[0]);
 
 
 	datatype_tgfx vertexattribs_datatypes[3]{ datatype_tgfx_VAR_VEC2, datatype_tgfx_VAR_VEC2, datatype_tgfx_UNDEFINED };
 	vertexattributelayout_tgfx_handle vertexattriblayout;
-	tgfxsys->api->contentmanager->Create_VertexAttributeLayout(vertexattribs_datatypes, vertexlisttypes_tgfx_TRIANGLELIST, &vertexattriblayout);
+	TGFXCONTENTMANAGER->Create_VertexAttributeLayout(vertexattribs_datatypes, vertexlisttypes_tgfx_TRIANGLELIST, &vertexattriblayout);
 
 	//Create vertex buffer, staging buffer to upload to and upload data
 
@@ -196,72 +218,112 @@ int main() {
 		-1.0, 1.0, 0.0, 1.0,
 		1.0, 1.0, 1.0, 1.0 };
 	buffer_tgfx_handle firstvertexbuffer, firststagingbuffer;
-	tgfxsys->api->contentmanager->Create_VertexBuffer(vertexattriblayout, 6, devicelocalmemtype_id, &firstvertexbuffer);
-	tgfxsys->api->contentmanager->Create_StagingBuffer(6 * 20, fastvisiblememtype_id, &firststagingbuffer);	//Allocate a little bit much
-	tgfxsys->api->contentmanager->Upload_toBuffer(firststagingbuffer, buffertype_tgfx_STAGING, vertexbufferdata, 6 * 4 * 4, 0);
-	tgfxsys->api->renderer->CopyBuffer_toBuffer(first_copytp, firststagingbuffer, buffertype_tgfx_STAGING, firstvertexbuffer, buffertype_tgfx_VERTEX, 0, 0, 6 * 4 * 4);
+	TGFXCONTENTMANAGER->Create_VertexBuffer(vertexattriblayout, 6, devicelocalmemtype_id, &firstvertexbuffer);
+	TGFXCONTENTMANAGER->Create_StagingBuffer(6 * 20, fastvisiblememtype_id, &firststagingbuffer);	//Allocate a little bit much
+	TGFXCONTENTMANAGER->Upload_toBuffer(firststagingbuffer, buffertype_tgfx_STAGING, vertexbufferdata, 6 * 4 * 4, 0);
+	TGFXRENDERER->CopyBuffer_toBuffer(first_copytp, firststagingbuffer, buffertype_tgfx_STAGING, firstvertexbuffer, buffertype_tgfx_VERTEX, 0, 0, 6 * 4 * 4);
 
 	//Create texture, staging buffer upload data to and upload data
 
 	texture_tgfx_handle first_texture; buffer_tgfx_handle texturestagingbuffer;
-	textureusageflag_tgfx_handle usageflag_tgfx = tgfxsys->api->helpers->CreateTextureUsageFlag(false, true, false, true, false);
-	tgfxsys->api->contentmanager->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &first_texture);
+	textureusageflag_tgfx_handle firsttexture_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, true, false, true, true);
+	TGFXCONTENTMANAGER->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, firsttexture_usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &first_texture);
 	vec4_tgfx color; color.x = 1.0f; color.y = 0.5f; color.z = 0.2f; color.w = 1.0f;
 	std::vector<vec4_tgfx> texture_data(1280 * 720, color);
-	tgfxsys->api->contentmanager->Create_StagingBuffer(1280 * 720 * 20, fastvisiblememtype_id, &texturestagingbuffer);
-	tgfxsys->api->contentmanager->Upload_toBuffer(texturestagingbuffer, buffertype_tgfx_STAGING, texture_data.data(), texture_data.size() * 16, 0);
+	TGFXCONTENTMANAGER->Create_StagingBuffer(1280 * 720 * 20, fastvisiblememtype_id, &texturestagingbuffer);
+	TGFXCONTENTMANAGER->Upload_toBuffer(texturestagingbuffer, buffertype_tgfx_STAGING, texture_data.data(), texture_data.size() * 16, 0);
+
+	//Upload light data
+	glm::vec4 directionallightdata[2] = { normalize(glm::vec4(0.3, 0.4, 0.5, 1.0)), glm::vec4(0.7, 0.3, 0.5, 1.0) };
+	TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformbuffers_handle, buffertype_tgfx_GLOBAL, directionallightdata, 32, 0);
+	struct raytrace_cameradata {
+		glm::vec4 camera_worldpos = glm::vec4(-10.0, 0.0, 0.0, 1.0);
+		glm::mat4 camera_to_world;
+	};
+	raytrace_cameradata rt_cameradata; rt_cameradata.camera_to_world = glm::perspective(glm::radians(90.0), double(16.0 / 9.0f), 0.1, 100.0);
+	TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformbuffers_handle, buffertype_tgfx_GLOBAL, &rt_cameradata, sizeof(raytrace_cameradata), 64);
 
 
 	unsigned long vertsize = 0, fragsize = 0;
 	void* vert_binary = filesys->funcs->read_binaryfile(CMAKE_SOURCE_FOLDER"/Example/FirstVert.spv", &vertsize); if (!vert_binary) { printf("Vertex Shader SPIR-V read has failed!"); }
 	void* frag_binary = filesys->funcs->read_binaryfile(CMAKE_SOURCE_FOLDER"/Example/FirstFrag.spv", &fragsize); if (!frag_binary) { printf("Fragment Shader SPIR-V read has failed!"); }
 	shadersource_tgfx_handle compiled_sources[3];
-	tgfxsys->api->contentmanager->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_VERTEXSHADER, vert_binary, vertsize, &compiled_sources[0]);
-	tgfxsys->api->contentmanager->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_FRAGMENTSHADER, frag_binary, fragsize, &compiled_sources[1]);
-	compiled_sources[2] = (shadersource_tgfx_handle)tgfxsys->api->INVALIDHANDLE;
+	TGFXCONTENTMANAGER->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_VERTEXSHADER, vert_binary, vertsize, &compiled_sources[0]);
+	TGFXCONTENTMANAGER->Compile_ShaderSource(shaderlanguages_tgfx_SPIRV, shaderstage_tgfx_FRAGMENTSHADER, frag_binary, fragsize, &compiled_sources[1]);
+	compiled_sources[2] = (shadersource_tgfx_handle)TGFXINVALID;
 	rasterpipelinetype_tgfx_handle first_material;
-	shaderinputdescription_tgfx_handle inputdescs[2] = { tgfxsys->api->helpers->CreateShaderInputDescription(shaderinputtype_tgfx_SAMPLER_G, 0, 1, 
-		tgfxsys->api->helpers->CreateShaderStageFlag(1, shaderstage_tgfx_FRAGMENTSHADER)), (shaderinputdescription_tgfx_handle)tgfxsys->api->INVALIDHANDLE };
-	tgfxsys->api->contentmanager->Link_MaterialType(compiled_sources, inputdescs, vertexattriblayout, sub_dps[0], cullmode_tgfx_OFF, polygonmode_tgfx_FILL, nullptr, nullptr, nullptr,
-		(blendinginfo_tgfx_listhandle)&tgfxsys->api->INVALIDHANDLE, &first_material);
+	shaderinputdescription_tgfx_handle inputdescs[2] = { TGFXHELPER->CreateShaderInputDescription(shaderinputtype_tgfx_SAMPLER_G, 0, 1, 
+		TGFXHELPER->CreateShaderStageFlag(1, shaderstage_tgfx_FRAGMENTSHADER)), (shaderinputdescription_tgfx_handle)TGFXINVALID };
+	extension_tgfx_handle depthbounds_ext[2] = { TGFXHELPER->EXT_DepthBoundsInfo(0.0, 1.0), (extension_tgfx_handle)TGFXINVALID };
+	TGFXHELPER->CreateDepthConfiguration(true, depthtest_tgfx_ALWAYS, depthbounds_ext);
+	TGFXCONTENTMANAGER->Link_MaterialType(compiled_sources, inputdescs, vertexattriblayout, sub_dps[0], cullmode_tgfx_OFF, 
+		polygonmode_tgfx_FILL, nullptr, nullptr, nullptr, (blendinginfo_tgfx_listhandle)&TGFXINVALID, &first_material);
 	rasterpipelineinstance_tgfx_handle first_matinst;
-	tgfxsys->api->contentmanager->Create_MaterialInst(first_material, &first_matinst);
+	TGFXCONTENTMANAGER->Create_MaterialInst(first_material, &first_matinst);
 	samplingtype_tgfx_handle first_samplingtype;
-	tgfxsys->api->contentmanager->Create_SamplingType(0, 1, texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP, texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP, texture_wrapping_tgfx_REPEAT, texture_wrapping_tgfx_REPEAT, texture_wrapping_tgfx_REPEAT, &first_samplingtype);
-	tgfxsys->api->contentmanager->SetGlobalShaderInput_Texture(true, 0, false, first_texture, first_samplingtype, image_access_tgfx_SHADER_SAMPLEONLY);
+	TGFXCONTENTMANAGER->Create_SamplingType(0, 1, texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP, texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP, texture_wrapping_tgfx_REPEAT, texture_wrapping_tgfx_REPEAT, texture_wrapping_tgfx_REPEAT, &first_samplingtype);
+	TGFXCONTENTMANAGER->SetGlobalShaderInput_Texture(true, 0, false, first_texture, first_samplingtype, image_access_tgfx_SHADER_SAMPLEONLY);
+
+	unsigned long compshadersize = 0;
+	//void* comp_binary = filesys->funcs->read_binaryfile(CMAKE_SOURCE_FOLDER"/Example/FirstCompute.spv", &compshadersize);
+	const char* comp_text = filesys->funcs->read_textfile(CMAKE_SOURCE_FOLDER"/Example/FirstComputeShader.comp");
+	shadersource_tgfx_handle compiled_computeshadersource = nullptr;
+	TGFXCONTENTMANAGER->Compile_ShaderSource(shaderlanguages_tgfx_GLSL, shaderstage_tgfx_COMPUTESHADER, (void*)comp_text, compshadersize, &compiled_computeshadersource);
+	computeshadertype_tgfx_handle first_computetype = nullptr;
+	shaderinputdescription_tgfx_handle first_compute_inputs[4] = { TGFXHELPER->CreateShaderInputDescription(shaderinputtype_tgfx_UBUFFER_G, 0, 1, TGFXHELPER->CreateShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER)), 
+		TGFXHELPER->CreateShaderInputDescription(shaderinputtype_tgfx_UBUFFER_G, 1, 1, TGFXHELPER->CreateShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER)), 
+		TGFXHELPER->CreateShaderInputDescription(shaderinputtype_tgfx_IMAGE_G, 2, 1, TGFXHELPER->CreateShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER)), (shaderinputdescription_tgfx_handle)TGFXINVALID};
+	TGFXCONTENTMANAGER->Create_ComputeType(compiled_computeshadersource, first_compute_inputs, &first_computetype);
+	computeshaderinstance_tgfx_handle first_computeinstance = nullptr;
+	TGFXCONTENTMANAGER->Create_ComputeInstance(first_computetype, &first_computeinstance);
+	TGFXCONTENTMANAGER->SetComputeType_Buffer(first_computetype, false, 0, shaderuniformbuffers_handle, buffertype_tgfx_GLOBAL, true, 0, 0, 32);
+	TGFXCONTENTMANAGER->SetComputeType_Buffer(first_computetype, false, 1, shaderuniformbuffers_handle, buffertype_tgfx_GLOBAL, true, 0, 64, 142);
+	TGFXCONTENTMANAGER->SetComputeType_Texture(first_computetype, false, 2, first_texture, false, 0, nullptr, image_access_tgfx_SHADER_WRITEONLY);
 
 	//Swapchain images should be converted from no_access layout in the first frame
-	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, first_texture, image_access_tgfx_NO_ACCESS, image_access_tgfx_TRANSFER_DIST, 0, cubeface_tgfx_FRONT);
-	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[0], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
-	tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
-	tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[0], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
-	tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[1], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
-	tgfxsys->api->contentmanager->SetMaterialType_Texture(first_material, false, 0, first_texture, true, 0, first_samplingtype, image_access_tgfx_SHADER_SAMPLEONLY);
+	//Frame 0
 
-	tgfxsys->api->renderer->SwapBuffers(firstwindow, first_wp);
-	tgfxsys->api->renderer->Run();
+	TGFXRENDERER->ImageBarrier(firstbarriertp, first_texture, image_access_tgfx_NO_ACCESS, image_access_tgfx_TRANSFER_DIST, 0, cubeface_tgfx_FRONT);
+	TGFXRENDERER->ImageBarrier(firstbarriertp, swapchain_textures[0], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
+	TGFXRENDERER->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_NO_ACCESS, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
+	TGFXRENDERER->ImageBarrier(final_tp, swapchain_textures[0], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+	TGFXRENDERER->ImageBarrier(final_tp, swapchain_textures[1], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+	TGFXCONTENTMANAGER->SetMaterialType_Texture(first_material, false, 0, first_texture, true, 0, first_samplingtype, image_access_tgfx_SHADER_SAMPLEONLY);
+	TGFXRENDERER->SwapBuffers(firstwindow, first_wp);
+	TGFXRENDERER->Run();
 
+	//Frame 1
 
+	boxregion_tgfx region;
+	region.WIDTH = 1280; region.HEIGHT = 720; region.XOffset = 0; region.YOffset = 0;
+	TGFXRENDERER->CopyBuffer_toImage(first_copytp, texturestagingbuffer, first_texture, 0, region, buffertype_tgfx_STAGING, 0, cubeface_tgfx_FRONT);
+	TGFXRENDERER->CopyBuffer_toBuffer(first_copytp, firststagingbuffer, buffertype_tgfx_STAGING, firstvertexbuffer, buffertype_tgfx_VERTEX, 0, 0, 6 * 4 * 4);
+	TGFXRENDERER->ImageBarrier(firstbarriertp, first_texture, image_access_tgfx_TRANSFER_DIST, image_access_tgfx_SHADER_WRITEONLY, 0, cubeface_tgfx_FRONT);
+	TGFXRENDERER->ImageBarrier(final_tp, first_texture, image_access_tgfx_SHADER_WRITEONLY, image_access_tgfx_SHADER_SAMPLEONLY, 0, cubeface_tgfx_FRONT);
+	uvec3_tgfx compute_dispatch; compute_dispatch.x = 512; compute_dispatch.y = 512; compute_dispatch.z = 1;
+	TGFXRENDERER->Dispatch_Compute(first_computepass, first_computeinstance, 0, compute_dispatch);
 
-
+	//Swapchain operations
+	TGFXRENDERER->ImageBarrier(firstbarriertp, swapchain_textures[TGFXRENDERER->GetCurrentFrameIndex()], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
+	TGFXRENDERER->ImageBarrier(final_tp, swapchain_textures[TGFXRENDERER->GetCurrentFrameIndex()], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+	TGFXRENDERER->SwapBuffers(firstwindow, first_wp);
+	TGFXRENDERER->Run();
+	
 	while (true) {
 		profiledscope_handle_tapi scope;	unsigned long long duration;
 		profilersys->funcs->start_profiling(&scope, "Run Loop", &duration, 1);
 
+		//Rendering operations
 		boxregion_tgfx region;
 		region.WIDTH = 1280; region.HEIGHT = 720; region.XOffset = 0; region.YOffset = 0;
-		tgfxsys->api->renderer->CopyBuffer_toImage(first_copytp, texturestagingbuffer, first_texture, 0, region, buffertype_tgfx_STAGING, 0, cubeface_tgfx_FRONT);
-		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, first_texture, image_access_tgfx_TRANSFER_DIST, image_access_tgfx_SHADER_SAMPLEONLY, 0, cubeface_tgfx_FRONT);
-		tgfxsys->api->renderer->ImageBarrier(final_tp, first_texture, image_access_tgfx_SHADER_SAMPLEONLY, image_access_tgfx_TRANSFER_DIST, 0, cubeface_tgfx_FRONT);
+		TGFXRENDERER->DrawDirect(firstvertexbuffer, nullptr, 6, 0, 0, 1, 0, first_matinst, sub_dps[0]);
 
-		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[0], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
-		tgfxsys->api->renderer->ImageBarrier(firstbarriertp, swapchain_textures[1], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
-		tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[0], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
-		tgfxsys->api->renderer->ImageBarrier(final_tp, swapchain_textures[1], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
-		tgfxsys->api->renderer->SwapBuffers(firstwindow, first_wp);
-		tgfxsys->api->renderer->CopyBuffer_toBuffer(first_copytp, firststagingbuffer, buffertype_tgfx_STAGING, firstvertexbuffer, buffertype_tgfx_VERTEX, 0, 0, 6 * 4 * 4);
-		tgfxsys->api->renderer->Run();
-		tgfxsys->api->renderer->DrawDirect(firstvertexbuffer, nullptr, 6, 0, 0, 1, 0, first_matinst, sub_dps[0]);
+		//Swapchain operations
+		TGFXRENDERER->ImageBarrier(firstbarriertp, swapchain_textures[TGFXRENDERER->GetCurrentFrameIndex()], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);
+		TGFXRENDERER->ImageBarrier(final_tp, swapchain_textures[TGFXRENDERER->GetCurrentFrameIndex()], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
+		TGFXRENDERER->SwapBuffers(firstwindow, first_wp);
+
+		TGFXRENDERER->Run();
 		profilersys->funcs->finish_profiling(&scope, 1);
 	}
 	printf("Application is finished!");

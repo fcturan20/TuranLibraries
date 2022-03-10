@@ -180,7 +180,7 @@ struct dispatchcall_vk {
 struct subcomputepass_vk {
 	VK_TPBarrierDatas Barriers_AfterSubpassExecutions;
 	threadlocal_vector<dispatchcall_vk> Dispatches;
-	subcomputepass_vk();
+	subcomputepass_vk() : Dispatches(1024){}
 	bool isThereWorkload();
 };
 
@@ -189,6 +189,6 @@ struct computepass_vk {
 	std::vector<subcomputepass_vk> Subpasses;
 	std::atomic_bool SubPassList_Updated = false;
 
-	computepass_vk(const std::string& name, unsigned int WAITSCOUNT);
+	computepass_vk(const std::string& name, unsigned int WAITSCOUNT) : base_data(name, VK_Pass::PassType::CP, WAITSCOUNT){}
 	bool isWorkloaded();
 };

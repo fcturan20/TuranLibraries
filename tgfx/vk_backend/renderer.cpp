@@ -14,6 +14,7 @@
 #include <utility>
 #include "imgui_vktgfx.h"
 #include "memory.h"
+#include <functional>
 
 
 typedef struct renderer_private{
@@ -679,7 +680,21 @@ struct renderer_funcs {
 	}
 
 	static void Dispatch_Compute(computepass_tgfx_handle ComputePassHandle, computeshaderinstance_tgfx_handle CSInstanceHandle,
-		unsigned int SubComputePassIndex, uvec3_tgfx DispatchSize);
+		unsigned int SubComputePassIndex, uvec3_tgfx DispatchSize) {
+		computepass_vk* CP = (computepass_vk*)ComputePassHandle;
+
+
+		subcomputepass_vk& SP = CP->Subpasses[SubComputePassIndex];
+		dispatchcall_vk dc;
+		dc.DispatchSize = glm::vec3(DispatchSize.x, DispatchSize.y, DispatchSize.z);
+		computeinstance_vk* ci = (computeinstance_vk*)CSInstanceHandle;
+		dc.GeneralSet = &ci->PROGRAM->General_DescSet.Set;
+		dc.InstanceSet = &ci->DescSet.Set;
+		dc.Layout = ci->PROGRAM->PipelineLayout;
+		dc.Pipeline = ci->PROGRAM->PipelineObject;
+		SP.Dispatches.push_back(dc);
+	}
+
 
 	static void ChangeDrawPass_RTSlotSet(drawpass_tgfx_handle DrawPassHandle, rtslotset_tgfx_handle RTSlotSetHandle);
 };
@@ -714,6 +729,7 @@ void renderer_public::RendererResource_Finalizations() {
 		}
 	}
 }
+unsigned char GetCurrentFrameIndex() {return renderer->Get_FrameIndex(false);}
 inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->Start_RenderGraphConstruction = &Start_RenderGraphConstruction;
 	core_tgfx_main->renderer->Finish_RenderGraphConstruction = &Finish_RenderGraphConstruction;
@@ -722,12 +738,15 @@ inline void set_rendersysptrs() {
 	core_tgfx_main->renderer->Create_TransferPass = &renderer_funcs::Create_TransferPass;
 	core_tgfx_main->renderer->Create_DrawPass = &renderer_funcs::Create_DrawPass;
 	core_tgfx_main->renderer->Create_WindowPass = &renderer_funcs::Create_WindowPass;
+	core_tgfx_main->renderer->Create_ComputePass = &renderer_funcs::Create_ComputePass;
 	core_tgfx_main->renderer->Run = &renderer_funcs::Run;
 	core_tgfx_main->renderer->ImageBarrier = &renderer_funcs::ImageBarrier;
 	core_tgfx_main->renderer->SwapBuffers = &renderer_funcs::SwapBuffers;
 	core_tgfx_main->renderer->CopyBuffer_toBuffer = &renderer_funcs::CopyBuffer_toBuffer;
 	core_tgfx_main->renderer->DrawDirect = &renderer_funcs::DrawDirect;
 	core_tgfx_main->renderer->CopyBuffer_toImage = &renderer_funcs::CopyBuffer_toImage;
+	core_tgfx_main->renderer->GetCurrentFrameIndex = &GetCurrentFrameIndex;
+	core_tgfx_main->renderer->Dispatch_Compute = &renderer_funcs::Dispatch_Compute;
 }
 extern void Create_Renderer() {
 	renderer = new renderer_public;

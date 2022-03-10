@@ -68,7 +68,8 @@ typedef struct helper_tgfx {
     rtslotusage_tgfx_handle(*CreateRTSlotUsage_Color)(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE);
     rtslotusage_tgfx_handle(*CreateRTSlotUsage_Depth)(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD,
         operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD);
-    depthsettings_tgfx_handle(*CreateDepthConfiguration)(unsigned char ShouldWrite, depthtest_tgfx COMPAREOP);
+    //Depth bounds extension
+    depthsettings_tgfx_handle(*CreateDepthConfiguration)(unsigned char ShouldWrite, depthtest_tgfx COMPAREOP, extension_tgfx_listhandle EXTENSIONS);
     stencilsettings_tgfx_handle(*CreateStencilConfiguration)(unsigned char Reference, unsigned char WriteMask, unsigned char CompareMask,
         stencilcompare_tgfx CompareOP, stencilop_tgfx DepthFailOP, stencilop_tgfx StencilFailOP, stencilop_tgfx AllSuccessOP);
     blendinginfo_tgfx_handle(*CreateBlendingConfiguration)(unsigned char ColorSlotIndex, vec4_tgfx Constant, blendfactor_tgfx SRCFCTR_CLR,
@@ -79,4 +80,5 @@ typedef struct helper_tgfx {
 
     void (*Destroy_ExtensionData)(extension_tgfx_handle ExtensionToDestroy);
     unsigned char (*DoesGPUsupportsVKDESCINDEXING)(gpu_tgfx_handle GPU);
+    extension_tgfx_handle (*EXT_DepthBoundsInfo)(float DepthBoundsMin, float DepthBoundsMax);
 } helper_tgfx;

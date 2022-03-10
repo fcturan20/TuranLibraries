@@ -10,7 +10,9 @@
 #include "resource.h"
 #include "memory.h"
 #include "includes.h"
+#include <glslang/SPIRV/GlslangToSpv.h>
 
+TBuiltInResource glsl_to_spirv_limitationtable;
 
 struct descelement_buffer_vk {
 	VkDescriptorBufferInfo Info = {};
@@ -50,6 +52,9 @@ struct gpudatamanager_private {
 	threadlocal_vector<vertexbuffer_vk*> vertexbuffers;
 	threadlocal_vector<memoryblock_vk*> stagingbuffers;
 	threadlocal_vector<sampler_vk*> samplers;
+	threadlocal_vector<computetype_vk*> computetypes;
+	threadlocal_vector<computeinstance_vk*> computeinstances;
+	threadlocal_vector<globalbuffer_vk*> globalbuffers;
 
 
 	//This vector contains descriptor sets that are for material types/instances that are created this frame
@@ -73,8 +78,8 @@ struct gpudatamanager_private {
 	//These are the texture that will be added to the list above after clearing the above list
 	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
 
-	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100), 
-	irtslotsets(100), graphicspipelineinstances(1024), graphicspipelinetypes(1024), vertexattributelayouts(1024), shadersources(1024), vertexbuffers(1024), stagingbuffers(100), samplers(100) {}
+	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100), globalbuffers(1024),
+	irtslotsets(100), graphicspipelineinstances(1024), graphicspipelinetypes(1024), vertexattributelayouts(1024), shadersources(1024), vertexbuffers(1024), stagingbuffers(100), samplers(100), computetypes(1024), computeinstances(1024) {}
 };
 static gpudatamanager_private* hidden = nullptr;
 
@@ -562,7 +567,7 @@ bool VKDescSet_PipelineLayoutCreation(const shaderinputdesc_vk** inputdescs, des
 				}
 
 				descriptor_vk& vkdesc = GeneralDescSet->Descs[desc->BINDINDEX];
-				switch (desc->TYPE) {
+				switch (desc->TYPE) {	
 				case shaderinputtype_tgfx_IMAGE_G:
 				{
 					vkdesc.ElementCount = desc->ELEMENTCOUNT;
@@ -794,7 +799,14 @@ void  Destroy_AllResources (){}
 
 
 extern void FindBufferOBJ_byBufType(const buffer_tgfx_handle Handle, buffertype_tgfx TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
-	printer(result_tgfx_NOTCODED, "FindBufferOBJ_byBufType() isn't coded yet!");
+	if (TYPE == buffertype_tgfx_GLOBAL) {
+		globalbuffer_vk* buffer = (globalbuffer_vk*)Handle;
+		TargetBuffer = allocatorsys->get_memorybufferhandle_byID(rendergpu, buffer->Block.MemAllocIndex);
+		TargetOffset = buffer->Block.Offset;
+	}
+	else {
+		printer(result_tgfx_FAIL, "FindBufferOBJ_byBufType() doesn't support this type!");
+	}
 }
 extern VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage) {
 	VkBuffer buffer;
@@ -946,8 +958,12 @@ result_tgfx Upload_toBuffer (buffer_tgfx_handle Handle, buffertype_tgfx Type, co
 		MEMALLOCINDEX = ((vertexbuffer_vk*)Handle)->Block.MemAllocIndex;
 		UploadOFFSET += ((vertexbuffer_vk*)Handle)->Block.Offset;
 		break;
-	case buffertype_tgfx_INDEX:
 	case buffertype_tgfx_GLOBAL:
+		MEMALLOCINDEX = ((globalbuffer_vk*)Handle)->Block.MemAllocIndex;
+		UploadOFFSET += ((globalbuffer_vk*)Handle)->Block.Offset;
+		break;
+	case buffertype_tgfx_INDEX:
+	default:
 		printer(result_tgfx_NOTCODED, "Upload_toBuffer() doesn't support this type for now!");
 		return result_tgfx_NOTCODED;
 	}
@@ -1152,7 +1168,36 @@ void  Delete_Texture (texture_tgfx_handle textureHANDLE, unsigned char isUsedLas
 
 result_tgfx Create_GlobalBuffer (const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned char isUniform,
 	unsigned int MemoryTypeIndex, buffer_tgfx_handle* GlobalBufferHandle) {
-	return result_tgfx_FAIL;
+	if (renderer->RGSTATUS() != RenderGraphStatus::Invalid) {
+		printer(result_tgfx_FAIL, "GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)! Please create your global buffers before render graph construction.");
+		return result_tgfx_WRONGTIMING;
+	}
+
+	VkBuffer obj;
+	VkBufferUsageFlags flags = 0;
+	if (isUniform) {
+		flags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	}
+	else {
+		flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	}
+	obj = Create_VkBuffer(DATA_SIZE, flags);
+
+
+	globalbuffer_vk* GB = new globalbuffer_vk;
+	GB->Block.MemAllocIndex = MemoryTypeIndex;
+	if (allocatorsys->suballocate_buffer(obj, flags, GB->Block) != result_tgfx_SUCCESS) {
+		printer(result_tgfx_FAIL, "Create_GlobalBuffer has failed at suballocation!");
+		return result_tgfx_FAIL;
+	}
+	vkDestroyBuffer(rendergpu->LOGICALDEVICE(), obj, nullptr);
+
+	GB->DATA_SIZE = DATA_SIZE;
+	GB->isUniform = isUniform;
+
+	*GlobalBufferHandle = (buffer_tgfx_handle)GB;
+	hidden->globalbuffers.push_back(GB);
+	return result_tgfx_SUCCESS;
 }
 void  Unload_GlobalBuffer (buffer_tgfx_handle BUFFER_ID){}
 result_tgfx SetGlobalShaderInput_Buffer (unsigned char isUniformBuffer, unsigned int ElementIndex, unsigned char isUsedLastFrame,
@@ -1196,15 +1241,82 @@ result_tgfx SetGlobalShaderInput_Texture (unsigned char isSampledTexture, unsign
 }
 
 
+static EShLanguage Find_EShShaderStage_byTGFXShaderStage(shaderstage_tgfx shaderstage) {
+	switch (shaderstage) {
+	case shaderstage_tgfx_VERTEXSHADER:
+		return EShLangVertex;
+	case shaderstage_tgfx_FRAGMENTSHADER:
+		return EShLangFragment;
+	case shaderstage_tgfx_COMPUTESHADER:
+		return EShLangCompute;
+	default:
+		printer(result_tgfx_NOTCODED, "Find_EShShaderStage_byTGFXShaderStage() doesn't support this type of stage!");
+		return EShLangVertex;
+	}
+}
+static void* compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, void* i_DATA, unsigned int i_DATA_SIZE, unsigned int* compiledbinary_datasize) {
+	EShLanguage stage = Find_EShShaderStage_byTGFXShaderStage(tgfxstage);
+	glslang::TShader shader(stage);
+	glslang::TProgram program;
+
+	// Enable SPIR-V and Vulkan rules when parsing GLSL
+	EShMessages messages = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
+
+	const char* strings[1] = { (const char*)i_DATA };
+	shader.setStrings(strings, 1);
+
+	if (!shader.parse(&glsl_to_spirv_limitationtable, 100, false, messages)) {
+		puts(shader.getInfoLog());
+		puts(shader.getInfoDebugLog());
+		return false;  // something didn't work
+	}
+
+	program.addShader(&shader);
+
+	//
+	// Program-level processing...
+	//
+
+	if (!program.link(messages)) {
+		std::string log = std::string("Shader compilation failed!") + shader.getInfoLog() + std::string(shader.getInfoDebugLog());
+		printer(result_tgfx_FAIL, log.c_str());
+		return false;
+	}
+	std::vector<unsigned int> binarydata;
+	glslang::GlslangToSpv(*program.getIntermediate(stage), binarydata);
+	if (binarydata.size()) {
+		unsigned int* outbinary = new unsigned int[binarydata.size()];
+		*compiledbinary_datasize = binarydata.size() * 4;
+		memcpy(outbinary, binarydata.data(), binarydata.size() * 4);
+		return outbinary;
+	}
+	printer(result_tgfx_FAIL, "glslang couldn't compile the shader!");
+	return nullptr;
+}
 result_tgfx Compile_ShaderSource (shaderlanguages_tgfx language, shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE,
 	shadersource_tgfx_handle* ShaderSourceHandle) {
+	void* binary_spirv_data = nullptr;
+	unsigned int binary_spirv_datasize = 0;
+	switch (language) {
+	case shaderlanguages_tgfx_SPIRV:
+		binary_spirv_data = DATA;
+		binary_spirv_datasize = DATA_SIZE;
+		break;
+	case shaderlanguages_tgfx_GLSL:
+		binary_spirv_data = compile_shadersource_withglslang(shaderstage, DATA, DATA_SIZE, &binary_spirv_datasize);
+		break;
+	default:
+		printer(result_tgfx_NOTCODED, "Vulkan backend doesn't support this shading language");
+	}
+
+
 	//Create Vertex Shader Module
 	VkShaderModuleCreateInfo ci = {};
 	ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	ci.flags = 0;
 	ci.pNext = nullptr;
-	ci.pCode = reinterpret_cast<const uint32_t*>(DATA);
-	ci.codeSize = static_cast<size_t>(DATA_SIZE);
+	ci.pCode = reinterpret_cast<const uint32_t*>(binary_spirv_data);
+	ci.codeSize = static_cast<size_t>(binary_spirv_datasize);
 
 	VkShaderModule Module;
 	if (vkCreateShaderModule(rendergpu->LOGICALDEVICE(), &ci, 0, &Module) != VK_SUCCESS) {
@@ -1447,7 +1559,7 @@ result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, sh
 			depth_state.depthTestEnable = VK_TRUE;
 			depth_state.depthCompareOp = depthsettings->DepthCompareOP;
 			depth_state.depthWriteEnable = depthsettings->ShouldWrite;
-			depth_state.depthBoundsTestEnable = VK_FALSE;
+			depth_state.depthBoundsTestEnable = depthsettings->DepthBoundsEnable;
 			depth_state.maxDepthBounds = depthsettings->DepthBoundsMax;
 			depth_state.minDepthBounds = depthsettings->DepthBoundsMin;
 		}
@@ -1562,8 +1674,91 @@ result_tgfx Create_MaterialInst (rasterpipelinetype_tgfx_handle MaterialType, ra
 }
 void  Delete_MaterialInst (rasterpipelineinstance_tgfx_handle ID){}
 
-result_tgfx Create_ComputeType (shadersource_tgfx_handle Source, shaderinputdescription_tgfx_listhandle ShaderInputDescs, computeshadertype_tgfx_handle* ComputeTypeHandle){ return result_tgfx_FAIL; }
-result_tgfx Create_ComputeInstance(computeshadertype_tgfx_handle ComputeType, computeshaderinstance_tgfx_handle* ComputeShaderInstanceHandle) { return result_tgfx_FAIL; }
+result_tgfx Create_ComputeType (shadersource_tgfx_handle Source, shaderinputdescription_tgfx_listhandle ShaderInputDescs, computeshadertype_tgfx_handle* ComputeTypeHandle) {
+	VkComputePipelineCreateInfo cp_ci = {};
+	shadersource_vk* SHADER = (shadersource_vk*)Source;
+	VkShaderModule shader_module = SHADER->Module;
+
+	computetype_vk* VKPipeline = new computetype_vk;
+
+	if (!VKDescSet_PipelineLayoutCreation((const shaderinputdesc_vk**)ShaderInputDescs, &VKPipeline->General_DescSet, &VKPipeline->Instance_DescSet,
+		&VKPipeline->PipelineLayout)) {
+		printer(result_tgfx_FAIL, "Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
+		delete VKPipeline;
+		return result_tgfx_FAIL;
+	}
+
+	//VkPipeline creation
+	{
+		cp_ci.stage.flags = 0;
+		cp_ci.stage.module = shader_module;
+		cp_ci.stage.pName = "main";
+		cp_ci.stage.pNext = nullptr;
+		cp_ci.stage.pSpecializationInfo = nullptr;
+		cp_ci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		cp_ci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		cp_ci.basePipelineHandle = VK_NULL_HANDLE;
+		cp_ci.basePipelineIndex = -1;
+		cp_ci.flags = 0;
+		cp_ci.layout = VKPipeline->PipelineLayout;
+		cp_ci.pNext = nullptr;
+		cp_ci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		if (vkCreateComputePipelines(rendergpu->LOGICALDEVICE(), VK_NULL_HANDLE, 1, &cp_ci, nullptr, &VKPipeline->PipelineObject) != VK_SUCCESS) {
+			printer(result_tgfx_FAIL, "Compile_ComputeShader() has failed at vkCreateComputePipelines!");
+			delete VKPipeline;
+			return result_tgfx_FAIL;
+		}
+	}
+	vkDestroyShaderModule(rendergpu->LOGICALDEVICE(), shader_module, nullptr);
+
+	*ComputeTypeHandle = (computeshadertype_tgfx_handle)VKPipeline;
+	hidden->computetypes.push_back(VKPipeline);
+	return result_tgfx_SUCCESS;
+}
+result_tgfx Create_ComputeInstance(computeshadertype_tgfx_handle ComputeType, computeshaderinstance_tgfx_handle* ComputeShaderInstanceHandle) {
+	computetype_vk* VKPipeline = (computetype_vk*)ComputeType;
+
+	computeinstance_vk* instance = new computeinstance_vk;
+	instance->PROGRAM = VKPipeline;
+
+	instance->DescSet.Layout = VKPipeline->Instance_DescSet.Layout;
+	instance->DescSet.ShouldRecreate.store(0);
+	instance->DescSet.DescImagesCount = VKPipeline->Instance_DescSet.DescImagesCount;
+	instance->DescSet.DescSamplersCount = VKPipeline->Instance_DescSet.DescSamplersCount;
+	instance->DescSet.DescSBuffersCount = VKPipeline->Instance_DescSet.DescSBuffersCount;
+	instance->DescSet.DescUBuffersCount = VKPipeline->Instance_DescSet.DescUBuffersCount;
+	instance->DescSet.DescCount = VKPipeline->Instance_DescSet.DescCount;
+
+	if (instance->DescSet.DescCount) {
+		instance->DescSet.Descs = new descriptor_vk[instance->DescSet.DescCount];
+
+		for (unsigned int i = 0; i < instance->DescSet.DescCount; i++) {
+			descriptor_vk& desc = instance->DescSet.Descs[i];
+			desc.ElementCount = VKPipeline->Instance_DescSet.Descs[i].ElementCount;
+			desc.Type = VKPipeline->Instance_DescSet.Descs[i].Type;
+			switch (desc.Type)
+			{
+			case desctype_vk::IMAGE:
+			case desctype_vk::SAMPLER:
+				desc.Elements = new descelement_image_vk[desc.ElementCount];
+			case desctype_vk::SBUFFER:
+			case desctype_vk::UBUFFER:
+				desc.Elements = new descelement_buffer_vk[desc.ElementCount];
+			}
+		}
+
+		if (!Create_DescSet(&instance->DescSet)) {
+			printer(result_tgfx_FAIL, "You probably exceed one of the limits you specified at GFX initialization process! Create_ComputeInstance() has failed!");
+			delete[] instance->DescSet.Descs;
+			delete instance;
+			return result_tgfx_FAIL;
+		}
+	}
+
+	*ComputeShaderInstanceHandle = (computeshaderinstance_tgfx_handle)instance;
+	hidden->computeinstances.push_back(instance);
+	return result_tgfx_SUCCESS;
+}
 void  Delete_ComputeShaderType (computeshadertype_tgfx_handle ID){}
 void  Delete_ComputeShaderInstance (computeshaderinstance_tgfx_handle ID){}
 
@@ -1598,6 +1793,7 @@ result_tgfx SetDescSet_Buffer(descset_vk* Set, unsigned int BINDINDEX, bool isUn
 	if (TargetOffset % reqalignmentoffset) {
 		printer(result_tgfx_WARNING, ("This TargetOffset in SetMaterialBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + std::to_string(reqalignmentoffset)).c_str());
 	}
+
 
 	unsigned char x = 0;
 	if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
@@ -1676,7 +1872,7 @@ result_tgfx SetDescSet_Texture(descset_vk* Set, unsigned int BINDINDEX, bool isS
 	Find_AccessPattern_byIMAGEACCESS(usage, unused, DescElement.info.imageLayout);
 	texture_vk* TEXTURE = ((texture_vk*)TextureHandle);
 	DescElement.info.imageView = TEXTURE->ImageView;
-	DescElement.info.sampler = Sampler->Sampler;
+	DescElement.info.sampler = ((isSampledTexture) ? (Sampler->Sampler) : (nullptr));
 
 	descset_updatecall_vk call;
 	call.Set = Set;
@@ -1727,20 +1923,32 @@ result_tgfx SetMaterialInst_Texture (rasterpipelineinstance_tgfx_handle Material
 //IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
 result_tgfx SetComputeType_Buffer (computeshadertype_tgfx_handle ComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
 	buffer_tgfx_handle TargetBufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize){
-	return result_tgfx_FAIL;
+	computetype_vk* PSO = (computetype_vk*)ComputeType;
+	descset_vk* Set = &PSO->General_DescSet;
+
+	return SetDescSet_Buffer(Set, BINDINDEX, isUniformBufferShaderInput, ELEMENTINDEX, TargetOffset, BUFTYPE, TargetBufferHandle, BoundDataSize, isUsedRecently);
 }
-result_tgfx SetComputeType_Texture (computeshadertype_tgfx_handle ComputeType, unsigned char isComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
-	texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage){
-	return result_tgfx_FAIL;
+result_tgfx SetComputeType_Texture (computeshadertype_tgfx_handle ComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
+	texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage) {
+	computetype_vk* PSO = (computetype_vk*)ComputeType;
+	descset_vk* Set = &PSO->General_DescSet;
+
+	return SetDescSet_Texture(Set, BINDINDEX, isSampledTexture, ELEMENTINDEX, (sampler_vk*)Sampler, (texture_vk*)TextureHandle, usage, isUsedRecently);
 }
 
 result_tgfx SetComputeInst_Buffer (computeshaderinstance_tgfx_handle ComputeInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
 	buffer_tgfx_handle TargetBufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize){
-	return result_tgfx_FAIL;
+	computeinstance_vk* PSO = (computeinstance_vk*)ComputeInstance;
+	descset_vk* Set = &PSO->DescSet;
+
+	return SetDescSet_Buffer(Set, BINDINDEX, isUniformBufferShaderInput, ELEMENTINDEX, TargetOffset, BUFTYPE, TargetBufferHandle, BoundDataSize, isUsedRecently);
 }
 result_tgfx SetComputeInst_Texture (computeshaderinstance_tgfx_handle ComputeInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
 	texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage){
-	return result_tgfx_FAIL;
+	computeinstance_vk* PSO = (computeinstance_vk*)ComputeInstance;
+	descset_vk* Set = &PSO->DescSet;
+
+	return SetDescSet_Texture(Set, BINDINDEX, isSampledTexture, ELEMENTINDEX, (sampler_vk*)Sampler, (texture_vk*)TextureHandle, usage, isUsedRecently);
 }
 
 
@@ -1988,6 +2196,118 @@ extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 	hidden->UnboundDescSetSamplerCount = 0;
 	hidden->UnboundDescSetSBufferCount = 0;
 	hidden->UnboundDescSetUBufferCount = 0;
+
+
+	//Start glslang
+	{
+		glslang::InitializeProcess();
+
+		//Initialize limitation table
+		//from Eric's Blog "Translate GLSL to SPIRV for Vulkan at Runtime" post: https://lxjk.github.io/2020/03/10/Translate-GLSL-to-SPIRV-for-Vulkan-at-Runtime.html
+		glsl_to_spirv_limitationtable.maxLights = 32;
+		glsl_to_spirv_limitationtable.maxClipPlanes = 6;
+		glsl_to_spirv_limitationtable.maxTextureUnits = 32;
+		glsl_to_spirv_limitationtable.maxTextureCoords = 32;
+		glsl_to_spirv_limitationtable.maxVertexAttribs = 64;
+		glsl_to_spirv_limitationtable.maxVertexUniformComponents = 4096;
+		glsl_to_spirv_limitationtable.maxVaryingFloats = 64;
+		glsl_to_spirv_limitationtable.maxVertexTextureImageUnits = 32;
+		glsl_to_spirv_limitationtable.maxCombinedTextureImageUnits = 80;
+		glsl_to_spirv_limitationtable.maxTextureImageUnits = 32;
+		glsl_to_spirv_limitationtable.maxFragmentUniformComponents = 4096;
+		glsl_to_spirv_limitationtable.maxDrawBuffers = 32;
+		glsl_to_spirv_limitationtable.maxVertexUniformVectors = 128;
+		glsl_to_spirv_limitationtable.maxVaryingVectors = 8;
+		glsl_to_spirv_limitationtable.maxFragmentUniformVectors = 16;
+		glsl_to_spirv_limitationtable.maxVertexOutputVectors = 16;
+		glsl_to_spirv_limitationtable.maxFragmentInputVectors = 15;
+		glsl_to_spirv_limitationtable.minProgramTexelOffset = -8;
+		glsl_to_spirv_limitationtable.maxProgramTexelOffset = 7;
+		glsl_to_spirv_limitationtable.maxClipDistances = 8;
+		glsl_to_spirv_limitationtable.maxComputeWorkGroupCountX = 65535;
+		glsl_to_spirv_limitationtable.maxComputeWorkGroupCountY = 65535;
+		glsl_to_spirv_limitationtable.maxComputeWorkGroupCountZ = 65535;
+		glsl_to_spirv_limitationtable.maxComputeWorkGroupSizeX = 1024;
+		glsl_to_spirv_limitationtable.maxComputeWorkGroupSizeY = 1024;
+		glsl_to_spirv_limitationtable.maxComputeWorkGroupSizeZ = 64;
+		glsl_to_spirv_limitationtable.maxComputeUniformComponents = 1024;
+		glsl_to_spirv_limitationtable.maxComputeTextureImageUnits = 16;
+		glsl_to_spirv_limitationtable.maxComputeImageUniforms = 8;
+		glsl_to_spirv_limitationtable.maxComputeAtomicCounters = 8;
+		glsl_to_spirv_limitationtable.maxComputeAtomicCounterBuffers = 1;
+		glsl_to_spirv_limitationtable.maxVaryingComponents = 60;
+		glsl_to_spirv_limitationtable.maxVertexOutputComponents = 64;
+		glsl_to_spirv_limitationtable.maxGeometryInputComponents = 64;
+		glsl_to_spirv_limitationtable.maxGeometryOutputComponents = 128;
+		glsl_to_spirv_limitationtable.maxFragmentInputComponents = 128;
+		glsl_to_spirv_limitationtable.maxImageUnits = 8;
+		glsl_to_spirv_limitationtable.maxCombinedImageUnitsAndFragmentOutputs = 8;
+		glsl_to_spirv_limitationtable.maxCombinedShaderOutputResources = 8;
+		glsl_to_spirv_limitationtable.maxImageSamples = 0;
+		glsl_to_spirv_limitationtable.maxVertexImageUniforms = 0;
+		glsl_to_spirv_limitationtable.maxTessControlImageUniforms = 0;
+		glsl_to_spirv_limitationtable.maxTessEvaluationImageUniforms = 0;
+		glsl_to_spirv_limitationtable.maxGeometryImageUniforms = 0;
+		glsl_to_spirv_limitationtable.maxFragmentImageUniforms = 8;
+		glsl_to_spirv_limitationtable.maxCombinedImageUniforms = 8;
+		glsl_to_spirv_limitationtable.maxGeometryTextureImageUnits = 16;
+		glsl_to_spirv_limitationtable.maxGeometryOutputVertices = 256;
+		glsl_to_spirv_limitationtable.maxGeometryTotalOutputComponents = 1024;
+		glsl_to_spirv_limitationtable.maxGeometryUniformComponents = 1024;
+		glsl_to_spirv_limitationtable.maxGeometryVaryingComponents = 64;
+		glsl_to_spirv_limitationtable.maxTessControlInputComponents = 128;
+		glsl_to_spirv_limitationtable.maxTessControlOutputComponents = 128;
+		glsl_to_spirv_limitationtable.maxTessControlTextureImageUnits = 16;
+		glsl_to_spirv_limitationtable.maxTessControlUniformComponents = 1024;
+		glsl_to_spirv_limitationtable.maxTessControlTotalOutputComponents = 4096;
+		glsl_to_spirv_limitationtable.maxTessEvaluationInputComponents = 128;
+		glsl_to_spirv_limitationtable.maxTessEvaluationOutputComponents = 128;
+		glsl_to_spirv_limitationtable.maxTessEvaluationTextureImageUnits = 16;
+		glsl_to_spirv_limitationtable.maxTessEvaluationUniformComponents = 1024;
+		glsl_to_spirv_limitationtable.maxTessPatchComponents = 120;
+		glsl_to_spirv_limitationtable.maxPatchVertices = 32;
+		glsl_to_spirv_limitationtable.maxTessGenLevel = 64;
+		glsl_to_spirv_limitationtable.maxViewports = 16;
+		glsl_to_spirv_limitationtable.maxVertexAtomicCounters = 0;
+		glsl_to_spirv_limitationtable.maxTessControlAtomicCounters = 0;
+		glsl_to_spirv_limitationtable.maxTessEvaluationAtomicCounters = 0;
+		glsl_to_spirv_limitationtable.maxGeometryAtomicCounters = 0;
+		glsl_to_spirv_limitationtable.maxFragmentAtomicCounters = 8;
+		glsl_to_spirv_limitationtable.maxCombinedAtomicCounters = 8;
+		glsl_to_spirv_limitationtable.maxAtomicCounterBindings = 1;
+		glsl_to_spirv_limitationtable.maxVertexAtomicCounterBuffers = 0;
+		glsl_to_spirv_limitationtable.maxTessControlAtomicCounterBuffers = 0;
+		glsl_to_spirv_limitationtable.maxTessEvaluationAtomicCounterBuffers = 0;
+		glsl_to_spirv_limitationtable.maxGeometryAtomicCounterBuffers = 0;
+		glsl_to_spirv_limitationtable.maxFragmentAtomicCounterBuffers = 1;
+		glsl_to_spirv_limitationtable.maxCombinedAtomicCounterBuffers = 1;
+		glsl_to_spirv_limitationtable.maxAtomicCounterBufferSize = 16384;
+		glsl_to_spirv_limitationtable.maxTransformFeedbackBuffers = 4;
+		glsl_to_spirv_limitationtable.maxTransformFeedbackInterleavedComponents = 64;
+		glsl_to_spirv_limitationtable.maxCullDistances = 8;
+		glsl_to_spirv_limitationtable.maxCombinedClipAndCullDistances = 8;
+		glsl_to_spirv_limitationtable.maxSamples = 4;
+		glsl_to_spirv_limitationtable.maxMeshOutputVerticesNV = 256;
+		glsl_to_spirv_limitationtable.maxMeshOutputPrimitivesNV = 512;
+		glsl_to_spirv_limitationtable.maxMeshWorkGroupSizeX_NV = 32;
+		glsl_to_spirv_limitationtable.maxMeshWorkGroupSizeY_NV = 1;
+		glsl_to_spirv_limitationtable.maxMeshWorkGroupSizeZ_NV = 1;
+		glsl_to_spirv_limitationtable.maxTaskWorkGroupSizeX_NV = 32;
+		glsl_to_spirv_limitationtable.maxTaskWorkGroupSizeY_NV = 1;
+		glsl_to_spirv_limitationtable.maxTaskWorkGroupSizeZ_NV = 1;
+		glsl_to_spirv_limitationtable.maxMeshViewCountNV = 4;
+		glsl_to_spirv_limitationtable.limits.nonInductiveForLoops = 1;
+		glsl_to_spirv_limitationtable.limits.whileLoops = 1;
+		glsl_to_spirv_limitationtable.limits.doWhileLoops = 1;
+		glsl_to_spirv_limitationtable.limits.generalUniformIndexing = 1;
+		glsl_to_spirv_limitationtable.limits.generalAttributeMatrixVectorIndexing = 1;
+		glsl_to_spirv_limitationtable.limits.generalVaryingIndexing = 1;
+		glsl_to_spirv_limitationtable.limits.generalSamplerIndexing = 1;
+		glsl_to_spirv_limitationtable.limits.generalVariableIndexing = 1;
+		glsl_to_spirv_limitationtable.limits.generalConstantMatrixVectorIndexing = 1;
+
+	}
+
 
 	//Material Related Descriptor Pool Creation
 	{

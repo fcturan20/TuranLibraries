@@ -37,3 +37,6 @@ else()
     message("dear Imgui (by Ocornut) isn't installed on your system!")
     target_compile_definitions(NO_IMGUI)
 endif()
+
+find_package(glslang CONFIG REQUIRED)
+target_link_libraries(TGFXVulkan PRIVATE HLSL SPIRV glslang OGLCompiler)

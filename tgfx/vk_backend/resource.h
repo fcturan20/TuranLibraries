@@ -147,3 +147,17 @@ struct shaderinputdesc_vk {
 	unsigned int ELEMENTCOUNT = 0;
 	VkShaderStageFlags ShaderStages;
 };
+struct computetype_vk {
+	VkPipeline PipelineObject;
+	VkPipelineLayout PipelineLayout;
+	descset_vk General_DescSet, Instance_DescSet;
+};
+struct computeinstance_vk {
+	computetype_vk* PROGRAM;
+	descset_vk DescSet;
+};
+struct globalbuffer_vk {
+	VkDeviceSize DATA_SIZE;
+	memoryblock_vk Block;
+	bool isUniform;
+};

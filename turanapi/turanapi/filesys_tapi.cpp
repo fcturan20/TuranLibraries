@@ -55,8 +55,9 @@ char* read_textfile(const char* path){
 		textfile.close();
 		finaltext = new char[string_data.str().length() + 1]{ '\n' };
 		unsigned int i = 0;
-		while (string_data.str()[i] != '\n') {
+		while (string_data.str()[i] != '\0') {
 			finaltext[i] = string_data.str()[i];
+			i++;
 		}
 		return finaltext;
 	}

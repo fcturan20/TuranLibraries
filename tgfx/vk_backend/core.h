@@ -10,10 +10,6 @@ struct core_public {
 	const std::vector<window_vk*>& GET_WINDOWs();
 };
 
-struct extension_private;
-struct extension_public {
-	extension_private* hidden = nullptr;
-};
 
 struct gpu_private;
 struct gpu_public{

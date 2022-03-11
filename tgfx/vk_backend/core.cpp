@@ -18,6 +18,8 @@
 #include "queue.h"
 #include "extension.h"
 
+#include "gpucontentmanager.h"
+
 struct core_private{
 public:
 	std::vector<gpu_public*> DEVICE_GPUs;
@@ -121,7 +123,7 @@ result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCa
 	//core->api->debugcallback = &core_functions::debugcallback;
 	//core->api->debugcallback_threaded = &core_functions::debugcallback_threaded;
 	//core->api->destroy_tgfx_resources = &core_functions::destroy_tgfx_resources;
-	//core->api->take_inputs = &core_functions::take_inputs;
+	core->api->take_inputs = &core_functions::take_inputs;
 	core->api->getmonitorlist = &core_functions::getmonitorlist;
 	core->api->getGPUlist = &core_functions::getGPUlist;
 	set_helper_functions();
@@ -804,6 +806,57 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 	printer(result_tgfx_SUCCESS, "Window creation is successful!");
 	*window = (window_tgfx_handle)Vulkan_Window;
 	hidden->WINDOWs.push_back(Vulkan_Window);
+}
+void core_functions::take_inputs() {
+	glfwPollEvents();
+	if (hidden->isAnyWindowResized) {
+		vkDeviceWaitIdle(rendergpu->LOGICALDEVICE());
+		for (unsigned int WindowIndex = 0; WindowIndex < hidden->WINDOWs.size(); WindowIndex++) {
+			window_vk* VKWINDOW = hidden->WINDOWs[WindowIndex];
+			if (!VKWINDOW->isResized) {
+				continue;
+			}
+			if (VKWINDOW->NEWWIDTH == VKWINDOW->LASTWIDTH && VKWINDOW->NEWHEIGHT == VKWINDOW->LASTHEIGHT) {
+				VKWINDOW->isResized = false;
+				continue;
+			}
+
+			VkSwapchainKHR swpchn;
+			texture_vk* swpchntextures[2]{ new texture_vk(), new texture_vk() };
+			//If new window size isn't able to create a swapchain, return to last window size
+			if (!Create_WindowSwapchain(VKWINDOW, VKWINDOW->NEWWIDTH, VKWINDOW->NEWHEIGHT, &swpchn, swpchntextures)) {
+				printer(result_tgfx_FAIL, "New size for the window is not possible, returns to the last successful size!");
+				glfwSetWindowSize(VKWINDOW->GLFW_WINDOW, VKWINDOW->LASTWIDTH, VKWINDOW->LASTHEIGHT);
+				VKWINDOW->isResized = false;
+				delete swpchntextures[0]; delete swpchntextures[1];
+				continue;
+			}
+
+			texture_vk* oldswpchn0 = VKWINDOW->Swapchain_Textures[0];
+			texture_vk* oldswpchn1 = VKWINDOW->Swapchain_Textures[1];
+
+			vkDestroyImageView(rendergpu->LOGICALDEVICE(), oldswpchn0->ImageView, nullptr);
+			vkDestroyImageView(rendergpu->LOGICALDEVICE(), oldswpchn1->ImageView, nullptr);
+			vkDestroySwapchainKHR(rendergpu->LOGICALDEVICE(), VKWINDOW->Window_SwapChain, nullptr);
+			oldswpchn0->Image = VK_NULL_HANDLE;
+			oldswpchn0->ImageView = VK_NULL_HANDLE;
+			oldswpchn1->Image = VK_NULL_HANDLE;
+			oldswpchn1->ImageView = VK_NULL_HANDLE;
+			core_tgfx_main->contentmanager->Delete_Texture((texture_tgfx_handle)oldswpchn0, false);
+			core_tgfx_main->contentmanager->Delete_Texture((texture_tgfx_handle)oldswpchn1, false);
+
+			VKWINDOW->LASTHEIGHT = VKWINDOW->NEWHEIGHT;
+			VKWINDOW->LASTWIDTH = VKWINDOW->NEWWIDTH;
+			//When you resize window at Frame1, user'd have to track swapchain texture state if I don't do this here
+			//So please don't touch!
+			VKWINDOW->Swapchain_Textures[0] = core_tgfx_main->renderer->GetCurrentFrameIndex() ? swpchntextures[1] : swpchntextures[0];
+			VKWINDOW->Swapchain_Textures[1] = core_tgfx_main->renderer->GetCurrentFrameIndex() ? swpchntextures[0] : swpchntextures[1];
+			VKWINDOW->Window_SwapChain = swpchn;
+			VKWINDOW->CurrentFrameSWPCHNIndex = 0;
+			VKWINDOW->resize_cb((window_tgfx_handle)VKWINDOW, VKWINDOW->UserPTR, VKWINDOW->NEWWIDTH, VKWINDOW->NEWHEIGHT, (texture_tgfx_handle*)VKWINDOW->Swapchain_Textures);
+			delete swpchntextures;
+		}
+	}
 }
 
 

@@ -68,6 +68,11 @@ unsigned char Slider_Vec2(const char* name, vec2_tgfx* data, float min, float ma
 unsigned char Slider_Vec3(const char* name, vec3_tgfx* data, float min, float max);
 unsigned char Slider_Vec4(const char* name, vec4_tgfx* data, float min, float max);
 
+
+void Delete_WINDOW(imguiwindow_tgfx* Window);
+void Register_WINDOW(imguiwindow_tgfx* Window);
+void Run_IMGUI_WINDOWs();
+
 void set_imguifuncptrs() {
 	core_tgfx_main->imgui->Begin_Menu = Begin_Menu;
 	core_tgfx_main->imgui->Begin_Menubar = Begin_Menubar;
@@ -108,6 +113,10 @@ void set_imguifuncptrs() {
 	core_tgfx_main->imgui->Slider_Vec3 = Slider_Vec3;
 	core_tgfx_main->imgui->Slider_Vec4 = Slider_Vec4;
 	core_tgfx_main->imgui->Text = Text;
+
+	core_tgfx_main->imgui->Run_IMGUI_WINDOWs = Run_IMGUI_WINDOWs;
+	core_tgfx_main->imgui->Register_WINDOW = Register_WINDOW;
+	core_tgfx_main->imgui->Delete_WINDOW = Delete_WINDOW;
 }
 
 void CheckIMGUIVKResults(VkResult result) {
@@ -254,6 +263,8 @@ void imgui_vk::Destroy_IMGUIResources() {
 
 struct imgui_vk::imgui_vk_hidden {
 	ImGuiContext* Context = nullptr;
+
+	std::vector<imguiwindow_tgfx*> ALL_IMGUI_WINDOWs, Windows_toClose, Windows_toOpen;
 };
 static imgui_vk::imgui_vk_hidden* hidden = nullptr;
 
@@ -288,6 +299,53 @@ extern void Create_IMGUI() {
 	ImGui::StyleColorsDark();
 }
 
+void Run_IMGUI_WINDOWs() {
+	for (unsigned int i = 0; i < hidden->ALL_IMGUI_WINDOWs.size(); i++) {
+		imguiwindow_tgfx* window = hidden->ALL_IMGUI_WINDOWs[i];
+		printer(result_tgfx_SUCCESS, ("Running the Window: " + std::string(window->WindowName)).c_str());
+		window->RunWindow();
+	}
+
+	if (hidden->Windows_toClose.size() > 0) {
+		for (unsigned int window_delete_i = 0; window_delete_i < hidden->Windows_toClose.size(); window_delete_i++) {
+			imguiwindow_tgfx* window_to_close = hidden->Windows_toClose[window_delete_i];
+			for (unsigned int i = 0; i < hidden->ALL_IMGUI_WINDOWs.size(); i++) {
+				if (window_to_close == hidden->ALL_IMGUI_WINDOWs[i]) {
+					delete window_to_close;
+					window_to_close = nullptr;
+					hidden->ALL_IMGUI_WINDOWs[i] = nullptr;
+					hidden->ALL_IMGUI_WINDOWs.erase(hidden->ALL_IMGUI_WINDOWs.begin() + i);
+
+					//Inner loop will break!
+					break;
+				}
+			}
+		}
+
+		hidden->Windows_toClose.clear();
+	}
+
+	if (hidden->Windows_toOpen.size() > 0) {
+		unsigned int previous_size = hidden->ALL_IMGUI_WINDOWs.size();
+
+		for (unsigned int i = 0; i < hidden->Windows_toOpen.size(); i++) {
+			imguiwindow_tgfx* window_to_open = hidden->Windows_toOpen[i];
+			hidden->ALL_IMGUI_WINDOWs.push_back(window_to_open);
+		}
+		hidden->Windows_toOpen.clear();
+		//We should run new windows!
+		for (; previous_size < hidden->ALL_IMGUI_WINDOWs.size(); previous_size++) {
+			hidden->ALL_IMGUI_WINDOWs[previous_size]->RunWindow();
+		}
+	}
+}
+void Register_WINDOW(imguiwindow_tgfx* Window) {
+	printer(result_tgfx_SUCCESS, "Registering a Window!");
+	hidden->Windows_toOpen.push_back(Window);
+}
+void Delete_WINDOW(imguiwindow_tgfx* Window) {
+	hidden->Windows_toClose.push_back(Window);
+}
 
 
 

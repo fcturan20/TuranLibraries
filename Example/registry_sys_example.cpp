@@ -19,7 +19,7 @@
 #include "tgfx_core.h"
 #include "tgfx_renderer.h"
 #include "tgfx_gpucontentmanager.h"
-
+#include "tgfx_imgui.h"
 
 #include <stdint.h>
 #include <vector>
@@ -50,6 +50,18 @@ void printf_log_tgfx(result_tgfx result, const char* text) {
 	}
 }
 
+core_tgfx* TGFXCORE = nullptr;
+const void* TGFXINVALID = nullptr;
+helper_tgfx* TGFXHELPER = nullptr;
+renderer_tgfx* TGFXRENDERER = nullptr;
+gpudatamanager_tgfx* TGFXCONTENTMANAGER = nullptr;
+dearimgui_tgfx* TGFXIMGUI = nullptr;
+
+void FirstWindow_Run() {
+	static bool shouldShowText = false;
+	if (TGFXIMGUI->Button("First Button")) { shouldShowText = !shouldShowText; }
+	if (shouldShowText) { TGFXIMGUI->Text("This is the first text!"); }
+}
 int main() {
 	auto registrydll = DLIB_LOAD_TAPI("tapi_registrysys.dll");
 	if (registrydll == NULL) {
@@ -111,10 +123,12 @@ int main() {
 	result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_VULKAN, printf_log_tgfx);
 	printf("%c", result);
 
-	const void* const TGFXINVALID = tgfxsys->api->INVALIDHANDLE;
-	helper_tgfx* const TGFXHELPER = tgfxsys->api->helpers;
-	renderer_tgfx* const TGFXRENDERER = tgfxsys->api->renderer;
-	gpudatamanager_tgfx* const TGFXCONTENTMANAGER = tgfxsys->api->contentmanager;
+	TGFXCORE = tgfxsys->api;
+	TGFXINVALID = tgfxsys->api->INVALIDHANDLE;
+	TGFXHELPER = tgfxsys->api->helpers;
+	TGFXRENDERER = tgfxsys->api->renderer;
+	TGFXCONTENTMANAGER = tgfxsys->api->contentmanager;
+	TGFXIMGUI = tgfxsys->api->imgui;
 
 	gpu_tgfx_listhandle gpulist;
 	tgfxsys->api->getGPUlist(&gpulist);
@@ -140,7 +154,7 @@ int main() {
 	monitor_tgfx_listhandle monitorlist;
 	tgfxsys->api->getmonitorlist(&monitorlist);
 	TGFXLISTCOUNT(tgfxsys->api, monitorlist, monitorcount);
-	printf("Monitor Count: %u", monitorcount);
+	printf_log_tgfx(result_tgfx_SUCCESS, (std::string("Monitor Count: ") + std::to_string(monitorcount)).c_str());
 	textureusageflag_tgfx_handle swapchaintexture_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, true, true, true, false);
 	texture_tgfx_handle swapchain_textures[2];
 	window_tgfx_handle firstwindow;
@@ -307,6 +321,12 @@ int main() {
 	TGFXCONTENTMANAGER->SetComputeType_Buffer(first_computetype, false, 1, shaderuniformbuffers_handle, buffertype_tgfx_GLOBAL, true, 0, 64, 142);
 	TGFXCONTENTMANAGER->SetComputeType_Texture(first_computetype, false, 2, first_texture, false, 0, nullptr, image_access_tgfx_SHADER_WRITEONLY);
 
+	static imguiwindow_tgfx window_struct;
+	window_struct.isWindowOpen = true;
+	window_struct.WindowName = "First IMGUIWindow";
+	window_struct.RunWindow = &FirstWindow_Run;
+	TGFXIMGUI->Register_WINDOW(&window_struct);
+
 	//Swapchain images should be converted from no_access layout in the first frame
 	//Frame 0
 	TGFXRENDERER->ImageBarrier(firstbarriertp, first_depthbuffer, image_access_tgfx_NO_ACCESS, image_access_tgfx_DEPTHSTENCIL_READWRITE, 0, cubeface_tgfx_FRONT);
@@ -335,11 +355,12 @@ int main() {
 	TGFXRENDERER->ImageBarrier(final_tp, swapchain_textures[TGFXRENDERER->GetCurrentFrameIndex()], image_access_tgfx_RTCOLOR_READWRITE, image_access_tgfx_SWAPCHAIN_DISPLAY, 0, cubeface_tgfx_FRONT);
 	TGFXRENDERER->SwapBuffers(firstwindow, first_wp);
 	TGFXRENDERER->Run();
-	
+
 	while (true) {
 		profiledscope_handle_tapi scope;	unsigned long long duration;
 		profilersys->funcs->start_profiling(&scope, "Run Loop", &duration, 1);
 
+		TGFXIMGUI->Run_IMGUI_WINDOWs();
 		//Rendering operations
 		boxregion_tgfx region;
 		region.WIDTH = 1280; region.HEIGHT = 720; region.XOffset = 0; region.YOffset = 0;
@@ -351,6 +372,7 @@ int main() {
 		TGFXRENDERER->SwapBuffers(firstwindow, first_wp);
 
 		TGFXRENDERER->Run();
+		TGFXCORE->take_inputs();
 		profilersys->funcs->finish_profiling(&scope, 1);
 	}
 	printf("Application is finished!");

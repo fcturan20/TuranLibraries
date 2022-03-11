@@ -13,7 +13,7 @@ layout(set = 0, binding = 1) uniform WorldData{
 } CameraData[];
 
 void main() {
-    //gl_Position = CameraData[0].camera_toprojection * CameraData[0].world_tocamera * CameraData[0].object_toworld *  vec4(inPosition, 1.0);
-    gl_Position = vec4(inPosition, 1.0);
+    gl_Position = CameraData[0].camera_toprojection * CameraData[0].world_tocamera * CameraData[0].object_toworld *  vec4(inPosition, 1.0);
+    //gl_Position = vec4(inPosition, 1.0);
     TextCoord = inTextCoord;
 }

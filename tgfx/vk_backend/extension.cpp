@@ -29,10 +29,10 @@ void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref
 	if (channels == texture_channels_tgfx_D32) {
 		switch (DEPTHOPTYPE) {
 		case operationtype_tgfx_READ_ONLY:
-			Ref.layout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+			Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 		case operationtype_tgfx_READ_AND_WRITE:
 		case operationtype_tgfx_WRITE_ONLY:
-			Ref.layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+			Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			break;
 		case operationtype_tgfx_UNUSED:
 			Ref.attachment = VK_ATTACHMENT_UNUSED;

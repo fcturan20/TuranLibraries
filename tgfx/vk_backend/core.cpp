@@ -153,6 +153,7 @@ extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi* regsys, c
 struct device_features_chainedstructs {
 	VkPhysicalDeviceDescriptorIndexingFeatures DescIndexingFeatures = {};
 	VkPhysicalDeviceMaintenance3Properties device_props2_main3 = {};
+	VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures seperatedepthstencillayouts = {};
 };
 //You have to enable some features to use some device extensions
 inline void core_functions::ActivateDeviceFeatures(gpu_public* VKGPU, VkDeviceCreateInfo& device_ci, device_features_chainedstructs& chainer) {
@@ -193,7 +194,19 @@ inline void core_functions::ActivateDeviceFeatures(gpu_public* VKGPU, VkDeviceCr
 		}
 	}
 
-	
+	if (VKGPU->extensions->ISSUPPORTED_SEPERATEDDEPTHSTENCILLAYOUTS()) {
+		chainer.seperatedepthstencillayouts.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES;
+		chainer.seperatedepthstencillayouts.separateDepthStencilLayouts = VK_TRUE;
+
+		if (extending_Next) {
+			*extending_Next = &chainer.seperatedepthstencillayouts;
+			extending_Next = &chainer.seperatedepthstencillayouts.pNext;
+		}
+		else {
+			dev_ci_Next = &chainer.seperatedepthstencillayouts;
+			extending_Next = &chainer.seperatedepthstencillayouts.pNext;
+		}
+	}
 }
 inline void core_functions::CheckDeviceLimits(gpu_public* VKGPU) {
 	//Check Descriptor Limits
@@ -250,7 +263,6 @@ void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_h
 		Logical_Device_CreationInfo.enabledExtensionCount = static_cast<uint32_t>(rendergpu->Active_DeviceExtensions.size());
 		Logical_Device_CreationInfo.ppEnabledExtensionNames = rendergpu->Active_DeviceExtensions.data();
 		Logical_Device_CreationInfo.pEnabledFeatures = &rendergpu->Active_Features;
-
 		Logical_Device_CreationInfo.enabledLayerCount = 0;
 		if (vkCreateDevice(rendergpu->Physical_Device, &Logical_Device_CreationInfo, nullptr, &rendergpu->Logical_Device) != VK_SUCCESS) {
 			printer(result_tgfx_SUCCESS, "Vulkan failed to create a Logical Device!");
@@ -412,13 +424,12 @@ bool Check_InstanceExtensions() {
 
 void core_functions::Create_Instance() {
 	//APPLICATION INFO
-	VkApplicationInfo App_Info = {};
-	App_Info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	App_Info.pApplicationName = "Vulkan DLL";
-	App_Info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-	App_Info.pEngineName = "GFX API";
-	App_Info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	App_Info.apiVersion = VK_API_VERSION_1_2;
+	Application_Info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	Application_Info.pApplicationName = "Vulkan DLL";
+	Application_Info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+	Application_Info.pEngineName = "GFX API";
+	Application_Info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+	Application_Info.apiVersion = VK_API_VERSION_1_2;
 
 	//CHECK SUPPORTED EXTENSIONs
 	uint32_t extension_count;
@@ -439,8 +450,7 @@ void core_functions::Create_Instance() {
 	//INSTANCE CREATION INFO
 	VkInstanceCreateInfo InstCreation_Info = {};
 	InstCreation_Info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	InstCreation_Info.pApplicationInfo = &App_Info;
-
+	InstCreation_Info.pApplicationInfo = &Application_Info;
 	//Extensions
 	InstCreation_Info.enabledExtensionCount = Active_InstanceExtensionNames.size();
 	InstCreation_Info.ppEnabledExtensionNames = Active_InstanceExtensionNames.data();

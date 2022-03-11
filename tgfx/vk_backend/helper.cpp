@@ -225,7 +225,15 @@ static rtslotdescription_tgfx_handle CreateRTSlotDescription_Color(texture_tgfx_
 static rtslotdescription_tgfx_handle CreateRTSlotDescription_DepthStencil(texture_tgfx_handle Texture0, texture_tgfx_handle Texture1,
     operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD, operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD,
     float DEPTHCLEARVALUE, unsigned char STENCILCLEARVALUE) {
-    return nullptr;
+    printer(result_tgfx_WARNING, "CreateRTSlotDescription_DepthStencil should be implemented properly!");
+    rtslotdesc_vk* desc = new rtslotdesc_vk;
+    desc->clear_value.x = DEPTHCLEARVALUE; desc->clear_value.y = STENCILCLEARVALUE;
+    desc->isUsedLater = true;
+    desc->loadtype = DEPTHLOAD;
+    desc->optype = DEPTHOP;
+    desc->textures[0] = (texture_vk*)Texture0;
+    desc->textures[1] = (texture_vk*)Texture1;
+    return (rtslotdescription_tgfx_handle)desc;
 }
 static rtslotusage_tgfx_handle CreateRTSlotUsage_Color(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE){
     printer(result_tgfx_WARNING, "Vulkan backend doesn't use LOADTYPE for now!");
@@ -248,7 +256,22 @@ static rtslotusage_tgfx_handle CreateRTSlotUsage_Color(rtslotdescription_tgfx_ha
 }
 static rtslotusage_tgfx_handle CreateRTSlotUsage_Depth(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD,
     operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD) {
-    return nullptr;
+    if (!base_slot) { printer(result_tgfx_INVALIDARGUMENT, "CreateRTSlotUsage_Color() has failed because base_slot is nullptr!"); return nullptr; }
+    rtslotdesc_vk* baseslot = (rtslotdesc_vk*)base_slot;
+    if (baseslot->optype == operationtype_tgfx_READ_ONLY &&
+        (DEPTHOP == operationtype_tgfx_WRITE_ONLY || DEPTHOP == operationtype_tgfx_READ_AND_WRITE)
+        )
+    {
+        printer(result_tgfx_INVALIDARGUMENT, "Inherite_RTSlotSet() has failed because you can't use a Read-Only DepthSlot with Write Access in a Inherited Set!");
+        return nullptr;
+    }
+    rtslotusage_vk* usage = new rtslotusage_vk;
+    usage->IS_DEPTH = true;
+    usage->OPTYPE = DEPTHOP;
+    usage->OPTYPESTENCIL = STENCILOP;
+    usage->LOADTYPE = DEPTHLOAD;
+    usage->LOADTYPESTENCIL = STENCILLOAD;
+    return (rtslotusage_tgfx_handle)usage;
 }
 static depthsettings_tgfx_handle CreateDepthConfiguration(unsigned char ShouldWrite, depthtest_tgfx COMPAREOP, extension_tgfx_listhandle EXTENSIONS) {
     depthsettingsdesc_vk* desc = new depthsettingsdesc_vk;

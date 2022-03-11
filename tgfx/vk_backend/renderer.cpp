@@ -540,11 +540,9 @@ struct renderer_funcs {
 		break;
 		case buffertype_tgfx_INDEX:
 		{
-			printer(result_tgfx_NOTCODED, "FindBufferOBJ_byBufType() isn't implemented for global buffer");
-			/*
-			VK_IndexBuffer* IB = (VK_IndexBuffer*)Handle;
-			TargetBuffer = RENDERGPU->ALLOCS()[IB->Block.MemAllocIndex].Buffer;
-			TargetOffset += IB->Block.Offset;*/
+			indexbuffer_vk* IB = (indexbuffer_vk*)Handle;
+			TargetBuffer = allocatorsys->get_memorybufferhandle_byID(rendergpu, IB->Block.MemAllocIndex);
+			TargetOffset += IB->Block.Offset;
 		}
 		break;
 		default:

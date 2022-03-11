@@ -214,14 +214,16 @@ int main() {
 	float vertexbufferdata[]{ -1.0, -1.0, 0.0, 0.0,
 		-1.0, 1.0, 0.0, 1.0,
 		1.0, -1.0, 1.0, 0.0,
-		1.0, -1.0, 1.0, 0.0,
-		-1.0, 1.0, 0.0, 1.0,
 		1.0, 1.0, 1.0, 1.0 };
-	buffer_tgfx_handle firstvertexbuffer, firststagingbuffer;
-	TGFXCONTENTMANAGER->Create_VertexBuffer(vertexattriblayout, 6, devicelocalmemtype_id, &firstvertexbuffer);
-	TGFXCONTENTMANAGER->Create_StagingBuffer(6 * 20, fastvisiblememtype_id, &firststagingbuffer);	//Allocate a little bit much
-	TGFXCONTENTMANAGER->Upload_toBuffer(firststagingbuffer, buffertype_tgfx_STAGING, vertexbufferdata, 6 * 4 * 4, 0);
-	TGFXRENDERER->CopyBuffer_toBuffer(first_copytp, firststagingbuffer, buffertype_tgfx_STAGING, firstvertexbuffer, buffertype_tgfx_VERTEX, 0, 0, 6 * 4 * 4);
+	unsigned int indexbufferdata[]{0, 1, 2, 1, 2, 3};
+	buffer_tgfx_handle firstvertexbuffer, firstindexbuffer, firststagingbuffer;
+	TGFXCONTENTMANAGER->Create_VertexBuffer(vertexattriblayout, 4, devicelocalmemtype_id, &firstvertexbuffer);
+	TGFXCONTENTMANAGER->Create_IndexBuffer(datatype_tgfx_VAR_UINT32, 6, devicelocalmemtype_id, &firstindexbuffer);
+	TGFXCONTENTMANAGER->Create_StagingBuffer(6 * 50, fastvisiblememtype_id, &firststagingbuffer);	//Allocate a little bit much
+	TGFXCONTENTMANAGER->Upload_toBuffer(firststagingbuffer, buffertype_tgfx_STAGING, vertexbufferdata, 4 * 4 * 4, 0);
+	TGFXCONTENTMANAGER->Upload_toBuffer(firststagingbuffer, buffertype_tgfx_STAGING, indexbufferdata, 4 * 6, 4 * 4 * 4);
+	TGFXRENDERER->CopyBuffer_toBuffer(first_copytp, firststagingbuffer, buffertype_tgfx_STAGING, firstvertexbuffer, buffertype_tgfx_VERTEX, 0, 0, 4 * 4 * 4);
+	TGFXRENDERER->CopyBuffer_toBuffer(first_copytp, firststagingbuffer, buffertype_tgfx_STAGING, firstindexbuffer, buffertype_tgfx_INDEX, 4 * 4 * 4, 0, 4 * 6);
 
 	//Create texture, staging buffer upload data to and upload data
 
@@ -316,7 +318,7 @@ int main() {
 		//Rendering operations
 		boxregion_tgfx region;
 		region.WIDTH = 1280; region.HEIGHT = 720; region.XOffset = 0; region.YOffset = 0;
-		TGFXRENDERER->DrawDirect(firstvertexbuffer, nullptr, 6, 0, 0, 1, 0, first_matinst, sub_dps[0]);
+		TGFXRENDERER->DrawDirect(firstvertexbuffer, firstindexbuffer, 6, 0, 0, 1, 0, first_matinst, sub_dps[0]);
 
 		//Swapchain operations
 		TGFXRENDERER->ImageBarrier(firstbarriertp, swapchain_textures[TGFXRENDERER->GetCurrentFrameIndex()], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);

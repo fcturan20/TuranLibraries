@@ -55,6 +55,7 @@ struct gpudatamanager_private {
 	threadlocal_vector<computetype_vk*> computetypes;
 	threadlocal_vector<computeinstance_vk*> computeinstances;
 	threadlocal_vector<globalbuffer_vk*> globalbuffers;
+	threadlocal_vector<indexbuffer_vk*> indexbuffers;
 
 
 	//This vector contains descriptor sets that are for material types/instances that are created this frame
@@ -78,7 +79,7 @@ struct gpudatamanager_private {
 	//These are the texture that will be added to the list above after clearing the above list
 	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
 
-	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100), globalbuffers(1024),
+	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100), globalbuffers(1024), indexbuffers(1024),
 	irtslotsets(100), graphicspipelineinstances(1024), graphicspipelinetypes(1024), vertexattributelayouts(1024), shadersources(1024), vertexbuffers(1024), stagingbuffers(100), samplers(100), computetypes(1024), computeinstances(1024) {}
 };
 static gpudatamanager_private* hidden = nullptr;
@@ -1056,7 +1057,35 @@ result_tgfx Create_VertexBuffer (vertexattributelayout_tgfx_handle VertexAttribu
 }
 void  Unload_VertexBuffer (buffer_tgfx_handle BufferHandle){}
 
-result_tgfx Create_IndexBuffer (datatype_tgfx DataType, unsigned int IndexCount, unsigned int MemoryTypeIndex, buffer_tgfx_handle* IndexBufferHandle){ return result_tgfx_FAIL; }
+result_tgfx Create_IndexBuffer (datatype_tgfx DataType, unsigned int IndexCount, unsigned int MemoryTypeIndex, buffer_tgfx_handle* IndexBufferHandle){
+	VkIndexType IndexType = Find_IndexType_byGFXDATATYPE(DataType);
+	if (IndexType == VK_INDEX_TYPE_MAX_ENUM) {
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_IndexBuffer() has failed because DataType isn't supported!");
+		return result_tgfx_INVALIDARGUMENT;
+	}
+	if (!IndexCount) {
+		printer(result_tgfx_FAIL, "GFXContentManager->Create_IndexBuffer() has failed because IndexCount is zero!");
+		return result_tgfx_INVALIDARGUMENT;
+	}
+	indexbuffer_vk* IB = new indexbuffer_vk;
+	IB->DATATYPE = IndexType;
+
+	VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	VkBuffer Buffer = Create_VkBuffer(get_uniformtypes_sizeinbytes(DataType) * IndexCount, BufferUsageFlag);
+	IB->Block.MemAllocIndex = MemoryTypeIndex;
+	IB->IndexCount = static_cast<VkDeviceSize>(IndexCount);
+	if (allocatorsys->suballocate_buffer(Buffer, BufferUsageFlag, IB->Block) != result_tgfx_SUCCESS) {
+		delete IB;
+		printer(result_tgfx_FAIL, "There is no memory left in specified memory region!");
+		vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Buffer, nullptr);
+		return result_tgfx_FAIL;
+	}
+	vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Buffer, nullptr);
+
+	*IndexBufferHandle = (buffer_tgfx_handle)IB;
+	hidden->indexbuffers.push_back(IB);
+	return result_tgfx_SUCCESS;
+}
 void  Unload_IndexBuffer (buffer_tgfx_handle BufferHandle){}
 
 result_tgfx Create_Texture (texture_dimensions_tgfx DIMENSION, unsigned int WIDTH, unsigned int HEIGHT, texture_channels_tgfx CHANNEL_TYPE,

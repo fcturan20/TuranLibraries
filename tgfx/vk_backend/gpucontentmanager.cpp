@@ -803,7 +803,7 @@ extern void FindBufferOBJ_byBufType(const buffer_tgfx_handle Handle, buffertype_
 	if (TYPE == buffertype_tgfx_GLOBAL) {
 		globalbuffer_vk* buffer = (globalbuffer_vk*)Handle;
 		TargetBuffer = allocatorsys->get_memorybufferhandle_byID(rendergpu, buffer->Block.MemAllocIndex);
-		TargetOffset = buffer->Block.Offset;
+		TargetOffset += buffer->Block.Offset;
 	}
 	else {
 		printer(result_tgfx_FAIL, "FindBufferOBJ_byBufType() doesn't support this type!");
@@ -1231,7 +1231,38 @@ result_tgfx Create_GlobalBuffer (const char* BUFFER_NAME, unsigned int DATA_SIZE
 void  Unload_GlobalBuffer (buffer_tgfx_handle BUFFER_ID){}
 result_tgfx SetGlobalShaderInput_Buffer (unsigned char isUniformBuffer, unsigned int ElementIndex, unsigned char isUsedLastFrame,
 	buffer_tgfx_handle BufferHandle, unsigned int BufferOffset, unsigned int BoundDataSize) {
-	return result_tgfx_FAIL;
+	desctype_vk intendedDescType = (isUniformBuffer) ? desctype_vk::UBUFFER : desctype_vk::SBUFFER;
+	descelement_buffer_vk* element = nullptr;
+	for (unsigned char i = 0; i < 2; i++) {
+		if (hidden->GlobalBuffers_DescSet.Descs[i].Type == intendedDescType) {
+			if (hidden->GlobalBuffers_DescSet.Descs[i].ElementCount <= ElementIndex) {
+				printer(result_tgfx_FAIL, "SetGlobalBuffer() has failed because ElementIndex isn't smaller than ElementCount of the GlobalBuffer!");
+				return result_tgfx_FAIL;
+			}
+			element = &((descelement_buffer_vk*)hidden->GlobalBuffers_DescSet.Descs[i].Elements)[ElementIndex];
+		}
+	}
+
+	unsigned char x = 0;
+	if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
+		if (x != 255) {
+			printer(result_tgfx_FAIL, "You already changed the global buffer this frame, second or concurrent one will fail!");
+			return result_tgfx_WRONGTIMING;
+		}
+		//If value is 255, this means global buffer isn't set before so try to set it again!
+		if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
+			printer(result_tgfx_FAIL, "You already changed the global buffer this frame, second or concurrent one will fail!");
+			return result_tgfx_WRONGTIMING;
+		}
+	}
+	VkDeviceSize finaloffset = static_cast<VkDeviceSize>(BufferOffset);
+	FindBufferOBJ_byBufType(BufferHandle, buffertype_tgfx_GLOBAL, element->Info.buffer, finaloffset);
+	element->Info.offset = finaloffset;
+	element->Info.range = static_cast<VkDeviceSize>(BoundDataSize);
+	if (isUsedLastFrame) {
+		hidden->GlobalBuffers_DescSet.ShouldRecreate.store(true);
+	}
+	return result_tgfx_SUCCESS;
 }
 result_tgfx SetGlobalShaderInput_Texture (unsigned char isSampledTexture, unsigned int ElementIndex, unsigned char isUsedLastFrame,
 	texture_tgfx_handle TextureHandle, samplingtype_tgfx_handle sampler, image_access_tgfx access) {
@@ -2339,7 +2370,7 @@ extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 
 
 	//Material Related Descriptor Pool Creation
-	{
+	if(true) {
 		VkDescriptorPoolCreateInfo dp_ci = {};
 		VkDescriptorPoolSize SIZEs[4];
 		SIZEs[0].descriptorCount = Find_MeaningfulDescriptorPoolSize(info->MaxSumMaterial_ImageTexture, desctype_vk::IMAGE);
@@ -2375,7 +2406,7 @@ extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 
 
 	//Create Descriptor Pool and Descriptor Set Layout for Global Shader Inputs
-	{
+	if(true) {
 		unsigned int UBUFFER_COUNT = info->GlobalShaderInput_UniformBufferCount, SBUFFER_COUNT = info->GlobalShaderInput_StorageBufferCount,
 			SAMPLER_COUNT = info->GlobalShaderInput_SampledTextureCount, IMAGE_COUNT = info->GlobalShaderInput_ImageTextureCount;
 
@@ -2450,15 +2481,15 @@ extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 
 			if (info->isUniformBuffer_Index1) {
 				BufferBinding[0].descriptorCount = SBUFFER_COUNT;
+				BufferBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 				BufferBinding[1].descriptorCount = UBUFFER_COUNT;
-				BufferBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				BufferBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				BufferBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			}
 			else {
 				BufferBinding[0].descriptorCount = UBUFFER_COUNT;
+				BufferBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 				BufferBinding[1].descriptorCount = SBUFFER_COUNT;
-				BufferBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				BufferBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				BufferBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			}
 
 			VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};

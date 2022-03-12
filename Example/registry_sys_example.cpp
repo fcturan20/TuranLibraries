@@ -57,10 +57,15 @@ renderer_tgfx* TGFXRENDERER = nullptr;
 gpudatamanager_tgfx* TGFXCONTENTMANAGER = nullptr;
 dearimgui_tgfx* TGFXIMGUI = nullptr;
 
+//Camera datas
+static float camerafov_angle = 45.0;
+static vec3_tgfx objpos, camerapos = {0.0, 0.0, 10.0}, camera_dir = {0.0, 0.0, -1.0};
+
 void FirstWindow_Run() {
-	static bool shouldShowText = false;
-	if (TGFXIMGUI->Button("First Button")) { shouldShowText = !shouldShowText; }
-	if (shouldShowText) { TGFXIMGUI->Text("This is the first text!"); }
+	TGFXIMGUI->Slider_Vec3("Object position", &objpos, -10.0, 10.0);
+	TGFXIMGUI->Slider_Vec3("Camera position", &camerapos, -10.0, 10.0);
+	TGFXIMGUI->Slider_Vec3("Camera direction", &camera_dir, -1.0, 1.0);
+	TGFXIMGUI->Slider_Float("Camera FOV", &camerafov_angle, 10.0, 150.0);
 }
 int main() {
 	auto registrydll = DLIB_LOAD_TAPI("tapi_registrysys.dll");
@@ -149,7 +154,7 @@ int main() {
 			fastvisiblememtype_id = memtypelist[i].memorytype_id;
 		}
 	}
-	initializationsecondstageinfo_tgfx_handle secondinfo = TGFXHELPER->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, false, true, true, (extension_tgfx_listhandle)TGFXINVALID);
+	initializationsecondstageinfo_tgfx_handle secondinfo = TGFXHELPER->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, true, true, true, (extension_tgfx_listhandle)TGFXINVALID);
 	tgfxsys->api->initialize_secondstage(secondinfo);
 	monitor_tgfx_listhandle monitorlist;
 	tgfxsys->api->getmonitorlist(&monitorlist);
@@ -163,7 +168,8 @@ int main() {
 
 	//Create a global buffer for shader inputs
 	buffer_tgfx_handle shaderuniformbuffers_handle = nullptr;
-	TGFXCONTENTMANAGER->Create_GlobalBuffer("UniformBuffers", 1024, true, fastvisiblememtype_id, &shaderuniformbuffers_handle);
+	TGFXCONTENTMANAGER->Create_GlobalBuffer("UniformBuffers", 4096, true, fastvisiblememtype_id, &shaderuniformbuffers_handle);
+	TGFXCONTENTMANAGER->SetGlobalShaderInput_Buffer(true, 0, true, shaderuniformbuffers_handle, 256, sizeof(glm::mat4x4) * 4);
 
 	texture_tgfx_handle first_depthbuffer; buffer_tgfx_handle texturestagingbuffer;
 	textureusageflag_tgfx_handle depthbuffer_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, false, true, false, false);
@@ -298,9 +304,9 @@ int main() {
 	shaderinputdescription_tgfx_handle inputdescs[2] = { TGFXHELPER->CreateShaderInputDescription(shaderinputtype_tgfx_SAMPLER_G, 0, 1, 
 		TGFXHELPER->CreateShaderStageFlag(1, shaderstage_tgfx_FRAGMENTSHADER)), (shaderinputdescription_tgfx_handle)TGFXINVALID };
 	extension_tgfx_handle depthbounds_ext[2] = { TGFXHELPER->EXT_DepthBoundsInfo(0.0, 1.0), (extension_tgfx_handle)TGFXINVALID };
-	TGFXHELPER->CreateDepthConfiguration(true, depthtest_tgfx_ALWAYS, depthbounds_ext);
+	depthsettings_tgfx_handle depthconfig = TGFXHELPER->CreateDepthConfiguration(true, depthtest_tgfx_LEQUAL, depthbounds_ext);
 	TGFXCONTENTMANAGER->Link_MaterialType(compiled_sources, inputdescs, vertexattriblayout, sub_dps[0], cullmode_tgfx_OFF, 
-		polygonmode_tgfx_FILL, nullptr, nullptr, nullptr, (blendinginfo_tgfx_listhandle)&TGFXINVALID, &first_material);
+		polygonmode_tgfx_FILL, depthconfig, nullptr, nullptr, (blendinginfo_tgfx_listhandle)&TGFXINVALID, &first_material);
 	rasterpipelineinstance_tgfx_handle first_matinst;
 	TGFXCONTENTMANAGER->Create_MaterialInst(first_material, &first_matinst);
 	samplingtype_tgfx_handle first_samplingtype;
@@ -365,6 +371,14 @@ int main() {
 		boxregion_tgfx region;
 		region.WIDTH = 1280; region.HEIGHT = 720; region.XOffset = 0; region.YOffset = 0;
 		TGFXRENDERER->DrawDirect(firstvertexbuffer, firstindexbuffer, 6 * 6, 0, 0, 1, 0, first_matinst, sub_dps[0]);
+		
+		glm::vec3 glm_objpos(objpos.x, objpos.y, objpos.z), glm_camerapos(camerapos.x, camerapos.y, camerapos.z), glm_cameradir(camera_dir.x, camera_dir.y, camera_dir.z);
+		glm::mat4x4 obj_to_world(1.0f); obj_to_world = glm::translate(obj_to_world, glm_objpos);
+		glm::mat4x4 world_to_camera = glm::lookAt(glm_camerapos, glm_camerapos + glm::normalize(glm_cameradir), glm::vec3(0, 1, 0));
+		glm::mat4x4 cameraproj = glm::perspective(glm::radians(camerafov_angle), float(1280.0 / 720.0), 0.01f, 10000.0f);
+		TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformbuffers_handle, buffertype_tgfx_GLOBAL, &obj_to_world, 64, 256);
+		TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformbuffers_handle, buffertype_tgfx_GLOBAL, &world_to_camera, 64, 320);
+		TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformbuffers_handle, buffertype_tgfx_GLOBAL, &cameraproj, 64, 448);
 
 		//Swapchain operations
 		TGFXRENDERER->ImageBarrier(firstbarriertp, swapchain_textures[TGFXRENDERER->GetCurrentFrameIndex()], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);

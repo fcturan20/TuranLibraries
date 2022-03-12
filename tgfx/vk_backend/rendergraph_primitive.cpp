@@ -505,9 +505,6 @@ void Record_RenderPass(VkCommandBuffer CB, drawpass_vk* DrawPass) {
 		if (SP.Binding_Index != SubPassIndex) {
 			printer(result_tgfx_FAIL, "Subpass Binding Index and the SubDrawPass' element index doesn't match, handle this case!");
 		}
-		if (SP.render_dearIMGUI) {
-			imgui->Render_toCB(CB);
-		}
 		//NonIndexed Draw Calls
 		{
 			std::unique_lock<std::mutex> DrawCallLocker;
@@ -611,6 +608,9 @@ void Record_RenderPass(VkCommandBuffer CB, drawpass_vk* DrawPass) {
 			}
 		}
 
+		if (SP.render_dearIMGUI) {
+			imgui->Render_toCB(CB);
+		}
 		if (SubPassIndex < DrawPass->Subpass_Count - 1) {
 			vkCmdNextSubpass(CB, VK_SUBPASS_CONTENTS_INLINE);
 		}

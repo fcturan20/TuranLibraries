@@ -10,10 +10,10 @@ layout(set = 0, binding = 1) uniform WorldData{
     mat4 world_tocamera;
     mat4 sky_tocamera;
     mat4 camera_toprojection;
-} CameraData[];
+} CameraData;
 
 void main() {
-    gl_Position = CameraData[0].camera_toprojection * CameraData[0].world_tocamera * CameraData[0].object_toworld *  vec4(inPosition, 1.0);
+    gl_Position = CameraData.camera_toprojection * CameraData.world_tocamera * CameraData.object_toworld *  vec4(inPosition.x, -inPosition.y, inPosition.z, 1.0);
     //gl_Position = vec4(inPosition, 1.0);
     TextCoord = inTextCoord;
 }

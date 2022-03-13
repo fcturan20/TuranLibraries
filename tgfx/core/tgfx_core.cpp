@@ -6,6 +6,7 @@
 #include "tgfx_helper.h"
 #include "tgfx_imgui.h"
 #include "tgfx_renderer.h"
+#include <string>
 
 
 static core_tgfx_type* core_type_ptr;
@@ -27,7 +28,9 @@ result_tgfx load_backend(backends_tgfx backend, tgfx_PrintLogCallback printcallb
 	};
 
     auto backend_dll = DLIB_LOAD_TAPI(path);
+	if (!backend_dll) { printcallback(result_tgfx_FAIL, ("There is no " + std::string(path) + "% s file!").c_str()); return result_tgfx_FAIL; }
     backend_load_func backendloader = (backend_load_func)DLIB_FUNC_LOAD_TAPI(backend_dll, "backend_load");
+	if(!backendloader){ printcallback(result_tgfx_FAIL, "TGFX Backend doesn't have any backend_load() function, which it should. You are probably using a newer version that uses different load scheme!"); return result_tgfx_FAIL; }
     return backendloader(core_regsys, core_type_ptr, printcallback);
 }
 

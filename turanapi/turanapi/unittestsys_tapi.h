@@ -1,6 +1,6 @@
 #pragma once
 #define UNITTEST_TAPI_PLUGIN_NAME "tapi_unittest"
-#define UNITTEST_TAPI_LOAD_TYPE unittestsys_tapi*
+#define UNITTEST_TAPI_LOAD_TYPE unittestsys_tapi_type*
 
 //RegistrySys Documentation: Storing Data for Systems
 typedef struct virtualmemorysys_tapi_d virtualmemorysys_tapi_d;

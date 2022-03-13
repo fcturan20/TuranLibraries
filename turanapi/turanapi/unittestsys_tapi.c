@@ -34,9 +34,9 @@ FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* reg_sys, unsigned char relo
     utsys->funcs->remove_unittest = &remove_unittest;
     utsys->funcs->run_tests = &run_tests;
 
-    reg_sys->add(UNITTEST_TAPI_PLUGIN_NAME, 0, utsys->funcs);
+    reg_sys->add(UNITTEST_TAPI_PLUGIN_NAME, 0, utsys);
 
-    return utsys->funcs;
+    return utsys;
 }
 FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* reg_sys, unsigned char reload){
     free(utsys->data);

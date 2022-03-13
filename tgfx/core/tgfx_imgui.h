@@ -7,7 +7,7 @@
 typedef struct imguiwindow_tgfx {
 	unsigned char isWindowOpen;
 	const char* WindowName;
-	void (*RunWindow)();
+	void (*RunWindow)(imguiwindow_tgfx* windowdata);
 } imguiwindow_tgfx;
 
 
@@ -30,7 +30,7 @@ typedef struct dearimgui_tgfx {
 
 	//IMGUI FUNCTIONALITY!
 
-	unsigned char (*Create_Window)(const char* title, unsigned char should_close, unsigned char has_menubar);
+	unsigned char (*Create_Window)(const char* title, unsigned char* should_close, unsigned char has_menubar);
 	void (*End_Window)();
 	void (*Text)(const char* text);
 	unsigned char (*Button)(const char* button_name);

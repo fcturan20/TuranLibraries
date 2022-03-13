@@ -204,7 +204,7 @@ void set_unittests(registrysys_tapi* reg_sys){
     if(ut_sys){
         unittest_interface_tapi x;
         x.test = &ut_0;
-        ut_sys->add_unittest("array_of_strings", 0, x);
+        ut_sys->funcs->add_unittest("array_of_strings", 0, x);
     }
     else{
         printf("Array of Strings: Unit tests aren't implemented because unit test system isn't available!");

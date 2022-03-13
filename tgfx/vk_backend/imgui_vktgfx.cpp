@@ -18,7 +18,7 @@ unsigned char Show_DemoWindow();
 unsigned char Show_MetricsWindow();
 
 //IMGUI FUNCTIONALITY!
-unsigned char Create_Window(const char* title, unsigned char should_close, unsigned char has_menubar);
+unsigned char Create_Window(const char* title, unsigned char* should_close, unsigned char has_menubar);
 void End_Window();
 void Text(const char* text);
 unsigned char Button(const char* button_name);
@@ -303,20 +303,16 @@ void Run_IMGUI_WINDOWs() {
 	for (unsigned int i = 0; i < hidden->ALL_IMGUI_WINDOWs.size(); i++) {
 		imguiwindow_tgfx* window = hidden->ALL_IMGUI_WINDOWs[i];
 		printer(result_tgfx_SUCCESS, ("Running the Window: " + std::string(window->WindowName)).c_str());
-		window->RunWindow();
+		window->RunWindow(window);
 	}
 
 	if (hidden->Windows_toClose.size() > 0) {
 		for (unsigned int window_delete_i = 0; window_delete_i < hidden->Windows_toClose.size(); window_delete_i++) {
 			imguiwindow_tgfx* window_to_close = hidden->Windows_toClose[window_delete_i];
-			for (unsigned int i = 0; i < hidden->ALL_IMGUI_WINDOWs.size(); i++) {
-				if (window_to_close == hidden->ALL_IMGUI_WINDOWs[i]) {
-					delete window_to_close;
-					window_to_close = nullptr;
-					hidden->ALL_IMGUI_WINDOWs[i] = nullptr;
-					hidden->ALL_IMGUI_WINDOWs.erase(hidden->ALL_IMGUI_WINDOWs.begin() + i);
-
-					//Inner loop will break!
+			for (unsigned int deleted_window_main_i = 0; deleted_window_main_i < hidden->ALL_IMGUI_WINDOWs.size(); deleted_window_main_i++) {
+				if (window_to_close == hidden->ALL_IMGUI_WINDOWs[deleted_window_main_i]) {
+					hidden->ALL_IMGUI_WINDOWs.erase(hidden->ALL_IMGUI_WINDOWs.begin() + deleted_window_main_i);
+					//Inner loop will break because we found the deleted window in the main list!
 					break;
 				}
 			}
@@ -334,8 +330,8 @@ void Run_IMGUI_WINDOWs() {
 		}
 		hidden->Windows_toOpen.clear();
 		//We should run new windows!
-		for (; previous_size < hidden->ALL_IMGUI_WINDOWs.size(); previous_size++) {
-			hidden->ALL_IMGUI_WINDOWs[previous_size]->RunWindow();
+		for (previous_size; previous_size < hidden->ALL_IMGUI_WINDOWs.size(); previous_size++) {
+			hidden->ALL_IMGUI_WINDOWs[previous_size]->RunWindow(hidden->ALL_IMGUI_WINDOWs[previous_size]);
 		}
 	}
 }
@@ -377,12 +373,12 @@ unsigned char Show_MetricsWindow() {
 }
 
 
-unsigned char Create_Window(const char* title, unsigned char should_close, unsigned char has_menubar) {
-	bool boolean = should_close;
+unsigned char Create_Window(const char* title, unsigned char* should_close, unsigned char has_menubar) {
+	bool close_boolean = should_close;
 	ImGuiWindowFlags window_flags = 0;
 	window_flags |= (has_menubar ? ImGuiWindowFlags_MenuBar : 0);
-	bool result = ImGui::Begin(title, &boolean, window_flags);
-	should_close = boolean;
+	bool result = ImGui::Begin(title, &close_boolean, window_flags);
+	*should_close = close_boolean;
 	return result;
 }
 

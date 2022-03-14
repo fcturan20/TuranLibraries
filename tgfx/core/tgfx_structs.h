@@ -8,6 +8,10 @@ typedef struct uvec3_tgfx {
     unsigned int x, y, z;
 } uvec3_tgfx;
 
+typedef struct uvec2_tgfx {
+	unsigned int x, y;
+} uvec2_tgfx;
+
 typedef struct vec2_tgfx {
     float x, y;
 } vec2_tgfx;

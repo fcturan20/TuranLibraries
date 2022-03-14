@@ -34,6 +34,7 @@ extern void Destroy_RenderGraph();
 //If returns false, this means nothing is rendered this frame
 //Implemented in rendergraph_main.cpp
 extern result_tgfx Execute_RenderGraph();
+extern void take_inputs();
 struct renderer_funcs {
 
 	static void Fill_ColorVkAttachmentDescription(VkAttachmentDescription& Desc, const colorslot_vk* Attachment) {
@@ -382,7 +383,7 @@ struct renderer_funcs {
 	}
 	static void PrepareForNextFrame() {
 		renderer->FrameIndex = (renderer->FrameIndex + 1) % 2;
-
+		take_inputs();
 		if(imgui){ imgui->NewFrame(); }
 	}
 

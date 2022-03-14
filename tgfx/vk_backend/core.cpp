@@ -123,7 +123,6 @@ result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCa
 	//core->api->debugcallback = &core_functions::debugcallback;
 	//core->api->debugcallback_threaded = &core_functions::debugcallback_threaded;
 	//core->api->destroy_tgfx_resources = &core_functions::destroy_tgfx_resources;
-	core->api->take_inputs = &core_functions::take_inputs;
 	core->api->getmonitorlist = &core_functions::getmonitorlist;
 	core->api->getGPUlist = &core_functions::getGPUlist;
 	set_helper_functions();
@@ -807,7 +806,7 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 	*window = (window_tgfx_handle)Vulkan_Window;
 	hidden->WINDOWs.push_back(Vulkan_Window);
 }
-void core_functions::take_inputs() {
+extern void take_inputs() {
 	glfwPollEvents();
 	if (hidden->isAnyWindowResized) {
 		vkDeviceWaitIdle(rendergpu->LOGICALDEVICE());

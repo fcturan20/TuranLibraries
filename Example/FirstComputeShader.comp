@@ -28,7 +28,7 @@ layout (std140, binding = 1, set = 2) uniform RAYTRACE_CAMERA{
     mat4 CAMERA_TO_WORLD;
 };
 
-vec3 SPHERE_CENTER = vec3(0,0,10);
+vec3 SPHERE_CENTER = vec3(0,0,-10);
 float SPHERE_RADIUS = 1.0f;
 
 //Return the position of the intersection point
@@ -89,6 +89,7 @@ void main(){
     if(INTERSECTION_POINT != FAILEDINTERSECTION_SENTINEL){
         vec3 Normal = normalize(INTERSECTION_POINT.xyz - SPHERE_CENTER);
         vec3 LightDir = normalize(-DIRECTIONALLIGHTs[0].DIRECTION);
+        pixel_color = vec4(0, 0, 1, 1) * dot(Normal, LightDir);
     }
     pixel_color = vec4(DIRECTIONALLIGHTs[0].COLOR, 1.0f);
     imageStore(OutputTexture, pixel_coords, pixel_color);

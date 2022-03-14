@@ -8,6 +8,7 @@ typedef struct imguiwindow_tgfx {
 	unsigned char isWindowOpen;
 	const char* WindowName;
 	void (*RunWindow)(imguiwindow_tgfx* windowdata);
+	void* userdata;
 } imguiwindow_tgfx;
 
 

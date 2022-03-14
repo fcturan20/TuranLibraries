@@ -43,7 +43,6 @@ typedef struct core_tgfx{
 
 
 
-	void (*take_inputs)();
 	//Destroy GFX API systems to create again (with a different Graphics API maybe?) or close application
 	//This will close all of the systems with "GFX" prefix and you shouldn't call them either
 	void (*destroy_tgfx_resources)();

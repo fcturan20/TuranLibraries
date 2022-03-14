@@ -3,6 +3,7 @@
 2) TGFX is the most complicated library and it's initialization takes 2 steps -unlike others that takes one step-.
 
 */
+#pragma once
 #include "registrysys_tapi.h"
 #include "virtualmemorysys_tapi.h"
 #include "unittestsys_tapi.h"
@@ -25,6 +26,10 @@ extern profiler_tapi* profilersys = nullptr;
 
 
 #include "tgfx_core.h"
+#include "tgfx_helper.h"
+#include "tgfx_renderer.h"
+#include "tgfx_gpucontentmanager.h"
+#include "tgfx_imgui.h"
 
 extern core_tgfx* TGFXCORE = nullptr;
 extern const void* TGFXINVALID = nullptr;
@@ -33,6 +38,18 @@ extern renderer_tgfx* TGFXRENDERER = nullptr;
 extern gpudatamanager_tgfx* TGFXCONTENTMANAGER = nullptr;
 extern dearimgui_tgfx* TGFXIMGUI = nullptr;
 
+
+//Global variables
+extern unsigned int devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = UINT32_MAX;
+extern texture_tgfx_handle swapchain_textures[2] = {NULL, NULL}, depthbuffer_handle = NULL;
+extern window_tgfx_handle firstwindow = NULL;
+extern buffer_tgfx_handle shaderuniformsbuffer = NULL;
+extern transferpass_tgfx_handle framebegincopy_TP = NULL, barrierbeforecompute_TP = NULL, barrierbeforeswapchain_TP = NULL;
+extern subdrawpass_tgfx_handle framerendering_subDP = NULL;
+extern windowpass_tgfx_handle swapchain_windowpass = NULL;
+extern computepass_tgfx_handle ComputebeforeRasterization_CP = NULL;
+extern vertexattributelayout_tgfx_handle vertexattriblayout = NULL;
+texture_tgfx_handle orange_texture = NULL;
 
 class TURANLIBRARY_LOADER {
 public:
@@ -139,5 +156,83 @@ public:
 		TGFXRENDERER = tgfxsys->api->renderer;
 		TGFXCONTENTMANAGER = tgfxsys->api->contentmanager;
 		TGFXIMGUI = tgfxsys->api->imgui;
+	}
+
+	static void InitializeTGFX_CreateWindow(unsigned int devicelocal_memallocsize, unsigned int fastvisible_memallocsize, uvec2_tgfx window_resolution) {
+		gpu_tgfx_listhandle gpulist;
+		TGFXCORE->getGPUlist(&gpulist);
+		TGFXLISTCOUNT(TGFXCORE, gpulist, gpulist_count);
+		printf("GPU COUNT: %u\n", gpulist_count);
+		const char* gpuname;
+		const memory_description_tgfx* memtypelist; unsigned int memtypelistcount;
+		TGFXHELPER->GetGPUInfo_General(gpulist[0], &gpuname, nullptr, nullptr, nullptr, &memtypelist, &memtypelistcount, nullptr, nullptr, nullptr);
+		std::cout << "Memory Type Count: " << memtypelistcount << " and GPU Name: " << gpuname << "\n";
+		for (unsigned int i = 0; i < memtypelistcount; i++) {
+			if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) {
+				TGFXHELPER->SetMemoryTypeInfo(memtypelist[i].memorytype_id, devicelocal_memallocsize , nullptr);
+				devicelocalmemtype_id = memtypelist[i].memorytype_id;
+			}
+			if (memtypelist[i].allocationtype == memoryallocationtype_FASTHOSTVISIBLE) {
+				TGFXHELPER->SetMemoryTypeInfo(memtypelist[i].memorytype_id, fastvisible_memallocsize, nullptr);
+				fastvisiblememtype_id = memtypelist[i].memorytype_id;
+			}
+		}
+		initializationsecondstageinfo_tgfx_handle secondinfo = TGFXHELPER->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, true, true, true, (extension_tgfx_listhandle)TGFXINVALID);
+		TGFXCORE->initialize_secondstage(secondinfo);
+		monitor_tgfx_listhandle monitorlist;
+		TGFXCORE->getmonitorlist(&monitorlist);
+		TGFXLISTCOUNT(TGFXCORE, monitorlist, monitorcount);
+		TURANLIBRARY_LOADER::printf_log_tgfx(result_tgfx_SUCCESS, (std::string("Monitor Count: ") + std::to_string(monitorcount)).c_str());
+		textureusageflag_tgfx_handle swapchaintexture_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, true, true, true, false);
+		TGFXCORE->create_window(window_resolution.x, window_resolution.y, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", swapchaintexture_usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
+	}
+
+	static void ReconstructRenderGraph_Simple(){
+		TGFXRENDERER->Start_RenderGraphConstruction();
+
+
+		//First Copy TP Creation
+		TGFXRENDERER->Create_TransferPass((passwaitdescription_tgfx_listhandle)&TGFXINVALID, transferpasstype_tgfx_COPY, "FirstCopyTP", &framebegincopy_TP);
+
+
+		//First Barrier TP Creation
+		passwaitdescription_tgfx_handle wait_for_copytp[2] = { TGFXHELPER->CreatePassWait_TransferPass(&framebegincopy_TP, transferpasstype_tgfx_COPY, TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+		TGFXRENDERER->Create_TransferPass(wait_for_copytp, transferpasstype_tgfx_BARRIER, "FirstBarrierTP", &barrierbeforecompute_TP);
+
+		//First Compute Pass Creation
+		passwaitdescription_tgfx_handle dp_waits[2] = { TGFXHELPER->CreatePassWait_TransferPass(&barrierbeforecompute_TP, transferpasstype_tgfx_BARRIER,
+			TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+		TGFXRENDERER->Create_ComputePass(dp_waits, 1, "FirstCP", &ComputebeforeRasterization_CP);
+
+		//Draw Pass Creation
+
+		vec4_tgfx white; white.x = 255; white.y = 255; white.z = 255; white.w = 0;
+		rtslotdescription_tgfx_handle rtslot_descs[3] = {
+			TGFXHELPER->CreateRTSlotDescription_Color(swapchain_textures[0], swapchain_textures[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white),
+			TGFXHELPER->CreateRTSlotDescription_DepthStencil(depthbuffer_handle, depthbuffer_handle, operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, operationtype_tgfx_UNUSED, drawpassload_tgfx_CLEAR, 1.0, 255), (rtslotdescription_tgfx_handle)TGFXINVALID };
+		rtslotset_tgfx_handle rtslotset_handle;
+		TGFXCONTENTMANAGER->Create_RTSlotset(rtslot_descs, &rtslotset_handle);
+		rtslotusage_tgfx_handle rtslotusages[3] = { TGFXHELPER->CreateRTSlotUsage_Color(rtslot_descs[0], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR),
+			TGFXHELPER->CreateRTSlotUsage_Depth(rtslot_descs[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, operationtype_tgfx_UNUSED, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)TGFXINVALID };
+		inheritedrtslotset_tgfx_handle irtslotset;
+		TGFXCONTENTMANAGER->Inherite_RTSlotSet(rtslotusages, rtslotset_handle, &irtslotset);
+		subdrawpassdescription_tgfx_handle subdp_descs[2] = { TGFXHELPER->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)TGFXINVALID };
+		passwaitdescription_tgfx_handle cp_waits[2] = { TGFXHELPER->CreatePassWait_ComputePass(&ComputebeforeRasterization_CP, 0,
+			TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+		subdrawpass_tgfx_listhandle sub_dps;
+		drawpass_tgfx_handle dp;
+		TGFXRENDERER->Create_DrawPass(subdp_descs, rtslotset_handle, cp_waits, "First DP", &sub_dps, &dp);
+		framerendering_subDP = sub_dps[0];
+
+		//Final Barrier TP Creation
+		waitsignaldescription_tgfx_handle waitsignaldescs[2] = { TGFXHELPER->CreateWaitSignal_FragmentShader(true, true, true), (waitsignaldescription_tgfx_handle)TGFXINVALID };
+		passwaitdescription_tgfx_handle final_tp_waits[2] = { TGFXHELPER->CreatePassWait_DrawPass(&dp, 0, waitsignaldescs, false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+		TGFXRENDERER->Create_TransferPass(final_tp_waits, transferpasstype_tgfx_BARRIER, "Final TP", &barrierbeforeswapchain_TP);
+
+		//Window Pass Creation
+		waitsignaldescription_tgfx_handle wait_for_finaltp_signal = TGFXHELPER->CreateWaitSignal_Transfer(true, true);
+		passwaitdescription_tgfx_handle wait_for_dp[2] = { TGFXHELPER->CreatePassWait_TransferPass(&barrierbeforeswapchain_TP, transferpasstype_tgfx_BARRIER, wait_for_finaltp_signal, false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+		TGFXRENDERER->Create_WindowPass(wait_for_dp, "First WP", &swapchain_windowpass);
+		TGFXRENDERER->Finish_RenderGraphConstruction(sub_dps[0]);
 	}
 };

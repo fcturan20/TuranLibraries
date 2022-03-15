@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+
 char stop_char;
 
 unsigned char unittest_func(const char** output_string, void* data){
@@ -48,7 +49,7 @@ int main() {
 	//Create a global buffer for shader inputs
 	shaderuniformsbuffer = nullptr;
 	TGFXCONTENTMANAGER->Create_GlobalBuffer("UniformBuffers", 4096, true, fastvisiblememtype_id, &shaderuniformsbuffer);
-	TGFXCONTENTMANAGER->SetGlobalShaderInput_Buffer(true, 0, true, shaderuniformsbuffer, 256, sizeof(glm::mat4x4) * 4);
+	TGFXCONTENTMANAGER->SetGlobalShaderInput_Buffer(true, 0, true, shaderuniformsbuffer, 256, (sizeof(glm::mat4x4) * 5) + sizeof(vec4_tgfx));
 
 	//Create a depth buffer
 	buffer_tgfx_handle texturestagingbuffer;
@@ -156,13 +157,17 @@ int main() {
 		region.WIDTH = 1280; region.HEIGHT = 720; region.XOffset = 0; region.YOffset = 0;
 		TGFXRENDERER->DrawDirect(firstvertexbuffer, firstindexbuffer, 6 * 6, 0, 0, 1, 0, base_3dshaderinst, framerendering_subDP);
 		
-		glm::vec3 glm_objpos(objpos.x, objpos.y, objpos.z);
+		glm::vec3 glm_objpos(objpos.x, objpos.y, objpos.z); vec3_tgfx camera_pos = maincam.getWorldPosition();
 		glm::mat4x4 obj_to_world(1.0f); obj_to_world = glm::translate(obj_to_world, glm_objpos);
-		glm::mat4x4 world_to_camera = maincam.getWorld_to_ViewMat4x4();
+		glm::mat4x4 world_to_camera = maincam.getWorld_to_ViewMat4x4(); 
 		glm::mat4x4 cameraproj = maincam.getPerspectiveMat4x4();
+		glm::mat4x4 cameraproj_to_world = glm::inverse(world_to_camera * cameraproj);
 		TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformsbuffer, buffertype_tgfx_GLOBAL, &obj_to_world, 64, 256);
 		TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformsbuffer, buffertype_tgfx_GLOBAL, &world_to_camera, 64, 320);
 		TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformsbuffer, buffertype_tgfx_GLOBAL, &cameraproj, 64, 448);
+		TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformsbuffer, buffertype_tgfx_GLOBAL, &cameraproj_to_world, 64, 512);
+		TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformsbuffer, buffertype_tgfx_GLOBAL, &camera_pos, 16, 576);
+		
 
 		//Swapchain operations
 		TGFXRENDERER->ImageBarrier(barrierbeforecompute_TP, swapchain_textures[TGFXRENDERER->GetCurrentFrameIndex()], image_access_tgfx_SWAPCHAIN_DISPLAY, image_access_tgfx_RTCOLOR_READWRITE, 0, cubeface_tgfx_FRONT);

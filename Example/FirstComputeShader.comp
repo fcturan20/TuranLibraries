@@ -23,10 +23,14 @@ struct DirectionalLight{
 layout (std140, binding = 0, set = 2) uniform LIGHTs{
 	DirectionalLight DIRECTIONALLIGHTs[1];
 };
-layout (std140, binding = 1, set = 2) uniform RAYTRACE_CAMERA{
+layout(set = 0, binding = 1) uniform WorldData{
+    mat4 object_toworld;
+    mat4 world_tocamera;
+    mat4 sky_tocamera;
+    mat4 camera_toprojection;
+    mat4 camera_toworld;
     vec3 camera_worldpos;
-    mat4 CAMERA_TO_WORLD;
-};
+} CameraData;
 
 vec3 SPHERE_CENTER = vec3(0,0,-10);
 float SPHERE_RADIUS = 1.0f;
@@ -82,10 +86,10 @@ void main(){
 
 
     vec4 CS_RAYDIR = vec4(pixel_NDCPos.xy, -focal_length, 0.0f);
-    vec3 WS_RAYDIR = (CAMERA_TO_WORLD * CS_RAYDIR).xyz;
+    vec3 WS_RAYDIR = (CameraData.camera_toworld * CS_RAYDIR).xyz;
 
     
-    vec4 INTERSECTION_POINT = Calculate_SphereIntersection(camera_worldpos.xyz, WS_RAYDIR);
+    vec4 INTERSECTION_POINT = Calculate_SphereIntersection(CameraData.camera_worldpos.xyz, WS_RAYDIR);
     if(INTERSECTION_POINT != FAILEDINTERSECTION_SENTINEL){
         vec3 Normal = normalize(INTERSECTION_POINT.xyz - SPHERE_CENTER);
         vec3 LightDir = normalize(-DIRECTIONALLIGHTs[0].DIRECTION);

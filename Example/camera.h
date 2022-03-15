@@ -10,6 +10,8 @@ class Camera {
 public:
 	glm::mat4x4 getPerspectiveMat4x4() { return glm::perspective(glm::radians(fov_angle), aspect_ratio, near_plane, far_plane); }
 	glm::mat4x4 getWorld_to_ViewMat4x4(){ return glm::lookAt(camerapos, camerapos + glm::normalize(camera_dir), glm::vec3(0, 1, 0)); }
+	vec3_tgfx getWorldPosition() { return vec3_tgfx{ camerapos.x, camerapos.y, camerapos.z }; }
+	vec3_tgfx getWorldDirection() { return vec3_tgfx{ camera_dir.x, camera_dir.y, camera_dir.z }; }
 	void imguiCameraEditor() {
 		vec3_tgfx tgfx_camerapos = { camerapos.x, camerapos.y, camerapos.z }, tgfx_cameradir = { camera_dir.x, camera_dir.y, camera_dir.z };
 		TGFXIMGUI->Slider_Vec3("Camera Position", &tgfx_camerapos, -10.0f, 10.0f);

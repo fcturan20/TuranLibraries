@@ -122,26 +122,26 @@ struct window_vk {
 	windowmode_tgfx DISPLAYMODE;
 	monitor_vk* MONITOR;
 	std::string NAME;
-	VkImageUsageFlags SWAPCHAINUSAGE;
 	tgfx_windowResizeCallback resize_cb = nullptr;
 	void* UserPTR;
+	texture_vk* Swapchain_Textures[2];
+	unsigned char CurrentFrameSWPCHNIndex = 0;
+	//To avoid calling resize or swapbuffer twice in a frame!
+	std::atomic<bool> isResized = false, isSwapped = false;
+	//Don't make these 3 again! There should 3 textures to be able to use 3 semaphores, otherwise 2 different semaphores for the same texture doesn't work as you expect!
+	//Presentation Semaphores should only be used for rendergraph submission as wait
+	semaphore_idtype_vk PresentationSemaphores[2];
+	queuefam_vk* presentationqueue = nullptr;
+	//Presentation Fences should only be used for CPU to wait
+	fence_idtype_vk PresentationFences[2];
 
 	VkSurfaceKHR Window_Surface = {};
 	VkSwapchainKHR Window_SwapChain = {};
 	GLFWwindow* GLFW_WINDOW = {};
-	unsigned char CurrentFrameSWPCHNIndex = 0;
-	texture_vk* Swapchain_Textures[2];
 	VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
 	std::vector<VkSurfaceFormatKHR> SurfaceFormats;
 	std::vector<VkPresentModeKHR> PresentationModes;
-	//Don't make these 3 again! There should 3 textures to be able to use 3 semaphores, otherwise 2 different semaphores for the same texture doesn't work as you expect!
-	//Presentation Semaphores should only be used for rendergraph submission as wait
-	semaphore_idtype_vk PresentationSemaphores[2];
-	//Presentation Fences should only be used for CPU to wait
-	fence_idtype_vk PresentationFences[2];
-	queuefam_vk* presentationqueue = nullptr;
-	//To avoid calling resize or swapbuffer twice in a frame!
-	std::atomic<bool> isResized = false, isSwapped = false;
+	VkImageUsageFlags SWAPCHAINUSAGE;
 };
 
 struct initialization_secondstageinfo{

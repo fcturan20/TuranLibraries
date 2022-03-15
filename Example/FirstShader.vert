@@ -10,6 +10,8 @@ layout(set = 0, binding = 1) uniform WorldData{
     mat4 world_tocamera;
     mat4 sky_tocamera;
     mat4 camera_toprojection;
+    mat4 camera_toworld;
+    vec3 camera_worldpos;
 } CameraData;
 
 void main() {

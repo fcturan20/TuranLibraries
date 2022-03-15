@@ -44,7 +44,7 @@ extern unsigned int devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = 
 extern texture_tgfx_handle swapchain_textures[2] = {NULL, NULL}, depthbuffer_handle = NULL;
 extern window_tgfx_handle firstwindow = NULL;
 extern buffer_tgfx_handle shaderuniformsbuffer = NULL;
-extern transferpass_tgfx_handle framebegincopy_TP = NULL, barrierbeforecompute_TP = NULL, barrierbeforeswapchain_TP = NULL;
+extern transferpass_tgfx_handle framebegincopy_TP = NULL, barrierbeforecompute_TP = NULL, barrierbeforeraster_TP = NULL, barrierbeforeswapchain_TP = NULL;
 extern subdrawpass_tgfx_handle framerendering_subDP = NULL;
 extern windowpass_tgfx_handle swapchain_windowpass = NULL;
 extern computepass_tgfx_handle ComputebeforeRasterization_CP = NULL;
@@ -200,9 +200,12 @@ public:
 		TGFXRENDERER->Create_TransferPass(wait_for_copytp, transferpasstype_tgfx_BARRIER, "FirstBarrierTP", &barrierbeforecompute_TP);
 
 		//First Compute Pass Creation
-		passwaitdescription_tgfx_handle dp_waits[2] = { TGFXHELPER->CreatePassWait_TransferPass(&barrierbeforecompute_TP, transferpasstype_tgfx_BARRIER,
+		passwaitdescription_tgfx_handle cp_waits[2] = { TGFXHELPER->CreatePassWait_TransferPass(&barrierbeforecompute_TP, transferpasstype_tgfx_BARRIER,
 			TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
-		TGFXRENDERER->Create_ComputePass(dp_waits, 1, "FirstCP", &ComputebeforeRasterization_CP);
+		TGFXRENDERER->Create_ComputePass(cp_waits, 1, "FirstCP", &ComputebeforeRasterization_CP);
+
+		passwaitdescription_tgfx_handle barrier_waits[2] = { TGFXHELPER->CreatePassWait_ComputePass(&ComputebeforeRasterization_CP, 0, TGFXHELPER->CreateWaitSignal_ComputeShader(true, true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+		TGFXRENDERER->Create_TransferPass(barrier_waits, transferpasstype_tgfx_BARRIER, "BarrierBeforeDP", &barrierbeforeraster_TP);
 
 		//Draw Pass Creation
 
@@ -217,11 +220,11 @@ public:
 		inheritedrtslotset_tgfx_handle irtslotset;
 		TGFXCONTENTMANAGER->Inherite_RTSlotSet(rtslotusages, rtslotset_handle, &irtslotset);
 		subdrawpassdescription_tgfx_handle subdp_descs[2] = { TGFXHELPER->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)TGFXINVALID };
-		passwaitdescription_tgfx_handle cp_waits[2] = { TGFXHELPER->CreatePassWait_ComputePass(&ComputebeforeRasterization_CP, 0,
-			TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+		passwaitdescription_tgfx_handle raster_waits[2] = { TGFXHELPER->CreatePassWait_TransferPass(&barrierbeforeraster_TP, transferpasstype_tgfx_BARRIER, 
+			TGFXHELPER->CreateWaitSignal_Transfer(true, true), false),  (passwaitdescription_tgfx_handle)TGFXINVALID };
 		subdrawpass_tgfx_listhandle sub_dps;
 		drawpass_tgfx_handle dp;
-		TGFXRENDERER->Create_DrawPass(subdp_descs, rtslotset_handle, cp_waits, "First DP", &sub_dps, &dp);
+		TGFXRENDERER->Create_DrawPass(subdp_descs, rtslotset_handle, raster_waits, "First DP", &sub_dps, &dp);
 		framerendering_subDP = sub_dps[0];
 
 		//Final Barrier TP Creation

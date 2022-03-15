@@ -27,8 +27,9 @@ public:
 	std::vector<monitor_vk*> MONITORs;
 	std::vector<window_vk*> WINDOWs;
 
-	//Instead of checking each window each frame, just check this
-	bool isAnyWindowResized = false, isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = true;
+	
+	bool isAnyWindowResized = false; //Instead of checking each window each frame, just check this
+	bool isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = true;
 };
 static core_private* hidden = nullptr;
 
@@ -99,12 +100,10 @@ result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCa
 		return result_tgfx_FAIL;
 
 	core->api->INVALIDHANDLE = regsys->get(VIRTUALMEMORY_TAPI_PLUGIN_NAME, VIRTUALMEMORY_TAPI_PLUGIN_VERSION, 0);
-	//Threading is supported
-	if (regsys->get(THREADINGSYS_TAPI_PLUGIN_NAME, THREADINGSYS_TAPI_PLUGIN_VERSION, 0)) {
-
-	}
-	else {
-
+	//Check if threading system is loaded
+	THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadsysloaded = (THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE)regsys->get(THREADINGSYS_TAPI_PLUGIN_NAME, THREADINGSYS_TAPI_PLUGIN_VERSION, 0);
+	if (threadsysloaded) {
+		threadingsys = threadsysloaded->funcs;
 	}
 
 	core_vk = new core_public;

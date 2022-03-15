@@ -11,3 +11,6 @@ install(TARGETS tgfx_core RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
 
 #Vulkan
 add_subdirectory("vk_backend")
+
+#D3D12
+add_subdirectory("dx12")

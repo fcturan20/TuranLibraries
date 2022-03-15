@@ -295,7 +295,8 @@ typedef enum windowmode_tgfx {
 
 typedef enum backends_tgfx {
     backends_tgfx_OPENGL4 = 0,
-    backends_tgfx_VULKAN = 1
+    backends_tgfx_VULKAN = 1,
+    backends_tgfx_D3D12 = 2
 } backends_tgfx;
 
 typedef enum shaderlanguages_tgfx {

@@ -2473,11 +2473,11 @@ extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 		{
 			BufferBinding[0].binding = 0;
 			BufferBinding[0].pImmutableSamplers = nullptr;
-			BufferBinding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+			BufferBinding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 
 			BufferBinding[1].binding = 1;
 			BufferBinding[1].pImmutableSamplers = nullptr;
-			BufferBinding[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+			BufferBinding[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 
 			if (info->isUniformBuffer_Index1) {
 				BufferBinding[0].descriptorCount = SBUFFER_COUNT;
@@ -2518,11 +2518,11 @@ extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 		{
 			TextureBinding[0].binding = 0;
 			TextureBinding[0].pImmutableSamplers = nullptr;
-			TextureBinding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+			TextureBinding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 
 			TextureBinding[1].binding = 1;
 			TextureBinding[1].pImmutableSamplers = nullptr;
-			TextureBinding[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+			TextureBinding[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 
 			if (info->isSampledTexture_Index1) {
 				TextureBinding[0].descriptorCount = IMAGE_COUNT;

@@ -16,4 +16,5 @@ queuesys_dx* queuesys = nullptr;
 
 tgfx_PrintLogCallback printer = nullptr;
 
+HINSTANCE hInstance = NULL;
 UINT g_RTVDescriptorSize = UINT32_MAX;

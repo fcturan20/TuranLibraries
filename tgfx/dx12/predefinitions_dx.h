@@ -109,4 +109,8 @@ enum class desctype_dx : unsigned char {
 //Resources
 struct texture_dx;
 
+extern HINSTANCE hInstance;
 extern UINT g_RTVDescriptorSize;
+extern ComPtr<IDXGIFactory4> dxgiFactory;
+
+#define TD3D12_WCLASSNAME L"TGFXD3D12"

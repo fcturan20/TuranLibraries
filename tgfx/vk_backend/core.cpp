@@ -20,65 +20,46 @@
 
 #include "gpucontentmanager.h"
 
-struct core_private{
-public:
-	std::vector<gpu_public*> DEVICE_GPUs;
-	//Window Operations
-	std::vector<monitor_vk*> MONITORs;
-	std::vector<window_vk*> WINDOWs;
-
-	
-	bool isAnyWindowResized = false; //Instead of checking each window each frame, just check this
-	bool isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = true;
-};
-static core_private* hidden = nullptr;
-
-const std::vector<window_vk*>& core_public::GET_WINDOWs() {
-	return hidden->WINDOWs;
-}
-
-void GFX_Error_Callback(int error_code, const char* description) {
-	printf("TGFX_FAIL: %s\n", description);
-}
-
 struct device_features_chainedstructs;
 struct core_functions {
 public:
-	static inline void initialize_secondstage(initializationsecondstageinfo_tgfx_handle info);
+	static void initialize_secondstage(initializationsecondstageinfo_tgfx_handle info);
 	//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
-	static inline void createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor,
+	static void createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor,
 		windowmode_tgfx Mode, const char* NAME, textureusageflag_tgfx_handle SwapchainUsage, tgfx_windowResizeCallback ResizeCB,
 		void* UserPointer, texture_tgfx_handle* SwapchainTextureHandles, window_tgfx_handle* window);
-	static inline void change_window_resolution(window_tgfx_handle WindowHandle, unsigned int width, unsigned int height);
-	static inline void getmonitorlist(monitor_tgfx_listhandle* MonitorList);
-	static inline void getGPUlist(gpu_tgfx_listhandle* GpuList);
+	static void change_window_resolution(window_tgfx_handle WindowHandle, unsigned int width, unsigned int height);
+	static void getmonitorlist(monitor_tgfx_listhandle* MonitorList);
+	static void getGPUlist(gpu_tgfx_listhandle* GpuList);
 
 	//Debug callbacks are user defined callbacks, you should assign the function pointer if you want to use them
 	//As default, all backends set them as empty no-work functions
-	static inline void debugcallback(result_tgfx result, const char* Text);
+	static void debugcallback(result_tgfx result, const char* Text);
 	//You can set this if TGFX is started with threaded call.
-	static inline void debugcallback_threaded(unsigned char ThreadIndex, result_tgfx Result, const char* Text);
+	static void debugcallback_threaded(unsigned char ThreadIndex, result_tgfx Result, const char* Text);
 
 
 	static void destroy_tgfx_resources();
 	static void take_inputs();
 
-	static inline void set_helper_functions();
-	static inline void Save_Monitors();
-	static inline void Create_Instance();
-	static inline void Setup_Debugging();
-	static inline void Check_Computer_Specs();
-	static inline void createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor,
+	static void Save_Monitors();
+	static void Create_Instance();
+	static void Setup_Debugging();
+	static void Check_Computer_Specs();
+	static void createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor,
 		windowmode_tgfx Mode, const char* NAME, textureusageflag_tgfx_handle SwapchainUsage, tgfx_windowResizeCallback ResizeCB, void* UserPointer,
 		texture_vk* SwapchainTextureHandles, window_tgfx_handle* window);
 
 	//GPU ANALYZATION FUNCS
 
-	static inline void Gather_PhysicalDeviceInformations(gpu_public* VKGPU);
-	static inline void Describe_SupportedExtensions(gpu_public* VKGPU);
-	static inline void ActivateDeviceFeatures(gpu_public* VKGPU, VkDeviceCreateInfo& device_ci, device_features_chainedstructs& chainer);
-	static inline void CheckDeviceLimits(gpu_public* VKGPU);
+	static void Gather_PhysicalDeviceInformations(gpu_public* VKGPU);
+	static void Describe_SupportedExtensions(gpu_public* VKGPU);
+	static void ActivateDeviceFeatures(gpu_public* VKGPU, VkDeviceCreateInfo& device_ci, device_features_chainedstructs& chainer);
+	static void CheckDeviceLimits(gpu_public* VKGPU);
 };
+void printf_log_tgfx(result_tgfx result, const char* text) {
+	printf("TGFX %u: %s\n", (unsigned int)result, text);
+}
 
 #ifndef NO_IMGUI
 extern void Create_IMGUI();
@@ -90,10 +71,20 @@ extern void set_helper_functions();
 extern void Create_AllocatorSys();
 extern void Create_QueueSys();
 extern void Create_SyncSystems();
+struct core_private {
+public:
+	std::vector<gpu_public*> DEVICE_GPUs;
+	//Window Operations
+	std::vector<monitor_vk*> MONITORs;
+	std::vector<window_vk*> WINDOWs;
 
 
-void printf_log_tgfx(result_tgfx result, const char* text) {
-	printf("TGFX %u: %s\n", (unsigned int)result, text);
+	bool isAnyWindowResized = false; //Instead of checking each window each frame, just check this
+	bool isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = true;
+};
+static core_private* hidden = nullptr;
+void GFX_Error_Callback(int error_code, const char* description) {
+	printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
 }
 result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallback printcallback) {
 	if (!regsys->get(TGFX_PLUGIN_NAME, TGFX_PLUGIN_VERSION, 0))
@@ -115,7 +106,7 @@ result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCa
 	else { printer = printf_log_tgfx; }
 
 	core->api->initialize_secondstage = &core_functions::initialize_secondstage;
-	
+
 	//Set function pointers of the user API
 	//core->api->change_window_resolution = &core_functions::change_window_resolution;
 	core->api->create_window = &core_functions::createwindow_vk;
@@ -146,9 +137,17 @@ result_tgfx load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCa
 
 	return result_tgfx_SUCCESS;
 }
-extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallback printcallback){
+extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi * regsys, core_tgfx_type * core, tgfx_PrintLogCallback printcallback) {
 	return load(regsys, core, printcallback);
- }
+}
+
+
+const std::vector<window_vk*>& core_public::GET_WINDOWs() {
+	return hidden->WINDOWs;
+}
+
+
+
 //While enabling features, some struct should be chained. This struct is to keep data object lifetimes optimal
 struct device_features_chainedstructs {
 	VkPhysicalDeviceDescriptorIndexingFeatures DescIndexingFeatures = {};
@@ -265,15 +264,13 @@ void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_h
 		Logical_Device_CreationInfo.pEnabledFeatures = &rendergpu->Active_Features;
 		Logical_Device_CreationInfo.enabledLayerCount = 0;
 		if (vkCreateDevice(rendergpu->Physical_Device, &Logical_Device_CreationInfo, nullptr, &rendergpu->Logical_Device) != VK_SUCCESS) {
-			printer(result_tgfx_SUCCESS, "Vulkan failed to create a Logical Device!");
+			printer(result_tgfx_FAIL, "Vulkan failed to create a Logical Device!");
 			return;
 		}
-		printer(result_tgfx_SUCCESS, "After vkCreateDevice()");
 		
 		queuesys->get_queue_objects(rendergpu);
 		CheckDeviceLimits(rendergpu);
 		allocatorsys->do_allocations(rendergpu);
-		printer(result_tgfx_SUCCESS, "After Check_DeviceLimits()");
 	}
 
 
@@ -353,7 +350,6 @@ void core_functions::Save_Monitors() {
 	hidden->MONITORs.clear();
 	int monitor_count;
 	GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
-	printer(result_tgfx_SUCCESS, ("VulkanCore: " + std::to_string(monitor_count) + " number of monitor(s) detected!").c_str());
 	for (unsigned int i = 0; i < monitor_count; i++) {
 		GLFWmonitor* monitor = monitors[i];
 
@@ -470,8 +466,6 @@ void core_functions::Create_Instance() {
 	if (vkCreateInstance(&InstCreation_Info, nullptr, &Vulkan_Instance) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "Failed to create a Vulkan Instance!");
 	}
-	printer(result_tgfx_SUCCESS, "Vulkan Instance is created successfully!");
-
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VK_DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT Message_Severity, VkDebugUtilsMessageTypeFlagsEXT Message_Type, const VkDebugUtilsMessengerCallbackDataEXT* pCallback_Data, void* pUserData);
@@ -492,7 +486,6 @@ void core_functions::Setup_Debugging() {
 	if (func(Vulkan_Instance, &DebugMessenger_CreationInfo, nullptr, &Debug_Messenger) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "Vulkan's Debug Callback system failed to start!");
 	}
-	printer(result_tgfx_SUCCESS, "Vulkan Debug Callback system is started!");
 }
 
 
@@ -529,8 +522,6 @@ inline const char* Convert_VendorID_toaString(uint32_t VendorID) {
 	}
 }
 inline void core_functions::Check_Computer_Specs() {
-	printer(result_tgfx_SUCCESS, "Started to check Computer Specifications!");
-
 	//CHECK GPUs
 	uint32_t GPU_NUMBER = 0;
 	vkEnumeratePhysicalDevices(Vulkan_Instance, &GPU_NUMBER, nullptr);
@@ -572,8 +563,6 @@ inline void core_functions::Check_Computer_Specs() {
 		vkgpu->extensions = new extension_manager;
 		Describe_SupportedExtensions(vkgpu);
 		CheckDeviceLimits(vkgpu);
-
-		printer(result_tgfx_SUCCESS, "Finished checking Computer Specifications!");
 	}
 }
 
@@ -659,9 +648,6 @@ bool Create_WindowSwapchain(window_vk* Vulkan_Window, unsigned int WIDTH, unsign
 		printer(result_tgfx_FAIL, "TGFX API asked for 2 swapchain textures but Vulkan driver gave less number of textures!");
 		return false;
 	}
-	else if (created_imagecount > 2) {
-		printer(result_tgfx_SUCCESS, "TGFX API asked for 2 swapchain textures but Vulkan driver gave more than that, so GFX API only used 2 of them!");
-	}
 	for (unsigned int vkim_index = 0; vkim_index < 2; vkim_index++) {
 		texture_vk* SWAPCHAINTEXTURE = new texture_vk;
 		SWAPCHAINTEXTURE->CHANNELs = texture_channels_tgfx_BGRA8UNORM;
@@ -712,14 +698,8 @@ void GLFWwindowresizecallback(GLFWwindow* glfwwindow, int width, int height) {
 void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor,
 	windowmode_tgfx Mode, const char* NAME, textureusageflag_tgfx_handle SwapchainUsage, tgfx_windowResizeCallback ResizeCB, void* UserPointer,
 	texture_tgfx_handle* SwapchainTextureHandles, window_tgfx_handle* window) {
-	printer(result_tgfx_SUCCESS, "Window creation has started!");
-
-	if (ResizeCB) {
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-	}
-	else {
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	}
+	if (ResizeCB) { glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); }
+	else { glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); }
 	//Create window as it will share resources with Renderer Context to get display texture!
 	monitor_vk* MONITOR = (monitor_vk*)monitor;
 	GLFWwindow* glfw_window = glfwCreateWindow(WIDTH, HEIGHT, NAME, (Mode == windowmode_tgfx_FULLSCREEN) ? (MONITOR->monitorobj) : (NULL), nullptr);
@@ -733,7 +713,6 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 	Vulkan_Window->SWAPCHAINUSAGE = *(VkImageUsageFlags*)SwapchainUsage;
 	Vulkan_Window->resize_cb = ResizeCB;
 	Vulkan_Window->UserPTR = UserPointer;
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 	//Check and Report if GLFW fails
 	if (glfw_window == NULL) {
@@ -748,13 +727,10 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 		printer(result_tgfx_FAIL, "GLFW failed to create a window surface");
 		return;
 	}
-	else {
-		printer(result_tgfx_SUCCESS, "GLFW created a window surface!");
-	}
 	Vulkan_Window->Window_Surface = Window_Surface;
 
 	if (ResizeCB) {
-		glfwSetWindowUserPointer(Vulkan_Window->GLFW_WINDOW, Vulkan_Window);
+		glfwSetWindowUserPointer(Vulkan_Window->GLFW_WINDOW, Vulkan_Window->UserPTR);
 		glfwSetWindowSizeCallback(Vulkan_Window->GLFW_WINDOW, GLFWwindowresizecallback);
 	}
 
@@ -786,6 +762,7 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 		vkGetPhysicalDeviceSurfacePresentModesKHR(rendergpu->PHYSICALDEVICE(), Vulkan_Window->Window_Surface, &PresentationModesCount, Vulkan_Window->PresentationModes.data());
 	}
 
+	//Create Swapchain
 	texture_vk* SWPCHNTEXTUREHANDLESVK[2];
 	if (!Create_WindowSwapchain(Vulkan_Window, Vulkan_Window->LASTWIDTH, Vulkan_Window->LASTHEIGHT, &Vulkan_Window->Window_SwapChain, SWPCHNTEXTUREHANDLESVK)) {
 		printer(result_tgfx_FAIL, "Window's swapchain creation has failed, so window's creation!");
@@ -801,7 +778,6 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 	SwapchainTextureHandles[1] = (texture_tgfx_handle)Vulkan_Window->Swapchain_Textures[1];
 
 
-	printer(result_tgfx_SUCCESS, "Window creation is successful!");
 	*window = (window_tgfx_handle)Vulkan_Window;
 	hidden->WINDOWs.push_back(Vulkan_Window);
 }

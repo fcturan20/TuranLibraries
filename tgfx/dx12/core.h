@@ -10,7 +10,7 @@ struct core_public {
 struct gpu_private;
 struct gpu_public {
 private:
-	friend struct core_functions;
+	friend struct core_functions_dx;
 	friend struct allocatorsys_dx;
 	friend struct queuesys_dx;
 	gpu_private* hidden = nullptr;
@@ -32,7 +32,7 @@ public:
 struct monitor_dx {
 	unsigned int width, height, color_bites, refresh_rate, physical_width, physical_height;
 	const char* name;
-
+	GLFWmonitor* monitorobj;
 };
 
 struct window_dx {
@@ -53,10 +53,11 @@ struct window_dx {
 	fence_idtype_dx PresentationFences[2];
 
 
-	// Window handle.
+	// WindowDX handle.
 	HWND Window_Handle;
 	// Window rectangle (used to toggle fullscreen state).
 	RECT PreviousWindowRect;
 	// Swapchain object
 	ComPtr<IDXGISwapChain4> Swapchain_Handle;
+	GLFWwindow* GLFWHANDLE;
 };

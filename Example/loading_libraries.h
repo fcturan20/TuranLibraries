@@ -147,7 +147,7 @@ public:
 		else { TGFXCORE = tgfxsys->api; }
 		//You have to load a backend to use the TGFX system.
 		//There is no data in the base TGFX system if you don't load any backend.
-		result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_VULKAN, printf_log_tgfx);
+		result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_D3D12, printf_log_tgfx);
 		printf("%c", result);
 
 		TGFXCORE = tgfxsys->api;

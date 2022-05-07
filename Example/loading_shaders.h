@@ -11,6 +11,7 @@ extern computeshaderinstance_tgfx_handle RT_computeshaderinstance = NULL;
 class SHADERS {
 public:
 	static void LoadShaders() {
+		/*
 		void* vert_text = filesys->read_textfile(CMAKE_SOURCE_FOLDER"/Example/FirstShader.vert"); if (!vert_text) { printf("Vertex Shader read has failed!"); }
 		void* frag_text = filesys->read_textfile(CMAKE_SOURCE_FOLDER"/Example/FirstShader.frag"); if (!frag_text) { printf("Fragment Shader read has failed!"); }
 		shadersource_tgfx_handle compiled_sources[3];
@@ -38,6 +39,6 @@ public:
 		TGFXCONTENTMANAGER->SetComputeType_Buffer(RT_computeshadertype, false, 0, shaderuniformsbuffer, buffertype_tgfx_GLOBAL, true, 0, 0, 32);
 		TGFXCONTENTMANAGER->SetComputeType_Buffer(RT_computeshadertype, false, 1, shaderuniformsbuffer, buffertype_tgfx_GLOBAL, true, 0, 64, 142);
 		TGFXCONTENTMANAGER->SetComputeType_Texture(RT_computeshadertype, false, 2, orange_texture, false, 0, nullptr, image_access_tgfx_SHADER_WRITEONLY);
-
+		*/
 	}
 };

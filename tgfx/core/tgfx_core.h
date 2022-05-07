@@ -26,10 +26,14 @@ typedef struct core_tgfx{
     */
 	result_tgfx (*load_backend)(backends_tgfx backend, tgfx_PrintLogCallback printcallback);
 	void (*initialize_secondstage)(initializationsecondstageinfo_tgfx_handle info);
-	//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
+	//You should also create a supported swapchain with create_swapchain() to use the window
+	//Don't forget to create a new swapchain in the callback too
 	void (*create_window)(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor, 
-		windowmode_tgfx Mode, const char* NAME, textureusageflag_tgfx_handle SwapchainUsage, tgfx_windowResizeCallback ResizeCB, 
-		void* UserPointer, texture_tgfx_handle* SwapchainTextureHandles, window_tgfx_handle* window);
+		windowmode_tgfx Mode, const char* NAME, tgfx_windowResizeCallback ResizeCB, 
+		void* UserPointer, window_tgfx_handle* window);
+	//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
+	result_tgfx(*create_swapchain)(window_tgfx_handle window, windowpresentation_tgfx presentationMode, windowcomposition_tgfx composition, 
+		colorspace_tgfx colorSpace, texture_channels_tgfx channels, textureusageflag_tgfx_handle SwapchainUsage, texture_tgfx_handle* textures);
 	void (*change_window_resolution)(window_tgfx_handle WindowHandle, unsigned int width, unsigned int height);
 	void (*getmonitorlist)(monitor_tgfx_listhandle* MonitorList);
 	void (*getGPUlist)(gpu_tgfx_listhandle* GpuList);

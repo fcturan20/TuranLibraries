@@ -124,50 +124,6 @@ void CheckIMGUIVKResults(VkResult result) {
 		printer(result_tgfx_FAIL, "IMGUI's Vulkan backend has failed, please report!");
 	}
 }
-result_tgfx imgui_vk::Initialize(subdrawpass_tgfx_handle SubPass) {
-	//Create a special Descriptor Pool for IMGUI
-	VkDescriptorPoolSize pool_sizes[] =
-	{
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
-	};
-
-	VkDescriptorPoolCreateInfo descpool_ci;
-	descpool_ci.flags = 0;
-	descpool_ci.maxSets = 1;
-	descpool_ci.pNext = nullptr;
-	descpool_ci.poolSizeCount = 1;
-	descpool_ci.pPoolSizes = pool_sizes;
-	descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	if (vkCreateDescriptorPool(rendergpu->LOGICALDEVICE(), &descpool_ci, nullptr, &descpool) != VK_SUCCESS) {
-		printer(result_tgfx_FAIL, "Creating a descriptor pool for dear IMGUI has failed!");
-		return result_tgfx_FAIL;
-	}
-
-	if (!core_vk->GET_WINDOWs().size()) {
-		printer(result_tgfx_FAIL, "Initialization of dear IMGUI has failed because you didn't create a window!");
-		return result_tgfx_FAIL;
-	}
-	ImGui_ImplGlfw_InitForVulkan(core_vk->GET_WINDOWs()[0]->GLFW_WINDOW, true);
-	ImGui_ImplVulkan_InitInfo init_info = {};
-	init_info.Instance = Vulkan_Instance;
-	init_info.PhysicalDevice = rendergpu->PHYSICALDEVICE();
-	init_info.Device = rendergpu->LOGICALDEVICE();
-	init_info.Queue = queuesys->get_queue(rendergpu, core_vk->GET_WINDOWs()[0]->presentationqueue);
-	init_info.QueueFamily = queuesys->get_queuefam_index(rendergpu, core_vk->GET_WINDOWs()[0]->presentationqueue);
-	init_info.PipelineCache = VK_NULL_HANDLE;
-	init_info.DescriptorPool = descpool;
-	init_info.Allocator = nullptr;
-	init_info.MinImageCount = 2;
-	init_info.ImageCount = 2;
-	init_info.CheckVkResultFn = CheckIMGUIVKResults;
-	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-	subdrawpass_vk* SP = (subdrawpass_vk*)SubPass;
-	init_info.Subpass = static_cast<uint32_t>(SP->Binding_Index);
-	SP->render_dearIMGUI = true;
-	ImGui_ImplVulkan_Init(&init_info, ((drawpass_vk*)SP->DrawPass)->RenderPassObject);
-
-	return result_tgfx_SUCCESS;
-}
 void imgui_vk::Change_DrawPass(subdrawpass_tgfx_handle Subpass) { printer(result_tgfx_NOTCODED, "imgui_vk->ChangeDrawPass() isn't coded"); }
 void imgui_vk::NewFrame() {
 	if (STAT == IMGUI_STATUS::NEW_FRAME) {
@@ -302,7 +258,6 @@ extern void Create_IMGUI() {
 void Run_IMGUI_WINDOWs() {
 	for (unsigned int i = 0; i < hidden->ALL_IMGUI_WINDOWs.size(); i++) {
 		imguiwindow_tgfx* window = hidden->ALL_IMGUI_WINDOWs[i];
-		printer(result_tgfx_SUCCESS, ("Running the Window: " + std::string(window->WindowName)).c_str());
 		window->RunWindow(window);
 	}
 
@@ -336,7 +291,6 @@ void Run_IMGUI_WINDOWs() {
 	}
 }
 void Register_WINDOW(imguiwindow_tgfx* Window) {
-	printer(result_tgfx_SUCCESS, "Registering a Window!");
 	hidden->Windows_toOpen.push_back(Window);
 }
 void Delete_WINDOW(imguiwindow_tgfx* Window) {
@@ -356,7 +310,6 @@ void Set_as_MainViewport() {
 }
 
 void Destroy_IMGUI_Resources() {
-	printer(result_tgfx_SUCCESS, "IMGUI resources are being destroyed!\n");
 	ImGui::DestroyContext();
 }
 

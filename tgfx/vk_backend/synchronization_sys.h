@@ -1,3 +1,4 @@
+#pragma once
 #include "predefinitions_vk.h"
 #include <vector>
 #include "core.h"

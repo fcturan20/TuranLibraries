@@ -1,6 +1,6 @@
 #pragma once
 #include "tgfx_forwarddeclarations.h"
-
+#include "tgfx_structs.h"
 
 	/*			GFX Content Manager:
 	* This system manages all of the GFX asset and GPU memory management proccesses
@@ -38,7 +38,7 @@
 
 
 	How does Material System works?
-	1) All of the shader inputs is divided into 3 categories: Global, Material Type (General), Material Instance (Per Instance)
+	1) All of the shader inputs is divided into 3 categories: Global, Mat erial Type (General), Material Instance (Per Instance)
 	2) General and Per Instance shader inputs should be set with SetMaterial_XXX() functions
 	3) Related SetMaterial_XXX() function of a shader input can only be called once per frame, second one (or concurrent one) will fail
 	4) That means you can change 2 different shader inputs in the same frame, but you can't change the same shader inputs twice in a frame
@@ -49,94 +49,93 @@
 	9) Please read "Resources_README.md" for details
 	*/
 
-	typedef struct gpudatamanager_tgfx {
-		void (*Destroy_AllResources)();
+typedef struct gpudatamanager_tgfx {
+	void (*Destroy_AllResources)();
 
+	//Don't forget that if sampler is used as constant, DX12 limits bordercolor to be vec4(0), vec4(0,0,0,1) and vec4(1)
+	result_tgfx (*Create_Sampler)(unsigned int MinimumMipLevel, unsigned int MaximumMipLevel, texture_mipmapfilter_tgfx MINFILTER, texture_mipmapfilter_tgfx MAGFILTER, texture_wrapping_tgfx WRAPPING_WIDTH,
+		texture_wrapping_tgfx WRAPPING_HEIGHT, texture_wrapping_tgfx WRAPPING_DEPTH, uvec4_tgfx bordercolor, samplingtype_tgfx_handle* SamplingTypeHandle);
 
-		result_tgfx (*Create_SamplingType)(unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
-			texture_mipmapfilter_tgfx MINFILTER, texture_mipmapfilter_tgfx MAGFILTER, texture_wrapping_tgfx WRAPPING_WIDTH,
-			texture_wrapping_tgfx WRAPPING_HEIGHT, texture_wrapping_tgfx WRAPPING_DEPTH, samplingtype_tgfx_handle* SamplingTypeHandle);
-
-		//Attributes list should end with datatype_tgfx_UNDEFINED (one extra element at the end)
+	//Attributes list should end with datatype_tgfx_UNDEFINED (one extra element at the end)
     
-		result_tgfx (*Create_VertexAttributeLayout)(const datatype_tgfx* Attributes, vertexlisttypes_tgfx listtype, 
-			vertexattributelayout_tgfx_handle* VertexAttributeLayoutHandle);
-		void (*Delete_VertexAttributeLayout)(vertexattributelayout_tgfx_handle VertexAttributeLayoutHandle);
+	result_tgfx (*Create_VertexAttributeLayout)(const datatype_tgfx* Attributes, vertexlisttypes_tgfx listtype, 
+		vertexattributelayout_tgfx_handle* VertexAttributeLayoutHandle);
+	void (*Delete_VertexAttributeLayout)(vertexattributelayout_tgfx_handle VertexAttributeLayoutHandle);
 
-		result_tgfx (*Upload_toBuffer)(buffer_tgfx_handle Handle, buffertype_tgfx Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET);
-
-		result_tgfx (*Create_StagingBuffer)(unsigned int DATASIZE, unsigned int MemoryTypeIndex, buffer_tgfx_handle* Handle);
-		void (*Delete_StagingBuffer)(buffer_tgfx_handle StagingBufferHandle);
-		/*
-		* You should sort your vertex data according to attribute layout, don't forget that
-		* VertexCount shouldn't be 0
-		*/
-		result_tgfx (*Create_VertexBuffer)(vertexattributelayout_tgfx_handle VertexAttributeLayoutHandle, unsigned int VertexCount,
-			unsigned int MemoryTypeIndex, buffer_tgfx_handle* VertexBufferHandle);
-		void (*Unload_VertexBuffer)(buffer_tgfx_handle BufferHandle);
-
-		result_tgfx (*Create_IndexBuffer)(datatype_tgfx DataType, unsigned int IndexCount, unsigned int MemoryTypeIndex, buffer_tgfx_handle* IndexBufferHandle);
-		void (*Unload_IndexBuffer)(buffer_tgfx_handle BufferHandle);
-
-		result_tgfx (*Create_Texture)(texture_dimensions_tgfx DIMENSION, unsigned int WIDTH, unsigned int HEIGHT, texture_channels_tgfx CHANNEL_TYPE,
-			unsigned char MIPCOUNT, textureusageflag_tgfx_handle USAGE, texture_order_tgfx DATAORDER, unsigned int MemoryTypeIndex, texture_tgfx_handle* TextureHandle);
-		//TARGET OFFSET is the offset in the texture's buffer to copy to
-		result_tgfx (*Upload_Texture)(texture_tgfx_handle TextureHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset);
-		void (*Delete_Texture)(texture_tgfx_handle TEXTUREHANDLE, unsigned char isUsedLastFrame);
-
-		result_tgfx (*Create_GlobalBuffer)(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned char isUniform,
-			unsigned int MemoryTypeIndex, buffer_tgfx_handle* GlobalBufferHandle);
-		void (*Unload_GlobalBuffer)(buffer_tgfx_handle BUFFER_ID);
-		result_tgfx (*SetGlobalShaderInput_Buffer)(unsigned char isUniformBuffer, unsigned int ElementIndex, unsigned char isUsedLastFrame, 
-			buffer_tgfx_handle BufferHandle, unsigned int BufferOffset, unsigned int BoundDataSize);
-		result_tgfx (*SetGlobalShaderInput_Texture)(unsigned char isSampledTexture, unsigned int ElementIndex, unsigned char isUsedLastFrame, 
-			texture_tgfx_handle TextureHandle, samplingtype_tgfx_handle sampler, image_access_tgfx access);
+	result_tgfx (*Upload_toBuffer)(buffer_tgfx_handle Handle, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET);
+	//If your GPU supports buffer_GPUaddress_pointers, you can use this. Otherwise this function pointer is NULL
+	//You can pass pointers to buffers (call buffer struct data or classic GPU buffers) and use complex data structures and access strategies in shaders
+	result_tgfx(*GetBufferGPUPointer)(buffer_tgfx_handle Handle, unsigned long long* ptr);
 
 
-		result_tgfx (*Compile_ShaderSource)(shaderlanguages_tgfx language, shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE, 
-			shadersource_tgfx_handle* ShaderSourceHandle);
-		void (*Delete_ShaderSource)(shadersource_tgfx_handle ShaderSourceHandle);
-		result_tgfx (*Link_MaterialType)(shadersource_tgfx_listhandle ShaderSourcesList, shaderinputdescription_tgfx_listhandle ShaderInputDescs, 
-			vertexattributelayout_tgfx_handle AttributeLayout, subdrawpass_tgfx_handle Subdrawpass, cullmode_tgfx culling, 
-			polygonmode_tgfx polygonmode, depthsettings_tgfx_handle depthtest, stencilsettings_tgfx_handle StencilFrontFaced, 
-			stencilsettings_tgfx_handle StencilBackFaced, blendinginfo_tgfx_listhandle BLENDINGs, rasterpipelinetype_tgfx_handle* MaterialHandle);
-		void (*Delete_MaterialType)(rasterpipelinetype_tgfx_handle ID);
-		result_tgfx (*Create_MaterialInst)(rasterpipelinetype_tgfx_handle MaterialType, rasterpipelineinstance_tgfx_handle * MaterialInstHandle);
-		void (*Delete_MaterialInst)(rasterpipelineinstance_tgfx_handle ID);
+	/*
+	* You should sort your vertex data according to attribute layout, don't forget that
+	* VertexCount shouldn't be 0
+	*/
+	result_tgfx (*Create_VertexBuffer)(vertexattributelayout_tgfx_handle VertexAttributeLayoutHandle, unsigned int VertexCount,
+		unsigned int MemoryTypeIndex, buffer_tgfx_handle* VertexBufferHandle);
+	void (*Unload_VertexBuffer)(buffer_tgfx_handle BufferHandle);
+
+	result_tgfx (*Create_IndexBuffer)(datatype_tgfx DataType, unsigned int IndexCount, unsigned int MemoryTypeIndex, buffer_tgfx_handle* IndexBufferHandle);
+	void (*Unload_IndexBuffer)(buffer_tgfx_handle BufferHandle);
+
+	result_tgfx (*Create_Texture)(texture_dimensions_tgfx DIMENSION, unsigned int WIDTH, unsigned int HEIGHT, texture_channels_tgfx CHANNEL_TYPE,
+		unsigned char MIPCOUNT, textureusageflag_tgfx_handle USAGE, texture_order_tgfx DATAORDER, unsigned int MemoryTypeIndex, texture_tgfx_handle* TextureHandle);
+	//TARGET OFFSET is the offset in the texture's buffer to copy to
+	result_tgfx (*Upload_Texture)(texture_tgfx_handle TextureHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset);
+	void (*Delete_Texture)(texture_tgfx_handle TEXTUREHANDLE);
+
+	//Extension can be UNIFORMBUFFER
+	result_tgfx (*Create_GlobalBuffer)(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int MemoryTypeIndex, extension_tgfx_listhandle exts, buffer_tgfx_handle* GlobalBufferHandle);
+	void (*Unload_GlobalBuffer)(buffer_tgfx_handle BUFFER_ID);
+
+	//If DescriptorType is sampler, StaticSamplers can be used to use static samplers at binding index 0
+	//If your GPU supports VariableDescCount, you set ElementCount to UINT32_MAX
+	result_tgfx (*Create_BindingTable)(shaderdescriptortype_tgfx DescriptorType, unsigned int ElementCount, 
+		shaderstageflag_tgfx_handle VisibleStages, samplingtype_tgfx_listhandle StaticSamplers, bindingtable_tgfx_handle* bindingTableHandle);
+	//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
+	void (*SetDescriptor_Sampler)(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
+		samplingtype_tgfx_handle samplerHandle);
+	//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_BUFFER
+	void (*SetDescriptor_Buffer)(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex, 
+		buffer_tgfx_handle bufferHandle, unsigned int bufferOffset, unsigned int BoundDataSize, extension_tgfx_listhandle exts);
+	//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLEDTEXTURE
+	void (*SetDescriptor_SampledTexture)(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
+		texture_tgfx_handle textureHandle);
+	//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_STORAGEIMAGE
+	void (*SetDescriptor_StorageImage)(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
+		texture_tgfx_handle textureHandle);
+
+	result_tgfx (*Compile_ShaderSource)(shaderlanguages_tgfx language, shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE, 
+		shadersource_tgfx_handle* ShaderSourceHandle);
+	void (*Delete_ShaderSource)(shadersource_tgfx_handle ShaderSourceHandle);
+	//For DX12 shaders;		You should use first slots for MatInstBindTables, then for MatTypeBindTables
+	//For Vulkan shaders;	You should use first slots for MatTypeBindTables, then for MatInstBindTables
+	result_tgfx (*Link_MaterialType)(shadersource_tgfx_listhandle ShaderSourcesList, 
+		bindingtable_tgfx_listhandle TypeBindingTables, bindingtable_tgfx_listhandle InstanceBindingTablesBASE,
+		vertexattributelayout_tgfx_handle AttributeLayout, subdrawpass_tgfx_handle Subdrawpass, cullmode_tgfx culling, 
+		polygonmode_tgfx polygonmode, depthsettings_tgfx_handle depthtest, stencilsettings_tgfx_handle StencilFrontFaced, 
+		stencilsettings_tgfx_handle StencilBackFaced, blendinginfo_tgfx_listhandle BLENDINGs, unsigned char CallBufferSize, rasterpipelinetype_tgfx_handle* MaterialHandle);
+	void (*Delete_MaterialType)(rasterpipelinetype_tgfx_handle ID);
+	result_tgfx (*Create_MaterialInst)(rasterpipelinetype_tgfx_handle MaterialType, bindingtable_tgfx_listhandle InstanceBindingTableOverrides, rasterpipelineinstance_tgfx_handle *MaterialInstHandle);
+	void (*Delete_MaterialInst)(rasterpipelineinstance_tgfx_handle ID);
 		
-		result_tgfx (*Create_ComputeType)(shadersource_tgfx_handle Source, shaderinputdescription_tgfx_listhandle ShaderInputDescs, computeshadertype_tgfx_handle* ComputeTypeHandle);
-		result_tgfx (*Create_ComputeInstance)(computeshadertype_tgfx_handle ComputeType, computeshaderinstance_tgfx_handle* ComputeShaderInstanceHandle);
-		void (*Delete_ComputeShaderType)(computeshadertype_tgfx_handle ID);
-		void (*Delete_ComputeShaderInstance)(computeshaderinstance_tgfx_handle ID);
+	result_tgfx (*Create_ComputeType)(shadersource_tgfx_handle Source, bindingtable_tgfx_listhandle TypeBindingTables, bindingtable_tgfx_listhandle InstanceBindingTablesBASE, unsigned char isCallBufferSupported, computeshadertype_tgfx_handle* ComputeTypeHandle);
+	result_tgfx (*Create_ComputeInstance)(computeshadertype_tgfx_handle ComputeType, bindingtable_tgfx_listhandle InstanceBindingTableOverrides, computeshaderinstance_tgfx_handle* ComputeShaderInstanceHandle);
+	void (*Delete_ComputeShaderType)(computeshadertype_tgfx_handle ID);
+	void (*Delete_ComputeShaderInstance)(computeshaderinstance_tgfx_handle ID);
 
-		//IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
-		result_tgfx (*SetMaterialType_Buffer)(rasterpipelinetype_tgfx_handle MaterialType, unsigned char isUsedRecently, unsigned int BINDINDEX,
-			buffer_tgfx_handle BufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize);
-		result_tgfx (*SetMaterialType_Texture)(rasterpipelinetype_tgfx_handle MaterialType, unsigned char isUsedRecently, unsigned int BINDINDEX,
-			texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage);
-		
-		result_tgfx (*SetMaterialInst_Buffer)(rasterpipelineinstance_tgfx_handle MaterialInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
-			buffer_tgfx_handle BufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize);
-		result_tgfx (*SetMaterialInst_Texture)(rasterpipelineinstance_tgfx_handle MaterialInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
-			texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage);
-		//IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
-		result_tgfx (*SetComputeType_Buffer)(computeshadertype_tgfx_handle ComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
-			buffer_tgfx_handle TargetBufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize);
-		result_tgfx (*SetComputeType_Texture)(computeshadertype_tgfx_handle ComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
-			texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage);
-		
-		result_tgfx (*SetComputeInst_Buffer)(computeshaderinstance_tgfx_handle ComputeInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
-			buffer_tgfx_handle TargetBufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize);
-		result_tgfx (*SetComputeInst_Texture)(computeshaderinstance_tgfx_handle ComputeInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
-			texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage);
+	result_tgfx (*SetBindingTable_Texture)(bindingtable_tgfx_handle bindingtable, unsigned int BINDINDEX, texture_tgfx_handle TextureHandle, unsigned char isSampledTexture);
+	result_tgfx (*SetBindingTable_Buffer)(bindingtable_tgfx_handle bindingtable, unsigned int BINDINDEX, buffer_tgfx_handle BufferHandle, unsigned int TargetOffset, unsigned int BoundDataSize);
 
 
-		result_tgfx (*Create_RTSlotset)(rtslotdescription_tgfx_listhandle Descriptions, rtslotset_tgfx_handle* RTSlotSetHandle);
-		void (*Delete_RTSlotSet)(rtslotset_tgfx_handle RTSlotSetHandle);
-		//Changes on RTSlots only happens at the frame slot is gonna be used
-		//For example; if you change next frame's slot, necessary API calls are gonna be called next frame
-		//For example; if you change slot but related slotset isn't used by drawpass, it doesn't happen until it is used
-		result_tgfx (*Change_RTSlotTexture)(rtslotset_tgfx_handle RTSlotHandle, unsigned char isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, texture_tgfx_handle TextureHandle);
-		result_tgfx (*Inherite_RTSlotSet)(rtslotusage_tgfx_listhandle Descriptions, rtslotset_tgfx_handle RTSlotSetHandle, inheritedrtslotset_tgfx_handle* InheritedSlotSetHandle);
-		void (*Delete_InheritedRTSlotSet)(inheritedrtslotset_tgfx_handle InheritedRTSlotSetHandle);
-	} gpudatamanager_tgfx;
+
+	result_tgfx (*Create_RTSlotset)(rtslotdescription_tgfx_listhandle Descriptions, rtslotset_tgfx_handle* RTSlotSetHandle);
+	void (*Delete_RTSlotSet)(rtslotset_tgfx_handle RTSlotSetHandle);
+	//Changes on RTSlots only happens at the frame slot is gonna be used
+	//For example; if you change next frame's slot, necessary API calls are gonna be called next frame
+	//For example; if you change slot but related slotset isn't used by drawpass, it doesn't happen until it is used
+	result_tgfx (*Change_RTSlotTexture)(rtslotset_tgfx_handle RTSlotHandle, unsigned char isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, texture_tgfx_handle TextureHandle);
+	result_tgfx (*Inherite_RTSlotSet)(rtslotusage_tgfx_listhandle Descriptions, rtslotset_tgfx_handle RTSlotSetHandle, inheritedrtslotset_tgfx_handle* InheritedSlotSetHandle);
+	void (*Delete_InheritedRTSlotSet)(inheritedrtslotset_tgfx_handle InheritedRTSlotSetHandle);
+} gpudatamanager_tgfx;

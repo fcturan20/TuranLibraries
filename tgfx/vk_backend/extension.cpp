@@ -5,7 +5,9 @@
 #include <glm/glm.hpp>
 #include "resource.h"
 #include "includes.h"
+#include "core.h"
 
+//Seperated Depth Stencil Layouts
 void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
 void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
 void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription& Desc, depthstencilslot_vk* DepthSlot);
@@ -17,12 +19,47 @@ extension_manager::extension_manager() {
 	Fill_DepthAttachmentDescription = Fill_DepthAttachmentDescription_NOSeperated;
 	Fill_DepthAttachmentReference = Fill_DepthAttachmentReference_NOSeperated;
 }
-void extension_manager::SUPPORT_DESCINDEXING() { isDescriptorIndexingSupported = true; }
-void extension_manager::SUPPORT_SWAWPCHAINDISPLAY() { SwapchainDisplay = true; }
+void extension_manager::SUPPORT_VARIABLEDESCCOUNT() { isVariableDescCountSupported = true; }
+void extension_manager::SUPPORT_SWAPCHAINDISPLAY() { SwapchainDisplay = true; }
 void extension_manager::SUPPORT_SEPERATEDDEPTHSTENCILLAYOUTS() {
 	SeperatedDepthStencilLayouts = true;
 	Fill_DepthAttachmentDescription = Fill_DepthAttachmentDescription_SeperatedDSLayouts;
 	Fill_DepthAttachmentReference = Fill_DepthAttachmentReference_SeperatedDSLayouts;
+}
+void extension_manager::SUPPORT_BUFFERDEVICEADDRESS() { isBufferDeviceAddressSupported = true; }
+void extension_manager::CheckDeviceExtensionProperties(GPU_VKOBJ* VKGPU) {
+	VkPhysicalDeviceDescriptorIndexingProperties descindexinglimits = {};
+	VkPhysicalDeviceInlineUniformBlockPropertiesEXT uniformblocklimits = {};
+	VkPhysicalDeviceProperties2 devprops2;
+
+
+	devprops2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+	descindexinglimits.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
+	uniformblocklimits.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_PROPERTIES_EXT;
+	devprops2.pNext = &descindexinglimits;
+	descindexinglimits.pNext = &uniformblocklimits;
+	vkGetPhysicalDeviceProperties2(VKGPU->PHYSICALDEVICE(), &devprops2);
+	//Check Descriptor Limits
+	{
+		static_assert(VKCONST_DYNAMICDESCRIPTORTYPESCOUNT == 4, "CheckDeviceExtensionProperties() supports only 4 DynamicDescTypes!");
+		if (ISSUPPORTED_DESCINDEXING()) {
+			MaxDescCounts[VKCONST_DESCSETID_DYNAMICSAMPLER] = descindexinglimits.maxDescriptorSetUpdateAfterBindSamplers;
+			MaxDescCounts[VKCONST_DESCSETID_SAMPLEDTEXTURE] = descindexinglimits.maxDescriptorSetUpdateAfterBindSampledImages;
+			MaxDescCounts[VKCONST_DESCSETID_STORAGEIMAGE] = descindexinglimits.maxDescriptorSetUpdateAfterBindStorageImages;
+			MaxDescCounts[VKCONST_DESCSETID_BUFFER] = descindexinglimits.maxDescriptorSetUpdateAfterBindStorageBuffers;
+			MaxDesc_ALL = descindexinglimits.maxUpdateAfterBindDescriptorsInAllPools;
+			MaxAccessibleDesc_PerStage = descindexinglimits.maxPerStageUpdateAfterBindResources;
+		}
+		else {
+			MaxDescCounts[VKCONST_DESCSETID_DYNAMICSAMPLER] = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorSamplers;
+			MaxDescCounts[VKCONST_DESCSETID_SAMPLEDTEXTURE] = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorSampledImages;
+			MaxDescCounts[VKCONST_DESCSETID_STORAGEIMAGE] = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorStorageImages;
+			MaxDescCounts[VKCONST_DESCSETID_BUFFER] = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorStorageBuffers;
+			MaxDesc_ALL = UINT32_MAX;
+			MaxAccessibleDesc_PerStage = VKGPU->DEVICEPROPERTIES().limits.maxPerStageResources;
+		}
+		MaxBoundDescSet = VKGPU->DEVICEPROPERTIES().limits.maxBoundDescriptorSets;
+	}
 }
 void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE) {
 	Ref.attachment = index;

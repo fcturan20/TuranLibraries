@@ -10,95 +10,6 @@
 
 //Some algorithms and data structures to help in C++ (like threadlocalvector)
 
-template<class T>
-class threadlocal_vector {
-	T** lists;
-	std::mutex Sync;
-	//Element order: thread0-size, thread0-capacity, thread1-size, thread1-capacity...
-	unsigned long* sizes_and_capacities;
-	inline void expand_if_necessary(unsigned int thread_i) {
-		if (sizes_and_capacities[(thread_i * 2)] == sizes_and_capacities[(thread_i * 2) + 1]) {
-			T* newlist = nullptr;
-			if (sizes_and_capacities[thread_i * 2] > 0) { newlist = new T[sizes_and_capacities[(thread_i * 2) + 1] * 2];}
-			else { 
-				newlist = new T; 
-				memcpy(newlist, lists[thread_i], sizeof(T) * sizes_and_capacities[thread_i * 2]);
-				delete[] lists[thread_i];
-			}
-			
-			lists[thread_i] = newlist;
-			if (sizes_and_capacities[(thread_i * 2) + 1] == 0) { sizes_and_capacities[(thread_i * 2) + 1] = 1; }
-			else{ sizes_and_capacities[(thread_i * 2) + 1] *= 2; }
-		}
-	}
-public:
-	threadlocal_vector(const threadlocal_vector& copy) {
-		unsigned int threadcount = (threadingsys) ? (threadingsys->thread_count()) : 1;
-		lists = new T * [threadcount];
-		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count() * 2) : 2];
-		for (unsigned int thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
-			lists[thread_i] = new T[copy.sizes_and_capacities[(thread_i * 2) + 1]];
-			for (unsigned int element_i = 0; element_i < copy.sizes_and_capacities[thread_i * 2]; element_i++) {
-				lists[thread_i][element_i] = copy.lists[thread_i][element_i];
-			}
-			sizes_and_capacities[thread_i * 2] = copy.sizes_and_capacities[thread_i * 2];
-			sizes_and_capacities[(thread_i * 2) + 1] = copy.sizes_and_capacities[(thread_i * 2) + 1];
-		}
-	}
-	//This constructor allocates initial_sizes memory but doesn't add any element to it, so you should use push_back()
-	threadlocal_vector(unsigned long initial_capacities) {
-		unsigned int threadcount = (threadingsys) ? (threadingsys->thread_count()) : 1;
-		lists = new T * [threadcount];
-		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count() * 2) : 2];
-		if (initial_capacities) {
-			for (unsigned int thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
-				lists[thread_i] = new T[initial_capacities];
-				sizes_and_capacities[thread_i * 2] = 0;
-				sizes_and_capacities[(thread_i * 2) + 1] = initial_capacities;
-			}
-		}
-	}
-	//This constructor allocates initial_sizes * 2 memory and fills it with initial_sizes number of ref objects
-	threadlocal_vector(unsigned long initial_sizes, const T& ref) {
-		unsigned int threadcount = (threadingsys) ? (threadingsys->thread_count()) : 1;
-		lists = new T * [threadcount];
-		sizes_and_capacities = new unsigned long[(threadingsys) ? (threadingsys->thread_count() * 2) : 2];
-		if (initial_sizes) {
-			for (unsigned int thread_i = 0; thread_i < ((threadingsys) ? (threadingsys->thread_count()) : 1); thread_i++) {
-				lists[thread_i] = new T[initial_sizes * 2];
-				for (unsigned long element_i = 0; element_i < initial_sizes; element_i++) {
-					lists[thread_i][element_i] = ref;
-				}
-				sizes_and_capacities[thread_i * 2] = initial_sizes;
-				sizes_and_capacities[(thread_i * 2) + 1] = initial_sizes * 2;
-			}
-		}
-	}
-	unsigned long size(unsigned int ThreadIndex = UINT32_MAX) {
-		return sizes_and_capacities[(ThreadIndex != UINT32_MAX) ? (ThreadIndex) : ((threadingsys) ? (threadingsys->this_thread_index() * 2) : 0)];
-	}
-	void push_back(const T& ref, unsigned int ThreadIndex = UINT32_MAX) {
-		const unsigned int thread_i = ((ThreadIndex != UINT32_MAX) ? (ThreadIndex) : ((threadingsys) ? (threadingsys->this_thread_index()) : 0));
-		expand_if_necessary(thread_i);
-		lists[thread_i][sizes_and_capacities[thread_i * 2]] = ref;
-		sizes_and_capacities[thread_i * 2] += 1;
-	}
-	T* data(unsigned int ThreadIndex = UINT32_MAX) {
-		return lists[(ThreadIndex != UINT32_MAX) ? (ThreadIndex) : ((threadingsys) ? (threadingsys->this_thread_index()) : 0)];
-	}
-	void clear(unsigned int ThreadIndex = UINT32_MAX) {
-		sizes_and_capacities[(ThreadIndex != UINT32_MAX) ? (ThreadIndex * 2) : ((threadingsys) ? (threadingsys->this_thread_index() * 2) : 0)] = 0;
-	}
-	T& get(unsigned int ThreadIndex, unsigned int ElementIndex) {
-		return lists[ThreadIndex][ElementIndex];
-	}
-	T& operator[](unsigned int ElementIndex) {
-		return lists[((threadingsys) ? (threadingsys->this_thread_index()) : 0)][ElementIndex];
-	}
-	void PauseAllOperations(std::unique_lock<std::mutex>& Locker) {
-		Locker = std::unique_lock<std::mutex>(Sync);
-	}
-};
 
 template<typename T>
 class vk_atomic {
@@ -196,6 +107,7 @@ public:
 
 
 
+
 inline unsigned char GetByteSizeOf_TextureChannels(texture_channels_tgfx channeltype) {
 	switch (channeltype)
 	{
@@ -272,26 +184,53 @@ inline VkFormat Find_VkFormat_byTEXTURECHANNELs(texture_channels_tgfx channels) 
 		return VK_FORMAT_UNDEFINED;
 	}
 }
-inline VkDescriptorType Find_VkDescType_byMATDATATYPE(shaderinputtype_tgfx TYPE) {
-	switch (TYPE) {
-	case shaderinputtype_tgfx_UBUFFER_G:
-	case shaderinputtype_tgfx_UBUFFER_PI:
-		return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	case shaderinputtype_tgfx_SBUFFER_G:
-	case shaderinputtype_tgfx_SBUFFER_PI:
+static inline VkDescriptorType Find_VkDescType_byVKCONST_DESCSETID(unsigned int DESCSET_ID) {
+	static_assert(VKCONST_DYNAMICDESCRIPTORTYPESCOUNT == 4, "Find_VkDescType_byVKCONST_DESCSETID() supports 4 desc types");
+	switch (DESCSET_ID) {
+	case VKCONST_DESCSETID_BUFFER:
 		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	case shaderinputtype_tgfx_SAMPLER_G:
-	case shaderinputtype_tgfx_SAMPLER_PI:
-		return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	case shaderinputtype_tgfx_IMAGE_G:
-	case shaderinputtype_tgfx_IMAGE_PI:
+	case VKCONST_DESCSETID_DYNAMICSAMPLER:
+		return VK_DESCRIPTOR_TYPE_SAMPLER;
+	case VKCONST_DESCSETID_SAMPLEDTEXTURE:
+		return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	case VKCONST_DESCSETID_STORAGEIMAGE:
 		return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	case shaderinputtype_tgfx_UNDEFINED:
-		printer(result_tgfx_FAIL, "(Find_VkDescType_byMATDATATYPE() has failed because SHADERINPUT_TYPE = UNDEFINED!");
 	default:
-		printer(result_tgfx_FAIL, "(Find_VkDescType_byMATDATATYPE() doesn't support this type of SHADERINPUT_TYPE!");
+		printer(result_tgfx_FAIL, "(Find_VkDescType_byVKCONST_DESCSETID() doesn't support this type of descriptor!");
+		return VK_DESCRIPTOR_TYPE_MAX_ENUM;
 	}
-	return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+}
+inline unsigned int Find_VKCONST_DESCSETID_byTGFXDescType(shaderdescriptortype_tgfx type) {
+	static_assert(VKCONST_DYNAMICDESCRIPTORTYPESCOUNT == 4, "Find_VKCONST_DESCSETID_byTGFXDescType() supports 4 desc types");
+	switch (type) {
+	case shaderdescriptortype_tgfx_BUFFER:
+		return VKCONST_DESCSETID_BUFFER;
+	case shaderdescriptortype_tgfx_SAMPLER:
+		return VKCONST_DESCSETID_DYNAMICSAMPLER;
+	case shaderdescriptortype_tgfx_SAMPLEDTEXTURE:
+		return VKCONST_DESCSETID_SAMPLEDTEXTURE;
+	case shaderdescriptortype_tgfx_STORAGEIMAGE:
+		return VKCONST_DESCSETID_STORAGEIMAGE;
+	default:
+		printer(result_tgfx_FAIL, "(Find_VkDescType_byVKCONST_DESCSETID() doesn't support this type of descriptor!");
+		return UINT32_MAX;
+	}
+}
+inline unsigned int Find_VKCONST_DESCSETID_byVkDescType(VkDescriptorType type) {
+	static_assert(VKCONST_DYNAMICDESCRIPTORTYPESCOUNT == 4, "Find_VKCONST_DESCSETID_byVkDescType() supports 4 desc types");
+	switch (type) {
+	case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+		return VKCONST_DESCSETID_BUFFER;
+	case VK_DESCRIPTOR_TYPE_SAMPLER :
+		return VKCONST_DESCSETID_DYNAMICSAMPLER;
+	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+		return VKCONST_DESCSETID_SAMPLEDTEXTURE ;
+	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+		return VKCONST_DESCSETID_STORAGEIMAGE ;
+	default:
+		printer(result_tgfx_FAIL, "(Find_VkDescType_byVKCONST_DESCSETID() doesn't support this type of descriptor!");
+		return UINT32_MAX;
+	}
 }
 inline VkSamplerAddressMode Find_AddressMode_byWRAPPING(texture_wrapping_tgfx Wrapping) {
 	switch (Wrapping) {
@@ -713,42 +652,6 @@ inline void Find_SubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSour
 		break;
 	}
 }
-inline desctype_vk Find_DescType_byGFXShaderInputType(shaderinputtype_tgfx type) {
-	switch (type)
-	{
-	case shaderinputtype_tgfx_SAMPLER_PI:
-	case shaderinputtype_tgfx_SAMPLER_G:
-		return desctype_vk::SAMPLER;
-	case shaderinputtype_tgfx_IMAGE_PI:
-	case shaderinputtype_tgfx_IMAGE_G:
-		return desctype_vk::IMAGE;
-	case shaderinputtype_tgfx_UBUFFER_PI:
-	case shaderinputtype_tgfx_UBUFFER_G:
-		return desctype_vk::UBUFFER;
-	case shaderinputtype_tgfx_SBUFFER_PI:
-	case shaderinputtype_tgfx_SBUFFER_G:
-		return desctype_vk::SBUFFER;
-	default:
-		printer(result_tgfx_FAIL, "(Find_DescType_byGFXShaderInputType() doesn't support this type!");
-		return desctype_vk::SAMPLER;
-	}
-}
-inline VkDescriptorType Find_VkDescType_byDescTypeCategoryless(desctype_vk type) {
-	switch (type)
-	{
-	case desctype_vk::IMAGE:
-		return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	case desctype_vk::SAMPLER:
-		return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	case desctype_vk::UBUFFER:
-		return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	case desctype_vk::SBUFFER:
-		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	default:
-		printer(result_tgfx_FAIL, "(Find_VkDescType_byDescTypeCategoryless() doesn't support this type!");
-		return VK_DESCRIPTOR_TYPE_MAX_ENUM;
-	}
-}
 
 inline void Find_AccessPattern_byIMAGEACCESS(const image_access_tgfx& Access, VkAccessFlags& TargetAccessFlag, VkImageLayout& TargetImageLayout) {
 	switch (Access)
@@ -909,5 +812,21 @@ inline unsigned int get_uniformtypes_sizeinbytes(datatype_tgfx data) {
 	default:
 		printer(result_tgfx_INVALIDARGUMENT, "get_uniformtypes_sizeinbytes() has failed because input isn't supported!");
 		return 0;
+	}
+}
+inline VkPresentModeKHR Find_VkPresentMode_byTGFXPresent(windowpresentation_tgfx p) {
+	switch (p)
+	{
+	case windowpresentation_tgfx_FIFO:
+		return VK_PRESENT_MODE_FIFO_KHR;
+	case windowpresentation_tgfx_FIFO_RELAXED:
+		return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+	case windowpresentation_tgfx_IMMEDIATE:
+		return VK_PRESENT_MODE_IMMEDIATE_KHR;
+	case windowpresentation_tgfx_MAILBOX:
+		return VK_PRESENT_MODE_MAILBOX_KHR;
+	default:
+		printer(result_tgfx_NOTCODED, "This presentation mode isn't supported by the VK backend!");
+		return VK_PRESENT_MODE_MAX_ENUM_KHR;
 	}
 }

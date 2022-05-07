@@ -46,13 +46,13 @@ struct gpudatamanager_public;
 extern gpudatamanager_public* contentmanager;
 struct imgui_dx;
 extern imgui_dx* imgui;
-struct gpu_public;
-extern gpu_public* rendergpu;
+struct GPU_VKOBJ;
+extern GPU_VKOBJ* rendergpu;
 typedef struct threadingsys_tapi threadingsys_tapi;
 extern threadingsys_tapi* threadingsys;
 extern unsigned int threadcount;
 struct allocatorsys_dx;
-extern allocatorsys_dx* allocatorsys;
+extern allocatorsys_dx* gpu_allocator;
 struct queuesys_dx;
 extern queuesys_dx* queuesys;
 

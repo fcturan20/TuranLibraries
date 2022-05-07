@@ -10,122 +10,114 @@
 #include "resource.h"
 #include "memory.h"
 #include "includes.h"
+#include "helper.h"
 #include <glslang/SPIRV/GlslangToSpv.h>
 
 TBuiltInResource glsl_to_spirv_limitationtable;
 
-struct descelement_buffer_vk {
-	VkDescriptorBufferInfo Info = {};
-	std::atomic<unsigned char> IsUpdated = 255;
-	descelement_buffer_vk(){}
-	descelement_buffer_vk(const descelement_buffer_vk& copyDesc){}
-};
-struct descelement_image_vk {
-	VkDescriptorImageInfo info = {};
-	std::atomic<unsigned char> IsUpdated = 255;
-	descelement_image_vk(){}
-	descelement_image_vk(const descelement_image_vk& copyDesc){}
-};
-struct descset_updatecall_vk {
-	descset_vk* Set = nullptr;
-	unsigned int BindingIndex = UINT32_MAX, ElementIndex = UINT32_MAX;
-};
 struct descpool_vk {
-	VkDescriptorPool pool;
-	std::atomic<uint32_t> REMAINING_SET, REMAINING_UBUFFER, REMAINING_SBUFFER, REMAINING_SAMPLER, REMAINING_IMAGE;
+	//Each pool stores a descset of the same descsetlayout (So for each desccsetlayout, there are B.I.F. + 1 descsets across all pools)
+	//B.I.F. + 1 pools TGFX handles descriptors before waiting for N-2th frame
+	//So we can handle descriptor updates while waiting for N-2th frame's command buffers to end
+	VkDescriptorPool POOLs[VKCONST_DESCPOOLCOUNT_PERDESCTYPE] = {};
+	std::atomic<uint32_t> REMAINING_DESCs = 0, REMAINING_SETs = 0;
 };
-struct shadersource_vk {
+struct SHADERSOURCE_VKOBJ {
+	std::atomic_bool isALIVE = false;
+	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::SHADERSOURCE;
+	static uint16_t GET_EXTRAFLAGS(SHADERSOURCE_VKOBJ* obj) { return obj->stage; }
+	void* operator new(size_t size) = delete;
+	void operator = (const SHADERSOURCE_VKOBJ& copyFrom) {
+		isALIVE.store(true);
+		Module = copyFrom.Module;  stage = copyFrom.stage; SOURCE_CODE = copyFrom.SOURCE_CODE; DATA_SIZE = copyFrom.DATA_SIZE;
+	}
 	VkShaderModule Module;
 	shaderstage_tgfx stage;
 	void* SOURCE_CODE = nullptr;
 	unsigned int DATA_SIZE = 0;
 };
 
+
 struct gpudatamanager_private {
-	threadlocal_vector<rtslotset_vk*> rtslotsets;
-	threadlocal_vector<texture_vk*> textures;
-	threadlocal_vector<irtslotset_vk*> irtslotsets;
-	threadlocal_vector<graphicspipelinetype_vk*> graphicspipelinetypes;
-	threadlocal_vector<graphicspipelineinst_vk*> graphicspipelineinstances;
-	threadlocal_vector<vertexattriblayout_vk*> vertexattributelayouts;
-	threadlocal_vector<shadersource_vk*> shadersources;
-	threadlocal_vector<vertexbuffer_vk*> vertexbuffers;
-	threadlocal_vector<memoryblock_vk*> stagingbuffers;
-	threadlocal_vector<sampler_vk*> samplers;
-	threadlocal_vector<computetype_vk*> computetypes;
-	threadlocal_vector<computeinstance_vk*> computeinstances;
-	threadlocal_vector<globalbuffer_vk*> globalbuffers;
-	threadlocal_vector<indexbuffer_vk*> indexbuffers;
+	VK_LINEAR_OBJARRAY<RTSLOTSET_VKOBJ, 1 << 10> rtslotsets;
+	VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, 1 << 24> textures;
+	VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, 1 << 10> irtslotsets;
+	VK_LINEAR_OBJARRAY<GRAPHICSPIPELINETYPE_VKOBJ, 1 << 24> graphicspipelinetypes;
+	VK_LINEAR_OBJARRAY<GRAPHICSPIPELINEINST_VKOBJ, 1 << 24> graphicspipelineinstances;
+	VK_LINEAR_OBJARRAY<VERTEXATTRIBLAYOUT_VKOBJ, 1 << 10> vertexattributelayouts;
+	VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, 1 << 24> shadersources;
+	VK_LINEAR_OBJARRAY<VERTEXBUFFER_VKOBJ, 1 << 24> vertexbuffers;
+	VK_LINEAR_OBJARRAY<SAMPLER_VKOBJ, 1 << 16> samplers;
+	VK_LINEAR_OBJARRAY<COMPUTETYPE_VKOBJ> computetypes;
+	VK_LINEAR_OBJARRAY<COMPUTEINST_VKOBJ> computeinstances;
+	VK_LINEAR_OBJARRAY<GLOBALSSBO_VKOBJ> globalbuffers;
+	VK_LINEAR_OBJARRAY<INDEXBUFFER_VKOBJ> indexbuffers;
+	VK_LINEAR_OBJARRAY<DESCSET_VKOBJ, 1 << 16> descsets;
+	
 
-
-	//This vector contains descriptor sets that are for material types/instances that are created this frame
-	threadlocal_vector<descset_vk*> DescSets_toCreate;
-	//This vector contains descriptor sets that needs update
-	//These desc sets are created before and is used in last 2 frames (So new descriptor set creation and updating it is necessary)
-	threadlocal_vector<descset_updatecall_vk> DescSets_toCreateUpdate;
-	//These desc sets are not used recently in draw calls. So don't go to create-update-delete process, just update.
-	threadlocal_vector<descset_updatecall_vk> DescSets_toJustUpdate;
-	//These are the desc sets that should be destroyed next frame!
-	std::vector<VkDescriptorSet> UnboundMaterialDescSetList;
-	unsigned int UnboundDescSetImageCount, UnboundDescSetSamplerCount, UnboundDescSetUBufferCount, UnboundDescSetSBufferCount;
-	descpool_vk MaterialRelated_DescPool;
-
-	VkDescriptorPool GlobalShaderInputs_DescPool;
-	VkDescriptorSet UnboundGlobalBufferDescSet, UnboundGlobalTextureDescSet; //These won't be deleted, just as a back buffer
-	descset_vk GlobalBuffers_DescSet, GlobalTextures_DescSet;
+	
+	//All descs allocated from these pools
+	//Each desc type has its own pool, that's why array is VKCONST_DYNAMICDESCRIPTORTYPESCOUNT size
+	descpool_vk ALL_DESCPOOLS[VKCONST_DYNAMICDESCRIPTORTYPESCOUNT];
+	
 
 	//These are the textures that will be deleted after waiting for 2 frames ago's command buffer
-	threadlocal_vector<texture_vk*> DeleteTextureList;
+	VK_VECTOR_ADDONLY<TEXTURE_VKOBJ*, 1 << 16> DeleteTextureList;
 	//These are the texture that will be added to the list above after clearing the above list
-	threadlocal_vector<texture_vk*> NextFrameDeleteTextureCalls;
+	VK_VECTOR_ADDONLY<TEXTURE_VKOBJ*, 1 << 16> NextFrameDeleteTextureCalls;
 
-	gpudatamanager_private() : DescSets_toCreate(1024), DescSets_toCreateUpdate(1024), DescSets_toJustUpdate(1024), DeleteTextureList(1024), NextFrameDeleteTextureCalls(1024), rtslotsets(10), textures(100), globalbuffers(1024), indexbuffers(1024),
-	irtslotsets(100), graphicspipelineinstances(1024), graphicspipelinetypes(1024), vertexattributelayouts(1024), shadersources(1024), vertexbuffers(1024), stagingbuffers(100), samplers(100), computetypes(1024), computeinstances(1024) {}
+	gpudatamanager_private() {}
 };
 static gpudatamanager_private* hidden = nullptr;
 
-void Update_GlobalDescSet_DescIndexing(descset_vk& Set, VkDescriptorPool Pool) {
-	//Update Descriptor Sets
-	{
+void Update_DescSet(DESCSET_VKOBJ& set) {
+	//If the desc set is a deleted one, pass this
+	if (set.Layout == VK_NULL_HANDLE) { return; }
+	//DescSets aren't created, so it should be created instead of updating
+	if (set.Sets[0] = VK_NULL_HANDLE) { return; }
+	//Swap places of DescSets. Moving 0th to 1st, 1st to 2nd, last one to 0th
+	VkDescriptorSet last_DescSet = set.Sets[VKCONST_BUFFERING_IN_FLIGHT];
+	for (unsigned int i = 0; i < VKCONST_BUFFERING_IN_FLIGHT - 1; i++) {
+		set.Sets[i + 1] = set.Sets[i];
+	}
+	set.Sets[0] = last_DescSet;
+
+	//Update 0th descriptor set
+	if(set.isUpdatedCounter.load()) {
 		std::vector<VkWriteDescriptorSet> UpdateInfos;
 
-		for (unsigned int BindingIndex = 0; BindingIndex < 2; BindingIndex++) {
-			descriptor_vk& Desc = Set.Descs[BindingIndex];
-			if (Desc.Type == desctype_vk::IMAGE || Desc.Type == desctype_vk::SAMPLER) {
-				for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
-					descelement_image_vk& im = ((descelement_image_vk*)Desc.Elements)[DescElementIndex];
-					if (im.IsUpdated.load() == 255) {
-						continue;
-					}
-					im.IsUpdated.store(0);
+		if (set.DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE || set.DESCTYPE == set.DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE || set.DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLER) {
+			for (unsigned int DescElementIndex = 0; DescElementIndex < set.textureDescELEMENTs.size(); DescElementIndex++) {
+				texture_descVK& im = set.textureDescELEMENTs[DescElementIndex];
+				if (im.isUpdated.load()) {
+					im.isUpdated.store(0);
 
 					VkWriteDescriptorSet UpdateInfo = {};
 					UpdateInfo.descriptorCount = 1;
-					UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+					UpdateInfo.descriptorType = set.DESCTYPE;
 					UpdateInfo.dstArrayElement = DescElementIndex;
-					UpdateInfo.dstBinding = BindingIndex;
-					UpdateInfo.dstSet = Set.Set;
+					UpdateInfo.dstBinding = 0;
+					UpdateInfo.dstSet = set.Sets[0];
 					UpdateInfo.pImageInfo = &im.info;
 					UpdateInfo.pNext = nullptr;
 					UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 					UpdateInfos.push_back(UpdateInfo);
 				}
 			}
-			else {
-				for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
-					descelement_buffer_vk& buf = ((descelement_buffer_vk*)Desc.Elements)[DescElementIndex];
-					if (buf.IsUpdated.load() == 255) {
-						continue;
-					}
-					buf.IsUpdated.store(0);
+		}
+		else {
+			for (unsigned int DescElementIndex = 0; DescElementIndex < set.bufferDescELEMENTs.size(); DescElementIndex++) {
+				buffer_descVK& buf = set.bufferDescELEMENTs[DescElementIndex];
+				if (buf.isUpdated.load()) {
+					buf.isUpdated.store(0);
 
 					VkWriteDescriptorSet UpdateInfo = {};
 					UpdateInfo.descriptorCount = 1;
-					UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
+					UpdateInfo.descriptorType = set.DESCTYPE;
 					UpdateInfo.dstArrayElement = DescElementIndex;
-					UpdateInfo.dstBinding = BindingIndex;
-					UpdateInfo.dstSet = Set.Set;
-					UpdateInfo.pBufferInfo = &buf.Info;
+					UpdateInfo.dstBinding = 0;
+					UpdateInfo.dstSet = set.Sets[0];
+					UpdateInfo.pBufferInfo = &buf.info;
 					UpdateInfo.pNext = nullptr;
 					UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 					UpdateInfos.push_back(UpdateInfo);
@@ -134,679 +126,98 @@ void Update_GlobalDescSet_DescIndexing(descset_vk& Set, VkDescriptorPool Pool) {
 		}
 
 		vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
-	}
-}
-void Update_GlobalDescSet_NonDescIndexing(descset_vk& Set, VkDescriptorPool Pool) {
-	//Update Descriptor Sets
-	{
-		std::vector<VkWriteDescriptorSet> UpdateInfos;
-
-		for (unsigned int BindingIndex = 0; BindingIndex < 2; BindingIndex++) {
-			descriptor_vk& Desc = Set.Descs[BindingIndex];
-			if (Desc.Type == desctype_vk::IMAGE || Desc.Type == desctype_vk::SAMPLER) {
-				for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
-					descelement_image_vk& im = ((descelement_image_vk*)Desc.Elements)[DescElementIndex];
-					im.IsUpdated.store(0);
-
-					VkWriteDescriptorSet UpdateInfo = {};
-					UpdateInfo.descriptorCount = 1;
-					UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
-					UpdateInfo.dstArrayElement = DescElementIndex;
-					UpdateInfo.dstBinding = BindingIndex;
-					UpdateInfo.dstSet = Set.Set;
-					UpdateInfo.pImageInfo = &im.info;
-					UpdateInfo.pNext = nullptr;
-					UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					UpdateInfos.push_back(UpdateInfo);
-				}
-			}
-			else {
-				for (unsigned int DescElementIndex = 0; DescElementIndex < Desc.ElementCount; DescElementIndex++) {
-					descelement_buffer_vk& buf = ((descelement_buffer_vk*)Desc.Elements)[DescElementIndex];
-					buf.IsUpdated.store(0);
-
-					VkWriteDescriptorSet UpdateInfo = {};
-					UpdateInfo.descriptorCount = 1;
-					UpdateInfo.descriptorType = Find_VkDescType_byDescTypeCategoryless(Desc.Type);
-					UpdateInfo.dstArrayElement = DescElementIndex;
-					UpdateInfo.dstBinding = BindingIndex;
-					UpdateInfo.dstSet = Set.Set;
-					UpdateInfo.pBufferInfo = &buf.Info;
-					UpdateInfo.pNext = nullptr;
-					UpdateInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					UpdateInfos.push_back(UpdateInfo);
-				}
-			}
-		}
-
-		vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
-	}
-}
-void CopyDescriptorSets(descset_vk& Set, std::vector<VkCopyDescriptorSet>& CopyVector, std::vector<VkDescriptorSet*>& CopyTargetSets) {
-	for (unsigned int DescIndex = 0; DescIndex < Set.DescCount; DescIndex++) {
-		VkCopyDescriptorSet copyinfo;
-		descriptor_vk& SourceDesc = ((descriptor_vk*)Set.Descs)[DescIndex];
-		copyinfo.pNext = nullptr;
-		copyinfo.sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
-		copyinfo.descriptorCount = SourceDesc.ElementCount;
-		//We will copy all descriptor array's elements
-		copyinfo.srcArrayElement = 0;
-		copyinfo.dstArrayElement = 0;
-		copyinfo.dstBinding = DescIndex;
-		copyinfo.srcBinding = DescIndex;
-		copyinfo.srcSet = Set.Set;
-		//We will fill this DistanceSet after creating it!
-		copyinfo.dstSet = VK_NULL_HANDLE;
-		CopyVector.push_back(copyinfo);
-		CopyTargetSets.push_back(&Set.Set);
+		set.isUpdatedCounter.fetch_sub(1);
 	}
 }
 void gpudatamanager_public::Apply_ResourceChanges() {
 	const unsigned char FrameIndex = renderer->Get_FrameIndex(false);
 
-
-	//Manage Global Descriptor Set
-	if (hidden->GlobalBuffers_DescSet.ShouldRecreate.load()) {
-		VkDescriptorSet backSet = hidden->UnboundGlobalBufferDescSet;
-		hidden->UnboundGlobalBufferDescSet = hidden->GlobalBuffers_DescSet.Set;
-		hidden->GlobalBuffers_DescSet.Set = backSet;
-		hidden->GlobalBuffers_DescSet.ShouldRecreate.store(false);
+	for (unsigned int element_i = 0; element_i < hidden->descsets.size(); element_i++) {
+		Update_DescSet(*hidden->descsets.getOBJbyINDEX(element_i));
 	}
-	if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-		Update_GlobalDescSet_DescIndexing(hidden->GlobalBuffers_DescSet, hidden->GlobalShaderInputs_DescPool);
-	}
-	else {
-		Update_GlobalDescSet_NonDescIndexing(hidden->GlobalBuffers_DescSet, hidden->GlobalShaderInputs_DescPool);
-	}
-	if (hidden->GlobalTextures_DescSet.ShouldRecreate.load()) {
-		VkDescriptorSet backSet = hidden->UnboundGlobalTextureDescSet;
-		hidden->UnboundGlobalTextureDescSet = hidden->GlobalTextures_DescSet.Set;
-		hidden->GlobalTextures_DescSet.Set = backSet;
-		hidden->GlobalTextures_DescSet.ShouldRecreate.store(false);
-	}
-	if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-		Update_GlobalDescSet_DescIndexing(hidden->GlobalTextures_DescSet, hidden->GlobalShaderInputs_DescPool);
-	}
-	else {
-		Update_GlobalDescSet_NonDescIndexing(hidden->GlobalTextures_DescSet, hidden->GlobalShaderInputs_DescPool);
-	}
-
-	//Manage Material Related Descriptor Sets
-	{
-		//Destroy descriptor sets that are changed last frame
-		if (hidden->UnboundMaterialDescSetList.size()) {
-			descpool_vk& DP = hidden->MaterialRelated_DescPool;
-			vkFreeDescriptorSets(rendergpu->LOGICALDEVICE(), DP.pool, hidden->UnboundMaterialDescSetList.size(),
-				hidden->UnboundMaterialDescSetList.data());
-			DP.REMAINING_SET.fetch_add(hidden->UnboundMaterialDescSetList.size());
-
-			DP.REMAINING_IMAGE.fetch_add(hidden->UnboundDescSetImageCount);
-			hidden->UnboundDescSetImageCount = 0;
-			DP.REMAINING_SAMPLER.fetch_add(hidden->UnboundDescSetSamplerCount);
-			hidden->UnboundDescSetSamplerCount = 0;
-			DP.REMAINING_SBUFFER.fetch_add(hidden->UnboundDescSetSBufferCount);
-			hidden->UnboundDescSetSBufferCount = 0;
-			DP.REMAINING_UBUFFER.fetch_add(hidden->UnboundDescSetUBufferCount);
-			hidden->UnboundDescSetUBufferCount = 0;
-			hidden->UnboundMaterialDescSetList.clear();
-		}
-		//Create Descriptor Sets for material types/instances that are created this frame
-		{
+	//Create Desc Sets for binding tables that are created this frame
+	for (unsigned int typeID = 0; typeID < VKCONST_DYNAMICDESCRIPTORTYPESCOUNT; typeID++) {
+		//TODO JOBSYS: This loop is enough to divide into multiple jobs (so 3 threads will create all necessary descsets)
+		for (unsigned int pool_i = 0; pool_i < VKCONST_DESCPOOLCOUNT_PERDESCTYPE; pool_i++) {						//Allocate same desc set in each different desc pool
 			std::vector<VkDescriptorSet> Sets;
 			std::vector<VkDescriptorSet*> SetPTRs;
 			std::vector<VkDescriptorSetLayout> SetLayouts;
-			std::unique_lock<std::mutex> Locker;
-			hidden->DescSets_toCreate.PauseAllOperations(Locker);
-			for (unsigned int ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
-				for (unsigned int SetIndex = 0; SetIndex < hidden->DescSets_toCreate.size(ThreadIndex); SetIndex++) {
-					descset_vk* Set = hidden->DescSets_toCreate.get(ThreadIndex, SetIndex);
-					Sets.push_back(VkDescriptorSet());
-					SetLayouts.push_back(Set->Layout);
-					SetPTRs.push_back(&Set->Set);
-				}
-				hidden->DescSets_toCreate.clear(ThreadIndex);
-			}
-			Locker.unlock();
-
-			if (Sets.size()) {
-				VkDescriptorSetAllocateInfo al_in = {};
-				al_in.descriptorPool = hidden->MaterialRelated_DescPool.pool;
-				al_in.descriptorSetCount = Sets.size();
-				al_in.pNext = nullptr;
-				al_in.pSetLayouts = SetLayouts.data();
-				al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-				vkAllocateDescriptorSets(rendergpu->LOGICALDEVICE(), &al_in, Sets.data());
-				for (unsigned int SetIndex = 0; SetIndex < Sets.size(); SetIndex++) {
-					*SetPTRs[SetIndex] = Sets[SetIndex];
-				}
-			}
-		}
-		//Create Descriptor Sets for material types/instances that are created before and used recently (last 2 frames), to update their descriptor sets
-		{
-			std::vector<VkDescriptorSet> NewSets;
-			std::vector<VkDescriptorSet*> SetPTRs;
-			std::vector<VkDescriptorSetLayout> SetLayouts;
-
-			//Copy descriptor sets exactly, then update with this frame's SetMaterial_xxx calls
-			std::vector<VkCopyDescriptorSet> CopySetInfos;
-			std::vector<VkDescriptorSet*> CopyTargetSets;
 
 
-			std::unique_lock<std::mutex> Locker;
-			hidden->DescSets_toCreateUpdate.PauseAllOperations(Locker);
-			for (unsigned int ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
-				for (unsigned int SetIndex = 0; SetIndex < hidden->DescSets_toCreateUpdate.size(ThreadIndex); SetIndex++) {
-					descset_updatecall_vk& Call = hidden->DescSets_toCreateUpdate.get(ThreadIndex, SetIndex);
-					descset_vk* Set = Call.Set;
-					bool SetStatus = Set->ShouldRecreate.load();
-					switch (SetStatus) {
-					case 0:
-						continue;
-					case 1:
-						NewSets.push_back(VkDescriptorSet());
-						SetPTRs.push_back(&Set->Set);
-						SetLayouts.push_back(Set->Layout);
-						hidden->UnboundDescSetImageCount += Set->DescImagesCount;
-						hidden->UnboundDescSetSamplerCount += Set->DescSamplersCount;
-						hidden->UnboundDescSetSBufferCount += Set->DescSBuffersCount;
-						hidden->UnboundDescSetUBufferCount += Set->DescUBuffersCount;
-						hidden->UnboundMaterialDescSetList.push_back(Set->Set);
+			VkDescriptorSetAllocateInfo info = {}; info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			info.descriptorPool = hidden->ALL_DESCPOOLS[typeID].POOLs[pool_i];
+			info.pNext = nullptr;
 
-						CopyDescriptorSets(*Set, CopySetInfos, CopyTargetSets);
-						Set->ShouldRecreate.store(0);
-						break;
-					default:
-						printer(result_tgfx_NOTCODED, "Descriptor Set atomic_uchar isn't supposed to have a value that's 2+! Please check 'Handle Descriptor Sets' in Vulkan Renderer->Run()");
-						break;
-					}
-				}
+			for (unsigned int set_i = 0; set_i < hidden->descsets.size(); set_i++) {			//Put desc set to a vector to batch all allocations to same descpool in one call
+				DESCSET_VKOBJ* currentSet = hidden->descsets.getOBJbyINDEX(set_i);
+				if (DESCSET_VKOBJ::GET_EXTRAFLAGS(currentSet) != typeID) { continue; }
+				Sets.push_back(VkDescriptorSet());
+				SetLayouts.push_back(currentSet->Layout);
+				SetPTRs.push_back(&currentSet->Sets[pool_i]);
 			}
 
-			if (NewSets.size()) {
-				VkDescriptorSetAllocateInfo al_in = {};
-				al_in.descriptorPool = hidden->MaterialRelated_DescPool.pool;
-				al_in.descriptorSetCount = NewSets.size();
-				al_in.pNext = nullptr;
-				al_in.pSetLayouts = SetLayouts.data();
-				al_in.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-				vkAllocateDescriptorSets(rendergpu->LOGICALDEVICE(), &al_in, NewSets.data());
-				for (unsigned int SetIndex = 0; SetIndex < NewSets.size(); SetIndex++) {
-					*SetPTRs[SetIndex] = NewSets[SetIndex];
-				}
+			info.descriptorSetCount = Sets.size();
+			info.pSetLayouts = SetLayouts.data();
+			if (!Sets.size()) { break; }
 
-				for (unsigned int CopyIndex = 0; CopyIndex < CopySetInfos.size(); CopyIndex++) {
-					CopySetInfos[CopyIndex].dstSet = *CopyTargetSets[CopyIndex];
-				}
-				vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), 0, nullptr, CopySetInfos.size(), CopySetInfos.data());
+			vkAllocateDescriptorSets(rendergpu->LOGICALDEVICE(), &info, Sets.data());
+			for (unsigned int SetIndex = 0; SetIndex < Sets.size(); SetIndex++) {
+				*SetPTRs[SetIndex] = Sets[SetIndex];
 			}
-		}
-		//Update descriptor sets
-		{
-			std::vector<VkWriteDescriptorSet> UpdateInfos;
-			std::unique_lock<std::mutex> Locker1;
-			hidden->DescSets_toCreateUpdate.PauseAllOperations(Locker1);
-			for (unsigned int ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
-				for (unsigned int CallIndex = 0; CallIndex < hidden->DescSets_toCreateUpdate.size(ThreadIndex); CallIndex++) {
-					descset_updatecall_vk& Call = hidden->DescSets_toCreateUpdate.get(ThreadIndex, CallIndex);
-					VkWriteDescriptorSet info = {};
-					info.descriptorCount = 1;
-					descriptor_vk& Desc = Call.Set->Descs[Call.BindingIndex];
-					switch (Desc.Type) {
-					case desctype_vk::IMAGE:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-						info.dstBinding = Call.BindingIndex;
-						info.dstArrayElement = Call.ElementIndex;
-						info.pImageInfo = &((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].info;
-						((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
-						break;
-					case desctype_vk::SAMPLER:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-						info.dstBinding = Call.BindingIndex;
-						info.dstArrayElement = Call.ElementIndex;
-						info.pImageInfo = &((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].info;
-						((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
-						break;
-					case desctype_vk::UBUFFER:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-						info.dstBinding = Call.BindingIndex;
-						info.dstArrayElement = Call.ElementIndex;
-						info.pBufferInfo = &((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].Info;
-						((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
-						break;
-					case desctype_vk::SBUFFER:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-						info.dstBinding = Call.BindingIndex;
-						info.dstArrayElement = Call.ElementIndex;
-						info.pBufferInfo = &((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].Info;
-						((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
-						break;
-					}
-					info.dstSet = Call.Set->Set;
-					info.pNext = nullptr;
-					info.pTexelBufferView = nullptr;
-					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					UpdateInfos.push_back(info);
-				}
-				hidden->DescSets_toCreateUpdate.clear(ThreadIndex);
-			}
-			Locker1.unlock();
-
-
-			std::unique_lock<std::mutex> Locker2;
-			hidden->DescSets_toJustUpdate.PauseAllOperations(Locker2);
-			for (unsigned int ThreadIndex = 0; ThreadIndex < threadcount; ThreadIndex++) {
-				for (unsigned int CallIndex = 0; CallIndex < hidden->DescSets_toJustUpdate.size(ThreadIndex); CallIndex++) {
-					descset_updatecall_vk& Call = hidden->DescSets_toJustUpdate.get(ThreadIndex, CallIndex);
-					VkWriteDescriptorSet info = {};
-					info.descriptorCount = 1;
-					descriptor_vk& Desc = Call.Set->Descs[Call.BindingIndex];
-					switch (Desc.Type) {
-					case desctype_vk::IMAGE:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-						info.dstBinding = Call.BindingIndex;
-						info.dstArrayElement = Call.ElementIndex;
-						info.pImageInfo = &((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].info;
-						((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
-						break;
-					case desctype_vk::SAMPLER:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-						info.dstBinding = Call.BindingIndex;
-						info.dstArrayElement = Call.ElementIndex;
-						info.pImageInfo = &((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].info;
-						((descelement_image_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
-						break;
-					case desctype_vk::UBUFFER:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-						info.dstBinding = Call.BindingIndex;
-						info.dstArrayElement = Call.ElementIndex;
-						info.pBufferInfo = &((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].Info;
-						((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
-						break;
-					case desctype_vk::SBUFFER:
-						info.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-						info.dstBinding = Call.BindingIndex;
-						info.dstArrayElement = Call.ElementIndex;
-						info.pBufferInfo = &((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].Info;
-						((descelement_buffer_vk*)Desc.Elements)[Call.ElementIndex].IsUpdated.store(0);
-						break;
-					}
-					info.dstSet = Call.Set->Set;
-					info.pNext = nullptr;
-					info.pTexelBufferView = nullptr;
-					info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					UpdateInfos.push_back(info);
-				}
-				hidden->DescSets_toJustUpdate.clear(ThreadIndex);
-			}
-			Locker2.unlock();
-
-			vkUpdateDescriptorSets(rendergpu->LOGICALDEVICE(), UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
 		}
 	}
+
 
 	//Re-create VkFramebuffers etc.
 	renderer->RendererResource_Finalizations();
 
 	//Delete textures
-	{
-		std::unique_lock<std::mutex> Locker;
-		hidden->DeleteTextureList.PauseAllOperations(Locker);
-		for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
-			for (unsigned int i = 0; i < hidden->DeleteTextureList.size(ThreadID); i++) {
-				texture_vk* Texture = hidden->DeleteTextureList.get(ThreadID, i);
-				if (Texture->Image) {
-					vkDestroyImageView(rendergpu->LOGICALDEVICE(), Texture->ImageView, nullptr);
-					vkDestroyImage(rendergpu->LOGICALDEVICE(), Texture->Image, nullptr);
-				}
-				if (Texture->Block.MemAllocIndex != UINT32_MAX) {
-					allocatorsys->free_memoryblock(rendergpu->MEMORYTYPE_IDS()[Texture->Block.MemAllocIndex], Texture->Block.Offset);
-				}
-				delete Texture;
-			}
-			hidden->DeleteTextureList.clear(ThreadID);
+	for (unsigned int i = 0; i < hidden->DeleteTextureList.size(); i++) {
+		TEXTURE_VKOBJ* Texture = hidden->DeleteTextureList[i];
+		if (Texture->Image) {
+			vkDestroyImageView(rendergpu->LOGICALDEVICE(), Texture->ImageView, nullptr);
+			vkDestroyImage(rendergpu->LOGICALDEVICE(), Texture->Image, nullptr);
 		}
+		if (Texture->Block.MemAllocIndex != UINT32_MAX) {
+			gpu_allocator->free_memoryblock(rendergpu->MEMORYTYPE_IDS()[Texture->Block.MemAllocIndex], Texture->Block.Offset);
+		}
+		hidden->textures.destroyOBJfromHANDLE(hidden->textures.returnHANDLEfromOBJ(Texture));
 	}
+	hidden->DeleteTextureList.clear();
 	//Push next frame delete texture list to the delete textures list
-	{
-		std::unique_lock<std::mutex> Locker;
-		hidden->NextFrameDeleteTextureCalls.PauseAllOperations(Locker);
-		for (unsigned char ThreadID = 0; ThreadID < threadcount; ThreadID++) {
-			for (unsigned int i = 0; i < hidden->NextFrameDeleteTextureCalls.size(ThreadID); i++) {
-				hidden->DeleteTextureList.push_back(hidden->NextFrameDeleteTextureCalls.get(ThreadID, i));
-			}
-			hidden->NextFrameDeleteTextureCalls.clear();
-		}
+	for (unsigned int i = 0; i < hidden->NextFrameDeleteTextureCalls.size(); i++) {
+		hidden->DeleteTextureList.push_back(hidden->NextFrameDeleteTextureCalls[i]);
 	}
+	hidden->NextFrameDeleteTextureCalls.clear();
 	
-
-}
-//General DescriptorSet Layout Creation
-bool Create_DescSet(descset_vk* Set) {
-	if (!Set->DescCount) {
-		return true;
+	if(threadcount > 1){
+		assert(false && "gpudatamanager_public::Apply_ResourceChanges() should support multi-threading!");
 	}
-	if (!hidden->MaterialRelated_DescPool.REMAINING_IMAGE.fetch_sub(Set->DescImagesCount) ||
-		!hidden->MaterialRelated_DescPool.REMAINING_SAMPLER.fetch_sub(Set->DescSamplersCount) ||
-		!hidden->MaterialRelated_DescPool.REMAINING_SBUFFER.fetch_sub(Set->DescSBuffersCount) ||
-		!hidden->MaterialRelated_DescPool.REMAINING_UBUFFER.fetch_sub(Set->DescUBuffersCount) ||
-		!hidden->MaterialRelated_DescPool.REMAINING_SET.fetch_sub(1)) {
-		printer(result_tgfx_FAIL, "Create_DescSets() has failed because descriptor pool doesn't have enough space!");
-		return false;
-	}
-	hidden->DescSets_toCreate.push_back(Set);
-	return true;
-}
-bool VKDescSet_PipelineLayoutCreation(const shaderinputdesc_vk** inputdescs, descset_vk* GeneralDescSet, descset_vk* InstanceDescSet, VkPipelineLayout* layout) {
-	TGFXLISTCOUNT(core_tgfx_main, inputdescs, inputdesccount);
-	//General DescSet creation
-	{
-		std::vector<VkDescriptorSetLayoutBinding> bindings;
-		for (unsigned int i = 0; i < inputdesccount; i++) {
-			const shaderinputdesc_vk* desc = inputdescs[i];
-			if (!inputdescs[i]) {
-				continue;
-			}
-			
-			if (!(desc->TYPE == shaderinputtype_tgfx_IMAGE_G ||
-				desc->TYPE == shaderinputtype_tgfx_SAMPLER_G ||
-				desc->TYPE == shaderinputtype_tgfx_SBUFFER_G ||
-				desc->TYPE == shaderinputtype_tgfx_UBUFFER_G)) {
-				continue;
-			}
-
-			unsigned int BP = desc->BINDINDEX;
-			for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
-				if (BP == bindings[bpsearchindex].binding) {
-					printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed because there are colliding binding points!");
-					return false;
-				}
-			}
-
-			if (!desc->ELEMENTCOUNT) {
-				printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed because one of the shader inputs have 0 element count!");
-				return false;
-			}
-
-			VkDescriptorSetLayoutBinding bn = {};
-			bn.stageFlags = desc->ShaderStages;
-			bn.pImmutableSamplers = VK_NULL_HANDLE;
-			bn.descriptorType = Find_VkDescType_byMATDATATYPE(desc->TYPE);
-			bn.descriptorCount = desc->ELEMENTCOUNT;
-			bn.binding = BP;
-			bindings.push_back(bn);
-
-			GeneralDescSet->DescCount++;
-			switch (desc->TYPE) {
-			case shaderinputtype_tgfx_IMAGE_G:
-				GeneralDescSet->DescImagesCount += desc->ELEMENTCOUNT;
-				break;
-			case shaderinputtype_tgfx_SAMPLER_G:
-				GeneralDescSet->DescSamplersCount += desc->ELEMENTCOUNT;
-				break;
-			case shaderinputtype_tgfx_UBUFFER_G:
-				GeneralDescSet->DescUBuffersCount += desc->ELEMENTCOUNT;
-				break;
-			case shaderinputtype_tgfx_SBUFFER_G:
-				GeneralDescSet->DescSBuffersCount += desc->ELEMENTCOUNT;
-				break;
-			}
-		}
-
-		if (GeneralDescSet->DescCount) {
-			GeneralDescSet->Descs = new descriptor_vk[GeneralDescSet->DescCount];
-			for (unsigned int i = 0; i < inputdesccount; i++) {
-				const shaderinputdesc_vk* desc = inputdescs[i];
-				if (!(desc->TYPE == shaderinputtype_tgfx_IMAGE_G ||
-					desc->TYPE == shaderinputtype_tgfx_SAMPLER_G ||
-					desc->TYPE == shaderinputtype_tgfx_SBUFFER_G ||
-					desc->TYPE == shaderinputtype_tgfx_UBUFFER_G)) {
-					continue;
-				}
-				if (desc->BINDINDEX >= GeneralDescSet->DescCount) {
-					printer(result_tgfx_FAIL, "One of your General shaderinputs uses a binding point that is exceeding the number of general shaderinputs. You have to use a binding point that's lower than size of the general shader inputs!");
-					return false;
-				}
-
-				descriptor_vk& vkdesc = GeneralDescSet->Descs[desc->BINDINDEX];
-				switch (desc->TYPE) {	
-				case shaderinputtype_tgfx_IMAGE_G:
-				{
-					vkdesc.ElementCount = desc->ELEMENTCOUNT;
-					vkdesc.Elements = new descelement_image_vk[desc->ELEMENTCOUNT];
-					vkdesc.Type = desctype_vk::IMAGE;
-				}
-				break;
-				case shaderinputtype_tgfx_SAMPLER_G:
-				{
-					vkdesc.ElementCount = desc->ELEMENTCOUNT;
-					vkdesc.Elements = new descelement_image_vk[desc->ELEMENTCOUNT];
-					vkdesc.Type = desctype_vk::SAMPLER;
-				}
-				break;
-				case shaderinputtype_tgfx_UBUFFER_G:
-				{
-					vkdesc.ElementCount = desc->ELEMENTCOUNT;
-					vkdesc.Elements = new descelement_buffer_vk[desc->ELEMENTCOUNT];
-					vkdesc.Type = desctype_vk::UBUFFER;
-				}
-				break;
-				case shaderinputtype_tgfx_SBUFFER_G:
-				{
-					vkdesc.ElementCount = desc->ELEMENTCOUNT;
-					vkdesc.Elements = new descelement_buffer_vk[desc->ELEMENTCOUNT];
-					vkdesc.Type = desctype_vk::SBUFFER;
-				}
-				break;
-				}
-			}
-			GeneralDescSet->ShouldRecreate.store(0);
-		}
-
-		if (bindings.size()) {
-			VkDescriptorSetLayoutCreateInfo ci = {};
-			ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-			ci.pNext = nullptr;
-			ci.flags = 0;
-			ci.bindingCount = bindings.size();
-			ci.pBindings = bindings.data();
-			
-
-			if (vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &ci, nullptr, &GeneralDescSet->Layout) != VK_SUCCESS) {
-				printer(result_tgfx_FAIL, "VKDescSet_PipelineLayoutCreation() has failed at General DescriptorSetLayout Creation vkCreateDescriptorSetLayout()");
-				return false;
-			}
-		}
-	}
-
-	//Instance DescriptorSet Layout Creation
-	if (true) {
-		std::vector<VkDescriptorSetLayoutBinding> bindings;
-		for (unsigned int i = 0; i < inputdesccount; i++) {
-			const shaderinputdesc_vk* desc = inputdescs[i];
-
-			if (!(desc->TYPE == shaderinputtype_tgfx_IMAGE_PI ||
-				desc->TYPE == shaderinputtype_tgfx_SAMPLER_PI ||
-				desc->TYPE == shaderinputtype_tgfx_SBUFFER_PI ||
-				desc->TYPE == shaderinputtype_tgfx_UBUFFER_PI)) {
-				continue;
-			}
-			unsigned int BP = desc->BINDINDEX;
-			for (unsigned int bpsearchindex = 0; bpsearchindex < bindings.size(); bpsearchindex++) {
-				if (BP == bindings[bpsearchindex].binding) {
-					printer(result_tgfx_FAIL, "Link_MaterialType() has failed because there are colliding binding points!");
-					return false;
-				}
-			}
-			VkDescriptorSetLayoutBinding bn = {};
-			bn.stageFlags = desc->ShaderStages;
-			bn.pImmutableSamplers = VK_NULL_HANDLE;
-			bn.descriptorType = Find_VkDescType_byMATDATATYPE(desc->TYPE);
-			bn.descriptorCount = 1;		//I don't support array descriptors for now!
-			bn.binding = BP;
-			bindings.push_back(bn);
-
-			InstanceDescSet->DescCount++;
-			switch (desc->TYPE) {
-			case shaderinputtype_tgfx_IMAGE_PI:
-			{
-				InstanceDescSet->DescImagesCount += desc->ELEMENTCOUNT;
-			}
-			break;
-			case shaderinputtype_tgfx_SAMPLER_PI:
-			{
-				InstanceDescSet->DescSamplersCount += desc->ELEMENTCOUNT;
-			}
-			break;
-			case shaderinputtype_tgfx_UBUFFER_PI:
-			{
-				InstanceDescSet->DescUBuffersCount += desc->ELEMENTCOUNT;
-			}
-			break;
-			case shaderinputtype_tgfx_SBUFFER_PI:
-			{
-				InstanceDescSet->DescSBuffersCount += desc->ELEMENTCOUNT;
-			}
-			break;
-			}
-		}
-
-		if (InstanceDescSet->DescCount) {
-			InstanceDescSet->Descs = new descriptor_vk[InstanceDescSet->DescCount];
-			for (unsigned int i = 0; i < inputdesccount; i++) {
-				const shaderinputdesc_vk* desc = inputdescs[i];
-				if (!(desc->TYPE == shaderinputtype_tgfx_IMAGE_PI ||
-					desc->TYPE == shaderinputtype_tgfx_SAMPLER_PI ||
-					desc->TYPE == shaderinputtype_tgfx_SBUFFER_PI ||
-					desc->TYPE == shaderinputtype_tgfx_UBUFFER_PI)) {
-					continue;
-				}
-
-				if (desc->BINDINDEX >= InstanceDescSet->DescCount) {
-					printer(result_tgfx_FAIL, "One of your Material Data Descriptors (Per Instance) uses a binding point that is exceeding the number of Material Data Descriptors (Per Instance). You have to use a binding point that's lower than size of the Material Data Descriptors (Per Instance)!");
-					return false;
-				}
-
-				//We don't need to create each descriptor's array elements
-				descriptor_vk& vkdesc = InstanceDescSet->Descs[desc->BINDINDEX];
-				vkdesc.ElementCount = desc->ELEMENTCOUNT;
-				switch (desc->TYPE) {
-				case shaderinputtype_tgfx_IMAGE_PI:
-					vkdesc.Type = desctype_vk::IMAGE;
-					break;
-				case shaderinputtype_tgfx_SAMPLER_PI:
-					vkdesc.Type = desctype_vk::SAMPLER;
-					break;
-				case shaderinputtype_tgfx_UBUFFER_PI:
-					vkdesc.Type = desctype_vk::UBUFFER;
-					break;
-				case shaderinputtype_tgfx_SBUFFER_PI:
-					vkdesc.Type = desctype_vk::SBUFFER;
-					break;
-				}
-			}
-			InstanceDescSet->ShouldRecreate.store(0);
-		}
-
-		if (bindings.size()) {
-			VkDescriptorSetLayoutCreateInfo ci = {};
-			ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-			ci.pNext = nullptr;
-			ci.flags = 0;
-			ci.bindingCount = bindings.size();
-			ci.pBindings = bindings.data();
-
-			if (vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &ci, nullptr, &InstanceDescSet->Layout) != VK_SUCCESS) {
-				printer(result_tgfx_FAIL, "Link_MaterialType() has failed at Instance DesciptorSetLayout Creation vkCreateDescriptorSetLayout()");
-				return false;
-			}
-		}
-	}
-
-	//General DescriptorSet Creation
-	if (!Create_DescSet(GeneralDescSet)) {
-		printer(result_tgfx_FAIL, "Descriptor pool is full, that means you should expand its size!");
-		return false;
-	}
-
-	//Pipeline Layout Creation
-	{
-		VkPipelineLayoutCreateInfo pl_ci = {};
-		pl_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pl_ci.pNext = nullptr;
-		pl_ci.flags = 0;
-
-		VkDescriptorSetLayout descsetlays[4] = { hidden->GlobalBuffers_DescSet.Layout, hidden->GlobalTextures_DescSet.Layout, VK_NULL_HANDLE, VK_NULL_HANDLE };
-		pl_ci.setLayoutCount = 2;
-		if (GeneralDescSet->Layout != VK_NULL_HANDLE) {
-			descsetlays[pl_ci.setLayoutCount] = GeneralDescSet->Layout;
-			pl_ci.setLayoutCount++;
-		}
-		if (InstanceDescSet->Layout != VK_NULL_HANDLE) {
-			descsetlays[pl_ci.setLayoutCount] = InstanceDescSet->Layout;
-			pl_ci.setLayoutCount++;
-		}
-		pl_ci.pSetLayouts = descsetlays;
-		//Don't support for now!
-		pl_ci.pushConstantRangeCount = 0;
-		pl_ci.pPushConstantRanges = nullptr;
-
-		if (vkCreatePipelineLayout(rendergpu->LOGICALDEVICE(), &pl_ci, nullptr, layout) != VK_SUCCESS) {
-			printer(result_tgfx_FAIL, "Link_MaterialType() failed at vkCreatePipelineLayout()!");
-			return false;
-		}
-	}
-	return true;
 }
 
-
-VkDescriptorSet gpudatamanager_public::get_GlobalBuffersDescSet() { return hidden->GlobalBuffers_DescSet.Set; }
-VkDescriptorSet gpudatamanager_public::get_GlobalTexturesDescsSet() {return hidden->GlobalTextures_DescSet.Set;}
 void gpudatamanager_public::Resource_Finalizations() {
-	//If Descriptor Indexing isn't supported, check if any global descriptor isn't set before!
-	if (!rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-		for (unsigned char BindingIndex = 0; BindingIndex < 2; BindingIndex++) {
-			descriptor_vk& BufferBinding = hidden->GlobalBuffers_DescSet.Descs[BindingIndex];
-			for (unsigned int ElementIndex = 0; ElementIndex < BufferBinding.ElementCount; ElementIndex++) {
-				descelement_buffer_vk& element = ((descelement_buffer_vk*)BufferBinding.Elements)[ElementIndex];
-				if (element.IsUpdated.load() == 255) {
-					printer(result_tgfx_FAIL, ("You have to use SetGlobalBuffer() for element index: " + std::to_string(ElementIndex)).c_str());
-					return;
-				}
-			}
-			descriptor_vk& TextureBinding = hidden->GlobalTextures_DescSet.Descs[BindingIndex];
-			for (unsigned int ElementIndex = 0; ElementIndex < TextureBinding.ElementCount; ElementIndex++) {
-				descelement_image_vk& element = ((descelement_image_vk*)TextureBinding.Elements)[ElementIndex];
-				if (element.IsUpdated.load() == 255) {
-					printer(result_tgfx_FAIL, ("You have to use SetGlobalTexture() for element index: " + std::to_string(ElementIndex)).c_str());
-					return;
-				}
-			}
-		}
-	}
 
-	
-	if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-		Update_GlobalDescSet_DescIndexing(hidden->GlobalBuffers_DescSet, hidden->GlobalShaderInputs_DescPool);
-		Update_GlobalDescSet_DescIndexing(hidden->GlobalTextures_DescSet, hidden->GlobalShaderInputs_DescPool);
-	}
-	else {
-		Update_GlobalDescSet_NonDescIndexing(hidden->GlobalBuffers_DescSet, hidden->GlobalShaderInputs_DescPool);
-		Update_GlobalDescSet_NonDescIndexing(hidden->GlobalTextures_DescSet, hidden->GlobalShaderInputs_DescPool);
-	}
 }
 
 
 void  Destroy_AllResources (){}
 
 
-extern void FindBufferOBJ_byBufType(const buffer_tgfx_handle Handle, buffertype_tgfx TYPE, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
-	if (TYPE == buffertype_tgfx_GLOBAL) {
-		globalbuffer_vk* buffer = (globalbuffer_vk*)Handle;
-		TargetBuffer = allocatorsys->get_memorybufferhandle_byID(rendergpu, buffer->Block.MemAllocIndex);
+extern void FindBufferOBJ_byBufType(const buffer_tgfx_handle Handle, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
+	VKOBJHANDLE handle = *(VKOBJHANDLE*)&Handle;
+	switch (handle.type) {
+	case VKHANDLETYPEs::GLOBALSSBO:
+	{
+		GLOBALSSBO_VKOBJ* buffer = (GLOBALSSBO_VKOBJ*)Handle;
+		TargetBuffer = gpu_allocator->get_memorybufferhandle_byID(rendergpu, buffer->Block.MemAllocIndex);
 		TargetOffset += buffer->Block.Offset;
 	}
-	else {
+		break;
+	default:
+		TargetBuffer = VK_NULL_HANDLE;
+		TargetOffset = UINT64_MAX;
 		printer(result_tgfx_FAIL, "FindBufferOBJ_byBufType() doesn't support this type!");
+		break;
 	}
 }
 extern VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage) {
@@ -830,47 +241,8 @@ extern VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage) {
 	}
 	return buffer;
 }
-unsigned int Find_MeaningfulDescriptorPoolSize(unsigned int needed_descriptorcount, desctype_vk DescType) {
-	unsigned int Supported_MaxDescCount = 0;
-	switch (DescType) {
-	case desctype_vk::IMAGE:
-		Supported_MaxDescCount = rendergpu->EXTMANAGER()->GETMAXDESC(desctype_vk::IMAGE);
-		break;
-	case desctype_vk::SAMPLER:
-		Supported_MaxDescCount = rendergpu->EXTMANAGER()->GETMAXDESC(desctype_vk::SAMPLER);
-		break;
-	case desctype_vk::UBUFFER:
-		Supported_MaxDescCount = rendergpu->EXTMANAGER()->GETMAXDESC(desctype_vk::UBUFFER);
-		break;
-	case desctype_vk::SBUFFER:
-		Supported_MaxDescCount = rendergpu->EXTMANAGER()->GETMAXDESC(desctype_vk::SBUFFER);
-		break;
-	default:
-		printer(result_tgfx_FAIL, "Find_MeaningfulDescriptorPoolSize() doesn't support this type of DescType!");
-		break;
-	}
-	const unsigned int FragmentationPreventingDescCount = ((Supported_MaxDescCount / 100) * 10);
-	if (needed_descriptorcount == Supported_MaxDescCount) {
-		return Supported_MaxDescCount;
-	}
-	if (needed_descriptorcount > Supported_MaxDescCount) {
-		printer(result_tgfx_FAIL, "You want more shader input than your GPU supports, so maximum count that your GPU supports has returned!");
-		return Supported_MaxDescCount;
-	}
-	if (needed_descriptorcount > (Supported_MaxDescCount * 2) / 5) {
-		if (needed_descriptorcount < Supported_MaxDescCount / 2) {
-			return needed_descriptorcount * 2;
-		}
-		if (needed_descriptorcount < (Supported_MaxDescCount * 4) / 5) {
-			return needed_descriptorcount + FragmentationPreventingDescCount;
-		}
-		return needed_descriptorcount;
-	}
-	return needed_descriptorcount * 2 + FragmentationPreventingDescCount;
-}
-result_tgfx Create_SamplingType (unsigned int MinimumMipLevel, unsigned int MaximumMipLevel,
-	texture_mipmapfilter_tgfx MINFILTER, texture_mipmapfilter_tgfx MAGFILTER, texture_wrapping_tgfx WRAPPING_WIDTH,
-	texture_wrapping_tgfx WRAPPING_HEIGHT, texture_wrapping_tgfx WRAPPING_DEPTH, samplingtype_tgfx_handle* SamplingTypeHandle){
+result_tgfx Create_SamplingType(unsigned int MinimumMipLevel, unsigned int MaximumMipLevel, texture_mipmapfilter_tgfx MINFILTER, texture_mipmapfilter_tgfx MAGFILTER, texture_wrapping_tgfx WRAPPING_WIDTH,
+	texture_wrapping_tgfx WRAPPING_HEIGHT, texture_wrapping_tgfx WRAPPING_DEPTH, uvec4_tgfx bordercolor, samplingtype_tgfx_handle* SamplingTypeHandle) {
 	VkSamplerCreateInfo s_ci = {};
 	s_ci.addressModeU = Find_AddressMode_byWRAPPING(WRAPPING_WIDTH);
 	s_ci.addressModeV = Find_AddressMode_byWRAPPING(WRAPPING_HEIGHT);
@@ -889,14 +261,15 @@ result_tgfx Create_SamplingType (unsigned int MinimumMipLevel, unsigned int Maxi
 	s_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	s_ci.unnormalizedCoordinates = VK_FALSE;
 
-	sampler_vk* SAMPLER = new sampler_vk;
-	if (vkCreateSampler(rendergpu->LOGICALDEVICE(), &s_ci, nullptr, &SAMPLER->Sampler) != VK_SUCCESS) {
-		delete SAMPLER;
+	VkSampler sampler;
+	if (vkCreateSampler(rendergpu->LOGICALDEVICE(), &s_ci, nullptr, &sampler) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "GFXContentManager->Create_SamplingType() has failed at vkCreateSampler!");
 		return result_tgfx_FAIL;
 	}
-	*SamplingTypeHandle = (samplingtype_tgfx_handle)SAMPLER;
-	hidden->samplers.push_back(SAMPLER);
+	SAMPLER_VKOBJ* SAMPLER = hidden->samplers.create_OBJ();
+	SAMPLER->Sampler = sampler;
+	VKOBJHANDLE handle = hidden->samplers.returnHANDLEfromOBJ(SAMPLER);;
+	*SamplingTypeHandle = *(samplingtype_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 
@@ -914,7 +287,7 @@ inline unsigned int Calculate_sizeofVertexLayout(const datatype_tgfx* ATTRIBUTEs
 }
 result_tgfx Create_VertexAttributeLayout (const datatype_tgfx* Attributes, vertexlisttypes_tgfx listtype,
 	vertexattributelayout_tgfx_handle* VertexAttributeLayoutHandle){
-	vertexattriblayout_vk* Layout = new vertexattriblayout_vk;
+	VERTEXATTRIBLAYOUT_VKOBJ* Layout = hidden->vertexattributelayouts.create_OBJ();
 	unsigned int AttributesCount = 0;
 	while (Attributes[AttributesCount] != datatype_tgfx_UNDEFINED) {
 		AttributesCount++;
@@ -941,81 +314,49 @@ result_tgfx Create_VertexAttributeLayout (const datatype_tgfx* Attributes, verte
 		Layout->AttribDescs[i].format = Find_VkFormat_byDataType(Layout->Attributes[i]);
 		stride_ofcurrentattribute += get_uniformtypes_sizeinbytes(Layout->Attributes[i]);
 	}
-	hidden->vertexattributelayouts.push_back(Layout);
-	*VertexAttributeLayoutHandle = (vertexattributelayout_tgfx_handle)Layout;
+
+	VKOBJHANDLE handle = hidden->vertexattributelayouts.returnHANDLEfromOBJ(Layout);
+	*VertexAttributeLayoutHandle = *(vertexattributelayout_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 void  Delete_VertexAttributeLayout (vertexattributelayout_tgfx_handle VertexAttributeLayoutHandle){}
 
-result_tgfx Upload_toBuffer (buffer_tgfx_handle Handle, buffertype_tgfx Type, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET){
+result_tgfx Upload_toBuffer (buffer_tgfx_handle Handle, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET){
 	VkDeviceSize UploadOFFSET = static_cast<VkDeviceSize>(OFFSET);
 	unsigned int MEMALLOCINDEX = UINT32_MAX;
-	switch (Type) {
-	case buffertype_tgfx_STAGING:
-		MEMALLOCINDEX = ((memoryblock_vk*)Handle)->MemAllocIndex;
-		UploadOFFSET += ((memoryblock_vk*)Handle)->Offset;
+	VKOBJHANDLE objhandle = *(VKOBJHANDLE*)&Handle;
+	switch (objhandle.type) {
+	case VKHANDLETYPEs::VERTEXBUFFER:
+	{
+		VERTEXBUFFER_VKOBJ* vb = hidden->vertexbuffers.getOBJfromHANDLE(objhandle);
+		if (!vb) { return result_tgfx_FAIL; }
+		MEMALLOCINDEX = vb->Block.MemAllocIndex;
+		UploadOFFSET += vb->Block.Offset; 
+	}
 		break;
-	case buffertype_tgfx_VERTEX:
-		MEMALLOCINDEX = ((vertexbuffer_vk*)Handle)->Block.MemAllocIndex;
-		UploadOFFSET += ((vertexbuffer_vk*)Handle)->Block.Offset;
+	case VKHANDLETYPEs::INDEXBUFFER:
+	{
+		INDEXBUFFER_VKOBJ* ib = hidden->indexbuffers.getOBJfromHANDLE(objhandle);
+		if (!ib) { return result_tgfx_FAIL; }
+		MEMALLOCINDEX = ib->Block.MemAllocIndex;
+		UploadOFFSET += ib->Block.Offset;
+	}
 		break;
-	case buffertype_tgfx_GLOBAL:
-		MEMALLOCINDEX = ((globalbuffer_vk*)Handle)->Block.MemAllocIndex;
-		UploadOFFSET += ((globalbuffer_vk*)Handle)->Block.Offset;
+	case VKHANDLETYPEs::GLOBALSSBO:
+	{
+		GLOBALSSBO_VKOBJ* gb = hidden->globalbuffers.getOBJfromHANDLE(objhandle);
+		MEMALLOCINDEX = gb->Block.MemAllocIndex;
+		UploadOFFSET += gb->Block.Offset;
+	}
 		break;
-	case buffertype_tgfx_INDEX:
 	default:
-		printer(result_tgfx_NOTCODED, "Upload_toBuffer() doesn't support this type for now!");
-		return result_tgfx_NOTCODED;
+		printer(result_tgfx_FAIL, "This type isn't supported for now by Upload_toBuffer()!");
+		break;
 	}
 
-	return allocatorsys->copy_to_mappedmemory(rendergpu, MEMALLOCINDEX, DATA, DATA_SIZE, UploadOFFSET);
+	return gpu_allocator->copy_to_mappedmemory(rendergpu, MEMALLOCINDEX, DATA, DATA_SIZE, UploadOFFSET);
 }
 
-result_tgfx Create_StagingBuffer (unsigned int DATASIZE, unsigned int MemoryTypeIndex, buffer_tgfx_handle* Handle){
-	if (!DATASIZE) {
-		printer(result_tgfx_FAIL, "Staging Buffer DATASIZE is zero!");
-		return result_tgfx_INVALIDARGUMENT;
-	}
-	if (allocatorsys->get_memorytype_byID(rendergpu, MemoryTypeIndex) == memoryallocationtype_DEVICELOCAL) {
-		printer(result_tgfx_FAIL, "You can't create a staging buffer in DEVICELOCAL memory!");
-		return result_tgfx_INVALIDARGUMENT;
-	}
-	VkBufferCreateInfo psuedo_ci = {};
-	psuedo_ci.flags = 0;
-	psuedo_ci.pNext = nullptr;
-	if (rendergpu->QUEUEFAMSCOUNT() > 1) {
-		psuedo_ci.sharingMode = VK_SHARING_MODE_CONCURRENT;
-	}
-	else {
-		psuedo_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	}
-	psuedo_ci.pQueueFamilyIndices = rendergpu->ALLQUEUEFAMILIES();
-	psuedo_ci.queueFamilyIndexCount = rendergpu->QUEUEFAMSCOUNT();
-	psuedo_ci.size = DATASIZE;
-	psuedo_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	psuedo_ci.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-		| VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-	VkBuffer Bufferobj;
-	if (vkCreateBuffer(rendergpu->LOGICALDEVICE(), &psuedo_ci, nullptr, &Bufferobj) != VK_SUCCESS) {
-		printer(result_tgfx_FAIL, "Intended staging buffer's creation failed at vkCreateBuffer()!");
-		return result_tgfx_FAIL;
-	}
-
-
-	memoryblock_vk* StagingBuffer = new memoryblock_vk;
-	StagingBuffer->MemAllocIndex = MemoryTypeIndex;
-	if (allocatorsys->suballocate_buffer(Bufferobj, psuedo_ci.usage, *StagingBuffer) != result_tgfx_SUCCESS) {
-		delete StagingBuffer;
-		printer(result_tgfx_FAIL, "Suballocation has failed, so staging buffer creation too!");
-		return result_tgfx_FAIL;
-	}
-	vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Bufferobj, nullptr);
-	*Handle = (buffer_tgfx_handle)StagingBuffer;
-	hidden->stagingbuffers.push_back(StagingBuffer);
-	return result_tgfx_SUCCESS;
-}
-void  Delete_StagingBuffer (buffer_tgfx_handle StagingBufferHandle){}
 /*
 * You should sort your vertex data according to attribute layout, don't forget that
 * VertexCount shouldn't be 0
@@ -1027,7 +368,7 @@ result_tgfx Create_VertexBuffer (vertexattributelayout_tgfx_handle VertexAttribu
 		return result_tgfx_INVALIDARGUMENT;
 	}
 
-	vertexattriblayout_vk* Layout = ((vertexattriblayout_vk*)VertexAttributeLayoutHandle);
+	VERTEXATTRIBLAYOUT_VKOBJ* Layout = hidden->vertexattributelayouts.getOBJfromHANDLE(*(VKOBJHANDLE*)&VertexAttributeLayoutHandle);
 	if (!Layout) {
 		printer(result_tgfx_FAIL, "GFXContentManager->Create_MeshBuffer() has failed because Attribute Layout ID is invalid!");
 		return result_tgfx_INVALIDARGUMENT;
@@ -1035,24 +376,24 @@ result_tgfx Create_VertexBuffer (vertexattributelayout_tgfx_handle VertexAttribu
 
 	unsigned int TOTALDATA_SIZE = Layout->size_perVertex * VertexCount;
 
-	vertexbuffer_vk* VKMesh = new vertexbuffer_vk;
-	VKMesh->Block.MemAllocIndex = MemoryTypeIndex;
-	VKMesh->Layout = Layout;
-	VKMesh->VERTEX_COUNT = VertexCount;
+	VERTEXBUFFER_VKOBJ VKMesh;
+	VKMesh.Block.MemAllocIndex = MemoryTypeIndex;
+	VKMesh.Layout = hidden->vertexattributelayouts.getINDEXbyOBJ(Layout);
+	VKMesh.VERTEX_COUNT = VertexCount;
 
 	VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	VkBuffer Buffer = Create_VkBuffer(TOTALDATA_SIZE, BufferUsageFlag);
-	if (allocatorsys->suballocate_buffer(Buffer, BufferUsageFlag, VKMesh->Block) != result_tgfx_SUCCESS) {
-		delete VKMesh;
+	if (gpu_allocator->suballocate_buffer(Buffer, BufferUsageFlag, VKMesh.Block) != result_tgfx_SUCCESS) {
 		printer(result_tgfx_FAIL, "There is no memory left in specified memory region!");
 		vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Buffer, nullptr);
 		return result_tgfx_FAIL;
 	}
 	vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Buffer, nullptr);
 
-
-	hidden->vertexbuffers.push_back(VKMesh);
-	*VertexBufferHandle = (buffer_tgfx_handle)VKMesh;
+	VERTEXBUFFER_VKOBJ* vb = hidden->vertexbuffers.create_OBJ();
+	*vb = VKMesh;
+	VKOBJHANDLE handle = hidden->vertexbuffers.returnHANDLEfromOBJ(vb);
+	*VertexBufferHandle = *(buffer_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 void  Unload_VertexBuffer (buffer_tgfx_handle BufferHandle){}
@@ -1067,23 +408,25 @@ result_tgfx Create_IndexBuffer (datatype_tgfx DataType, unsigned int IndexCount,
 		printer(result_tgfx_FAIL, "GFXContentManager->Create_IndexBuffer() has failed because IndexCount is zero!");
 		return result_tgfx_INVALIDARGUMENT;
 	}
-	indexbuffer_vk* IB = new indexbuffer_vk;
-	IB->DATATYPE = IndexType;
+	INDEXBUFFER_VKOBJ IB;
+	IB.DATATYPE = IndexType;
 
 	VkBufferUsageFlags BufferUsageFlag = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 	VkBuffer Buffer = Create_VkBuffer(get_uniformtypes_sizeinbytes(DataType) * IndexCount, BufferUsageFlag);
-	IB->Block.MemAllocIndex = MemoryTypeIndex;
-	IB->IndexCount = static_cast<VkDeviceSize>(IndexCount);
-	if (allocatorsys->suballocate_buffer(Buffer, BufferUsageFlag, IB->Block) != result_tgfx_SUCCESS) {
-		delete IB;
+	IB.Block.MemAllocIndex = MemoryTypeIndex;
+	IB.IndexCount = static_cast<VkDeviceSize>(IndexCount);
+	if (gpu_allocator->suballocate_buffer(Buffer, BufferUsageFlag, IB.Block) != result_tgfx_SUCCESS) {
 		printer(result_tgfx_FAIL, "There is no memory left in specified memory region!");
 		vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Buffer, nullptr);
 		return result_tgfx_FAIL;
 	}
 	vkDestroyBuffer(rendergpu->LOGICALDEVICE(), Buffer, nullptr);
 
-	*IndexBufferHandle = (buffer_tgfx_handle)IB;
-	hidden->indexbuffers.push_back(IB);
+	INDEXBUFFER_VKOBJ* finalobj = hidden->indexbuffers.create_OBJ();
+	*finalobj = IB;
+
+	VKOBJHANDLE handle = hidden->indexbuffers.returnHANDLEfromOBJ(finalobj);
+	*IndexBufferHandle = *(buffer_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 void  Unload_IndexBuffer (buffer_tgfx_handle BufferHandle){}
@@ -1094,26 +437,26 @@ result_tgfx Create_Texture (texture_dimensions_tgfx DIMENSION, unsigned int WIDT
 		printer(result_tgfx_FAIL, "GFXContentManager->Create_Texture() has failed because mip count of the texture is wrong!");
 		return result_tgfx_FAIL;
 	}
-	texture_vk* texture = new texture_vk;
-	texture->CHANNELs = CHANNEL_TYPE;
-	texture->HEIGHT = HEIGHT;
-	texture->WIDTH = WIDTH;
-	texture->DATA_SIZE = WIDTH * HEIGHT * GetByteSizeOf_TextureChannels(CHANNEL_TYPE);
+	TEXTURE_VKOBJ texture;
+	texture.CHANNELs = CHANNEL_TYPE;
+	texture.HEIGHT = HEIGHT;
+	texture.WIDTH = WIDTH;
+	texture.DATA_SIZE = WIDTH * HEIGHT * GetByteSizeOf_TextureChannels(CHANNEL_TYPE);
 	VkImageUsageFlags flag = *(VkImageUsageFlags*)USAGE;
-	if (texture->CHANNELs == texture_channels_tgfx_D24S8 || texture->CHANNELs == texture_channels_tgfx_D32) { flag &= ~(1UL << 4); }
+	if (texture.CHANNELs == texture_channels_tgfx_D24S8 || texture.CHANNELs == texture_channels_tgfx_D32) { flag &= ~(1UL << 4); }
 	else { flag &= ~(1UL << 5); }
-	texture->USAGE = flag;
-	texture->Block.MemAllocIndex = MemoryTypeIndex;
-	texture->DIMENSION = DIMENSION;
-	texture->MIPCOUNT = MIPCOUNT;
+	texture.USAGE = flag;
+	texture.Block.MemAllocIndex = MemoryTypeIndex;
+	texture.DIMENSION = DIMENSION;
+	texture.MIPCOUNT = MIPCOUNT;
 
 
 	//Create VkImage
 	{
 		VkImageCreateInfo im_ci = {};
 		im_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		im_ci.extent.width = texture->WIDTH;
-		im_ci.extent.height = texture->HEIGHT;
+		im_ci.extent.width = texture.WIDTH;
+		im_ci.extent.height = texture.HEIGHT;
 		im_ci.extent.depth = 1;
 		if (DIMENSION == texture_dimensions_tgfx_2DCUBE) {
 			im_ci.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
@@ -1123,7 +466,7 @@ result_tgfx Create_Texture (texture_dimensions_tgfx DIMENSION, unsigned int WIDT
 			im_ci.flags = 0;
 			im_ci.arrayLayers = 1;
 		}
-		im_ci.format = Find_VkFormat_byTEXTURECHANNELs(texture->CHANNELs);
+		im_ci.format = Find_VkFormat_byTEXTURECHANNELs(texture.CHANNELs);
 		im_ci.imageType = Find_VkImageType(DIMENSION);
 		im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		im_ci.mipLevels = static_cast<uint32_t>(MIPCOUNT);
@@ -1133,18 +476,16 @@ result_tgfx Create_Texture (texture_dimensions_tgfx DIMENSION, unsigned int WIDT
 		im_ci.pQueueFamilyIndices = rendergpu->ALLQUEUEFAMILIES();
 		im_ci.queueFamilyIndexCount = rendergpu->QUEUEFAMSCOUNT();
 		im_ci.tiling = Find_VkTiling(DATAORDER);
-		im_ci.usage = texture->USAGE;
+		im_ci.usage = texture.USAGE;
 		im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
-		if (vkCreateImage(rendergpu->LOGICALDEVICE(), &im_ci, nullptr, &texture->Image) != VK_SUCCESS) {
+		if (vkCreateImage(rendergpu->LOGICALDEVICE(), &im_ci, nullptr, &texture.Image) != VK_SUCCESS) {
 			printer(result_tgfx_FAIL, "GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
-			delete texture;
 			return result_tgfx_FAIL;
 		}
 
-		if (allocatorsys->suballocate_image(texture) != result_tgfx_SUCCESS) {
+		if (gpu_allocator->suballocate_image(&texture) != result_tgfx_SUCCESS) {
 			printer(result_tgfx_FAIL, "Suballocation of the texture has failed! Please re-create later.");
-			delete texture;
 			return result_tgfx_FAIL;
 		}
 	}
@@ -1156,7 +497,7 @@ result_tgfx Create_Texture (texture_dimensions_tgfx DIMENSION, unsigned int WIDT
 		ci.flags = 0;
 		ci.pNext = nullptr;
 
-		ci.image = texture->Image;
+		ci.image = texture.Image;
 		if (DIMENSION == texture_dimensions_tgfx_2DCUBE) {
 			ci.viewType = VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE;
 			ci.subresourceRange.layerCount = 6;
@@ -1168,136 +509,157 @@ result_tgfx Create_Texture (texture_dimensions_tgfx DIMENSION, unsigned int WIDT
 		ci.subresourceRange.baseArrayLayer = 0;
 		ci.subresourceRange.baseMipLevel = 0;
 		ci.subresourceRange.levelCount = 1;
-		ci.format = Find_VkFormat_byTEXTURECHANNELs(texture->CHANNELs);
-		if (texture->CHANNELs == texture_channels_tgfx_D32) {
+		ci.format = Find_VkFormat_byTEXTURECHANNELs(texture.CHANNELs);
+		if (texture.CHANNELs == texture_channels_tgfx_D32) {
 			ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 		}
-		else if (texture->CHANNELs == texture_channels_tgfx_D24S8) {
+		else if (texture.CHANNELs == texture_channels_tgfx_D24S8) {
 			ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 		}
 		else {
 			ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
 
-		Fill_ComponentMapping_byCHANNELs(texture->CHANNELs, ci.components);
+		Fill_ComponentMapping_byCHANNELs(texture.CHANNELs, ci.components);
 
-		if (vkCreateImageView(rendergpu->LOGICALDEVICE(), &ci, nullptr, &texture->ImageView) != VK_SUCCESS) {
+		if (vkCreateImageView(rendergpu->LOGICALDEVICE(), &ci, nullptr, &texture.ImageView) != VK_SUCCESS) {
 			printer(result_tgfx_FAIL, "GFXContentManager->Upload_Texture() has failed in vkCreateImageView()!");
 			return result_tgfx_FAIL;
 		}
 	}
 
-	hidden->textures.push_back(texture);
-	*TextureHandle = (texture_tgfx_handle)texture;
+	TEXTURE_VKOBJ* obj = contentmanager->GETTEXTURES_ARRAY().create_OBJ();
+	*obj = texture;
+	VKOBJHANDLE handle = contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(obj);
+	*TextureHandle = *(texture_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 //TARGET OFFSET is the offset in the texture's buffer to copy to
 result_tgfx Upload_Texture (texture_tgfx_handle TextureHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset){ return result_tgfx_FAIL; }
-void  Delete_Texture (texture_tgfx_handle textureHANDLE, unsigned char isUsedLastFrame){}
 
-result_tgfx Create_GlobalBuffer (const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned char isUniform,
-	unsigned int MemoryTypeIndex, buffer_tgfx_handle* GlobalBufferHandle) {
-	if (renderer->RGSTATUS() != RenderGraphStatus::Invalid) {
+result_tgfx Create_GlobalBuffer (const char* BUFFER_NAME, unsigned int DATA_SIZE, 
+	unsigned int MemoryTypeIndex, extension_tgfx_listhandle exts, buffer_tgfx_handle* GlobalBufferHandle) {
+	if (renderer->RGSTATUS() != RGReconstructionStatus::Invalid) {
 		printer(result_tgfx_FAIL, "GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)! Please create your global buffers before render graph construction.");
 		return result_tgfx_WRONGTIMING;
 	}
 
 	VkBuffer obj;
-	VkBufferUsageFlags flags = 0;
-	if (isUniform) {
-		flags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-	}
-	else {
-		flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-	}
+	VkBufferUsageFlags flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 	obj = Create_VkBuffer(DATA_SIZE, flags);
 
 
-	globalbuffer_vk* GB = new globalbuffer_vk;
-	GB->Block.MemAllocIndex = MemoryTypeIndex;
-	if (allocatorsys->suballocate_buffer(obj, flags, GB->Block) != result_tgfx_SUCCESS) {
+	GLOBALSSBO_VKOBJ GB;
+	GB.Block.MemAllocIndex = MemoryTypeIndex;
+	GB.DATA_SIZE = DATA_SIZE;
+	if (gpu_allocator->suballocate_buffer(obj, flags, GB.Block) != result_tgfx_SUCCESS) {
 		printer(result_tgfx_FAIL, "Create_GlobalBuffer has failed at suballocation!");
 		return result_tgfx_FAIL;
 	}
 	vkDestroyBuffer(rendergpu->LOGICALDEVICE(), obj, nullptr);
 
-	GB->DATA_SIZE = DATA_SIZE;
-	GB->isUniform = isUniform;
-
-	*GlobalBufferHandle = (buffer_tgfx_handle)GB;
-	hidden->globalbuffers.push_back(GB);
+	GLOBALSSBO_VKOBJ* finalgb = hidden->globalbuffers.create_OBJ();
+	*finalgb = GB;
+	VKOBJHANDLE handle = hidden->globalbuffers.returnHANDLEfromOBJ(finalgb);
+	*GlobalBufferHandle = *(buffer_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
-void  Unload_GlobalBuffer (buffer_tgfx_handle BUFFER_ID){}
-result_tgfx SetGlobalShaderInput_Buffer (unsigned char isUniformBuffer, unsigned int ElementIndex, unsigned char isUsedLastFrame,
-	buffer_tgfx_handle BufferHandle, unsigned int BufferOffset, unsigned int BoundDataSize) {
-	desctype_vk intendedDescType = (isUniformBuffer) ? desctype_vk::UBUFFER : desctype_vk::SBUFFER;
-	descelement_buffer_vk* element = nullptr;
-	for (unsigned char i = 0; i < 2; i++) {
-		if (hidden->GlobalBuffers_DescSet.Descs[i].Type == intendedDescType) {
-			if (hidden->GlobalBuffers_DescSet.Descs[i].ElementCount <= ElementIndex) {
-				printer(result_tgfx_FAIL, "SetGlobalBuffer() has failed because ElementIndex isn't smaller than ElementCount of the GlobalBuffer!");
-				return result_tgfx_FAIL;
-			}
-			element = &((descelement_buffer_vk*)hidden->GlobalBuffers_DescSet.Descs[i].Elements)[ElementIndex];
+
+
+result_tgfx Create_BindingTable(shaderdescriptortype_tgfx DescriptorType, unsigned int ElementCount,
+	shaderstageflag_tgfx_handle VisibleStages, samplingtype_tgfx_listhandle StaticSamplers, bindingtable_tgfx_handle* bindingTableHandle) {
+#ifdef VULKAN_DEBUGGING
+	//Check if pool has enough space for the desc set and if there is, then decrease the amount of available descs in the pool for other checks
+	if (!ElementCount) { printer(result_tgfx_FAIL, "You shouldn't create a binding table with ElementCount = 0"); return result_tgfx_FAIL;}
+	unsigned int descsetid = Find_VKCONST_DESCSETID_byTGFXDescType(DescriptorType);
+	if (hidden->ALL_DESCPOOLS[descsetid].REMAINING_DESCs.fetch_sub(ElementCount) < ElementCount ||
+		!hidden->ALL_DESCPOOLS[descsetid].REMAINING_DESCs.fetch_sub(1)) {
+		printer(result_tgfx_FAIL, "Create_DescSets() has failed because descriptor pool doesn't have enough space! You probably exceeded one of the limits you've set before");
+		return result_tgfx_FAIL;
+	}
+	if (StaticSamplers) {
+		unsigned int i = 0;
+		while (StaticSamplers[i] != core_tgfx_main->INVALIDHANDLE) {
+			if (!hidden->samplers.getOBJfromHANDLE(*(VKOBJHANDLE*)&StaticSamplers[i])) { printer(result_tgfx_FAIL, "You shouldn't give NULL or invalid handles to StaticSamplers list!"); return result_tgfx_WARNING; }
+			i++;
 		}
+	}
+#endif
+
+	DESCSET_VKOBJ set;
+	VkDescriptorSetLayoutCreateInfo ci = {}; ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	VkDescriptorSetLayoutBinding bindings[2] = {};
+	ci.flags = 0;	ci.pNext = nullptr; ci.bindingCount = 1; ci.pBindings = bindings;
+	
+	unsigned int dynamicbinding_i = 0;
+	std::vector<VkSampler> staticSamplers;
+	if (DescriptorType == shaderdescriptortype_tgfx_SAMPLER && StaticSamplers) {
+		TGFXLISTCOUNT(core_tgfx_main, StaticSamplers, staticsamplerscount);
+		staticSamplers.resize(staticsamplerscount);
+		for (unsigned int i = 0; i < staticsamplerscount; i++) {
+			staticSamplers[i] = hidden->samplers.getOBJfromHANDLE(*(VKOBJHANDLE*)&StaticSamplers[i])->Sampler;
+		}
+		bindings[0].binding = 0;
+		bindings[0].descriptorCount = staticsamplerscount;
+		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+		bindings[0].pImmutableSamplers = staticSamplers.data();
+		bindings[0].stageFlags = VK_SHADER_STAGE_ALL;
+
+		ci.bindingCount++;
+		dynamicbinding_i++;
 	}
 
-	unsigned char x = 0;
-	if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
-		if (x != 255) {
-			printer(result_tgfx_FAIL, "You already changed the global buffer this frame, second or concurrent one will fail!");
-			return result_tgfx_WRONGTIMING;
-		}
-		//If value is 255, this means global buffer isn't set before so try to set it again!
-		if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
-			printer(result_tgfx_FAIL, "You already changed the global buffer this frame, second or concurrent one will fail!");
-			return result_tgfx_WRONGTIMING;
-		}
-	}
-	VkDeviceSize finaloffset = static_cast<VkDeviceSize>(BufferOffset);
-	FindBufferOBJ_byBufType(BufferHandle, buffertype_tgfx_GLOBAL, element->Info.buffer, finaloffset);
-	element->Info.offset = finaloffset;
-	element->Info.range = static_cast<VkDeviceSize>(BoundDataSize);
-	if (isUsedLastFrame) {
-		hidden->GlobalBuffers_DescSet.ShouldRecreate.store(true);
-	}
+	bindings[dynamicbinding_i].binding = dynamicbinding_i;
+	bindings[dynamicbinding_i].descriptorCount = ElementCount;
+	bindings[dynamicbinding_i].descriptorType = Find_VkDescType_byVKCONST_DESCSETID(descsetid);
+	bindings[dynamicbinding_i].pImmutableSamplers = nullptr;
+	if (VisibleStages) { bindings[dynamicbinding_i].stageFlags = *(VkShaderStageFlags*)&VisibleStages; }
+	bindings[dynamicbinding_i].stageFlags = GetVkShaderStageFlags_fromTGFXHandle(VisibleStages);
+
+	ThrowIfFailed(vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &ci, nullptr, &set.Layout), "Descriptor Set Layout creation has failed!");
+	DESCSET_VKOBJ* finalobj = hidden->descsets.create_OBJ();
+	*finalobj = set;
+
+	VKOBJHANDLE handle = hidden->descsets.returnHANDLEfromOBJ(finalobj);
+	*bindingTableHandle = *(bindingtable_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
-result_tgfx SetGlobalShaderInput_Texture (unsigned char isSampledTexture, unsigned int ElementIndex, unsigned char isUsedLastFrame,
-	texture_tgfx_handle TextureHandle, samplingtype_tgfx_handle sampler, image_access_tgfx access) {
-	desctype_vk intendedDescType = (isSampledTexture) ? desctype_vk::SAMPLER : desctype_vk::IMAGE;
-	descelement_image_vk* element = nullptr;
-	for (unsigned char i = 0; i < 2; i++) {
-		if (hidden->GlobalTextures_DescSet.Descs[i].Type == intendedDescType) {
-			if (hidden->GlobalTextures_DescSet.Descs[i].ElementCount <= ElementIndex) {
-				printer(result_tgfx_FAIL, "SetGlobalTexture() has failed because ElementIndex isn't smaller than TextureCount of the GlobalTexture!");
-				return result_tgfx_FAIL;
-			}
-			element = &((descelement_image_vk*)hidden->GlobalTextures_DescSet.Descs[i].Elements)[ElementIndex];
-		}
+bool VKPipelineLayoutCreation(uint32_t TypeDescs[VKCONST_MAXDESCSET_PERLIST], uint32_t InstDescs[VKCONST_MAXDESCSET_PERLIST], bool isCallBufferSupported, VkPipelineLayout* layout) {
+	VkPipelineLayoutCreateInfo pl_ci = {}; pl_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; pl_ci.pNext = nullptr;
+	pl_ci.flags = 0;
+
+	uint32_t TypeDescsCount = 0, InstDescsCount = 0;
+	for (TypeDescsCount; TypeDescsCount < VKCONST_MAXDESCSET_PERLIST; TypeDescsCount++) { if (TypeDescs[TypeDescsCount] == UINT32_MAX) { break; } }
+	for (InstDescsCount; InstDescsCount < VKCONST_MAXDESCSET_PERLIST; InstDescsCount++) { if (InstDescs[InstDescsCount] == UINT32_MAX) { break; } }
+
+	if (TypeDescsCount + InstDescsCount == 0) { return true; }
+	//It stores 2 lists, so size is twice
+	VkDescriptorSetLayout DESCLAYOUTs[VKCONST_MAXDESCSET_PERLIST * 2];
+	for (unsigned int typeSets_i = 0; typeSets_i < TypeDescsCount; typeSets_i++) {
+		DESCLAYOUTs[typeSets_i] = hidden->descsets.getOBJbyINDEX(TypeDescs[typeSets_i])->Layout;
+	}
+	for (unsigned int instSets_i = 0; instSets_i < InstDescsCount; instSets_i++) {
+		DESCLAYOUTs[TypeDescsCount + instSets_i] = hidden->descsets.getOBJbyINDEX(InstDescs[instSets_i])->Layout;
+	}
+	pl_ci.setLayoutCount = TypeDescsCount + InstDescsCount;
+	pl_ci.pSetLayouts = DESCLAYOUTs;
+	VkPushConstantRange range = {};
+	//Don't support for now!
+	if (isCallBufferSupported) {
+		pl_ci.pushConstantRangeCount = 1;
+		pl_ci.pPushConstantRanges = &range;
+		range.offset = 0;
+		range.size = 128;
+		range.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+	}
+	else { pl_ci.pushConstantRangeCount = 0; pl_ci.pPushConstantRanges = nullptr; }
+
+	if (vkCreatePipelineLayout(rendergpu->LOGICALDEVICE(), &pl_ci, nullptr, layout) != VK_SUCCESS) {
+		printer(result_tgfx_FAIL, "Link_MaterialType() failed at vkCreatePipelineLayout()!");
+		return false;
 	}
 
-	unsigned char x = 0;
-	if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
-		if (x != 255) {
-			printer(result_tgfx_FAIL, "You already changed the global texture this frame, second or concurrent one will fail!");
-			return result_tgfx_WRONGTIMING;
-		}
-		//If value is 255, this means global texture isn't set before so try to set it again!
-		if (!element->IsUpdated.compare_exchange_strong(x, 1)) {
-			printer(result_tgfx_FAIL, "You already changed the global texture this frame, second or concurrent one will fail!");
-			return result_tgfx_WRONGTIMING;
-		}
-	}
-	element->info.imageView = ((texture_vk*)TextureHandle)->ImageView;
-	element->info.sampler = ((sampler_vk*)sampler)->Sampler;
-	VkAccessFlags unused;
-	Find_AccessPattern_byIMAGEACCESS(access, unused, element->info.imageLayout);
-	if (isUsedLastFrame) {
-		hidden->GlobalTextures_DescSet.ShouldRecreate.store(true);
-	}
-	return result_tgfx_SUCCESS;
+	return true;
 }
 
 
@@ -1384,12 +746,12 @@ result_tgfx Compile_ShaderSource (shaderlanguages_tgfx language, shaderstage_tgf
 		return result_tgfx_FAIL;
 	}
 
-	shadersource_vk* SHADERSOURCE = new shadersource_vk;
+	SHADERSOURCE_VKOBJ* SHADERSOURCE = hidden->shadersources.create_OBJ();
 	SHADERSOURCE->Module = Module;
 	SHADERSOURCE->stage = shaderstage;
-	hidden->shadersources.push_back(SHADERSOURCE);
-	printer(result_tgfx_SUCCESS, "Shader Module is successfully created!");
-	*ShaderSourceHandle = (shadersource_tgfx_handle)SHADERSOURCE;
+
+	VKOBJHANDLE handle = hidden->shadersources.returnHANDLEfromOBJ(SHADERSOURCE);
+	*ShaderSourceHandle = *(shadersource_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 void  Delete_ShaderSource (shadersource_tgfx_handle ShaderSourceHandle){}
@@ -1431,26 +793,42 @@ VkColorComponentFlags Find_ColorWriteMask_byChannels(texture_channels_tgfx chann
 	}
 }
 
-result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, shaderinputdescription_tgfx_listhandle ShaderInputDescs,
+inline void CountDescSets(bindingtable_tgfx_listhandle descset, unsigned int* finaldesccount, unsigned int finaldescs[VKCONST_MAXDESCSET_PERLIST]) {
+	TGFXLISTCOUNT(core_tgfx_main, descset, listsize);
+	unsigned int valid_descset_i = 0;
+	for (unsigned int i = 0; i < listsize; i++) {
+		bindingtable_tgfx_handle b_table = descset[i];
+		if (!b_table) { continue; }
+		VKOBJHANDLE handle = *(VKOBJHANDLE*) & b_table;
+		DESCSET_VKOBJ* descset = hidden->descsets.getOBJfromHANDLE(handle);
+		if (!descset) { printer(10); }
+		if (valid_descset_i >= VKCONST_MAXDESCSET_PERLIST) { printer(11); }
+		finaldescs[valid_descset_i++] = hidden->descsets.getINDEXbyOBJ(descset);
+	}
+	if (valid_descset_i == 0) { printer(12); }
+	*finaldesccount = valid_descset_i;
+}
+extern bool Get_SlotSets_fromSubDP(subdrawpass_tgfx_handle subdp, RTSLOTSET_VKOBJ** rtslotset, IRTSLOTSET_VKOBJ** irtslotset);
+extern bool Get_RPOBJ_andSPINDEX_fromSubDP(subdrawpass_tgfx_handle subdp, VkRenderPass* rp_obj, unsigned int* sp_index);
+result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList,
+	bindingtable_tgfx_listhandle MatTypeBindTables, bindingtable_tgfx_listhandle MatInstBindTables,
 	vertexattributelayout_tgfx_handle AttributeLayout, subdrawpass_tgfx_handle Subdrawpass, cullmode_tgfx culling,
 	polygonmode_tgfx polygonmode, depthsettings_tgfx_handle depthtest, stencilsettings_tgfx_handle StencilFrontFaced,
-	stencilsettings_tgfx_handle StencilBackFaced, blendinginfo_tgfx_listhandle BLENDINGs, rasterpipelinetype_tgfx_handle* MaterialHandle) {
-	if (renderer->RGSTATUS() == RenderGraphStatus::StartedConstruction) {
+	stencilsettings_tgfx_handle StencilBackFaced, blendinginfo_tgfx_listhandle BLENDINGs, unsigned char isCallBufferSupported, rasterpipelinetype_tgfx_handle* MaterialHandle) {
+	if (renderer->RGSTATUS() == RGReconstructionStatus::StartedConstruction) {
 		printer(result_tgfx_FAIL, "You can't link a Material Type while recording RenderGraph!");
 		return result_tgfx_WRONGTIMING;
 	}
-	vertexattriblayout_vk* LAYOUT = (vertexattriblayout_vk*)AttributeLayout;
+	VERTEXATTRIBLAYOUT_VKOBJ* LAYOUT = hidden->vertexattributelayouts.getOBJfromHANDLE(*(VKOBJHANDLE*) & AttributeLayout);
 	if (!LAYOUT) {
 		printer(result_tgfx_FAIL, "Link_MaterialType() has failed because Material Type has invalid Vertex Attribute Layout!");
 		return result_tgfx_INVALIDARGUMENT;
 	}
-	subdrawpass_vk* Subpass = (subdrawpass_vk*)Subdrawpass;
-	drawpass_vk* MainPass = (drawpass_vk*)Subpass->DrawPass;
 
-	shadersource_vk* VertexSource = nullptr, *FragmentSource = nullptr;
+	SHADERSOURCE_VKOBJ* VertexSource = nullptr, *FragmentSource = nullptr;
 	unsigned int ShaderSourceCount = 0;
 	while (ShaderSourcesList[ShaderSourceCount] != core_tgfx_main->INVALIDHANDLE) {
-		shadersource_vk* ShaderSource = ((shadersource_vk*)ShaderSourcesList[ShaderSourceCount]);
+		SHADERSOURCE_VKOBJ* ShaderSource = hidden->shadersources.getOBJfromHANDLE(*(VKOBJHANDLE*)&ShaderSourcesList[ShaderSourceCount]);
 		switch (ShaderSource->stage) {
 		case shaderstage_tgfx_VERTEXSHADER:
 			if (VertexSource) { printer(result_tgfx_FAIL, "Link_MaterialType() has failed because there 2 vertex shaders in the list!"); return result_tgfx_FAIL; }
@@ -1467,7 +845,7 @@ result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, sh
 
 
 	//Subpass attachment should happen here!
-	graphicspipelinetype_vk* VKPipeline = new graphicspipelinetype_vk;
+	GRAPHICSPIPELINETYPE_VKOBJ VKPipeline;
 
 	VkPipelineShaderStageCreateInfo Vertex_ShaderStage = {};
 	VkPipelineShaderStageCreateInfo Fragment_ShaderStage = {};
@@ -1544,7 +922,10 @@ result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, sh
 	
 	TGFXLISTCOUNT(core_tgfx_main, BLENDINGs, BlendingsCount);
 	blendinginfo_vk** BLENDINGINFOS = (blendinginfo_vk**)BLENDINGs;
-	std::vector<VkPipelineColorBlendAttachmentState> States(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT);
+
+	RTSLOTSET_VKOBJ* baseslotset = nullptr; IRTSLOTSET_VKOBJ* inherited_slotset = nullptr;
+	if (!Get_SlotSets_fromSubDP(Subdrawpass, &baseslotset, &inherited_slotset)) { return result_tgfx_FAIL; }
+	VkPipelineColorBlendAttachmentState* States = (VkPipelineColorBlendAttachmentState*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, baseslotset->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT * sizeof(VkPipelineColorBlendAttachmentState));
 	VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
 	{
 		VkPipelineColorBlendAttachmentState NonBlendState = {};
@@ -1557,26 +938,26 @@ result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, sh
 		NonBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 		NonBlendState.alphaBlendOp = VK_BLEND_OP_ADD;
 
-		for (unsigned int RTSlotIndex = 0; RTSlotIndex < States.size(); RTSlotIndex++) {
+		for (unsigned int RTSlotIndex = 0; RTSlotIndex < baseslotset->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT; RTSlotIndex++) {
 			bool isFound = false;
 			for (unsigned int BlendingInfoIndex = 0; BlendingInfoIndex < BlendingsCount; BlendingInfoIndex++) {
 				const blendinginfo_vk* blendinginfo = BLENDINGINFOS[BlendingInfoIndex];
 				if (blendinginfo->COLORSLOT_INDEX == RTSlotIndex) {
 					States[RTSlotIndex] = blendinginfo->BlendState;
-					States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
+					States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(baseslotset->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
 					isFound = true;
 					break;
 				}
 			}
 			if (!isFound) {
 				States[RTSlotIndex] = NonBlendState;
-				States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(MainPass->SLOTSET->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
+				States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(baseslotset->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
 			}
 		}
 
 		Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		Pipeline_ColorBlendState.attachmentCount = States.size();
-		Pipeline_ColorBlendState.pAttachments = States.data();
+		Pipeline_ColorBlendState.attachmentCount = baseslotset->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT;
+		Pipeline_ColorBlendState.pAttachments = States;
 		if (BlendingsCount) {
 			Pipeline_ColorBlendState.blendConstants[0] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.x;
 			Pipeline_ColorBlendState.blendConstants[1] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.y;
@@ -1595,24 +976,26 @@ result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, sh
 	}
 
 	VkPipelineDynamicStateCreateInfo Dynamic_States = {};
-	std::vector<VkDynamicState> DynamicStatesList;
+	VkDynamicState DynamicStatesList[64]; uint32_t dynamicstatescount = 0;	//64 is enough, i guess!?
 	{
-		DynamicStatesList.push_back(VK_DYNAMIC_STATE_VIEWPORT);
-		DynamicStatesList.push_back(VK_DYNAMIC_STATE_SCISSOR);
+		DynamicStatesList[0] = VK_DYNAMIC_STATE_VIEWPORT; dynamicstatescount++;
+		DynamicStatesList[1] = VK_DYNAMIC_STATE_SCISSOR; dynamicstatescount++;
 
 		Dynamic_States.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		Dynamic_States.dynamicStateCount = DynamicStatesList.size();
-		Dynamic_States.pDynamicStates = DynamicStatesList.data();
+		Dynamic_States.dynamicStateCount = dynamicstatescount;
+		Dynamic_States.pDynamicStates = DynamicStatesList;
 	}
 
-	if (!VKDescSet_PipelineLayoutCreation((const shaderinputdesc_vk**)ShaderInputDescs, &VKPipeline->General_DescSet, &VKPipeline->Instance_DescSet, &VKPipeline->PipelineLayout)) {
+	uint32_t typesetscount = 0, instsetscount = 0;
+	CountDescSets(MatTypeBindTables, &typesetscount, VKPipeline.TypeSETs);
+	CountDescSets(MatInstBindTables, &instsetscount, VKPipeline.InstSETs_base);
+	if (!VKPipelineLayoutCreation(VKPipeline.TypeSETs, VKPipeline.InstSETs_base, isCallBufferSupported, &VKPipeline.PipelineLayout)) {
 		printer(result_tgfx_FAIL, "Link_MaterialType() has failed at VKDescSet_PipelineLayoutCreation!");
-		delete VKPipeline;
 		return result_tgfx_FAIL;
 	}
 
 	VkPipelineDepthStencilStateCreateInfo depth_state = {};
-	if (Subpass->SLOTSET->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
+	if (baseslotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
 		depth_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		if (depthtest) {
 			depthsettingsdesc_vk* depthsettings = (depthsettingsdesc_vk*)depthtest;
@@ -1646,108 +1029,85 @@ result_tgfx Link_MaterialType(shadersource_tgfx_listhandle ShaderSourcesList, sh
 	{
 		GraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 		GraphicsPipelineCreateInfo.pColorBlendState = &Pipeline_ColorBlendState;
-		if (Subpass->SLOTSET->BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
-			GraphicsPipelineCreateInfo.pDepthStencilState = &depth_state;
-		}
-		else {
-			GraphicsPipelineCreateInfo.pDepthStencilState = nullptr;
-		}
+		if (baseslotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) { GraphicsPipelineCreateInfo.pDepthStencilState = &depth_state; }
+		else { GraphicsPipelineCreateInfo.pDepthStencilState = nullptr; }
 		GraphicsPipelineCreateInfo.pDynamicState = &Dynamic_States;
 		GraphicsPipelineCreateInfo.pInputAssemblyState = &InputAssemblyState;
 		GraphicsPipelineCreateInfo.pMultisampleState = &MSAAState;
 		GraphicsPipelineCreateInfo.pRasterizationState = &RasterizationState;
 		GraphicsPipelineCreateInfo.pVertexInputState = &VertexInputState_ci;
 		GraphicsPipelineCreateInfo.pViewportState = &RenderViewportState;
-		GraphicsPipelineCreateInfo.layout = VKPipeline->PipelineLayout;
-		GraphicsPipelineCreateInfo.renderPass = MainPass->RenderPassObject;
-		GraphicsPipelineCreateInfo.subpass = Subpass->Binding_Index;
+		GraphicsPipelineCreateInfo.layout = VKPipeline.PipelineLayout;
+		Get_RPOBJ_andSPINDEX_fromSubDP(Subdrawpass, &GraphicsPipelineCreateInfo.renderPass, &GraphicsPipelineCreateInfo.subpass);
 		GraphicsPipelineCreateInfo.stageCount = 2;
 		GraphicsPipelineCreateInfo.pStages = STAGEs;
 		GraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;		//Optional
 		GraphicsPipelineCreateInfo.basePipelineIndex = -1;					//Optional
 		GraphicsPipelineCreateInfo.flags = 0;
 		GraphicsPipelineCreateInfo.pNext = nullptr;
-		if (vkCreateGraphicsPipelines(rendergpu->LOGICALDEVICE(), nullptr, 1, &GraphicsPipelineCreateInfo, nullptr, &VKPipeline->PipelineObject) != VK_SUCCESS) {
-			delete VKPipeline;
-			delete STAGEs;
+		if (vkCreateGraphicsPipelines(rendergpu->LOGICALDEVICE(), nullptr, 1, &GraphicsPipelineCreateInfo, nullptr, &VKPipeline.PipelineObject) != VK_SUCCESS) {
 			printer(result_tgfx_FAIL, "vkCreateGraphicsPipelines has failed!");
 			return result_tgfx_FAIL;
 		}
 	}
 
-	VKPipeline->GFX_Subpass = Subpass;
-	hidden->graphicspipelinetypes.push_back(VKPipeline);
+	VKPipeline.GFX_Subpass = Subdrawpass;
 
-
-	printer(result_tgfx_SUCCESS, "Finished creating Graphics Pipeline");
-	*MaterialHandle = (rasterpipelinetype_tgfx_handle)VKPipeline;
+	GRAPHICSPIPELINETYPE_VKOBJ* finalobj = hidden->graphicspipelinetypes.create_OBJ();
+	*finalobj = VKPipeline;
+	VKOBJHANDLE handle = hidden->graphicspipelinetypes.returnHANDLEfromOBJ(finalobj);
+	*MaterialHandle = *(rasterpipelinetype_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 
 void  Delete_MaterialType(rasterpipelinetype_tgfx_handle ID) { printer(result_tgfx_NOTCODED, "Delete_MaterialType() isn't implemented!"); }
-result_tgfx Create_MaterialInst (rasterpipelinetype_tgfx_handle MaterialType, rasterpipelineinstance_tgfx_handle* MaterialInstHandle){
-	graphicspipelinetype_vk* VKPSO = (graphicspipelinetype_vk*)MaterialType;
+result_tgfx Create_MaterialInst (rasterpipelinetype_tgfx_handle MaterialType, bindingtable_tgfx_listhandle MatInstBindingTable, rasterpipelineinstance_tgfx_handle* MaterialInstHandle){
+	GRAPHICSPIPELINETYPE_VKOBJ* VKPSO = hidden->graphicspipelinetypes.getOBJfromHANDLE(*(VKOBJHANDLE*) & MaterialType);
+	unsigned int descSets[VKCONST_MAXDESCSET_PERLIST], descSetCount;
+	CountDescSets(MatInstBindingTable, &descSetCount, descSets);
+
 #ifdef VULKAN_DEBUGGING
 	if (!VKPSO) {
-		printer(result_tgfx_FAIL, "Create_MaterialInst() has failed because Material Type isn't found!");
-		return result_tgfx_INVALIDARGUMENT;
+		printer(result_tgfx_FAIL, "Create_MaterialInst() has failed because Material Type isn't found!"); return result_tgfx_INVALIDARGUMENT;
+	}
+	uint32_t base_instancedescsetcount = 0;
+	while (VKPSO->InstSETs_base[base_instancedescsetcount++] != UINT32_MAX && base_instancedescsetcount < VKCONST_MAXDESCSET_PERLIST) {}
+	if (descSetCount != base_instancedescsetcount) {
+		printer(result_tgfx_INVALIDARGUMENT, "Create_MaterialInst() has failed because given BindingTable doesn't compatible with the one given while linking material type!"); return result_tgfx_INVALIDARGUMENT;
 	}
 #endif
 
 	//Descriptor Set Creation
-	graphicspipelineinst_vk* VKPInstance = new graphicspipelineinst_vk;
+	GRAPHICSPIPELINEINST_VKOBJ* VKPInstance = hidden->graphicspipelineinstances.create_OBJ();
 
-	VKPInstance->DescSet.Layout = VKPSO->Instance_DescSet.Layout;
-	VKPInstance->DescSet.ShouldRecreate.store(0);
-	VKPInstance->DescSet.DescImagesCount = VKPSO->Instance_DescSet.DescImagesCount;
-	VKPInstance->DescSet.DescSamplersCount = VKPSO->Instance_DescSet.DescSamplersCount;
-	VKPInstance->DescSet.DescSBuffersCount = VKPSO->Instance_DescSet.DescSBuffersCount;
-	VKPInstance->DescSet.DescUBuffersCount = VKPSO->Instance_DescSet.DescUBuffersCount;
-	VKPInstance->DescSet.DescCount = VKPSO->Instance_DescSet.DescCount;
-
-	if (VKPInstance->DescSet.DescCount) {
-		VKPInstance->DescSet.Descs = new descriptor_vk[VKPInstance->DescSet.DescCount];
-
-		for (unsigned int i = 0; i < VKPInstance->DescSet.DescCount; i++) {
-			descriptor_vk& desc = VKPInstance->DescSet.Descs[i];
-			desc.ElementCount = VKPSO->Instance_DescSet.Descs[i].ElementCount;
-			desc.Type = VKPSO->Instance_DescSet.Descs[i].Type;
-			switch (desc.Type)
-			{
-			case desctype_vk::IMAGE:
-			case desctype_vk::SAMPLER:
-				desc.Elements = new descelement_image_vk[desc.ElementCount];
-			case desctype_vk::SBUFFER:
-			case desctype_vk::UBUFFER:
-				desc.Elements = new descelement_buffer_vk[desc.ElementCount];
-			}
-		}
-
-		Create_DescSet(&VKPInstance->DescSet);
+	VKPInstance->PROGRAM = hidden->graphicspipelinetypes.getINDEXbyOBJ(VKPSO);
+	for (unsigned int i = 0; i < descSetCount; i++) {
+		VKPInstance->InstSETs[i] = descSets[i];
 	}
 
-
-	VKPInstance->PROGRAM = VKPSO;
-	hidden->graphicspipelineinstances.push_back(VKPInstance);
-	*MaterialInstHandle = (rasterpipelineinstance_tgfx_handle)VKPInstance;
+	VKOBJHANDLE handle = hidden->graphicspipelineinstances.returnHANDLEfromOBJ(VKPInstance);
+	*MaterialInstHandle = *(rasterpipelineinstance_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 void  Delete_MaterialInst (rasterpipelineinstance_tgfx_handle ID){}
 
-result_tgfx Create_ComputeType (shadersource_tgfx_handle Source, shaderinputdescription_tgfx_listhandle ShaderInputDescs, computeshadertype_tgfx_handle* ComputeTypeHandle) {
+result_tgfx Create_ComputeType (shadersource_tgfx_handle Source, bindingtable_tgfx_listhandle TypeBindingTables, bindingtable_tgfx_listhandle InstBindingTables, unsigned char isCallBufferSupported, computeshadertype_tgfx_handle* ComputeTypeHandle) {
 	VkComputePipelineCreateInfo cp_ci = {};
-	shadersource_vk* SHADER = (shadersource_vk*)Source;
+	SHADERSOURCE_VKOBJ* SHADER = hidden->shadersources.getOBJfromHANDLE(*(VKOBJHANDLE*)&Source);
 	VkShaderModule shader_module = SHADER->Module;
 
-	computetype_vk* VKPipeline = new computetype_vk;
+	COMPUTETYPE_VKOBJ VKPipeline;
 
-	if (!VKDescSet_PipelineLayoutCreation((const shaderinputdesc_vk**)ShaderInputDescs, &VKPipeline->General_DescSet, &VKPipeline->Instance_DescSet,
-		&VKPipeline->PipelineLayout)) {
+	uint32_t typesetscount = 0, instsetscount = 0;
+	CountDescSets(TypeBindingTables, &typesetscount, VKPipeline.TypeSETs);
+	CountDescSets(InstBindingTables, &instsetscount, VKPipeline.InstSETs);
+
+
+	if (!VKPipelineLayoutCreation(VKPipeline.TypeSETs, VKPipeline.InstSETs, isCallBufferSupported, &VKPipeline.PipelineLayout)) {
 		printer(result_tgfx_FAIL, "Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
-		delete VKPipeline;
 		return result_tgfx_FAIL;
 	}
-
+	
 	//VkPipeline creation
 	{
 		cp_ci.stage.flags = 0;
@@ -1760,264 +1120,163 @@ result_tgfx Create_ComputeType (shadersource_tgfx_handle Source, shaderinputdesc
 		cp_ci.basePipelineHandle = VK_NULL_HANDLE;
 		cp_ci.basePipelineIndex = -1;
 		cp_ci.flags = 0;
-		cp_ci.layout = VKPipeline->PipelineLayout;
+		cp_ci.layout = VKPipeline.PipelineLayout;
 		cp_ci.pNext = nullptr;
 		cp_ci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		if (vkCreateComputePipelines(rendergpu->LOGICALDEVICE(), VK_NULL_HANDLE, 1, &cp_ci, nullptr, &VKPipeline->PipelineObject) != VK_SUCCESS) {
-			printer(result_tgfx_FAIL, "Compile_ComputeShader() has failed at vkCreateComputePipelines!");
-			delete VKPipeline;
-			return result_tgfx_FAIL;
-		}
+		ThrowIfFailed(vkCreateComputePipelines(rendergpu->LOGICALDEVICE(), VK_NULL_HANDLE, 1, &cp_ci, nullptr, &VKPipeline.PipelineObject), "Compile_ComputeShader() has failed at vkCreateComputePipelines!");
 	}
 	vkDestroyShaderModule(rendergpu->LOGICALDEVICE(), shader_module, nullptr);
-
-	*ComputeTypeHandle = (computeshadertype_tgfx_handle)VKPipeline;
-	hidden->computetypes.push_back(VKPipeline);
+	
+	COMPUTETYPE_VKOBJ* obj = hidden->computetypes.create_OBJ();
+	*obj = VKPipeline;
+	VKOBJHANDLE handle = hidden->computetypes.returnHANDLEfromOBJ(obj);
+	*ComputeTypeHandle = *(computeshadertype_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
-result_tgfx Create_ComputeInstance(computeshadertype_tgfx_handle ComputeType, computeshaderinstance_tgfx_handle* ComputeShaderInstanceHandle) {
-	computetype_vk* VKPipeline = (computetype_vk*)ComputeType;
+result_tgfx Create_ComputeInstance(computeshadertype_tgfx_handle ComputeType, bindingtable_tgfx_listhandle ComputeInstBindingTable, computeshaderinstance_tgfx_handle* ComputeShaderInstanceHandle) {
+	COMPUTETYPE_VKOBJ* VKPipeline = hidden->computetypes.getOBJfromHANDLE(*(VKOBJHANDLE*)&ComputeType);
+	unsigned int descSets[VKCONST_MAXDESCSET_PERLIST] = {UINT32_MAX}, descSetCount;
+	CountDescSets(ComputeInstBindingTable, &descSetCount, descSets);
 
-	computeinstance_vk* instance = new computeinstance_vk;
-	instance->PROGRAM = VKPipeline;
+#ifdef VULKAN_DEBUGGING
+	if (!VKPipeline) {
+		printer(result_tgfx_FAIL, "Create_MaterialInst() has failed because Material Type isn't found!"); return result_tgfx_INVALIDARGUMENT;
+	}
+	uint32_t baseInstSetCount = 0;
+	while (VKPipeline->InstSETs[baseInstSetCount++] != UINT32_MAX && baseInstSetCount < VKCONST_MAXDESCSET_PERLIST) {}
+	if (descSetCount != baseInstSetCount) {
+		printer(result_tgfx_INVALIDARGUMENT, "Create_ComputeInstance() has failed because given BindingTable doesn't compatible with the one given while creating compute type!"); return result_tgfx_INVALIDARGUMENT;
+	}
+#endif
 
-	instance->DescSet.Layout = VKPipeline->Instance_DescSet.Layout;
-	instance->DescSet.ShouldRecreate.store(0);
-	instance->DescSet.DescImagesCount = VKPipeline->Instance_DescSet.DescImagesCount;
-	instance->DescSet.DescSamplersCount = VKPipeline->Instance_DescSet.DescSamplersCount;
-	instance->DescSet.DescSBuffersCount = VKPipeline->Instance_DescSet.DescSBuffersCount;
-	instance->DescSet.DescUBuffersCount = VKPipeline->Instance_DescSet.DescUBuffersCount;
-	instance->DescSet.DescCount = VKPipeline->Instance_DescSet.DescCount;
-
-	if (instance->DescSet.DescCount) {
-		instance->DescSet.Descs = new descriptor_vk[instance->DescSet.DescCount];
-
-		for (unsigned int i = 0; i < instance->DescSet.DescCount; i++) {
-			descriptor_vk& desc = instance->DescSet.Descs[i];
-			desc.ElementCount = VKPipeline->Instance_DescSet.Descs[i].ElementCount;
-			desc.Type = VKPipeline->Instance_DescSet.Descs[i].Type;
-			switch (desc.Type)
-			{
-			case desctype_vk::IMAGE:
-			case desctype_vk::SAMPLER:
-				desc.Elements = new descelement_image_vk[desc.ElementCount];
-			case desctype_vk::SBUFFER:
-			case desctype_vk::UBUFFER:
-				desc.Elements = new descelement_buffer_vk[desc.ElementCount];
-			}
-		}
-
-		if (!Create_DescSet(&instance->DescSet)) {
-			printer(result_tgfx_FAIL, "You probably exceed one of the limits you specified at GFX initialization process! Create_ComputeInstance() has failed!");
-			delete[] instance->DescSet.Descs;
-			delete instance;
-			return result_tgfx_FAIL;
-		}
+	COMPUTEINST_VKOBJ* instance = hidden->computeinstances.create_OBJ();
+	instance->PROGRAM = hidden->computetypes.getINDEXbyOBJ(VKPipeline);
+	for (unsigned int i = 0; i < descSetCount; i++) {
+		instance->InstSETs[i] = descSets[i];
 	}
 
-	*ComputeShaderInstanceHandle = (computeshaderinstance_tgfx_handle)instance;
-	hidden->computeinstances.push_back(instance);
-	return result_tgfx_SUCCESS;
-}
-void  Delete_ComputeShaderType (computeshadertype_tgfx_handle ID){}
-void  Delete_ComputeShaderInstance (computeshaderinstance_tgfx_handle ID){}
-
-
-result_tgfx SetDescSet_Buffer(descset_vk* Set, unsigned int BINDINDEX, bool isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset,
-	buffertype_tgfx BUFTYPE, buffer_tgfx_handle BufferHandle, unsigned int BoundDataSize, bool isUsedRecently) {
-
-	if (!Set->DescCount) {
-		printer(result_tgfx_FAIL, "Given Material Type/Instance doesn't have any shader input to set!");
-		return result_tgfx_FAIL;
-	}
-	if (BINDINDEX >= Set->DescCount) {
-		printer(result_tgfx_FAIL, "BINDINDEX is exceeding the shader input count in the Material Type/Instance");
-		return result_tgfx_FAIL;
-	}
-	descriptor_vk& Descriptor = Set->Descs[BINDINDEX];
-	if ((isUniformBufferShaderInput && Descriptor.Type != desctype_vk::UBUFFER) ||
-		(!isUniformBufferShaderInput && Descriptor.Type != desctype_vk::SBUFFER)) {
-		printer(result_tgfx_FAIL, "BINDINDEX is pointing to some other type of shader input!");
-		return result_tgfx_FAIL;
-	}
-	if (ELEMENTINDEX >= Descriptor.ElementCount) {
-		printer(result_tgfx_FAIL, "You gave SetMaterialBuffer() an overflowing ELEMENTINDEX!");
-		return result_tgfx_FAIL;
-	}
-
-	descelement_buffer_vk& DescElement = ((descelement_buffer_vk*)Descriptor.Elements)[ELEMENTINDEX];
-
-	//Check alignment offset
-
-	VkDeviceSize reqalignmentoffset = (isUniformBufferShaderInput) ? rendergpu->DEVICEPROPERTIES().limits.minUniformBufferOffsetAlignment : rendergpu->DEVICEPROPERTIES().limits.minStorageBufferOffsetAlignment;
-	if (TargetOffset % reqalignmentoffset) {
-		printer(result_tgfx_WARNING, ("This TargetOffset in SetMaterialBuffer triggers Vulkan Validation Layer, this usage may cause undefined behaviour on this GPU! You should set TargetOffset as a multiple of " + std::to_string(reqalignmentoffset)).c_str());
-	}
-
-
-	unsigned char x = 0;
-	if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
-		if (x != 255) {
-			printer(result_tgfx_FAIL, "You already set shader input buffer, you can't change it at the same frame!");
-			return result_tgfx_WRONGTIMING;
-		}
-		//If value is 255, this means this shader input isn't set before. So try again!
-		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
-			printer(result_tgfx_FAIL, "You already set shader input buffer, you can't change it at the same frame!");
-			return result_tgfx_WRONGTIMING;
-		}
-	}
-	VkDeviceSize FinalOffset = static_cast<VkDeviceSize>(TargetOffset);
-	switch (BUFTYPE) {
-	case buffertype_tgfx_STAGING:
-	case buffertype_tgfx_GLOBAL:
-		FindBufferOBJ_byBufType(BufferHandle, BUFTYPE, DescElement.Info.buffer, FinalOffset);
-		break;
-	default:
-		printer(result_tgfx_NOTCODED, "SetMaterial_UniformBuffer() doesn't support this type of target buffers!");
-		return result_tgfx_NOTCODED;
-	}
-	DescElement.Info.offset = FinalOffset;
-	DescElement.Info.range = static_cast<VkDeviceSize>(BoundDataSize);
-	DescElement.IsUpdated.store(1);
-	descset_updatecall_vk call;
-	call.Set = Set;
-	call.BindingIndex = BINDINDEX;
-	call.ElementIndex = ELEMENTINDEX;
-	if (isUsedRecently) {
-		call.Set->ShouldRecreate.store(1);
-		hidden->DescSets_toCreateUpdate.push_back(call);
-	}
-	else {
-		hidden->DescSets_toJustUpdate.push_back(call);
-	}
-	return result_tgfx_SUCCESS;
-}
-result_tgfx SetDescSet_Texture(descset_vk* Set, unsigned int BINDINDEX, bool isSampledTexture, unsigned int ELEMENTINDEX, sampler_vk* Sampler, texture_vk* TextureHandle,
-	image_access_tgfx usage, bool isUsedRecently) {
-	if (!Set->DescCount) {
-		printer(result_tgfx_FAIL, "Given Material Type/Instance doesn't have any shader input to set!");
-		return result_tgfx_FAIL;
-	}
-	if (BINDINDEX >= Set->DescCount) {
-		printer(result_tgfx_FAIL, "BINDINDEX is exceeding the shader input count in the Material Type/Instance");
-		return result_tgfx_FAIL;
-	}
-	descriptor_vk& Descriptor = Set->Descs[BINDINDEX];
-	if ((isSampledTexture && Descriptor.Type != desctype_vk::SAMPLER) ||
-		(!isSampledTexture && Descriptor.Type != desctype_vk::IMAGE)) {
-		printer(result_tgfx_FAIL, "BINDINDEX is pointing to some other type of shader input!");
-		return result_tgfx_FAIL;
-	}
-	if (ELEMENTINDEX >= Descriptor.ElementCount) {
-		printer(result_tgfx_FAIL, "You gave SetMaterialTexture() an overflowing ELEMENTINDEX!");
-		return result_tgfx_FAIL;
-	}
-	descelement_image_vk& DescElement = ((descelement_image_vk*)Descriptor.Elements)[ELEMENTINDEX];
-
-
-	unsigned char x = 0;
-	if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
-		if (x != 255) {
-			printer(result_tgfx_FAIL, "You already set shader input texture, you can't change it at the same frame!");
-			return result_tgfx_WRONGTIMING;
-		}
-		//If value is 255, this means this shader input isn't set before. So try again!
-		if (!DescElement.IsUpdated.compare_exchange_strong(x, 1)) {
-			printer(result_tgfx_FAIL, "You already set shader input texture, you can't change it at the same frame!");
-			return result_tgfx_WRONGTIMING;
-		}
-	}
-	VkAccessFlags unused;
-	Find_AccessPattern_byIMAGEACCESS(usage, unused, DescElement.info.imageLayout);
-	texture_vk* TEXTURE = ((texture_vk*)TextureHandle);
-	DescElement.info.imageView = TEXTURE->ImageView;
-	DescElement.info.sampler = ((isSampledTexture) ? (Sampler->Sampler) : (nullptr));
-
-	descset_updatecall_vk call;
-	call.Set = Set;
-	call.BindingIndex = BINDINDEX;
-	call.ElementIndex = ELEMENTINDEX;
-	if (isUsedRecently) {
-		call.Set->ShouldRecreate.store(1);
-		hidden->DescSets_toCreateUpdate.push_back(call);
-	}
-	else {
-		hidden->DescSets_toJustUpdate.push_back(call);
-	}
+	VKOBJHANDLE handle = hidden->computeinstances.returnHANDLEfromOBJ(instance);
+	*ComputeShaderInstanceHandle = *(computeshaderinstance_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 
+//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
+void SetDescriptor_Sampler(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
+	samplingtype_tgfx_handle samplerHandle) {
+	VKOBJHANDLE bindingtable_objhandle = *(VKOBJHANDLE*)&bindingtable,  sampler_objhandle = *(VKOBJHANDLE*)&samplerHandle;
+#ifdef VULKAN_DEBUGGING
+	if (bindingtable_objhandle.EXTRA_FLAGs >= VKCONST_DYNAMICDESCRIPTORTYPESCOUNT) { printer(result_tgfx_FAIL, "BindingTable handle is invalid!"); return; }
+#endif
+	DESCSET_VKOBJ* set = hidden->descsets.getOBJfromHANDLE(bindingtable_objhandle);
+	SAMPLER_VKOBJ* sampler = hidden->samplers.getOBJfromHANDLE(sampler_objhandle);
 
+#ifdef VULKAN_DEBUGGING
+	if (!set || !sampler || elementIndex >= set->samplerDescELEMENTs.size() || set->DESCTYPE != VK_DESCRIPTOR_TYPE_SAMPLER) { printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Sampler() has invalid input!"); return; }
+	sampler_descVK& samplerDESC = set->samplerDescELEMENTs[elementIndex];
+	unsigned char elementUpdateStatus = 0;
+	if (!samplerDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
+		printer(result_tgfx_FAIL, "SetDescriptor_Sampler() failed because you already changed the descriptor in the same frame!");
+	}
+#else
+	sampler_descVK& samplerDESC = ((sampler_descVK*)set->DescElements)[elementIndex];
+	samplerDESC.isUpdated.store(1);
+#endif
 
-//IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
-result_tgfx SetMaterialType_Buffer (rasterpipelinetype_tgfx_handle MaterialType, unsigned char isUsedRecently, unsigned int BINDINDEX,
-	buffer_tgfx_handle BufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize){
-	graphicspipelinetype_vk* PSO = (graphicspipelinetype_vk*)MaterialType;
-	descset_vk* Set = &PSO->General_DescSet;
-
-	return SetDescSet_Buffer(Set, BINDINDEX, isUniformBufferShaderInput, ELEMENTINDEX, TargetOffset, BUFTYPE, BufferHandle, BoundDataSize, isUsedRecently);
+	samplerDESC.sampler_obj = sampler->Sampler;
+	set->isUpdatedCounter.store(3);
 }
-result_tgfx SetMaterialType_Texture (rasterpipelinetype_tgfx_handle MaterialType, unsigned char isUsedRecently, unsigned int BINDINDEX,
-	texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage){
-	graphicspipelinetype_vk* PSO = ((graphicspipelinetype_vk*)MaterialType);
-	descset_vk* Set = &PSO->General_DescSet;
+//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_BUFFER
+void SetDescriptor_Buffer(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
+	buffer_tgfx_handle bufferHandle, unsigned int bufferOffset, unsigned int BoundDataSize, extension_tgfx_listhandle exts) {
+	VKOBJHANDLE bindingtable_objhandle = *(VKOBJHANDLE*)&bindingtable;
+#ifdef VULKAN_DEBUGGING
+	if (bindingtable_objhandle.EXTRA_FLAGs >= VKCONST_DYNAMICDESCRIPTORTYPESCOUNT) { printer(result_tgfx_FAIL, "BindingTable handle is invalid!"); return; }
+#endif
+	DESCSET_VKOBJ* set = hidden->descsets.getOBJfromHANDLE(bindingtable_objhandle);
 
-	return SetDescSet_Texture(Set, BINDINDEX, isSampledTexture, ELEMENTINDEX, (sampler_vk*)Sampler, (texture_vk*)TextureHandle, usage, isUsedRecently);
+	
+#ifdef VULKAN_DEBUGGING
+	if (!set || !bufferHandle || elementIndex >= set->bufferDescELEMENTs.size() || set->DESCTYPE != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
+		printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Buffer() has invalid input!"); return; }
+	buffer_descVK& bufferDESC = set->bufferDescELEMENTs[elementIndex];
+	unsigned char elementUpdateStatus = 0;
+	if (!bufferDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
+		printer(result_tgfx_FAIL, "SetDescriptor_Buffer() failed because you already changed the descriptor in the same frame!");
+	}
+#else
+	bufferDESC.isUpdated.store(1);
+#endif
+	bufferDESC.info.buffer = VK_NULL_HANDLE;
+
+	set->isUpdatedCounter.store(3);
 }
 
-result_tgfx SetMaterialInst_Buffer (rasterpipelineinstance_tgfx_handle MaterialInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
-	buffer_tgfx_handle BufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize){
-	graphicspipelineinst_vk* PSO = (graphicspipelineinst_vk*)MaterialInstance;
-	descset_vk* Set = &PSO->DescSet;
+//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLEDTEXTURE
+void SetDescriptor_SampledTexture(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
+	texture_tgfx_handle textureHandle) {
+	VKOBJHANDLE bindingtable_objhandle = *(VKOBJHANDLE*)&bindingtable;
+#ifdef VULKAN_DEBUGGING
+	if (bindingtable_objhandle.EXTRA_FLAGs >= VKCONST_DYNAMICDESCRIPTORTYPESCOUNT) { printer(result_tgfx_FAIL, "BindingTable handle is invalid!"); return; }
+#endif
+	DESCSET_VKOBJ* set = hidden->descsets.getOBJfromHANDLE(bindingtable_objhandle);
 
-	return SetDescSet_Buffer(Set, BINDINDEX, isUniformBufferShaderInput, ELEMENTINDEX, TargetOffset, BUFTYPE, BufferHandle, BoundDataSize, isUsedRecently);
+	TEXTURE_VKOBJ* texture = (TEXTURE_VKOBJ*)textureHandle;
+#ifdef VULKAN_DEBUGGING
+	if (!set || !textureHandle || elementIndex >= set->textureDescELEMENTs.size() || set->DESCTYPE != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE) {
+		printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_SampledTexture() has invalid input!"); return;
+	}
+	texture_descVK& textureDESC = set->textureDescELEMENTs[elementIndex];
+	unsigned char elementUpdateStatus = 0;
+	if (!textureDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
+		printer(result_tgfx_FAIL, "SetDescriptor_SampledTexture() failed because you already changed the descriptor in the same frame!");
+	}
+#else
+	texture_descVK& textureDESC = ((texture_descVK*)set->DescElements)[elementIndex];
+	textureDESC.isUpdated.store(1);
+#endif
+	textureDESC.info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	textureDESC.info.imageView = texture->ImageView;
+	textureDESC.info.sampler = VK_NULL_HANDLE;
+
+	set->isUpdatedCounter.store(3);
 }
-result_tgfx SetMaterialInst_Texture (rasterpipelineinstance_tgfx_handle MaterialInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
-	texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage){
-	graphicspipelineinst_vk* PSO = (graphicspipelineinst_vk*)MaterialInstance;
-	descset_vk* Set = &PSO->DescSet;
+//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_STORAGEIMAGE
+void SetDescriptor_StorageImage(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
+	texture_tgfx_handle textureHandle) {
+	VKOBJHANDLE bindingtable_objhandle = *(VKOBJHANDLE*)&bindingtable;
+#ifdef VULKAN_DEBUGGING
+	if (bindingtable_objhandle.EXTRA_FLAGs >= VKCONST_DYNAMICDESCRIPTORTYPESCOUNT) { printer(result_tgfx_FAIL, "BindingTable handle is invalid!"); return; }
+#endif
+	DESCSET_VKOBJ* set = hidden->descsets.getOBJfromHANDLE(bindingtable_objhandle);
 
-	return SetDescSet_Texture(Set, BINDINDEX, isSampledTexture, ELEMENTINDEX, (sampler_vk*)Sampler, (texture_vk*)TextureHandle, usage, isUsedRecently);
+	TEXTURE_VKOBJ* texture = (TEXTURE_VKOBJ*)textureHandle;
+#ifdef VULKAN_DEBUGGING
+	if (!set || !textureHandle || elementIndex >= set->textureDescELEMENTs.size() || set->DESCTYPE != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
+		printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_StorageImage() has invalid input!"); return;
+	}
+	texture_descVK& textureDESC = set->textureDescELEMENTs[elementIndex];
+	unsigned char elementUpdateStatus = 0;
+	if (!textureDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
+		printer(result_tgfx_FAIL, "SetDescriptor_StorageImage() failed because you already changed the descriptor in the same frame!");
 }
-//IsUsedRecently means is the material type/instance used in last frame. This is necessary for Vulkan synchronization process.
-result_tgfx SetComputeType_Buffer (computeshadertype_tgfx_handle ComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
-	buffer_tgfx_handle TargetBufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize){
-	computetype_vk* PSO = (computetype_vk*)ComputeType;
-	descset_vk* Set = &PSO->General_DescSet;
+#else
+	texture_descVK& textureDESC = ((texture_descVK*)set->DescElements)[elementIndex];
+	textureDESC.isUpdated.store(1);
+#endif
+	textureDESC.info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	textureDESC.info.imageView = texture->ImageView;
+	textureDESC.info.sampler = VK_NULL_HANDLE;
 
-	return SetDescSet_Buffer(Set, BINDINDEX, isUniformBufferShaderInput, ELEMENTINDEX, TargetOffset, BUFTYPE, TargetBufferHandle, BoundDataSize, isUsedRecently);
-}
-result_tgfx SetComputeType_Texture (computeshadertype_tgfx_handle ComputeType, unsigned char isUsedRecently, unsigned int BINDINDEX,
-	texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage) {
-	computetype_vk* PSO = (computetype_vk*)ComputeType;
-	descset_vk* Set = &PSO->General_DescSet;
-
-	return SetDescSet_Texture(Set, BINDINDEX, isSampledTexture, ELEMENTINDEX, (sampler_vk*)Sampler, (texture_vk*)TextureHandle, usage, isUsedRecently);
-}
-
-result_tgfx SetComputeInst_Buffer (computeshaderinstance_tgfx_handle ComputeInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
-	buffer_tgfx_handle TargetBufferHandle, buffertype_tgfx BUFTYPE, unsigned char isUniformBufferShaderInput, unsigned int ELEMENTINDEX, unsigned int TargetOffset, unsigned int BoundDataSize){
-	computeinstance_vk* PSO = (computeinstance_vk*)ComputeInstance;
-	descset_vk* Set = &PSO->DescSet;
-
-	return SetDescSet_Buffer(Set, BINDINDEX, isUniformBufferShaderInput, ELEMENTINDEX, TargetOffset, BUFTYPE, TargetBufferHandle, BoundDataSize, isUsedRecently);
-}
-result_tgfx SetComputeInst_Texture (computeshaderinstance_tgfx_handle ComputeInstance, unsigned char isUsedRecently, unsigned int BINDINDEX,
-	texture_tgfx_handle TextureHandle, unsigned char isSampledTexture, unsigned int ELEMENTINDEX, samplingtype_tgfx_handle Sampler, image_access_tgfx usage){
-	computeinstance_vk* PSO = (computeinstance_vk*)ComputeInstance;
-	descset_vk* Set = &PSO->DescSet;
-
-	return SetDescSet_Texture(Set, BINDINDEX, isSampledTexture, ELEMENTINDEX, (sampler_vk*)Sampler, (texture_vk*)TextureHandle, usage, isUsedRecently);
+	set->isUpdatedCounter.store(3);
 }
 
 
 result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rtslotset_tgfx_handle* RTSlotSetHandle){ 
 	TGFXLISTCOUNT(core_tgfx_main, Descriptions, DescriptionsCount);
 	for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
-		const rtslotdesc_vk* desc = (rtslotdesc_vk*)Descriptions[SlotIndex];
-		texture_vk* FirstHandle = desc->textures[0];
-		texture_vk* SecondHandle = desc->textures[1];
+		const rtslot_create_description_vk* desc = (rtslot_create_description_vk*)Descriptions[SlotIndex];
+		TEXTURE_VKOBJ* FirstHandle = desc->textures[0];
+		TEXTURE_VKOBJ* SecondHandle = desc->textures[1];
 		if ((FirstHandle->CHANNELs != SecondHandle->CHANNELs) ||
 			(FirstHandle->WIDTH != SecondHandle->WIDTH) ||
 			(FirstHandle->HEIGHT != SecondHandle->HEIGHT)
@@ -2033,9 +1292,9 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 	unsigned int DEPTHSLOT_VECTORINDEX = UINT32_MAX;
 	//Validate the list and find Depth Slot if there is any
 	for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
-		const rtslotdesc_vk* desc = (rtslotdesc_vk*)Descriptions[SlotIndex];
+		const rtslot_create_description_vk* desc = (rtslot_create_description_vk*)Descriptions[SlotIndex];
 		for (unsigned int RTIndex = 0; RTIndex < 2; RTIndex++) {
-			texture_vk* RT = (desc->textures[RTIndex]);
+			TEXTURE_VKOBJ* RT = (desc->textures[RTIndex]);
 			if (!RT) {
 				printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because intended RT isn't found!");
 				return result_tgfx_INVALIDARGUMENT;
@@ -2056,10 +1315,10 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 	}
 	unsigned char COLORRT_COUNT = (DEPTHSLOT_VECTORINDEX != UINT32_MAX) ? DescriptionsCount - 1 : DescriptionsCount;
 
-	unsigned int FBWIDTH = ((rtslotdesc_vk*)Descriptions[0])->textures[0]->WIDTH;
-	unsigned int FBHEIGHT = ((rtslotdesc_vk*)Descriptions[0])->textures[0]->HEIGHT;
+	unsigned int FBWIDTH = ((rtslot_create_description_vk*)Descriptions[0])->textures[0]->WIDTH;
+	unsigned int FBHEIGHT = ((rtslot_create_description_vk*)Descriptions[0])->textures[0]->HEIGHT;
 	for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
-		texture_vk* Texture = ((rtslotdesc_vk*)Descriptions[SlotIndex])->textures[0];
+		TEXTURE_VKOBJ* Texture = ((rtslot_create_description_vk*)Descriptions[SlotIndex])->textures[0];
 		if (Texture->WIDTH != FBWIDTH || Texture->HEIGHT != FBHEIGHT) {
 			printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because one of your slot's texture has wrong resolution!");
 			return result_tgfx_INVALIDARGUMENT;
@@ -2067,7 +1326,7 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 	}
 	
 
-	rtslotset_vk* VKSLOTSET = new rtslotset_vk;
+	RTSLOTSET_VKOBJ* VKSLOTSET = hidden->rtslotsets.create_OBJ();
 	for (unsigned int SlotSetIndex = 0; SlotSetIndex < 2; SlotSetIndex++) {
 		rtslots_vk& PF_SLOTSET = VKSLOTSET->PERFRAME_SLOTSETs[SlotSetIndex];
 
@@ -2076,7 +1335,7 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 		if (DEPTHSLOT_VECTORINDEX != UINT32_MAX) {
 			PF_SLOTSET.DEPTHSTENCIL_SLOT = new depthstencilslot_vk;
 			depthstencilslot_vk* slot = PF_SLOTSET.DEPTHSTENCIL_SLOT;
-			const rtslotdesc_vk* DEPTHDESC = (rtslotdesc_vk*)Descriptions[DEPTHSLOT_VECTORINDEX];
+			const rtslot_create_description_vk* DEPTHDESC = (rtslot_create_description_vk*)Descriptions[DEPTHSLOT_VECTORINDEX];
 			slot->CLEAR_COLOR = glm::vec2(DEPTHDESC->clear_value.x, DEPTHDESC->clear_value.y);
 			slot->DEPTH_OPTYPE = DEPTHDESC->optype;
 			slot->RT = (DEPTHDESC->textures[SlotSetIndex]);
@@ -2088,8 +1347,8 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 		for (unsigned int i = 0; i < DescriptionsCount; i++) {
 			if (i == DEPTHSLOT_VECTORINDEX) { continue; }
 			unsigned int slotindex = ((i > DEPTHSLOT_VECTORINDEX) ? (i - 1) : (i));
-			const rtslotdesc_vk* desc = (rtslotdesc_vk*)Descriptions[i];
-			texture_vk* RT = desc->textures[SlotSetIndex];
+			const rtslot_create_description_vk* desc = (rtslot_create_description_vk*)Descriptions[i];
+			TEXTURE_VKOBJ* RT = desc->textures[SlotSetIndex];
 			colorslot_vk& SLOT = PF_SLOTSET.COLOR_SLOTs[slotindex];
 			SLOT.RT_OPERATIONTYPE = desc->optype;
 			SLOT.LOADSTATE = desc->loadtype;
@@ -2098,23 +1357,19 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 			SLOT.CLEAR_COLOR = glm::vec4(desc->clear_value.x, desc->clear_value.y, desc->clear_value.z, desc->clear_value.w);
 		}
 
-
+		VkImageView* imageviews = (VkImageView*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, (PF_SLOTSET.COLORSLOTs_COUNT + 1) * sizeof(VkImageView));
 		for (unsigned int i = 0; i < PF_SLOTSET.COLORSLOTs_COUNT; i++) {
-			texture_vk* VKTexture = PF_SLOTSET.COLOR_SLOTs[i].RT;
-			if (!VKTexture->ImageView) {
-				printer(result_tgfx_FAIL, "One of your RTs doesn't have a VkImageView! You can't use such a texture as RT. Generally this case happens when you forgot to specify your swapchain texture's usage (while creating a window).");
-				return result_tgfx_FAIL;
-			}
-			VKSLOTSET->ImageViews[SlotSetIndex].push_back(VKTexture->ImageView);
+			TEXTURE_VKOBJ* VKTexture = PF_SLOTSET.COLOR_SLOTs[i].RT;
+			imageviews[i] = VKTexture->ImageView;
 		}
 		if (PF_SLOTSET.DEPTHSTENCIL_SLOT) {
-			VKSLOTSET->ImageViews[SlotSetIndex].push_back(PF_SLOTSET.DEPTHSTENCIL_SLOT->RT->ImageView);
+			imageviews[PF_SLOTSET.COLORSLOTs_COUNT] = PF_SLOTSET.DEPTHSTENCIL_SLOT->RT->ImageView;
 		}
 		
 
 		VkFramebufferCreateInfo& fb_ci = VKSLOTSET->FB_ci[SlotSetIndex];
-		fb_ci.attachmentCount = VKSLOTSET->ImageViews[SlotSetIndex].size();
-		fb_ci.pAttachments = VKSLOTSET->ImageViews[SlotSetIndex].data();
+		fb_ci.attachmentCount = PF_SLOTSET.COLORSLOTs_COUNT + ((PF_SLOTSET.DEPTHSTENCIL_SLOT) ? 1 : 0);
+		fb_ci.pAttachments = imageviews;
 		fb_ci.flags = 0;
 		fb_ci.height = FBHEIGHT;
 		fb_ci.width = FBWIDTH;
@@ -2124,8 +1379,8 @@ result_tgfx Create_RTSlotset (rtslotdescription_tgfx_listhandle Descriptions, rt
 		fb_ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	}
 
-	hidden->rtslotsets.push_back(VKSLOTSET);
-	*RTSlotSetHandle = (rtslotset_tgfx_handle)VKSLOTSET;
+	VKOBJHANDLE handle = hidden->rtslotsets.returnHANDLEfromOBJ(VKSLOTSET);
+	*RTSlotSetHandle = *(rtslotset_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 void  Delete_RTSlotSet (rtslotset_tgfx_handle RTSlotSetHandle){}
@@ -2138,21 +1393,20 @@ result_tgfx Inherite_RTSlotSet (rtslotusage_tgfx_listhandle DescriptionsGFX, rts
 		printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because Handle is invalid!");
 		return result_tgfx_INVALIDARGUMENT;
 	}
-	rtslotset_vk* BaseSet = (rtslotset_vk*)RTSlotSetHandle;
-	irtslotset_vk* InheritedSet = new irtslotset_vk;
-	InheritedSet->BASESLOTSET = BaseSet;
-	rtslotusage_vk** Descriptions = (rtslotusage_vk**)DescriptionsGFX;
+	RTSLOTSET_VKOBJ* BaseSet = hidden->rtslotsets.getOBJfromHANDLE(*(VKOBJHANDLE*)&RTSlotSetHandle);
+	IRTSLOTSET_VKOBJ InheritedSet;
+	InheritedSet.BASESLOTSET = hidden->rtslotsets.getINDEXbyOBJ(BaseSet);
+	rtslot_inheritance_descripton_vk** Descriptions = (rtslot_inheritance_descripton_vk**)DescriptionsGFX;
 
 	//Find Depth/Stencil Slots and count Color Slots
 	bool DEPTH_FOUND = false;
 	unsigned char COLORSLOT_COUNT = 0, DEPTHDESC_VECINDEX = 0;
 	TGFXLISTCOUNT(core_tgfx_main, Descriptions, DESCCOUNT);
 	for (unsigned char i = 0; i < DESCCOUNT; i++) {
-		const rtslotusage_vk* DESC = Descriptions[i];
+		const rtslot_inheritance_descripton_vk* DESC = Descriptions[i];
 		if (DESC->IS_DEPTH) {
 			if (DEPTH_FOUND) {
 				printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because there are two depth buffers in the description, which is not supported!");
-				delete InheritedSet;
 				return result_tgfx_INVALIDARGUMENT;
 			}
 			DEPTH_FOUND = true;
@@ -2162,27 +1416,25 @@ result_tgfx Inherite_RTSlotSet (rtslotusage_tgfx_listhandle DescriptionsGFX, rts
 				)
 			{
 				printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because you can't use a Read-Only DepthSlot with Write Access in a Inherited Set!");
-				delete InheritedSet;
 				return result_tgfx_INVALIDARGUMENT;
 			}
-			InheritedSet->DEPTH_OPTYPE = DESC->OPTYPE;
-			InheritedSet->STENCIL_OPTYPE = DESC->OPTYPESTENCIL;
+			InheritedSet.DEPTH_OPTYPE = DESC->OPTYPE;
+			InheritedSet.STENCIL_OPTYPE = DESC->OPTYPESTENCIL;
 		}
 		else {
 			COLORSLOT_COUNT++;
 		}
 	}
 	if (!DEPTH_FOUND) {
-		InheritedSet->DEPTH_OPTYPE = operationtype_tgfx_UNUSED;
+		InheritedSet.DEPTH_OPTYPE = operationtype_tgfx_UNUSED;
 	}
 	if (COLORSLOT_COUNT != BaseSet->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT) {
 		printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because BaseSet's Color Slot count doesn't match given Descriptions's one!");
-		delete InheritedSet;
 		return result_tgfx_INVALIDARGUMENT;
 	}
 
 
-	InheritedSet->COLOR_OPTYPEs = new operationtype_tgfx[COLORSLOT_COUNT];
+	InheritedSet.COLOR_OPTYPEs = new operationtype_tgfx[COLORSLOT_COUNT];
 	//Set OPTYPEs of inherited slotset
 	for (unsigned int i = 0; i < COLORSLOT_COUNT; i++) {
 		if (i == DEPTHDESC_VECINDEX) {
@@ -2191,53 +1443,51 @@ result_tgfx Inherite_RTSlotSet (rtslotusage_tgfx_listhandle DescriptionsGFX, rts
 		unsigned char slotindex = ((i > DEPTHDESC_VECINDEX) ? (i - 1) : i);
 		
 		//FIX: LoadType isn't supported natively while changing subpass, it may be supported by adding a VkCmdPipelineBarrier but don't want to bother with it for now!
-		InheritedSet->COLOR_OPTYPEs[slotindex] = Descriptions[i]->OPTYPE;
+		InheritedSet.COLOR_OPTYPEs[slotindex] = Descriptions[i]->OPTYPE;
 	}
 
-	*InheritedSlotSetHandle = (inheritedrtslotset_tgfx_handle)InheritedSet;
-	hidden->irtslotsets.push_back(InheritedSet);
+	IRTSLOTSET_VKOBJ* finalobj = hidden->irtslotsets.create_OBJ();
+	*finalobj = InheritedSet;
+	VKOBJHANDLE handle = hidden->irtslotsets.returnHANDLEfromOBJ(finalobj);
+	*InheritedSlotSetHandle = *(inheritedrtslotset_tgfx_handle*)&handle;
 	return result_tgfx_SUCCESS;
 }
 void  Delete_InheritedRTSlotSet (inheritedrtslotset_tgfx_handle InheritedRTSlotSetHandle){}
 
+VK_LINEAR_OBJARRAY<INDEXBUFFER_VKOBJ>& gpudatamanager_public::GETIB_ARRAY() { return hidden->indexbuffers; }
+VK_LINEAR_OBJARRAY<VERTEXBUFFER_VKOBJ, 1 << 24>& gpudatamanager_public::GETVB_ARRAY() { return hidden->vertexbuffers; }
+VK_LINEAR_OBJARRAY<RTSLOTSET_VKOBJ, 1024>& gpudatamanager_public::GETRTSLOTSET_ARRAY() { return hidden->rtslotsets; }
+VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, 1024>& gpudatamanager_public::GETIRTSLOTSET_ARRAY() { return hidden->irtslotsets; }
+VK_LINEAR_OBJARRAY<COMPUTETYPE_VKOBJ>& gpudatamanager_public::GETCOMPUTETYPE_ARRAY() { return hidden->computetypes; }
+VK_LINEAR_OBJARRAY<COMPUTEINST_VKOBJ>& gpudatamanager_public::GETCOMPUTEINST_ARRAY() { return hidden->computeinstances; }
+VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, 1 << 24>& gpudatamanager_public::GETTEXTURES_ARRAY() { return hidden->textures; }
+VK_LINEAR_OBJARRAY<GRAPHICSPIPELINETYPE_VKOBJ, 1 << 24>& gpudatamanager_public::GETGRAPHICSPIPETYPE_ARRAY() { return hidden->graphicspipelinetypes; }
+VK_LINEAR_OBJARRAY<GRAPHICSPIPELINEINST_VKOBJ, 1 << 24>& gpudatamanager_public::GETGRAPHICSPIPEINST_ARRAY() { return hidden->graphicspipelineinstances; }
+VK_LINEAR_OBJARRAY<GLOBALSSBO_VKOBJ>& gpudatamanager_public::GETGLOBALSSBO_ARRAY() { return hidden->globalbuffers; }
+VK_LINEAR_OBJARRAY<DESCSET_VKOBJ, 1 << 16>& gpudatamanager_public::GETDESCSET_ARRAY() { return hidden->descsets; }
 inline void set_functionpointers() {
 	core_tgfx_main->contentmanager->Change_RTSlotTexture = Change_RTSlotTexture;
 	core_tgfx_main->contentmanager->Compile_ShaderSource = Compile_ShaderSource;
+	core_tgfx_main->contentmanager->Create_BindingTable = Create_BindingTable;
 	core_tgfx_main->contentmanager->Create_ComputeInstance = Create_ComputeInstance;
 	core_tgfx_main->contentmanager->Create_ComputeType = Create_ComputeType;
 	core_tgfx_main->contentmanager->Create_GlobalBuffer = Create_GlobalBuffer;
 	core_tgfx_main->contentmanager->Create_IndexBuffer = Create_IndexBuffer;
 	core_tgfx_main->contentmanager->Create_MaterialInst = Create_MaterialInst;
 	core_tgfx_main->contentmanager->Create_RTSlotset = Create_RTSlotset;
-	core_tgfx_main->contentmanager->Create_SamplingType = Create_SamplingType;
-	core_tgfx_main->contentmanager->Create_StagingBuffer = Create_StagingBuffer;
+	core_tgfx_main->contentmanager->Create_Sampler = Create_SamplingType;
 	core_tgfx_main->contentmanager->Create_Texture = Create_Texture;
 	core_tgfx_main->contentmanager->Create_VertexAttributeLayout = Create_VertexAttributeLayout;
 	core_tgfx_main->contentmanager->Create_VertexBuffer = Create_VertexBuffer;
-	core_tgfx_main->contentmanager->Delete_ComputeShaderInstance = Delete_ComputeShaderInstance;
-	core_tgfx_main->contentmanager->Delete_ComputeShaderType = Delete_ComputeShaderType;
 	core_tgfx_main->contentmanager->Delete_InheritedRTSlotSet = Delete_InheritedRTSlotSet;
 	core_tgfx_main->contentmanager->Delete_MaterialInst = Delete_MaterialInst;
 	core_tgfx_main->contentmanager->Delete_MaterialType = Delete_MaterialType;
 	core_tgfx_main->contentmanager->Delete_RTSlotSet = Delete_RTSlotSet;
 	core_tgfx_main->contentmanager->Delete_ShaderSource = Delete_ShaderSource;
-	core_tgfx_main->contentmanager->Delete_StagingBuffer = Delete_StagingBuffer;
-	core_tgfx_main->contentmanager->Delete_Texture = Delete_Texture;
 	core_tgfx_main->contentmanager->Delete_VertexAttributeLayout = Delete_VertexAttributeLayout;
 	core_tgfx_main->contentmanager->Destroy_AllResources = Destroy_AllResources;
 	core_tgfx_main->contentmanager->Inherite_RTSlotSet = Inherite_RTSlotSet;
 	core_tgfx_main->contentmanager->Link_MaterialType = Link_MaterialType;
-	core_tgfx_main->contentmanager->SetComputeInst_Buffer = SetComputeInst_Buffer;
-	core_tgfx_main->contentmanager->SetComputeInst_Texture = SetComputeInst_Texture;
-	core_tgfx_main->contentmanager->SetComputeType_Buffer = SetComputeType_Buffer;
-	core_tgfx_main->contentmanager->SetComputeType_Texture = SetComputeType_Texture;
-	core_tgfx_main->contentmanager->SetGlobalShaderInput_Buffer = SetGlobalShaderInput_Buffer;
-	core_tgfx_main->contentmanager->SetGlobalShaderInput_Texture = SetGlobalShaderInput_Texture;
-	core_tgfx_main->contentmanager->SetMaterialInst_Buffer = SetMaterialInst_Buffer;
-	core_tgfx_main->contentmanager->SetMaterialInst_Texture = SetMaterialInst_Texture;
-	core_tgfx_main->contentmanager->SetMaterialType_Buffer = SetMaterialType_Buffer;
-	core_tgfx_main->contentmanager->SetMaterialType_Texture = SetMaterialType_Texture;
-	core_tgfx_main->contentmanager->Unload_GlobalBuffer = Unload_GlobalBuffer;
 	core_tgfx_main->contentmanager->Unload_IndexBuffer = Unload_IndexBuffer;
 	core_tgfx_main->contentmanager->Unload_VertexBuffer = Unload_VertexBuffer;
 	core_tgfx_main->contentmanager->Upload_Texture = Upload_Texture;
@@ -2249,13 +1499,6 @@ extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 	hidden = contentmanager->hidden;
 
 	set_functionpointers();
-
-
-
-	hidden->UnboundDescSetImageCount = 0;
-	hidden->UnboundDescSetSamplerCount = 0;
-	hidden->UnboundDescSetSBufferCount = 0;
-	hidden->UnboundDescSetUBufferCount = 0;
 
 
 	//Start glslang
@@ -2369,278 +1612,30 @@ extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 	}
 
 
-	//Material Related Descriptor Pool Creation
-	if(true) {
-		VkDescriptorPoolCreateInfo dp_ci = {};
-		VkDescriptorPoolSize SIZEs[4];
-		SIZEs[0].descriptorCount = Find_MeaningfulDescriptorPoolSize(info->MaxSumMaterial_ImageTexture, desctype_vk::IMAGE);
-		SIZEs[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		SIZEs[1].descriptorCount = Find_MeaningfulDescriptorPoolSize(info->MaxSumMaterial_StorageBuffer, desctype_vk::SBUFFER);
-		SIZEs[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		SIZEs[2].descriptorCount = Find_MeaningfulDescriptorPoolSize(info->MaxSumMaterial_UniformBuffer, desctype_vk::UBUFFER);
-		SIZEs[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		SIZEs[3].descriptorCount = Find_MeaningfulDescriptorPoolSize(info->MaxSumMaterial_SampledTexture, desctype_vk::SAMPLER);
-		SIZEs[3].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		dp_ci.maxSets = info->MaxMaterialCount;
-		dp_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-		//If descriptor indexing is supported, global descriptor set is only updated (not freed)
-		if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-			dp_ci.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-		}
-		dp_ci.pNext = nullptr;
-		dp_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 
-		dp_ci.poolSizeCount = 4;
-		dp_ci.pPoolSizes = SIZEs;
-		if (vkCreateDescriptorPool(rendergpu->LOGICALDEVICE(), &dp_ci, nullptr, &hidden->MaterialRelated_DescPool.pool) != VK_SUCCESS) {
-			printer(result_tgfx_FAIL, "Material Related Descriptor Pool Creation has failed! So GFXContentManager system initialization has failed!");
-			return;
-		}
+	//Create Descriptor Pools
+	for (unsigned int DescTypeID = 0; DescTypeID < VKCONST_DYNAMICDESCRIPTORTYPESCOUNT; DescTypeID++) {
+		VkDescriptorPoolSize size;
+		size.descriptorCount = info->MAXDESCCOUNTs[DescTypeID];
+		size.type = Find_VkDescType_byVKCONST_DESCSETID(DescTypeID);
 
-		hidden->MaterialRelated_DescPool.REMAINING_IMAGE.store(info->MaxSumMaterial_ImageTexture);
-		hidden->MaterialRelated_DescPool.REMAINING_SAMPLER.store(info->MaxSumMaterial_SampledTexture);
-		hidden->MaterialRelated_DescPool.REMAINING_SBUFFER.store(info->MaxSumMaterial_StorageBuffer);
-		hidden->MaterialRelated_DescPool.REMAINING_UBUFFER.store(info->MaxSumMaterial_UniformBuffer);
-		hidden->MaterialRelated_DescPool.REMAINING_SET.store(info->MaxMaterialCount);
-	}
+		if (!size.descriptorCount) { break; }
 
+		VkDescriptorPoolCreateInfo descpool_ci = {};
+		descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		descpool_ci.maxSets = info->MAXDESCSETCOUNT;
+		descpool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+		descpool_ci.pPoolSizes = &size;
+		descpool_ci.poolSizeCount = 1;
+		descpool_ci.pNext = nullptr;
 
-	//Create Descriptor Pool and Descriptor Set Layout for Global Shader Inputs
-	if(true) {
-		unsigned int UBUFFER_COUNT = info->GlobalShaderInput_UniformBufferCount, SBUFFER_COUNT = info->GlobalShaderInput_StorageBufferCount,
-			SAMPLER_COUNT = info->GlobalShaderInput_SampledTextureCount, IMAGE_COUNT = info->GlobalShaderInput_ImageTextureCount;
-
-		//Create Descriptor Pool
+		for(unsigned int PoolID = 0; PoolID < VKCONST_DESCPOOLCOUNT_PERDESCTYPE; PoolID++)
 		{
-			//Descriptor Pool and Descriptor Set creation
-			//Create a descriptor pool that has 2 times of sum of counts above!
-			std::vector<VkDescriptorPoolSize> poolsizes;
-			if (UBUFFER_COUNT > 0) {
-				VkDescriptorPoolSize UDescCount;
-				UDescCount.descriptorCount = UBUFFER_COUNT * 2;
-				UDescCount.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				poolsizes.push_back(UDescCount);
-			}
-			if (SBUFFER_COUNT > 0) {
-				VkDescriptorPoolSize SDescCount;
-				SDescCount.descriptorCount = SBUFFER_COUNT * 2;
-				SDescCount.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				poolsizes.push_back(SDescCount);
-			}
-			if (SAMPLER_COUNT > 0) {
-				VkDescriptorPoolSize SampledCount;
-				SampledCount.descriptorCount = SAMPLER_COUNT * 2;
-				SampledCount.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				poolsizes.push_back(SampledCount);
-			}
-			if (IMAGE_COUNT > 0) {
-				VkDescriptorPoolSize ImageCount;
-				ImageCount.descriptorCount = IMAGE_COUNT * 2;
-				ImageCount.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				poolsizes.push_back(ImageCount);
-			}
-
-			if (!poolsizes.size()) {
-				VkDescriptorPoolSize defaultsamplersize;
-				defaultsamplersize.descriptorCount = 1;
-				defaultsamplersize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				poolsizes.push_back(defaultsamplersize);
-
-				VkDescriptorPoolSize defaultubuffersize;
-				defaultubuffersize.descriptorCount = 1;
-				defaultubuffersize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				poolsizes.push_back(defaultubuffersize);
-			}
-
-			VkDescriptorPoolCreateInfo descpool_ci = {};
-			descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			descpool_ci.maxSets = 4;
-			descpool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-			if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-				descpool_ci.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-			}
-			descpool_ci.pPoolSizes = poolsizes.data();
-			descpool_ci.poolSizeCount = poolsizes.size();
-			descpool_ci.pNext = nullptr;
-			if (vkCreateDescriptorPool(rendergpu->LOGICALDEVICE(), &descpool_ci, nullptr, &hidden->GlobalShaderInputs_DescPool) != VK_SUCCESS) {
-				printer(result_tgfx_FAIL, "Vulkan Global Descriptor Pool Creation has failed!");
+			if (vkCreateDescriptorPool(rendergpu->LOGICALDEVICE(), &descpool_ci, nullptr, &hidden->ALL_DESCPOOLS[DescTypeID].POOLs[PoolID]) != VK_SUCCESS) {
+				printer(result_tgfx_FAIL, "Vulkan Global Descriptor Pool creation has failed! You possibly exceeded GPU limits.");
 			}
 		}
-
-
-		//Create Global Buffer Descriptor Set Layout
-		VkDescriptorSetLayoutBinding BufferBinding[2];
-		{
-			BufferBinding[0].binding = 0;
-			BufferBinding[0].pImmutableSamplers = nullptr;
-			BufferBinding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-
-			BufferBinding[1].binding = 1;
-			BufferBinding[1].pImmutableSamplers = nullptr;
-			BufferBinding[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-
-			if (info->isUniformBuffer_Index1) {
-				BufferBinding[0].descriptorCount = SBUFFER_COUNT;
-				BufferBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				BufferBinding[1].descriptorCount = UBUFFER_COUNT;
-				BufferBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			}
-			else {
-				BufferBinding[0].descriptorCount = UBUFFER_COUNT;
-				BufferBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				BufferBinding[1].descriptorCount = SBUFFER_COUNT;
-				BufferBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-			}
-
-			VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
-			VkDescriptorSetLayoutBindingFlagsCreateInfo descindexing_ci = {};
-			VkDescriptorBindingFlags ext_flags[2] = { VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT ,
-			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
-			if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-				descindexing_ci.bindingCount = 2;
-				descindexing_ci.pBindingFlags = ext_flags;
-				descindexing_ci.pNext = nullptr;
-				descindexing_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-				DescSetLayout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-				DescSetLayout_ci.pNext = &descindexing_ci;
-			}
-			DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-			DescSetLayout_ci.bindingCount = 2;
-			DescSetLayout_ci.pBindings = BufferBinding;
-			if (vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &DescSetLayout_ci, nullptr, &hidden->GlobalBuffers_DescSet.Layout) != VK_SUCCESS) {
-				printer(result_tgfx_FAIL, "Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
-				return;
-			}
-		}
-
-		//Create Global Texture Descriptor Set Layout
-		VkDescriptorSetLayoutBinding TextureBinding[2];
-		{
-			TextureBinding[0].binding = 0;
-			TextureBinding[0].pImmutableSamplers = nullptr;
-			TextureBinding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-
-			TextureBinding[1].binding = 1;
-			TextureBinding[1].pImmutableSamplers = nullptr;
-			TextureBinding[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-
-			if (info->isSampledTexture_Index1) {
-				TextureBinding[0].descriptorCount = IMAGE_COUNT;
-				TextureBinding[1].descriptorCount = SAMPLER_COUNT;
-				TextureBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				TextureBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			}
-			else {
-				TextureBinding[0].descriptorCount = SAMPLER_COUNT;
-				TextureBinding[1].descriptorCount = IMAGE_COUNT;
-				TextureBinding[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				TextureBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			}
-
-
-			VkDescriptorSetLayoutCreateInfo DescSetLayout_ci = {};
-			VkDescriptorSetLayoutBindingFlagsCreateInfo descindexing_ci = {};
-			VkDescriptorBindingFlags ext_flags[2] = { VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT ,
-			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
-			if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-				descindexing_ci.bindingCount = 2;
-				descindexing_ci.pBindingFlags = ext_flags;
-				descindexing_ci.pNext = nullptr;
-				descindexing_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-				DescSetLayout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-				DescSetLayout_ci.pNext = &descindexing_ci;
-			}
-			DescSetLayout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-			DescSetLayout_ci.bindingCount = 2;
-			DescSetLayout_ci.pBindings = TextureBinding;
-			if (vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &DescSetLayout_ci, nullptr, &hidden->GlobalTextures_DescSet.Layout) != VK_SUCCESS) {
-				printer(result_tgfx_FAIL, "Create_RenderGraphResources() has failed at vkCreateDescriptorSetLayout()!");
-				return;
-			}
-		}
-
-		//NOTE: Descriptor Sets are created two times because we don't want to change descriptors while they're being used by GPU
-
-		//Create Global Buffer Descriptor Sets
-		{
-			VkDescriptorSetVariableDescriptorCountAllocateInfo variabledescscount_info = {};
-			VkDescriptorSetAllocateInfo descset_ai = {};
-			uint32_t UnboundMaxBufferDescCount[2] = { BufferBinding[1].descriptorCount, BufferBinding[1].descriptorCount };
-			if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-				variabledescscount_info.descriptorSetCount = 2;
-				variabledescscount_info.pDescriptorCounts = UnboundMaxBufferDescCount;
-				variabledescscount_info.pNext = nullptr;
-				variabledescscount_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
-				descset_ai.descriptorPool = hidden->GlobalShaderInputs_DescPool;
-			}
-			descset_ai.pNext = &variabledescscount_info;
-			descset_ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			descset_ai.descriptorSetCount = 2;
-			VkDescriptorSetLayout SetLayouts[2]{ hidden->GlobalBuffers_DescSet.Layout, hidden->GlobalBuffers_DescSet.Layout };
-			descset_ai.pSetLayouts = SetLayouts;
-			VkDescriptorSet Sets[2];
-			if (vkAllocateDescriptorSets(rendergpu->LOGICALDEVICE(), &descset_ai, Sets) != VK_SUCCESS) {
-				printer(result_tgfx_FAIL, "CreateandUpdate_GlobalDescSet() has failed at vkAllocateDescriptorSets()!");
-			}
-			hidden->UnboundGlobalBufferDescSet = Sets[0];
-			hidden->GlobalBuffers_DescSet.Set = Sets[1];
-		}
-
-		//Create Global Texture Descriptor Sets
-		{
-			VkDescriptorSetVariableDescriptorCountAllocateInfo variabledescscount_info = {};
-			VkDescriptorSetAllocateInfo descset_ai = {};
-			uint32_t MaxUnboundTextureDescCount[2]{ TextureBinding[1].descriptorCount, TextureBinding[1].descriptorCount };
-			if (rendergpu->EXTMANAGER()->ISSUPPORTED_DESCINDEXING()) {
-				variabledescscount_info.descriptorSetCount = 2;
-				variabledescscount_info.pDescriptorCounts = MaxUnboundTextureDescCount;
-				variabledescscount_info.pNext = nullptr;
-				variabledescscount_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
-				descset_ai.descriptorPool = hidden->GlobalShaderInputs_DescPool;
-			}
-			descset_ai.pNext = &variabledescscount_info;
-			descset_ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			descset_ai.descriptorSetCount = 2;
-			VkDescriptorSetLayout SetLayouts[2]{ hidden->GlobalTextures_DescSet.Layout, hidden->GlobalTextures_DescSet.Layout };
-			descset_ai.pSetLayouts = SetLayouts;
-			VkDescriptorSet Sets[2];
-			if (vkAllocateDescriptorSets(rendergpu->LOGICALDEVICE(), &descset_ai, Sets) != VK_SUCCESS) {
-				printer(result_tgfx_FAIL, "CreateandUpdate_GlobalDescSet() has failed at vkAllocateDescriptorSets()!");
-			}
-			hidden->UnboundGlobalTextureDescSet = Sets[0];
-			hidden->GlobalTextures_DescSet.Set = Sets[1];
-		}
-
-		//Fill Global Buffer Descriptor Set
-		{
-			descriptor_vk* BufferFinalDescs = new descriptor_vk[2];
-			BufferFinalDescs[0].ElementCount = BufferBinding[0].descriptorCount;
-			BufferFinalDescs[0].Elements = new descelement_buffer_vk[BufferFinalDescs[0].ElementCount];
-			BufferFinalDescs[0].Type = info->isUniformBuffer_Index1 ? desctype_vk::SBUFFER : desctype_vk::UBUFFER;
-			BufferFinalDescs[1].ElementCount = BufferBinding[1].descriptorCount;
-			BufferFinalDescs[1].Elements = new descelement_buffer_vk[BufferFinalDescs[1].ElementCount];
-			BufferFinalDescs[1].Type = info->isUniformBuffer_Index1 ? desctype_vk::UBUFFER : desctype_vk::SBUFFER;;
-
-			hidden->GlobalBuffers_DescSet.DescCount = UBUFFER_COUNT + SBUFFER_COUNT;
-			hidden->GlobalBuffers_DescSet.DescUBuffersCount = 1;
-			hidden->GlobalBuffers_DescSet.DescSBuffersCount = 1;
-			hidden->GlobalBuffers_DescSet.Descs = BufferFinalDescs;
-		}
-
-		//Fill Global Texture Descriptor Set
-		{
-			descriptor_vk* TextureFinalDescs = new descriptor_vk[2];
-			TextureFinalDescs[0].ElementCount = TextureBinding[0].descriptorCount;
-			TextureFinalDescs[0].Elements = new descelement_image_vk[TextureFinalDescs[0].ElementCount];
-			TextureFinalDescs[0].Type = info->isSampledTexture_Index1 ? desctype_vk::IMAGE : desctype_vk::SAMPLER;
-			TextureFinalDescs[1].ElementCount = TextureBinding[1].descriptorCount;
-			TextureFinalDescs[1].Elements = new descelement_image_vk[TextureFinalDescs[1].ElementCount];
-			TextureFinalDescs[1].Type = info->isSampledTexture_Index1 ? desctype_vk::SAMPLER : desctype_vk::IMAGE;
-
-			hidden->GlobalTextures_DescSet.DescCount = IMAGE_COUNT + SAMPLER_COUNT;
-			hidden->GlobalTextures_DescSet.DescUBuffersCount = 1;
-			hidden->GlobalTextures_DescSet.DescSBuffersCount = 1;
-			hidden->GlobalTextures_DescSet.Descs = TextureFinalDescs;
-		}
+		hidden->ALL_DESCPOOLS[DescTypeID].REMAINING_DESCs.store(info->MAXDESCCOUNTs[DescTypeID]);
+		hidden->ALL_DESCPOOLS[DescTypeID].REMAINING_SETs.store(info->MAXDESCSETCOUNT);
 	}
 }

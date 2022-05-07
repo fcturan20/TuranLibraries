@@ -34,11 +34,17 @@ struct queuesys_data {
 	std::vector<queuefam_vk*> queuefams;
 };
 
-void queuesys_vk::analize_queues(gpu_public* vkgpu) {
+void queuesys_vk::analize_queues(GPU_VKOBJ* vkgpu) {
+	static constexpr unsigned char max_propertiescount = 10;
 	bool is_presentationfound = false;
 	vkgpu->queuefams = new queuefam_vk * [vkgpu->QUEUEFAMSCOUNT()];
+	VkQueueFamilyProperties properties[max_propertiescount]; uint32_t dontuse;
+#ifdef VULKAN_DEBUGGING
+	if (max_propertiescount < vkgpu->QUEUEFAMSCOUNT()) { printer(result_tgfx_FAIL, "VK backend's queue analization process should support more queue families! Please report this!"); }
+#endif
+	vkGetPhysicalDeviceQueueFamilyProperties(vkgpu->PHYSICALDEVICE(), &dontuse, properties);
 	for (unsigned int queuefamily_index = 0; queuefamily_index < vkgpu->QUEUEFAMSCOUNT(); queuefamily_index++) {
-		VkQueueFamilyProperties* QueueFamily = &vkgpu->QUEUEFAMILYPROPERTIES()[queuefamily_index];
+		VkQueueFamilyProperties* QueueFamily = &properties[queuefamily_index];
 		queuefam_vk* queuefam = new queuefam_vk;
 
 
@@ -91,7 +97,7 @@ void queuesys_vk::analize_queues(gpu_public* vkgpu) {
 
 
 //While creating VK Logical Device, we need which queues to create. Get that info from here.
-std::vector<VkDeviceQueueCreateInfo> queuesys_vk::get_queue_cis(gpu_public* vkgpu) {
+std::vector<VkDeviceQueueCreateInfo> queuesys_vk::get_queue_cis(GPU_VKOBJ* vkgpu) {
 	std::vector<VkDeviceQueueCreateInfo> QueueCreationInfos(0);
 	//Queue Creation Processes
 	for (unsigned int QueueIndex = 0; QueueIndex < vkgpu->QUEUEFAMSCOUNT(); QueueIndex++) {
@@ -114,14 +120,12 @@ std::vector<VkDeviceQueueCreateInfo> queuesys_vk::get_queue_cis(gpu_public* vkgp
 }
 
 
-void queuesys_vk::get_queue_objects(gpu_public* vkgpu) {
+void queuesys_vk::get_queue_objects(GPU_VKOBJ* vkgpu) {
 	rendergpu->AllQueueFamilies = new uint32_t[rendergpu->QUEUEFAMSCOUNT()];
 	for (unsigned int i = 0; i < rendergpu->QUEUEFAMSCOUNT(); i++) {
-		printer(result_tgfx_SUCCESS, ("Queue Feature Score: " + std::to_string(rendergpu->queuefams[i]->featurescore)).c_str());
 		for (unsigned int queueindex = 0; queueindex < rendergpu->queuefams[i]->queuecount; queueindex++) {
 			vkGetDeviceQueue(rendergpu->LOGICALDEVICE(), rendergpu->queuefams[i]->queueFamIndex, queueindex, &(rendergpu->queuefams[i]->queues[queueindex].Queue));
 		}
-		printer(result_tgfx_SUCCESS, ("After vkGetDeviceQueue() " + std::to_string(i)).c_str());
 		rendergpu->AllQueueFamilies[i] = rendergpu->queuefams[i]->queueFamIndex;
 	}
 	//Create Command Pool for each Queue Family
@@ -129,7 +133,6 @@ void queuesys_vk::get_queue_objects(gpu_public* vkgpu) {
 		if (!(rendergpu->QUEUEFAMS()[queuefamindex]->supportflag.is_COMPUTEsupported || rendergpu->QUEUEFAMS()[queuefamindex]->supportflag.is_GRAPHICSsupported ||
 			rendergpu->QUEUEFAMS()[queuefamindex]->supportflag.is_TRANSFERsupported)
 			) {
-			printer(result_tgfx_SUCCESS, "VulkanRenderer:Command pool creation for a queue has failed because one of the VkQueues doesn't support neither Graphics, Compute or Transfer. So GFX API didn't create a command pool for it!");
 			continue;
 		}
 		for (unsigned char i = 0; i < 2; i++) {
@@ -144,9 +147,8 @@ void queuesys_vk::get_queue_objects(gpu_public* vkgpu) {
 			}
 		}
 	}
-	printer(result_tgfx_SUCCESS, "After vkGetDeviceQueue()");
 }
-uint32_t queuesys_vk::get_queuefam_index(gpu_public* vkgpu, queuefam_vk* fam) {
+uint32_t queuesys_vk::get_queuefam_index(GPU_VKOBJ* vkgpu, queuefam_vk* fam) {
 #ifdef VULKAN_DEBUGGING
 	bool isfound = false;
 	for (unsigned int i = 0; i < vkgpu->QUEUEFAMSCOUNT(); i++) {
@@ -156,7 +158,7 @@ uint32_t queuesys_vk::get_queuefam_index(gpu_public* vkgpu, queuefam_vk* fam) {
 #endif
 	return fam->queueFamIndex;
 }
-queuefam_vk* queuesys_vk::check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR WindowSurface) {
+queuefam_vk* queuesys_vk::check_windowsupport(GPU_VKOBJ* vkgpu, VkSurfaceKHR WindowSurface) {
 	queuefam_vk* supported_queue = nullptr;
 	for (unsigned int i = 0; i < rendergpu->QUEUEFAMSCOUNT(); i++) {
 		VkBool32 Does_Support = 0;
@@ -169,7 +171,7 @@ queuefam_vk* queuesys_vk::check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR Wi
 	}
 	return supported_queue;
 }
-commandbuffer_vk* queuesys_vk::get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex) {
+commandbuffer_vk* queuesys_vk::get_commandbuffer(GPU_VKOBJ* vkgpu, queuefam_vk* family, unsigned char FrameIndex) {
 	commandpool_vk& CP = family->CommandPools[FrameIndex];
 
 	VkCommandBufferAllocateInfo cb_ai = {};
@@ -193,7 +195,7 @@ commandbuffer_vk* queuesys_vk::get_commandbuffer(gpu_public* vkgpu, queuefam_vk*
 VkCommandBuffer queuesys_vk::get_commandbufferobj(commandbuffer_vk* id) {
 	return id->CB;
 }
-fence_idtype_vk queuesys_vk::queueSubmit(gpu_public* vkgpu, queuefam_vk* family, const std::vector<semaphore_idtype_vk>& WaitSemaphores, const std::vector<semaphore_idtype_vk>& SignalSemaphores, const VkCommandBuffer* commandbuffers, const VkPipelineStageFlags* cb_flags, unsigned int CBCount) {
+fence_idtype_vk queuesys_vk::queueSubmit(GPU_VKOBJ* vkgpu, queuefam_vk* family, const std::vector<semaphore_idtype_vk>& WaitSemaphores, const std::vector<semaphore_idtype_vk>& SignalSemaphores, const VkCommandBuffer* commandbuffers, const VkPipelineStageFlags* cb_flags, unsigned int CBCount) {
 	printer(result_tgfx_WARNING, "QueueSystem->queueSubmit() isn't properly implemented. We should keep track of command buffers");
 	fence_vk& fence = fencesys->CreateFence();
 	
@@ -224,11 +226,11 @@ fence_idtype_vk queuesys_vk::queueSubmit(gpu_public* vkgpu, queuefam_vk* family,
 	fence.wait_semaphores = WaitSemaphores;
 	return fence.getID();
 }
-bool queuesys_vk::does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag) {
+bool queuesys_vk::does_queuefamily_support(GPU_VKOBJ* vkgpu, queuefam_vk* family, const queueflag_vk& flag) {
 	printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");
 	return false;
 }
-VkQueue queuesys_vk::get_queue(gpu_public* vkgpu, queuefam_vk* queuefam) {
+VkQueue queuesys_vk::get_queue(GPU_VKOBJ* vkgpu, queuefam_vk* queuefam) {
 	return queuefam->queues[0].Queue;
 }
 extern void Create_QueueSys() {

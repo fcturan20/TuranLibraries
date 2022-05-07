@@ -147,7 +147,7 @@ public:
 		else { TGFXCORE = tgfxsys->api; }
 		//You have to load a backend to use the TGFX system.
 		//There is no data in the base TGFX system if you don't load any backend.
-		result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_D3D12, printf_log_tgfx);
+		result_tgfx result = tgfxsys->api->load_backend(backends_tgfx_VULKAN, printf_log_tgfx);
 		printf("%c", result);
 
 		TGFXCORE = tgfxsys->api;
@@ -177,22 +177,27 @@ public:
 				fastvisiblememtype_id = memtypelist[i].memorytype_id;
 			}
 		}
-		initializationsecondstageinfo_tgfx_handle secondinfo = TGFXHELPER->Create_GFXInitializationSecondStageInfo(gpulist[0], 10, 100, 100, 100, 100, 100, 100, 100, 100, true, true, true, (extension_tgfx_listhandle)TGFXINVALID);
+		initializationsecondstageinfo_tgfx_handle secondinfo = TGFXHELPER->Create_GFXInitializationSecondStageInfo(gpulist[0], 100, 1000, 1000, 1000, 1000, true, (extension_tgfx_listhandle)(&TGFXCORE->INVALIDHANDLE));
 		TGFXCORE->initialize_secondstage(secondinfo);
 		monitor_tgfx_listhandle monitorlist;
 		TGFXCORE->getmonitorlist(&monitorlist);
 		TGFXLISTCOUNT(TGFXCORE, monitorlist, monitorcount);
 		TURANLIBRARY_LOADER::printf_log_tgfx(result_tgfx_SUCCESS, (std::string("Monitor Count: ") + std::to_string(monitorcount)).c_str());
 		textureusageflag_tgfx_handle swapchaintexture_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, true, true, true, false);
-		TGFXCORE->create_window(window_resolution.x, window_resolution.y, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", swapchaintexture_usageflag, nullptr, nullptr, swapchain_textures, &firstwindow);
+		TGFXCORE->create_window(window_resolution.x, window_resolution.y, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", nullptr, nullptr, &firstwindow);
+		texture_tgfx_handle swapchaintextures[3];
+		TGFXCORE->create_swapchain(firstwindow, windowpresentation_tgfx_FIFO, windowcomposition_tgfx_OPAQUE, colorspace_tgfx_sRGB_NONLINEAR, texture_channels_tgfx_BGRA8UNORM, swapchaintexture_usageflag, swapchaintextures);
 	}
 
-	static void ReconstructRenderGraph_Simple(){
+	static void ReconstructRenderGraph_Simple(){/*
 		TGFXRENDERER->Start_RenderGraphConstruction();
 
 
 		//First Copy TP Creation
-		TGFXRENDERER->Create_TransferPass((passwaitdescription_tgfx_listhandle)&TGFXINVALID, transferpasstype_tgfx_COPY, "FirstCopyTP", &framebegincopy_TP);
+		subtransferpassdescription_tgfx_handle subtpdescs[3] = { TGFXHELPER->CreateSubTransferPassDescription((passwaitdescription_tgfx_listhandle)(&TGFXCORE->INVALIDHANDLE), transferpasstype_tgfx_COPY),
+			TGFXHELPER->CreateSubTransferPassDescription((passwaitdescription_tgfx_listhandle)(&TGFXCORE->INVALIDHANDLE), transferpasstype_tgfx_COPY), (subtransferpassdescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
+		subtransferpass_tgfx_handle subtps[2];
+		TGFXRENDERER->Create_TransferPass(subtpdescs, subtps, &framebegincopy_TP);
 
 
 		//First Barrier TP Creation
@@ -236,6 +241,6 @@ public:
 		waitsignaldescription_tgfx_handle wait_for_finaltp_signal = TGFXHELPER->CreateWaitSignal_Transfer(true, true);
 		passwaitdescription_tgfx_handle wait_for_dp[2] = { TGFXHELPER->CreatePassWait_TransferPass(&barrierbeforeswapchain_TP, transferpasstype_tgfx_BARRIER, wait_for_finaltp_signal, false), (passwaitdescription_tgfx_handle)TGFXINVALID };
 		TGFXRENDERER->Create_WindowPass(wait_for_dp, "First WP", &swapchain_windowpass);
-		TGFXRENDERER->Finish_RenderGraphConstruction(sub_dps[0]);
+		TGFXRENDERER->Finish_RenderGraphConstruction(sub_dps[0]);*/
 	}
 };

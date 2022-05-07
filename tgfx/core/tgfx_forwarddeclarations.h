@@ -13,6 +13,7 @@ typedef struct tgfx_transferpass_obj* transferpass_tgfx_handle;
 typedef struct tgfx_windowpass_obj* windowpass_tgfx_handle;
 typedef struct tgfx_subdrawpass_obj* subdrawpass_tgfx_handle;
 typedef struct tgfx_subcomputepass_obj* subcomputepass_tgfx_handle;
+typedef struct tgfx_subtransferpass_obj* subtransferpass_tgfx_handle;
 typedef struct tgfx_rtslotset_obj* rtslotset_tgfx_handle;
 typedef struct tgfx_buffer_obj* buffer_tgfx_handle;
 typedef struct tgfx_samplingtype_obj* samplingtype_tgfx_handle;
@@ -23,6 +24,7 @@ typedef struct tgfx_computeshaderinstance_obj* computeshaderinstance_tgfx_handle
 typedef struct tgfx_rasterpipelinetype_obj* rasterpipelinetype_tgfx_handle;
 typedef struct tgfx_rasterpipelineinstance_obj* rasterpipelineinstance_tgfx_handle;
 typedef struct tgfx_inheritedrtslotset_obj* inheritedrtslotset_tgfx_handle;
+typedef struct tgfx_bindingtable_obj* bindingtable_tgfx_handle;
 
 
 
@@ -33,6 +35,8 @@ typedef struct tgfx_textureusageflag_data* textureusageflag_tgfx_handle;
 typedef struct tgfx_waitsignaldescription_data* waitsignaldescription_tgfx_handle;
 typedef struct tgfx_passwaitdescription_data* passwaitdescription_tgfx_handle;
 typedef struct tgfx_subdrawpassdescription_data* subdrawpassdescription_tgfx_handle;
+typedef struct tgfx_subcomputepassdescription_data* subcomputepassdescription_tgfx_handle;
+typedef struct tgfx_subtransferpassdescription_data* subtransferpassdescription_tgfx_handle;
 typedef struct tgfx_vertexattributedata* vertexattributetgfx_handle;
 typedef struct tgfx_shaderstageflag_data* shaderstageflag_tgfx_handle;
 typedef struct tgfx_rtslotdescription_data* rtslotdescription_tgfx_handle;
@@ -41,8 +45,10 @@ typedef struct tgfx_stencilsettings_data* stencilsettings_tgfx_handle;
 typedef struct tgfx_depthsettings_data* depthsettings_tgfx_handle;
 typedef struct tgfx_memorytype_data* memorytype_tgfx_handle;
 typedef struct tgfx_initializationsecondstageinfo_data* initializationsecondstageinfo_tgfx_handle;
-typedef struct tgfx_shaderinputdescription_data* shaderinputdescription_tgfx_handle;
+typedef struct tgfx_bindingtypeinfo_data* bindingtypeinfo_tgfx_handle;
 typedef struct tgfx_blendinginfo_data* blendinginfo_tgfx_handle;
+typedef struct tgfx_buffereddrawcall* buffereddrawcall_tgfx_handle;
+typedef struct tgfx_buffereddispatchcall* buffereddispatchcall_tgfx_handle;
 
 
             //LISTS
@@ -53,13 +59,18 @@ typedef monitor_tgfx_handle* monitor_tgfx_listhandle;
 typedef gpu_tgfx_handle* gpu_tgfx_listhandle;
 typedef extension_tgfx_handle* extension_tgfx_listhandle;
 typedef subdrawpassdescription_tgfx_handle* subdrawpassdescription_tgfx_listhandle;
+typedef subcomputepassdescription_tgfx_handle* subcomputepassdescription_tgfx_listhandle;
+typedef subtransferpassdescription_tgfx_handle* subtransferpassdescription_tgfx_listhandle;
 typedef rtslotdescription_tgfx_handle* rtslotdescription_tgfx_listhandle;
 typedef rtslotusage_tgfx_handle* rtslotusage_tgfx_listhandle;
 typedef memorytype_tgfx_handle* memorytype_tgfx_listhandle;
 typedef subdrawpass_tgfx_handle* subdrawpass_tgfx_listhandle;
+typedef subcomputepass_tgfx_handle* subcomputepass_tgfx_listhandle;
+typedef subtransferpass_tgfx_handle* subtransferpass_tgfx_listhandle;
 typedef shadersource_tgfx_handle* shadersource_tgfx_listhandle;
-typedef shaderinputdescription_tgfx_handle* shaderinputdescription_tgfx_listhandle;
 typedef blendinginfo_tgfx_handle* blendinginfo_tgfx_listhandle;
+typedef samplingtype_tgfx_handle* samplingtype_tgfx_listhandle;
+typedef bindingtable_tgfx_handle* bindingtable_tgfx_listhandle;
 
 
             //ENUMS
@@ -85,7 +96,8 @@ typedef enum cubeface_tgfx {
     cubeface_tgfx_LEFT,
     cubeface_tgfx_RIGHT,
     cubeface_tgfx_TOP,
-    cubeface_tgfx_BOTTOM
+    cubeface_tgfx_BOTTOM,
+    cubeface_tgfx_ALL
 } cubeface_tgfx;
 
 typedef enum operationtype_tgfx {
@@ -112,13 +124,6 @@ typedef enum depthtest_tgfx {
     depthtest_tgfx_GREATER,
     depthtest_tgfx_GEQUAL
 } depthtest_tgfx;
-
-typedef enum buffertype_tgfx {
-    buffertype_tgfx_STAGING,
-    buffertype_tgfx_VERTEX,
-    buffertype_tgfx_INDEX,
-    buffertype_tgfx_GLOBAL
-} buffertype_tgfx;
 
 typedef enum depthmode_tgfx {
     depthmode_tgfx_READ_WRITE,
@@ -326,6 +331,8 @@ typedef enum transferpasstype_tgfx {
     transferpasstype_tgfx_COPY = 1
 } transferpasstype_tgfx;
 
+//Don't forget that TGFX stores how you access them in shaders
+//So backend'll probably cull some unnecessary transitions
 typedef enum image_access_tgfx {
     image_access_tgfx_RTCOLOR_READONLY = 0,
     image_access_tgfx_RTCOLOR_WRITEONLY = 1,
@@ -389,21 +396,14 @@ typedef enum subdrawpassaccess_tgfx {
 
 
 
-//Appendix "PI" means per material instance, "G" means material type general
-//If there is any PI data type in Material Type, we assume that you're accessing it in shader with MaterialInstance index (Back-end handles that)
-//If there is no title, that means it's modifiable and possibly includes a double buffered implementation in GL back-end
-//CONST title means it can't be changed after the creation
-typedef enum shaderinputtype_tgfx {
-    shaderinputtype_tgfx_UNDEFINED = 0,
-    //DRAWCALL_DESCRIPTOR = 1,
-    shaderinputtype_tgfx_SAMPLER_PI,
-    shaderinputtype_tgfx_SAMPLER_G,
-    shaderinputtype_tgfx_IMAGE_PI,
-    shaderinputtype_tgfx_IMAGE_G,
-    shaderinputtype_tgfx_UBUFFER_PI,
-    shaderinputtype_tgfx_UBUFFER_G,
-    shaderinputtype_tgfx_SBUFFER_PI,
-    shaderinputtype_tgfx_SBUFFER_G
+typedef enum shaderdescriptortype_tgfx {
+    shaderdescriptortype_tgfx_SAMPLER = 0,
+    shaderdescriptortype_tgfx_SAMPLEDTEXTURE,
+    shaderdescriptortype_tgfx_STORAGEIMAGE,
+    shaderdescriptortype_tgfx_BUFFER,
+    //TODO: Extensions will be supported in the future
+    shaderdescriptortype_tgfx_EXT_UNIFORMBUFFER,
+    shaderdescriptortype_tgfx_VKEXT_UNIFORMBLOCK
 } shaderinputtype_tgfx;
 
 typedef enum memoryallocationtype_tgfx {
@@ -414,6 +414,26 @@ typedef enum memoryallocationtype_tgfx {
 } memoryallocationtype_tgfx;
 
 
+typedef enum constantsampler_color {
+    BLACK_ALPHA0 = 0,
+    BLACK_ALPHA1 = 1,
+    WHITE_ALPHA1 = 2
+};
+
+typedef enum colorspace_tgfx {
+    colorspace_tgfx_sRGB_NONLINEAR
+};
+
+typedef enum windowcomposition_tgfx {
+    windowcomposition_tgfx_OPAQUE
+};
+
+typedef enum windowpresentation_tgfx {
+    windowpresentation_tgfx_FIFO,
+    windowpresentation_tgfx_FIFO_RELAXED,
+    windowpresentation_tgfx_IMMEDIATE,
+    windowpresentation_tgfx_MAILBOX
+};
 
             //CALLBACKS
 

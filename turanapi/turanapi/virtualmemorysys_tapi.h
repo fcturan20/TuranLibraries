@@ -10,14 +10,15 @@ typedef struct virtualmemorysys_tapi_d virtualmemorysys_tapi_d;
 
 typedef struct virtualmemorysys_tapi{
     //Reserve address space from virtual memory
-    void* (*virtual_reserve)(unsigned long size);
+    //size is in bytes
+    void* (*virtual_reserve)(unsigned long long size);
     //Initialize the reserved memory with zeros.
-    void (*virtual_commit)(void* reservedmem, unsigned long commitsize);
+    void (*virtual_commit)(void* reservedmem, unsigned long long commitsize);
     //Return back the committed memory to reserved state
     //This will help if you want to catch some bugs that points to memory you just freed.
-    void (*virtual_uncommit)(void* committedmem, unsigned long size);
+    void (*virtual_decommit)(void* committedmem, unsigned long long size);
     //Return allocated address space back to OS
-    void (*virtual_free)(void* ptr, unsigned long size);
+    void (*virtual_free)(void* ptr, unsigned long long size);
     //Get page size of the system
     unsigned int (*get_pagesize)();
     

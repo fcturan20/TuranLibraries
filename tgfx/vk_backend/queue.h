@@ -40,18 +40,18 @@ struct queueflag_vk {
 struct queuesys_vk {
 	queuesys_data* data;
 	//Analize queues to fill gpu description
-	void analize_queues(gpu_public* vkgpu);
+	void analize_queues(GPU_VKOBJ* vkgpu);
 	//While creating VK Logical Device, we need which queues to create. Get that info from here.
-	std::vector<VkDeviceQueueCreateInfo> get_queue_cis(gpu_public* vkgpu);
+	std::vector<VkDeviceQueueCreateInfo> get_queue_cis(GPU_VKOBJ* vkgpu);
 	//Get VkQueue objects from logical device
-	void get_queue_objects(gpu_public* vkgpu);
+	void get_queue_objects(GPU_VKOBJ* vkgpu);
 	//Searches for an available command buffer, if not found creates one
-	commandbuffer_vk* get_commandbuffer(gpu_public* vkgpu, queuefam_vk* family, unsigned char FrameIndex);
+	commandbuffer_vk* get_commandbuffer(GPU_VKOBJ* vkgpu, queuefam_vk* family, unsigned char FrameIndex);
 	VkCommandBuffer get_commandbufferobj(commandbuffer_vk* id);
-	fence_idtype_vk queueSubmit(gpu_public* vkgpu, queuefam_vk* family, const std::vector<semaphore_idtype_vk>& WaitSemaphores, const std::vector<semaphore_idtype_vk>& SignalSemaphores, const VkCommandBuffer* commandbuffers, const VkPipelineStageFlags* cb_flags, unsigned int CBCount);
-	uint32_t get_queuefam_index(gpu_public* vkgpu, queuefam_vk* fam);
-	queuefam_vk* check_windowsupport(gpu_public* vkgpu, VkSurfaceKHR surface);
-	bool does_queuefamily_support(gpu_public* vkgpu, queuefam_vk* family, const queueflag_vk& flag);
+	fence_idtype_vk queueSubmit(GPU_VKOBJ* vkgpu, queuefam_vk* family, const std::vector<semaphore_idtype_vk>& WaitSemaphores, const std::vector<semaphore_idtype_vk>& SignalSemaphores, const VkCommandBuffer* commandbuffers, const VkPipelineStageFlags* cb_flags, unsigned int CBCount);
+	uint32_t get_queuefam_index(GPU_VKOBJ* vkgpu, queuefam_vk* fam);
+	queuefam_vk* check_windowsupport(GPU_VKOBJ* vkgpu, VkSurfaceKHR surface);
+	bool does_queuefamily_support(GPU_VKOBJ* vkgpu, queuefam_vk* family, const queueflag_vk& flag);
 	//Use this for 3rd party libraries (like dear ImGui)
-	VkQueue get_queue(gpu_public* vkgpu, queuefam_vk* queuefam);
+	VkQueue get_queue(GPU_VKOBJ* vkgpu, queuefam_vk* queuefam);
 };

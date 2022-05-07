@@ -2,6 +2,8 @@
 
 RenderGraph is the way to define your GPU side operations. Modern GFX APIs needs proper synchronization between GPU-CPU and RenderGraph is the best system to define them. Every GPU operation (even resource creation, upload etc) needs to start running at the scheduled time for best performance and minimal bug. To achieve that, this system uses *RenderPass*es to abstract GPU operation types and define execution dependencies between them.
 
+TODO DOC: This doc is very old, fix it.
+
 # Table of Contents
 * [Acronyms](#Acronyms)
 * [Summary](#Summary)
@@ -47,7 +49,7 @@ RenderGraph is the way to define your GPU side operations. Modern GFX APIs needs
 
 # Transfer Pass
 -   This is where data transfers happen.
--   You have 4 choices; CPU->GPU Transfer Pass (Upload TP), GPU<->GPU Transfer Pass (Copy TP), GPU->CPU Transfer Pass (Download TP) and GPU Operation ||| GPU Operation Transfer Pass (Barrier TP)
+-   You have 2 choices; CPU<->GPU or GPU<->GPU Transfer Pass (Copy TP) and GPU Operation ||| GPU Operation Transfer Pass (Barrier TP)
 -   TP is typeful. Because it's more data transfers close to each other in API, it's harder to debugging. Also GPU pipelines may differ between types of data transfers, which this seperation may help in future!
 -   Upload TPs use staging buffer for temporary data. When you call Upload_**Buffer(), the data is uploaded to the staging buffer, then is copied to the permanent VRAM location.
 -   For now, Staging buffers are only for data transfers. I want to allow user to divide the buffer for datas that is frequently changed.

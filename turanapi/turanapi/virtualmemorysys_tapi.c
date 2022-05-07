@@ -6,23 +6,23 @@
 #include "windows.h"
 
 //Reserve address space from virtual memory
-void* virtual_reserve(unsigned long size){
+void* virtual_reserve(unsigned long long size){
     return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_READWRITE);
 }
 
 //Initialize the reserved memory with zeros.
-void virtual_commit(void* ptr, unsigned long commitsize){
-    VirtualAlloc(ptr, commitsize, MEM_COMMIT, PAGE_READWRITE);
+void virtual_commit(void* ptr, unsigned long long commitsize){
+    if(VirtualAlloc(ptr, commitsize, MEM_COMMIT, PAGE_READWRITE) == NULL){while(1){} }
 }
 
 //Return back the committed memory to reserved state
 //This will help if you want to catch some bugs that points to memory you just freed.
-void virtual_uncommit(void* ptr, unsigned long size){
+void virtual_decommit(void* ptr, unsigned long long size){
     VirtualFree(ptr, size, MEM_DECOMMIT);
 }
 
     //Free the pages allocated
-void virtual_free(void* ptr, unsigned long commit){
+void virtual_free(void* ptr, unsigned long long commit){
     VirtualFree(ptr, commit, MEM_RELEASE);
 }
 
@@ -32,7 +32,7 @@ unsigned int get_pagesize(){
     return si.dwPageSize;
 }
 
-void* get_virtualmemory(long reserve_size, unsigned long first_commit_size){
+void* get_virtualmemory(long reserve_size, unsigned long long first_commit_size){
     void* ptr = VirtualAlloc(NULL, reserve_size, MEM_RESERVE, PAGE_READWRITE);
     VirtualAlloc(ptr, first_commit_size, MEM_COMMIT, PAGE_READWRITE);
     return ptr;
@@ -46,7 +46,7 @@ void* load_virtualmemorysystem(){
     memsys->funcs->virtual_commit = &virtual_commit;
     memsys->funcs->virtual_free = &virtual_free;
     memsys->funcs->virtual_reserve = &virtual_reserve;
-    memsys->funcs->virtual_uncommit = &virtual_uncommit;
+    memsys->funcs->virtual_decommit = &virtual_decommit;
     return memsys;
 }
 

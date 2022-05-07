@@ -8,7 +8,7 @@ struct core_public {
 };
 
 struct gpu_private;
-struct gpu_public {
+struct GPU_VKOBJ {
 private:
 	friend struct core_functions_dx;
 	friend struct allocatorsys_dx;

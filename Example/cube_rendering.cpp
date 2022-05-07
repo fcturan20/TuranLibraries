@@ -45,10 +45,10 @@ int main() {
 
 	uvec2_tgfx window_resolution = { 1280, 720 };
 	TURANLIBRARY_LOADER::InitializeTGFX_CreateWindow(40 * 1024 * 1024, 20 * 1024 * 1024, window_resolution);
-
+	/*
 	//Create a global buffer for shader inputs
 	shaderuniformsbuffer = nullptr;
-	TGFXCONTENTMANAGER->Create_GlobalBuffer("UniformBuffers", 4096, true, fastvisiblememtype_id, &shaderuniformsbuffer);
+	TGFXCONTENTMANAGER->Create_GlobalBuffer("UniformBuffers", 4096, fastvisiblememtype_id, (extension_tgfx_listhandle)&TGFXCORE->INVALIDHANDLE, &shaderuniformsbuffer);
 	TGFXCONTENTMANAGER->SetGlobalShaderInput_Buffer(true, 0, true, shaderuniformsbuffer, 256, (sizeof(glm::mat4x4) * 5) + sizeof(vec4_tgfx));
 
 	//Create a depth buffer
@@ -176,7 +176,7 @@ int main() {
 
 		TGFXRENDERER->Run();
 		profilersys->finish_profiling(&scope, 1);
-	}
+	}*/
 	printf("Application is finished!");
 	
 	return 1;

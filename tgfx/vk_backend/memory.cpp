@@ -35,11 +35,10 @@ struct memorytype_vk {
 	VkDeviceSize MaxSize = 0, ALLOCATIONSIZE = 0;
 	void* MappedMemory = nullptr;
 	memoryallocationtype_tgfx TYPE;
-	threadlocal_vector<suballocation_vk> Allocated_Blocks;
-	memorytype_vk() : Allocated_Blocks(1024) {
-
-	}
-	memorytype_vk(const memorytype_vk& copy) : Allocated_Blocks(copy.Allocated_Blocks) {
+	VK_VECTOR_ADDONLY<suballocation_vk, 1 << 20> Allocated_Blocks;
+	memorytype_vk() = default;
+	memorytype_vk& operator = (const memorytype_vk& copy){
+		Allocated_Blocks = copy.Allocated_Blocks;
 		Allocated_Memory = copy.Allocated_Memory;
 		Buffer = copy.Buffer;
 		UnusedSize.store(UnusedSize.load());
@@ -47,6 +46,7 @@ struct memorytype_vk {
 		MaxSize = copy.MaxSize;
 		ALLOCATIONSIZE = copy.ALLOCATIONSIZE;
 		MappedMemory = copy.MappedMemory;
+		return *this;
 	}
 	inline VkDeviceSize FindAvailableOffset(VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment) {
 		VkDeviceSize FurthestOffset = 0;
@@ -60,30 +60,28 @@ struct memorytype_vk {
 			AlignmentOffset = 1;
 			RequiredAlignment = 1;
 		}
-		for (unsigned int ThreadID = 0; ThreadID < threadcount; ThreadID++) {
-			for (unsigned int i = 0; i < Allocated_Blocks.size(ThreadID); i++) {
-				suballocation_vk& Block = Allocated_Blocks.get(ThreadID, i);
-				if (FurthestOffset <= Block.Offset) {
-					FurthestOffset = Block.Offset + Block.Size;
-				}
-				if (!Block.isEmpty.load()) {
-					continue;
-				}
-
-				VkDeviceSize Offset = CalculateOffset(Block.Offset, AlignmentOffset, RequiredAlignment);
-
-				if (Offset + RequiredSize - Block.Offset > Block.Size ||
-					Offset + RequiredSize - Block.Offset < (Block.Size / 5) * 3) {
-					continue;
-				}
-				bool x = true, y = false;
-				//Try to get the block first (Concurrent usages are prevented that way)
-				if (!Block.isEmpty.compare_exchange_strong(x, y)) {
-					continue;
-				}
-				//Don't change the block's own offset, because that'd probably cause shifting offset the memory block after free-reuse-free-reuse sequences
-				return Offset;
+		for (unsigned int i = 0; i < Allocated_Blocks.size(); i++) {
+			suballocation_vk& Block = Allocated_Blocks[i];
+			if (FurthestOffset <= Block.Offset) {
+				FurthestOffset = Block.Offset + Block.Size;
 			}
+			if (!Block.isEmpty.load()) {
+				continue;
+			}
+
+			VkDeviceSize Offset = CalculateOffset(Block.Offset, AlignmentOffset, RequiredAlignment);
+
+			if (Offset + RequiredSize - Block.Offset > Block.Size ||
+				Offset + RequiredSize - Block.Offset < (Block.Size / 5) * 3) {
+				continue;
+			}
+			bool x = true, y = false;
+			//Try to get the block first (Concurrent usages are prevented that way)
+			if (!Block.isEmpty.compare_exchange_strong(x, y)) {
+				continue;
+			}
+			//Don't change the block's own offset, because that'd probably cause shifting offset the memory block after free-reuse-free-reuse sequences
+			return Offset;
 		}
 
 		VkDeviceSize finaloffset = CalculateOffset(FurthestOffset, AlignmentOffset, RequiredAlignment);
@@ -109,21 +107,16 @@ private:
 	}
 };
 struct allocatorsys_data {
-	std::map<unsigned int, memorytype_vk> memorytypes;
-	unsigned int get_nextemptyid() { return next_emptyid++; }
-	memorytype_vk& get_memtype_byid(unsigned int MemTypeID) {
-		return memorytypes[MemTypeID];
-	}
-private:
-	unsigned int next_emptyid = 0;
+	VK_STATICVECTOR<memorytype_vk, 200> memorytypes;
 };
+allocatorsys_data* hidden = nullptr;
 
 //Returns the given offset
 //RequiredSize: You should use vkGetBuffer/ImageRequirements' output size here
 //AligmentOffset: You should use GPU's own aligment offset limitation for the specified type of data
 //RequiredAlignment: You should use vkGetBuffer/ImageRequirements' output alignment here
 inline result_tgfx suballocate_memoryblock(unsigned int memoryid, VkDeviceSize RequiredSize, VkDeviceSize AlignmentOffset, VkDeviceSize RequiredAlignment, VkDeviceSize* ResultOffset) {
-	memorytype_vk& memtype = allocatorsys->data->get_memtype_byid(memoryid);
+	memorytype_vk& memtype = *hidden->memorytypes[memoryid];
 	*ResultOffset = memtype.FindAvailableOffset(RequiredSize, AlignmentOffset, RequiredAlignment);
 	if (*ResultOffset == UINT64_MAX) {
 		printer(result_tgfx_NOTCODED, "There is not enough space in the memory allocation, Vulkan backend should support multiple memory allocations");
@@ -132,7 +125,7 @@ inline result_tgfx suballocate_memoryblock(unsigned int memoryid, VkDeviceSize R
 	return result_tgfx_SUCCESS;
 }
 
-void allocatorsys_vk::analize_gpumemory(gpu_public* VKGPU) {
+void gpuallocatorsys_vk::analize_gpumemory(GPU_VKOBJ* VKGPU) {
 	std::vector<memory_description_tgfx> mem_descs;
 	for (uint32_t MemoryTypeIndex = 0; MemoryTypeIndex < VKGPU->MemoryProperties.memoryTypeCount; MemoryTypeIndex++) {
 		VkMemoryType& MemoryType = VKGPU->MemoryProperties.memoryTypes[MemoryTypeIndex];
@@ -160,70 +153,66 @@ void allocatorsys_vk::analize_gpumemory(gpu_public* VKGPU) {
 		}
 		if (isDeviceLocal) {
 			if (isHostVisible && isHostCoherent) {
+				unsigned int memid = hidden->memorytypes.push_back(memorytype_vk());
+
 				memory_description_tgfx memtype_desc;
 				memtype_desc.allocationtype = memoryallocationtype_FASTHOSTVISIBLE;
-				memtype_desc.memorytype_id = data->memorytypes.size();
+				memtype_desc.memorytype_id = memid;
 				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
 				mem_descs.push_back(memtype_desc);
 
-				unsigned int memtypeid = data->get_nextemptyid();
-				data->memorytypes.insert(std::make_pair(memtypeid, memorytype_vk()));
-				memorytype_vk& memtype = data->memorytypes[data->memorytypes.size() - 1];
+				memorytype_vk& memtype = *hidden->memorytypes[memid];
 				memtype.MemoryTypeIndex = MemoryTypeIndex;
 				memtype.TYPE = memoryallocationtype_FASTHOSTVISIBLE;
 				memtype.MaxSize = memtype_desc.max_allocationsize;
-				VKGPU->memtype_ids.push_back(memtypeid);
-				printer(result_tgfx_SUCCESS, ("Found FAST HOST VISIBLE BIT! Size: " + std::to_string(memtype_desc.allocationtype)).c_str());
+				VKGPU->memtype_ids.push_back(memid);
 			}
 			else {
+				unsigned int memid = hidden->memorytypes.push_back(memorytype_vk());
+
 				memory_description_tgfx memtype_desc;
 				memtype_desc.allocationtype = memoryallocationtype_DEVICELOCAL;
-				memtype_desc.memorytype_id = data->memorytypes.size();
+				memtype_desc.memorytype_id = memid;
 				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
 				mem_descs.push_back(memtype_desc);
 
-				unsigned int memtypeid = data->get_nextemptyid();
-				data->memorytypes.insert(std::make_pair(memtypeid, memorytype_vk()));
-				memorytype_vk& memtype = data->memorytypes[data->memorytypes.size() - 1];
+				memorytype_vk& memtype = *hidden->memorytypes[memid];
 				memtype.MemoryTypeIndex = MemoryTypeIndex;
 				memtype.TYPE = memoryallocationtype_DEVICELOCAL;
 				memtype.MaxSize = memtype_desc.max_allocationsize;
-				VKGPU->memtype_ids.push_back(memtypeid);
-				printer(result_tgfx_SUCCESS, ("Found DEVICE LOCAL BIT! Size: " + std::to_string(memtype_desc.allocationtype)).c_str());
+				VKGPU->memtype_ids.push_back(memid);
 			}
 		}
 		else if (isHostVisible && isHostCoherent) {
 			if (isHostCached) {
+				unsigned int memid = hidden->memorytypes.push_back(memorytype_vk());
+
 				memory_description_tgfx memtype_desc;
 				memtype_desc.allocationtype = memoryallocationtype_READBACK;
-				memtype_desc.memorytype_id = data->memorytypes.size();
+				memtype_desc.memorytype_id = memid;
 				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
 				mem_descs.push_back(memtype_desc);
 
-				unsigned int memtypeid = data->get_nextemptyid();
-				data->memorytypes.insert(std::make_pair(memtypeid, memorytype_vk()));
-				memorytype_vk& memtype = data->memorytypes[data->memorytypes.size() - 1];
+				memorytype_vk& memtype = *hidden->memorytypes[memid];
 				memtype.MemoryTypeIndex = MemoryTypeIndex;
 				memtype.TYPE = memoryallocationtype_READBACK;
 				memtype.MaxSize = memtype_desc.max_allocationsize;
-				VKGPU->memtype_ids.push_back(memtypeid);
-				printer(result_tgfx_SUCCESS, ("Found READBACK BIT! Size: " + std::to_string(memtype_desc.allocationtype)).c_str());
+				VKGPU->memtype_ids.push_back(memid);
 			}
 			else {
+				uint32_t memid = hidden->memorytypes.push_back(memorytype_vk());
+
 				memory_description_tgfx memtype_desc;
 				memtype_desc.allocationtype = memoryallocationtype_HOSTVISIBLE;
-				memtype_desc.memorytype_id = data->memorytypes.size();
+				memtype_desc.memorytype_id = memid;
 				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
 				mem_descs.push_back(memtype_desc);
 
-				unsigned int memtypeid = data->get_nextemptyid();
-				data->memorytypes.insert(std::make_pair(memtypeid, memorytype_vk()));
-				memorytype_vk& memtype = data->memorytypes[data->memorytypes.size() - 1];
+				memorytype_vk& memtype = *hidden->memorytypes[memid];
 				memtype.MemoryTypeIndex = MemoryTypeIndex;
 				memtype.TYPE = memoryallocationtype_HOSTVISIBLE;
 				memtype.MaxSize = memtype_desc.max_allocationsize;
-				VKGPU->memtype_ids.push_back(memtypeid);
-				printer(result_tgfx_SUCCESS, ("Found HOST VISIBLE BIT! Size: " + std::to_string(memtype_desc.allocationtype)).c_str());
+				VKGPU->memtype_ids.push_back(memid);
 			}
 		}
 	}
@@ -236,9 +225,9 @@ void allocatorsys_vk::analize_gpumemory(gpu_public* VKGPU) {
 
 	VKGPU->desc.MEMTYPEs = memdescs_final;
 }
-void allocatorsys_vk::do_allocations(gpu_public* gpu) {
+void gpuallocatorsys_vk::do_allocations(GPU_VKOBJ* gpu) {
 	for (unsigned int allocindex = 0; allocindex < gpu->memtype_ids.size(); allocindex++) {
-		memorytype_vk& memtype = data->get_memtype_byid(gpu->memtype_ids[allocindex]);
+		memorytype_vk& memtype = *hidden->memorytypes[gpu->memtype_ids[allocindex]];
 		if (!memtype.ALLOCATIONSIZE) {
 			continue;
 		}
@@ -282,17 +271,17 @@ void allocatorsys_vk::do_allocations(gpu_public* gpu) {
 		}
 	}
 }
-unsigned int allocatorsys_vk::get_memorytypeindex_byID(gpu_public* gpu, unsigned int memorytype_id) {
-	return data->get_memtype_byid(memorytype_id).MemoryTypeIndex;
+unsigned int gpuallocatorsys_vk::get_memorytypeindex_byID(GPU_VKOBJ* gpu, unsigned int memory_id) {
+	return hidden->memorytypes[memory_id]->MemoryTypeIndex;
 }
-memoryallocationtype_tgfx allocatorsys_vk::get_memorytype_byID(gpu_public* gpu, unsigned int memorytype_id) {
-	return data->get_memtype_byid(memorytype_id).TYPE;
+memoryallocationtype_tgfx gpuallocatorsys_vk::get_memorytype_byID(GPU_VKOBJ* gpu, unsigned int memory_id) {
+	return hidden->memorytypes[memory_id]->TYPE;
 }
-VkBuffer allocatorsys_vk::get_memorybufferhandle_byID(gpu_public* gpu, unsigned int memorytype_id) {
-	return data->get_memtype_byid(memorytype_id).Buffer;
+VkBuffer gpuallocatorsys_vk::get_memorybufferhandle_byID(GPU_VKOBJ* gpu, unsigned int memory_id) {
+	return hidden->memorytypes[memory_id]->Buffer;
 }
-result_tgfx allocatorsys_vk::copy_to_mappedmemory(gpu_public* gpu, unsigned int memorytype_id, const void* dataptr, unsigned long data_size, unsigned long offset) {
-	void* MappedMemory = data->get_memtype_byid(memorytype_id).MappedMemory;
+result_tgfx gpuallocatorsys_vk::copy_to_mappedmemory(GPU_VKOBJ* gpu, unsigned int memory_id, const void* dataptr, unsigned long data_size, unsigned long offset) {
+	void* MappedMemory = hidden->memorytypes[memory_id]->MappedMemory;
 	if (!MappedMemory) {
 		printer(result_tgfx_FAIL, "Memory is not mapped, so you are either trying to upload to an GPU Local buffer or MemoryTypeIndex is not allocated memory type's index!");
 		return result_tgfx_FAIL;
@@ -301,13 +290,13 @@ result_tgfx allocatorsys_vk::copy_to_mappedmemory(gpu_public* gpu, unsigned int 
 	return result_tgfx_SUCCESS;
 }
 
-result_tgfx allocatorsys_vk::suballocate_image(texture_vk* texture) {
+result_tgfx gpuallocatorsys_vk::suballocate_image(TEXTURE_VKOBJ* texture) {
 	VkMemoryRequirements req;
 	vkGetImageMemoryRequirements(rendergpu->LOGICALDEVICE(), texture->Image, &req);
 	VkDeviceSize size = req.size;
 
 	VkDeviceSize Offset = 0;
-	unsigned int memorytypeindex = allocatorsys->get_memorytypeindex_byID(rendergpu, texture->Block.MemAllocIndex);
+	unsigned int memorytypeindex = gpu_allocator->get_memorytypeindex_byID(rendergpu, texture->Block.MemAllocIndex);
 	if (!(req.memoryTypeBits & (1u << memorytypeindex))) {
 		printer(result_tgfx_FAIL, "Intended texture doesn't support to be stored in the specified memory region!");
 		return result_tgfx_FAIL;
@@ -317,20 +306,20 @@ result_tgfx allocatorsys_vk::suballocate_image(texture_vk* texture) {
 		return result_tgfx_FAIL;
 	}
 
-	if (vkBindImageMemory(rendergpu->LOGICALDEVICE(), texture->Image, allocatorsys->data->get_memtype_byid(texture->Block.MemAllocIndex).Allocated_Memory, Offset) != VK_SUCCESS) {
+	if (vkBindImageMemory(rendergpu->LOGICALDEVICE(), texture->Image, hidden->memorytypes[texture->Block.MemAllocIndex]->Allocated_Memory, Offset) != VK_SUCCESS) {
 		printer(result_tgfx_FAIL, "VKContentManager->Suballocate_Image() has failed at VkBindImageMemory()!");
 		return result_tgfx_FAIL;
 	}
 	texture->Block.Offset = Offset;
 	return result_tgfx_SUCCESS;
 }
-result_tgfx allocatorsys_vk::suballocate_buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, memoryblock_vk& Block) {
+result_tgfx gpuallocatorsys_vk::suballocate_buffer(VkBuffer BUFFER, VkBufferUsageFlags UsageFlags, memoryblock_vk& Block) {
 	VkMemoryRequirements bufferreq;
 	vkGetBufferMemoryRequirements(rendergpu->LOGICALDEVICE(), BUFFER, &bufferreq);
 	VkDeviceSize size = bufferreq.size;
 
 	VkDeviceSize Offset = 0;
-	unsigned int memorytypeindex = allocatorsys->get_memorytypeindex_byID(rendergpu, Block.MemAllocIndex);
+	unsigned int memorytypeindex = gpu_allocator->get_memorytypeindex_byID(rendergpu, Block.MemAllocIndex);
 
 	if (!(bufferreq.memoryTypeBits & (1u << memorytypeindex))) {
 		printer(result_tgfx_FAIL, "Intended buffer doesn't support to be stored in specified memory region!");
@@ -352,15 +341,15 @@ result_tgfx allocatorsys_vk::suballocate_buffer(VkBuffer BUFFER, VkBufferUsageFl
 
 	return result_tgfx_SUCCESS;
 }
-void allocatorsys_vk::free_memoryblock(unsigned int memoryid, VkDeviceSize offset) {
+void gpuallocatorsys_vk::free_memoryblock(unsigned int memoryid, VkDeviceSize offset) {
 
 }
 extern void Create_AllocatorSys() {
-	allocatorsys = new allocatorsys_vk;
-	allocatorsys->data = new allocatorsys_data;
+	gpu_allocator = new gpuallocatorsys_vk;
+	hidden = new allocatorsys_data;
 }
-extern result_tgfx SetMemoryTypeInfo(unsigned int MemoryType_id, unsigned long long AllocationSize, extension_tgfx_listhandle Extensions) {
-	memorytype_vk& ALLOC = allocatorsys->data->get_memtype_byid(MemoryType_id);
+extern result_tgfx SetMemoryTypeInfo(unsigned int Memory_id, unsigned long long AllocationSize, extension_tgfx_listhandle Extensions) {
+	memorytype_vk& ALLOC = *hidden->memorytypes[Memory_id];
 	if (AllocationSize > ALLOC.MaxSize) {
 		printer(result_tgfx_INVALIDARGUMENT, "SetMemoryTypeInfo() has failed because allocation size can't be larger than maximum size!");
 		return result_tgfx_INVALIDARGUMENT;

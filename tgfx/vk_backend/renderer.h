@@ -1,10 +1,28 @@
+/* There are 5 different branches for Renderer:
+1) RG Description: Describes render passes then checks if RG is valid. 
+    If valid, creates Vulkan objects for the passes (RenderPass, Framebuffer etc.)
+    Implemented in RG_Description.cpp
+2) RG Static Linking: Creates optimized data structures for dynamic framegraph optimizations.
+    Implemented in RG_StaticLinkage.cpp
+3) RG Commander: Implements render commands API (Draws, Dispatches, Transfer calls etc.)
+    Implemented in RG_Commander.cpp
+4) RG Dynamic Linking: Optimizes RG for minimal queue and sync operations and submits recorded CBs.
+    Implemented in RG_DynamicLinkage.cpp
+5) RG CommandBuffer Recorder: Records command buffers according to the commands from RG_DynamicLinkage.cpp
+    Implemented in RG_CBRecording.cpp
+//For the sake of simplicity; RG_CBRecording, RG_StaticLinkage and RG_DynamicLinkage is implemented in RG_primitive.cpp for now
+//But all of these branches are communicating through RG.h header, so don't include the header in other systems
+*/
+
+
 #pragma once
 #include "includes.h"
 #include <vector>
 #include <tgfx_forwarddeclarations.h>
 #include <tgfx_structs.h>
+#include <atomic>
 
-enum class RenderGraphStatus : unsigned char {
+enum class RGReconstructionStatus : unsigned char {
 	Invalid = 0,
 	StartedConstruction = 1,
 	FinishConstructionCalled = 2,
@@ -15,180 +33,22 @@ enum class RenderGraphStatus : unsigned char {
 //Renderer data that other parts of the backend can access
 struct renderer_funcs;
 struct renderer_public {
-private:
-	friend struct framegraphsys_vk;
-	friend struct renderer_funcs;
-	friend result_tgfx Execute_RenderGraph();
-	friend void Start_RenderGraphConstruction();
-	friend unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpass);
-	friend void Destroy_RenderGraph();
-	std::vector<drawpass_vk*> DrawPasses;
-	std::vector<transferpass_vk*> TransferPasses;
-	std::vector<windowpass_vk*> WindowPasses;
-	std::vector<computepass_vk*> ComputePasses;
-	RenderGraphStatus RG_Status = RenderGraphStatus::Invalid;
-	unsigned char FrameIndex = 0;
 public:
 	inline unsigned char Get_FrameIndex(bool is_LastFrame){
-		return (is_LastFrame) ? ((FrameIndex + 1) % 2) : (FrameIndex);
+		return (is_LastFrame) ? ((VKGLOBAL_FRAMEINDEX - 1) % VKCONST_BUFFERING_IN_FLIGHT) : (VKGLOBAL_FRAMEINDEX);
 	}
 	void RendererResource_Finalizations();
-	inline RenderGraphStatus RGSTATUS() { return RG_Status; }
+	RGReconstructionStatus RGSTATUS();
 };
 
 
 //RENDER NODEs
-struct VK_Pass {
-	struct WaitDescription {
-		VK_Pass** WaitedPass = nullptr;
-		bool WaitLastFramesPass = false;
-	};
-	enum class PassType : unsigned char {
-		INVALID = 0,
-		DP = 1,
-		TP = 2,
-		CP = 3,
-		WP = 4,
-	};
-	//Name is to debug the rendergraph algorithms, production ready code won't use it!
-	std::string NAME;
-	WaitDescription* const WAITs;
-	const unsigned char WAITsCOUNT;
-	PassType TYPE;
-	//This is to store which branch this pass is used in last frames
-	//With that way, we can identify which semaphore we should wait on if rendergraph is reconstructed
-	//This is UINT32_MAX if pass isn't used last frame
-	unsigned int LastUsedBranchID = UINT32_MAX;
-
-
-	VK_Pass(const std::string& name, PassType type, unsigned int waitsCount) : WAITs(new WaitDescription[waitsCount]), WAITsCOUNT(waitsCount), TYPE(type), NAME(name) {}
+enum class VK_PASSTYPE : unsigned char {
+	INVALID = 0,
+	DP = 1,
+	TP,
+	CP,
+	WP
 };
-
-template<class T>
-bool isWorkloaded(T* pass) {
-	return pass->isWorkloaded();
-}
-
-//DRAW PASS
-
-struct nonindexeddrawcall_vk {
-	VkBuffer VBuffer;
-	VkDeviceSize VOffset = 0;
-	uint32_t FirstVertex = 0, VertexCount = 0, FirstInstance = 0, InstanceCount = 0;
-
-	VkPipeline MatTypeObj;
-	VkPipelineLayout MatTypeLayout;
-	VkDescriptorSet* GeneralSet, * PerInstanceSet;
-};
-struct indexeddrawcall_vk {
-	VkBuffer VBuffer, IBuffer;
-	VkDeviceSize VBOffset = 0, IBOffset = 0;
-	uint32_t VOffset = 0, FirstIndex = 0, IndexCount = 0, FirstInstance = 0, InstanceCount = 0;
-	VkIndexType IType;
-
-	VkPipeline MatTypeObj;
-	VkPipelineLayout MatTypeLayout;
-	VkDescriptorSet* GeneralSet, * PerInstanceSet;
-};
-struct subdrawpass_vk {
-	unsigned char Binding_Index;
-	bool render_dearIMGUI = false;
-	subdrawpassaccess_tgfx waitop, continueop;
-	irtslotset_vk* SLOTSET;
-	drawpass_vk* DrawPass;
-	threadlocal_vector<nonindexeddrawcall_vk> NonIndexedDrawCalls;
-	threadlocal_vector<indexeddrawcall_vk> IndexedDrawCalls;
-	subdrawpass_vk() : IndexedDrawCalls(1024), NonIndexedDrawCalls(1024){}
-	bool isThereWorkload();
-};
-struct drawpass_vk {
-	VK_Pass base_data;
-	VkRenderPass RenderPassObject;
-	rtslotset_vk* SLOTSET;
-	std::atomic<unsigned char> SlotSetChanged = true;
-	unsigned char Subpass_Count;
-	subdrawpass_vk* Subpasses;
-	VkFramebuffer FBs[2]{ VK_NULL_HANDLE };
-	boxregion_tgfx RenderRegion;
-
-	drawpass_vk(const std::string& name, unsigned int waitsCount) : base_data(name, VK_Pass::PassType::DP, waitsCount){}
-	bool isWorkloaded();
-};
-
-//TRANSFER PASS
-
-struct VK_BUFtoIMinfo {
-	VkImage TargetImage;
-	VkBuffer SourceBuffer;
-	VkBufferImageCopy BufferImageCopy;
-};
-struct VK_BUFtoBUFinfo {
-	VkBuffer SourceBuffer, DistanceBuffer;
-	VkBufferCopy info;
-};
-struct VK_IMtoIMinfo {
-	VkImage SourceTexture, TargetTexture;
-	VkImageCopy info;
-};
-struct VK_TPCopyDatas {
-	threadlocal_vector<VK_BUFtoIMinfo> BUFIMCopies;
-	threadlocal_vector<VK_BUFtoBUFinfo> BUFBUFCopies;
-	threadlocal_vector<VK_IMtoIMinfo> IMIMCopies;
-	VK_TPCopyDatas(): BUFIMCopies(1024), BUFBUFCopies(1024), IMIMCopies(1024) {}
-};
-
-struct VK_ImBarrierInfo {
-	VkImageMemoryBarrier Barrier;
-};
-struct VK_BufBarrierInfo {
-	VkBufferMemoryBarrier Barrier;
-};
-struct VK_TPBarrierDatas {
-	threadlocal_vector<VK_ImBarrierInfo> TextureBarriers;
-	threadlocal_vector<VK_BufBarrierInfo> BufferBarriers;
-	VK_TPBarrierDatas() :TextureBarriers(1024) , BufferBarriers(1024) {}
-	VK_TPBarrierDatas(const VK_TPBarrierDatas& copyfrom) :TextureBarriers(copyfrom.TextureBarriers), BufferBarriers(copyfrom.BufferBarriers) {}
-};
-
-struct transferpass_vk {
-	VK_Pass base_data;
-	void* TransferDatas;
-	transferpasstype_tgfx TYPE;
-
-	transferpass_vk(const char* name, unsigned int WAITSCOUNT) : base_data(name, VK_Pass::PassType::TP, WAITSCOUNT) {}
-	bool isWorkloaded();
-};
-
-struct windowcall_vk {
-	window_vk* Window;
-};
-struct windowpass_vk {
-	VK_Pass base_data;
-	//Element 0 is the Penultimate, Element 1 is the Last, Element 2 is the Current buffers.
-	std::vector<windowcall_vk> WindowCalls[3];
-
-	windowpass_vk(const char* name, unsigned int waitsCount) : base_data(name, VK_Pass::PassType::WP, waitsCount){}
-	bool isWorkloaded();
-};
-struct dispatchcall_vk {
-	VkPipelineLayout Layout = VK_NULL_HANDLE;
-	VkPipeline Pipeline = VK_NULL_HANDLE;
-	VkDescriptorSet* GeneralSet = nullptr, * InstanceSet = nullptr;
-	glm::uvec3 DispatchSize;
-};
-
-struct subcomputepass_vk {
-	VK_TPBarrierDatas Barriers_AfterSubpassExecutions;
-	threadlocal_vector<dispatchcall_vk> Dispatches;
-	subcomputepass_vk() : Dispatches(1024){}
-	bool isThereWorkload();
-};
-
-struct computepass_vk {
-	VK_Pass base_data;
-	std::vector<subcomputepass_vk> Subpasses;
-	std::atomic_bool SubPassList_Updated = false;
-
-	computepass_vk(const std::string& name, unsigned int WAITSCOUNT) : base_data(name, VK_Pass::PassType::CP, WAITSCOUNT){}
-	bool isWorkloaded();
-};
+typedef uint16_t VK_PASS_ID_TYPE;
+static constexpr VK_PASS_ID_TYPE VK_PASS_INVALID_ID = UINT16_MAX;

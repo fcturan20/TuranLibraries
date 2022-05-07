@@ -18,7 +18,7 @@
 
 struct core_private {
 public:
-	std::vector<gpu_public*> DEVICE_GPUs;
+	std::vector<GPU_VKOBJ*> DEVICE_GPUs;
 	//Window Operations
 	std::vector<monitor_dx*> MONITORs;
 	std::vector<window_dx*> WINDOWs;

@@ -109,8 +109,8 @@ struct renderer_funcs {
 			call.base.MatTypeObj = MATTYPE->PipelineObject;
 			call.base.MatTypeLayout = MATTYPE->PipelineLayout;
 			for (uint32_t i = 0; i < VKCONST_MAXDESCSET_PERLIST; i++) {
-				call.base.TypeSETs[i] = MATTYPE->TypeSETs[i];
-				call.base.InstanceSETs[i] = PI->InstSETs[i];
+				//call.base.TypeSETs[i] = MATTYPE->TypeSETs[i];
+				//call.base.InstanceSETs[i] = PI->InstSETs[i];
 			}
 			call.FirstInstance = FirstInstance;
 			call.InstanceCount = InstanceCount;
@@ -384,6 +384,7 @@ extern void Create_Renderer() {
 	hidden = (renderer_private*)(allocation_ptr + sizeof(renderer_public));
 
 	set_rendersysptrs();
+	set_RGCreation_funcptrs();
 }
 
 bool RenderGraph::SubTPCOPY_VK::isWorkloaded() {

@@ -126,7 +126,7 @@ typedef struct gpudatamanager_tgfx {
 	void (*Delete_ComputeShaderInstance)(computeshaderinstance_tgfx_handle ID);
 
 	result_tgfx (*SetBindingTable_Texture)(bindingtable_tgfx_handle bindingtable, unsigned int BINDINDEX, texture_tgfx_handle TextureHandle, unsigned char isSampledTexture);
-	result_tgfx (*SetBindingTable_Buffer)(bindingtable_tgfx_handle bindingtable, unsigned int BINDINDEX, buffer_tgfx_handle BufferHandle, unsigned int TargetOffset, unsigned int BoundDataSize);
+	result_tgfx (*SetBindingTable_Buffer)(bindingtable_tgfx_handle bindingtable, unsigned int BINDINDEX, buffer_tgfx_handle BufferHandle, unsigned int TargetOffset, unsigned int BoundDataSize, extension_tgfx_listhandle exts);
 
 
 

@@ -442,7 +442,9 @@ result_tgfx Create_Texture (texture_dimensions_tgfx DIMENSION, unsigned int WIDT
 	texture.HEIGHT = HEIGHT;
 	texture.WIDTH = WIDTH;
 	texture.DATA_SIZE = WIDTH * HEIGHT * GetByteSizeOf_TextureChannels(CHANNEL_TYPE);
-	VkImageUsageFlags flag = *(VkImageUsageFlags*)USAGE;
+	VkImageUsageFlags flag = 0;
+	if (VKCONST_isPointerContainVKFLAG) { flag = *(VkImageUsageFlags*)&USAGE; }
+	else { flag = *(VkImageUsageFlags*)USAGE; }
 	if (texture.CHANNELs == texture_channels_tgfx_D24S8 || texture.CHANNELs == texture_channels_tgfx_D32) { flag &= ~(1UL << 4); }
 	else { flag &= ~(1UL << 5); }
 	texture.USAGE = flag;
@@ -539,11 +541,6 @@ result_tgfx Upload_Texture (texture_tgfx_handle TextureHandle, const void* Input
 
 result_tgfx Create_GlobalBuffer (const char* BUFFER_NAME, unsigned int DATA_SIZE, 
 	unsigned int MemoryTypeIndex, extension_tgfx_listhandle exts, buffer_tgfx_handle* GlobalBufferHandle) {
-	if (renderer->RGSTATUS() != RGReconstructionStatus::Invalid) {
-		printer(result_tgfx_FAIL, "GFX API don't support run-time Global Buffer addition for now because Vulkan needs to recreate PipelineLayouts (so all PSOs)! Please create your global buffers before render graph construction.");
-		return result_tgfx_WRONGTIMING;
-	}
-
 	VkBuffer obj;
 	VkBufferUsageFlags flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 	obj = Create_VkBuffer(DATA_SIZE, flags);
@@ -586,7 +583,7 @@ result_tgfx Create_BindingTable(shaderdescriptortype_tgfx DescriptorType, unsign
 	}
 #endif
 
-	DESCSET_VKOBJ set;
+
 	VkDescriptorSetLayoutCreateInfo ci = {}; ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	VkDescriptorSetLayoutBinding bindings[2] = {};
 	ci.flags = 0;	ci.pNext = nullptr; ci.bindingCount = 1; ci.pBindings = bindings;
@@ -616,9 +613,10 @@ result_tgfx Create_BindingTable(shaderdescriptortype_tgfx DescriptorType, unsign
 	if (VisibleStages) { bindings[dynamicbinding_i].stageFlags = *(VkShaderStageFlags*)&VisibleStages; }
 	bindings[dynamicbinding_i].stageFlags = GetVkShaderStageFlags_fromTGFXHandle(VisibleStages);
 
-	ThrowIfFailed(vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &ci, nullptr, &set.Layout), "Descriptor Set Layout creation has failed!");
+	VkDescriptorSetLayout layout_f;
+	ThrowIfFailed(vkCreateDescriptorSetLayout(rendergpu->LOGICALDEVICE(), &ci, nullptr, &layout_f), "Descriptor Set Layout creation has failed!");
 	DESCSET_VKOBJ* finalobj = hidden->descsets.create_OBJ();
-	*finalobj = set;
+	*finalobj = DESCSET_VKOBJ(Find_VkDescType_byVKCONST_DESCSETID(descsetid), ElementCount);
 
 	VKOBJHANDLE handle = hidden->descsets.returnHANDLEfromOBJ(finalobj);
 	*bindingTableHandle = *(bindingtable_tgfx_handle*)&handle;
@@ -1186,22 +1184,23 @@ void SetDescriptor_Sampler(bindingtable_tgfx_handle bindingtable, unsigned int e
 	set->isUpdatedCounter.store(3);
 }
 //Set a descriptor of the binding table created with shaderdescriptortype_tgfx_BUFFER
-void SetDescriptor_Buffer(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
+result_tgfx SetDescriptor_Buffer(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
 	buffer_tgfx_handle bufferHandle, unsigned int bufferOffset, unsigned int BoundDataSize, extension_tgfx_listhandle exts) {
 	VKOBJHANDLE bindingtable_objhandle = *(VKOBJHANDLE*)&bindingtable;
 #ifdef VULKAN_DEBUGGING
-	if (bindingtable_objhandle.EXTRA_FLAGs >= VKCONST_DYNAMICDESCRIPTORTYPESCOUNT) { printer(result_tgfx_FAIL, "BindingTable handle is invalid!"); return; }
+	if (bindingtable_objhandle.EXTRA_FLAGs >= VKCONST_DYNAMICDESCRIPTORTYPESCOUNT) { printer(result_tgfx_FAIL, "BindingTable handle is invalid!"); return result_tgfx_FAIL; }
 #endif
 	DESCSET_VKOBJ* set = hidden->descsets.getOBJfromHANDLE(bindingtable_objhandle);
 
 	
 #ifdef VULKAN_DEBUGGING
 	if (!set || !bufferHandle || elementIndex >= set->bufferDescELEMENTs.size() || set->DESCTYPE != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
-		printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Buffer() has invalid input!"); return; }
+		printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Buffer() has invalid input!"); return result_tgfx_FAIL; }
 	buffer_descVK& bufferDESC = set->bufferDescELEMENTs[elementIndex];
 	unsigned char elementUpdateStatus = 0;
 	if (!bufferDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
 		printer(result_tgfx_FAIL, "SetDescriptor_Buffer() failed because you already changed the descriptor in the same frame!");
+		return result_tgfx_FAIL;
 	}
 #else
 	bufferDESC.isUpdated.store(1);
@@ -1209,6 +1208,7 @@ void SetDescriptor_Buffer(bindingtable_tgfx_handle bindingtable, unsigned int el
 	bufferDESC.info.buffer = VK_NULL_HANDLE;
 
 	set->isUpdatedCounter.store(3);
+	return result_tgfx_SUCCESS;
 }
 
 //Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLEDTEXTURE
@@ -1492,6 +1492,7 @@ inline void set_functionpointers() {
 	core_tgfx_main->contentmanager->Unload_VertexBuffer = Unload_VertexBuffer;
 	core_tgfx_main->contentmanager->Upload_Texture = Upload_Texture;
 	core_tgfx_main->contentmanager->Upload_toBuffer = Upload_toBuffer;
+	core_tgfx_main->contentmanager->SetBindingTable_Buffer = SetDescriptor_Buffer;
 }
 extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
 	contentmanager = new gpudatamanager_public;

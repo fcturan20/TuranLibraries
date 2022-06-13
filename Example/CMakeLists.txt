@@ -19,7 +19,7 @@ install(TARGETS cube_rendering_example RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/E
 
 find_package(glm REQUIRED)
 target_include_directories(cube_rendering_example PRIVATE ${glm_INCLUDE_DIRS})
-target_link_libraries(cube_rendering_example PRIVATE glm::glm)
+target_link_libraries(cube_rendering_example PRIVATE glm::glm TGFXVulkan)
 
 
 

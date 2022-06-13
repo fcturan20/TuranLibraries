@@ -306,7 +306,7 @@ public:
 	}
 	void destroyOBJfromHANDLE(VKOBJHANDLE handle) {
 #ifdef VULKAN_DEBUGGING
-		if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX || handle.OBJ_memoffset % (sizeof(T)) ||
+		if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX || (handle.OBJ_memoffset + uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) - uintptr_t(data)) % (sizeof(T)) ||
 			(T*)((char*)VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) < data || (T*)((char*)VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) > data + OBJCOUNT) {
 			printer(result_tgfx_FAIL, "Given handle is invalid! You probably used a invalid arithmetic/write operations on the handle");
 		}
@@ -319,7 +319,7 @@ public:
 	}
 	T* getOBJfromHANDLE(VKOBJHANDLE handle) {
 #ifdef VULKAN_DEBUGGING
-		if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX || handle.OBJ_memoffset % (sizeof(T)) || 
+		if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX || (handle.OBJ_memoffset + uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) - uintptr_t(data)) % (sizeof(T)) ||
 			(T*)((char*)VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) < data || (T*)((char*)VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) > data + OBJCOUNT) {
 			printer(result_tgfx_FAIL, "Given handle is invalid! You probably used a invalid arithmetic/write operations on the handle"); return NULL; }
 #endif
@@ -423,16 +423,16 @@ public:
 		dynamicmemptr = vk_virmem::allocate_dynamicmem((maxelementcount * sizeof(T)) / VKCONST_VIRMEMPAGESIZE, &PTR);
 		virmemsys->virtual_commit(dynamicmemptr, VKCONST_VIRMEMPAGESIZE);
 	}
-	VK_VECTOR_ADDONLY<T, maxelementcount>& operator=(const VK_VECTOR_ADDONLY<T, maxelementcount>& copyFrom) {
+	inline const VK_VECTOR_ADDONLY<T, maxelementcount>& operator=(const VK_VECTOR_ADDONLY<T, maxelementcount>& copyFrom) {
 		PTR = copyFrom.PTR;
-		currentcmd_i.store(currentcmd_i.load());
+		currentcmd_i.store(copyFrom.currentcmd_i.load());
 		dynamicmemptr = copyFrom.dynamicmemptr;
 		return *this;
 	}
 	void push_back(const T& obj) {
 		uint32_t cmd_i = currentcmd_i.load();
 		if (cmd_i % (VKCONST_VIRMEMPAGESIZE / sizeof(T))) {
-			virmemsys->virtual_commit(dynamicmemptr, VKCONST_VIRMEMPAGESIZE);
+			virmemsys->virtual_commit(((char*)dynamicmemptr) + (sizeof(T) * cmd_i), VKCONST_VIRMEMPAGESIZE);
 		}
 		T* data = (T*)VK_MEMOFFSET_TO_POINTER(PTR);
 		data[cmd_i] = obj;
@@ -441,6 +441,14 @@ public:
 		virmemsys->virtual_decommit(VK_MEMOFFSET_TO_POINTER(PTR), currentcmd_i * sizeof(T));
 		currentcmd_i = 0;
 		virmemsys->virtual_commit(VK_MEMOFFSET_TO_POINTER(PTR), VKCONST_VIRMEMPAGESIZE);
+	}
+	//This function doesn't allocate new memory, just increments currentcmd_i
+	void resize(uint32_t newsize) {
+#ifdef VULKAN_DEBUGGING
+		if (newsize > maxelementcount) { printer(result_tgfx_NOTCODED, "VK_VECTOR_ADDONLY doesn't allocate new memory but you're trying it!"); }
+#endif
+		virmemsys->virtual_commit(dynamicmemptr, (newsize * sizeof(T)));
+		currentcmd_i.store(newsize);
 	}
 	T& operator[](uint32_t i) { return ((T*)VK_MEMOFFSET_TO_POINTER(PTR))[i]; }
 	uint32_t size() { return currentcmd_i.load(); }

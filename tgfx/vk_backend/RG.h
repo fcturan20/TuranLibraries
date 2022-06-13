@@ -30,6 +30,14 @@ struct RenderGraph {
 
 		drawcallbase_vk base;
 	};
+	struct WaitDescFinal {
+		bool isWaitingForLastFrame : 1;
+		bool WaitedOP_TRANSFER : 1, WaitedOP_COPY : 1;
+		uint16_t SubpassIndex;
+		uint32_t MainPassPTR;
+
+		WaitDescFinal() : isWaitingForLastFrame(false), SubpassIndex(0), MainPassPTR(UINT32_MAX) {}
+	};
 	struct DP_VK;
 	struct SubDP_VK {
 		uint32_t DP_ID : 16;
@@ -38,12 +46,22 @@ struct RenderGraph {
 		bool is_RENDERPASSRELATED : 1;
 		subdrawpassaccess_tgfx waitop : 8, continueop : 8;
 		uint16_t VKRP_BINDINDEX, RG_BINDINDEX;	//RG bindindex is the id in all subdps of the same dp, vkrp_bindindex is the id in VkRenderpass object
+
+
 		//These are to define which subpass is waited for the merged subpass
-		uint16_t Waitfor_MergedSubCP_withIndex = 0, WaitFor_MergedSubTP_withIndex = 0;
+		struct WaitforMergedPass {
+			uint16_t waitedCP_subpass_i = UINT16_MAX, waitedTP_subpass_i = UINT16_MAX;
+			uint8_t waitedCP_op_flag = 0, waitedTP_op_flag = 0;
+		};
+		union{
+			passwaitdescription_tgfx_listhandle subpasswaits;
+			WaitforMergedPass mergedpasses;
+		};
+
 		//These will be virtual memory allocated structs
 		VK_VECTOR_ADDONLY<nonindexeddrawcall_vk, 1 << 16> NonIndexedDrawCalls;
 		VK_VECTOR_ADDONLY<indexeddrawcall_vk, 1 << 16> IndexedDrawCalls;
-		SubDP_VK() : render_dearIMGUI(false) {}
+		SubDP_VK() : render_dearIMGUI(false), subpasswaits(nullptr) {}
 		DP_VK* getDP();
 		bool isThereWorkload();
 		VKOBJHANDLE getHANDLE() {
@@ -64,7 +82,11 @@ struct RenderGraph {
 	//	so they need to define how they access to rtslotset with irtslotset
 	//BarrierOnly related: Subpass doesn't define the thing above but subpass only waits for some operations of other passes
 	struct DP_VK {
-		VK_PASSTYPE PASSTYPE = VK_PASSTYPE::DP;
+		//For template definitions
+		static constexpr VK_PASSTYPE STATICPASSTYPE = VK_PASSTYPE::DP;
+		static constexpr VKHANDLETYPEs STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBDP;
+
+		VK_PASSTYPE PASSTYPE = STATICPASSTYPE;
 		VK_PASS_ID_TYPE PASS_ID = VK_PASS_INVALID_ID;
 		
 		boxregion_tgfx RenderRegion;
@@ -78,11 +100,18 @@ struct RenderGraph {
 
 		union {
 			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
-			uint32_t PassWaitsPTR;	//This is used after reconstructing
+			struct finalWaitsPTR {
+				uint32_t PassWaitsPTR = UINT32_MAX;
+				uint16_t waitcount = 0;
+			};
+			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
 		};
+
+		VK_PASS_ID_TYPE MERGEDCP_ID = VK_PASS_INVALID_ID, MERGEDTP_ID = VK_PASS_INVALID_ID;
 		SubDP_VK* getSUBDPs() { return (SubDP_VK*)(uintptr_t(this) + sizeof(DP_VK)); }
 
 		bool isWorkloaded();
+		void convert_waits();
 		VKOBJHANDLE getHANDLE() {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::DRAWPASS;
@@ -94,6 +123,7 @@ struct RenderGraph {
 			if (handle.type != VKHANDLETYPEs::DRAWPASS) { printer(14); return nullptr; }
 			return (DP_VK*)VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
 		}
+		DP_VK() {}
 	};
 
 	//TRANSFER PASS
@@ -126,14 +156,48 @@ struct RenderGraph {
 	};
 
 	struct TP_VK {
-		VK_PASSTYPE PASS_TYPE = VK_PASSTYPE::TP;
+		//For template definitions
+		static constexpr VK_PASSTYPE STATICPASSTYPE = VK_PASSTYPE::TP;
+		static constexpr VKHANDLETYPEs STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBTP;
+
+
+		VK_PASSTYPE PASSTYPE = STATICPASSTYPE;
 		VK_PASS_ID_TYPE PASS_ID = VK_PASS_INVALID_ID;
-		uint16_t SubPassesCount = UINT16_MAX, Merged_DP_ID = UINT16_MAX, Merged_CP_ID = UINT16_MAX;
+		uint16_t SubPassesCount = UINT16_MAX;
 		uint32_t SubPassesList_SizeInBytes;
 		union {
-			passwaitdescription_tgfx_listhandle passwaits = nullptr; //This is used while reconstructing
-			uint32_t PassWaitsPTR;	//This is used after reconstructing
+			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
+			struct finalWaitsPTR {
+				uint32_t PassWaitsPTR = UINT32_MAX;
+				uint16_t waitcount = 0;
+			};
+			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
 		};
+
+		VK_PASS_ID_TYPE MERGEDCP_ID = VK_PASS_INVALID_ID, MERGEDDP_ID = VK_PASS_INVALID_ID;
+		
+		//SubTPs should have this as their first variable
+		struct SUBTP_COMMON {
+			VK_PASSTYPE TYPE = VK_PASSTYPE::INVALID;
+			uint16_t SubTP_ID = 0;
+
+			//These are to define which subpass is waited for the merged subpass
+			struct WaitforMergedPass {
+				uint16_t waitedCP_subpass_i = UINT16_MAX, waitedDP_subpass_i = UINT16_MAX;
+				uint8_t waitedCP_op_flag = 0, waitedDP_op_flag = 0;
+			};
+
+
+			union {
+				passwaitdescription_tgfx_listhandle subpasswaits;
+				WaitforMergedPass mergedpasses;
+			};
+
+			SUBTP_COMMON() : subpasswaits(nullptr) {}
+		};
+
+		TP_VK() {}
+		void convert_waits();
 		VKOBJHANDLE getHANDLE() {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::TRANSFERPASS;
@@ -147,41 +211,44 @@ struct RenderGraph {
 		}
 	};
 	struct SubTPCOPY_VK {
+		TP_VK::SUBTP_COMMON common;
 		VK_VECTOR_ADDONLY<VK_BUFtoIMinfo, 1 << 16> BUFIMCopies;
 		VK_VECTOR_ADDONLY<VK_BUFtoBUFinfo, 1 << 16> BUFBUFCopies;
 		VK_VECTOR_ADDONLY<VK_IMtoIMinfo, 1 << 16> IMIMCopies;
-		uint16_t SubTP_ID = 0;		//Index of this subpass
-		uint16_t SubDP_index = UINT16_MAX, SubCP_index = UINT16_MAX;	//Merged Pass
+
 		bool isWorkloaded();
 		VKOBJHANDLE getHANDLE() {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::SUBTP_COPY;
 			handle.OBJ_memoffset = VK_POINTER_TO_MEMOFFSET(this);
-			handle.EXTRA_FLAGs = SubTP_ID;
+			handle.EXTRA_FLAGs = common.SubTP_ID;
 			return handle;
 		}
 		static SubTPCOPY_VK* getPassFromHandle(VKOBJHANDLE handle) {
 			if (handle.type != VKHANDLETYPEs::SUBTP_COPY) { printer(14); return nullptr; }
 			return (SubTPCOPY_VK*)VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
 		}
+		SubTPCOPY_VK() { common.TYPE = VK_PASSTYPE::SUBTP_COPY; }
 	};
 	struct SubTPBARRIER_VK {
+		TP_VK::SUBTP_COMMON common;
 		VK_VECTOR_ADDONLY<VK_ImBarrierInfo, 1 << 16> TextureBarriers;
 		VK_VECTOR_ADDONLY<VK_BufBarrierInfo, 1 << 16> BufferBarriers;
-		uint16_t SubTP_ID = 0;		//Index of this subpass
-		uint16_t SubDP_index = UINT16_MAX, SubCP_index = UINT16_MAX;	//Merged Pass
+
+
 		bool isWorkloaded();
 		VKOBJHANDLE getHANDLE() {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::SUBTP_BARRIER;
 			handle.OBJ_memoffset = VK_POINTER_TO_MEMOFFSET(this);
-			handle.EXTRA_FLAGs = SubTP_ID;
+			handle.EXTRA_FLAGs = common.SubTP_ID;
 			return handle;
 		}
 		static SubTPBARRIER_VK* getPassFromHandle(VKOBJHANDLE handle) {
 			if (handle.type != VKHANDLETYPEs::SUBTP_BARRIER) { printer(14); return nullptr; }
 			return (SubTPBARRIER_VK*)VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
 		}
+		SubTPBARRIER_VK() { common.TYPE = VK_PASSTYPE::SUBTP_BARRIER; }
 	};
 
 	struct windowcall_vk {
@@ -192,11 +259,16 @@ struct RenderGraph {
 		VK_PASS_ID_TYPE PASS_ID = VK_PASS_INVALID_ID;
 		VK_VECTOR_ADDONLY<windowcall_vk, 256> WindowCalls;
 		union {
-			passwaitdescription_tgfx_listhandle passwaits = nullptr; //This is used while reconstructing
-			uint32_t PassWaitsPTR;	//This is used after reconstructing
+			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
+			struct finalWaitsPTR {
+				uint32_t PassWaitsPTR = UINT32_MAX;
+				uint16_t waitcount = 0;
+			};
+			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
 		};
 
 		bool isWorkloaded();
+		void convert_waits();
 		VKOBJHANDLE getHANDLE() {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::WINDOWPASS;
@@ -208,6 +280,7 @@ struct RenderGraph {
 			if (handle.type != VKHANDLETYPEs::WINDOWPASS) { printer(14); return nullptr; }
 			return (WP_VK*)VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
 		}
+		WP_VK() {}
 	};
 	struct dispatchcall_vk {
 		VkPipelineLayout Layout = VK_NULL_HANDLE;
@@ -216,12 +289,19 @@ struct RenderGraph {
 		glm::uvec3 DispatchSize = glm::uvec3(0);
 		dispatchcall_vk() { for (uint32_t i = 0; i < VKCONST_MAXDESCSET_PERLIST * 2; i++) { BINDINGTABLEIDs[i] = UINT16_MAX; } }
 	};
-	static constexpr uint32_t sizesdf = sizeof(dispatchcall_vk);
 
 	struct SubCP_VK {
 		VK_VECTOR_ADDONLY<dispatchcall_vk, 1 << 10> Dispatches;
 		uint16_t SubCP_ID = 0;
-		uint16_t SubDP_index = UINT16_MAX, SubTP_index = UINT16_MAX;
+		//These are to define which subpass is waited for the merged subpass
+		struct WaitforMergedPass {
+			uint16_t waitedTP_subpass_i = UINT16_MAX, waitedDP_subpass_i = UINT16_MAX;
+			uint8_t waitedTP_op_flag = 0, waitedDP_op_flag = 0;
+		};
+		union {
+			passwaitdescription_tgfx_listhandle subpasswaits;
+			WaitforMergedPass mergedpasses;
+		};
 		VKOBJHANDLE getHANDLE() {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::SUBCP;
@@ -234,20 +314,33 @@ struct RenderGraph {
 			return (SubCP_VK*)VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
 		}
 		bool isThereWorkload();
+		SubCP_VK() {subpasswaits = nullptr;}
 	};
 
 	struct CP_VK {
-		VK_PASSTYPE PASSTYPE;
-		VK_PASS_ID_TYPE PASS_ID;
+		//For template definitions
+		static constexpr VK_PASSTYPE STATICPASSTYPE = VK_PASSTYPE::CP;
+		static constexpr VKHANDLETYPEs STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBCP;
+		
+
+
+		VK_PASSTYPE PASSTYPE = STATICPASSTYPE;
+		VK_PASS_ID_TYPE PASS_ID = VK_PASS_INVALID_ID;
 		uint16_t SubPassesCount;
 
 		union {
 			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
-			uint32_t PassWaitsPTR;	//This is used after reconstructing
+			struct finalWaitsPTR {
+				uint32_t PassWaitsPTR = UINT32_MAX;
+				uint16_t waitcount = 0;
+			};
+			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
 		};
+		VK_PASS_ID_TYPE MERGEDDP_ID = VK_PASS_INVALID_ID, MERGEDTP_ID = VK_PASS_INVALID_ID;
 
-		CP_VK() : PASS_ID(VK_PASS_INVALID_ID), PASSTYPE(VK_PASSTYPE::CP) {}
+
 		SubCP_VK* GetSubpasses() { return (SubCP_VK*)((uintptr_t)this + sizeof(CP_VK)); }
+		void convert_waits();
 		VKOBJHANDLE getHANDLE() {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::COMPUTEPASS;
@@ -260,12 +353,10 @@ struct RenderGraph {
 			return (CP_VK*)VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
 		}
 		bool isWorkloaded();
+		CP_VK() {}
 	};
-	static constexpr uint32_t szizdzf = sizeof(CP_VK);
-
 	//4MB is enough for all pass data, i guess?
 	static constexpr unsigned int VKCONST_VIRMEM_RGALLOCATION_PAGECOUNT = 2000;
-	//Last 4 pages are given to PASSBASES_PTR
 	uint32_t PASSES_PTR = UINT32_MAX;
 	static uint32_t GetSize_ofType(VK_PASSTYPE type, void* pass) {
 		switch (type) {
@@ -280,6 +371,7 @@ struct RenderGraph {
 		break;
 		case VK_PASSTYPE::WP:
 		{	WP_VK* wp = (WP_VK*)pass; return sizeof(WP_VK); }
+		break;
 		default:
 			printer(result_tgfx_FAIL, "Pass is not supported by the GetSize_ofType(), there is a possible memory bug!");
 			return UINT32_MAX;
@@ -303,6 +395,67 @@ struct RenderGraph {
 	}
 	//This stores reconstruction status, even though old valid RG isn't changed after new one is started reconstruction
 	RGReconstructionStatus STATUS = RGReconstructionStatus::Invalid;
+
+
+	struct WaitDesc_SubDP {
+		bool isWaitingForLastFrame : 1;
+		uint32_t SubPassIndex : 31;
+		drawpass_tgfx_handle* passhandle;
+
+		//All temporary WaitDescs should have these below
+		static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBDP;
+		VKDATAHANDLE getHandle_ofDesc() {
+			VKDATAHANDLE handle;
+			handle.type = HANDLETYPE;
+			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
+			return handle;
+		};
+		static WaitDesc_SubDP* getDesc_fromHandle(VKDATAHANDLE handle) {
+			if (handle.type != HANDLETYPE) { return nullptr; }
+			return (WaitDesc_SubDP*)VK_MEMOFFSET_TO_POINTER(handle.DATA_memoffset);
+		};
+		uint32_t convert_to_FinalWaitDesc();
+	};
+	struct WaitDesc_SubCP {
+		bool isWaitingForLastFrame : 1;
+		uint32_t SubPassIndex : 31;
+		computepass_tgfx_handle* passhandle;
+
+		static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBCP;
+		VKDATAHANDLE getHandle_ofDesc() {
+			VKDATAHANDLE handle;
+			handle.type = HANDLETYPE;
+			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
+			return handle;
+		};
+		static WaitDesc_SubCP* getDesc_fromHandle(VKDATAHANDLE handle) {
+			if (handle.type != HANDLETYPE) { return nullptr; }
+			return (WaitDesc_SubCP*)VK_MEMOFFSET_TO_POINTER(handle.DATA_memoffset);
+		};
+		uint32_t convert_to_FinalWaitDesc();
+	};
+	struct WaitDesc_SubTP {
+		bool isWaitingForLastFrame : 1;
+		uint32_t SubPassIndex : 31;
+		transferpass_tgfx_handle* passhandle;
+
+		static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBTP;
+		VKDATAHANDLE getHandle_ofDesc() {
+			VKDATAHANDLE handle;
+			handle.type = HANDLETYPE;
+			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
+			return handle;
+		};
+		static WaitDesc_SubTP* getDesc_fromHandle(VKDATAHANDLE handle) {
+			if (handle.type != HANDLETYPE) { return nullptr; }
+			return (WaitDesc_SubTP*)VK_MEMOFFSET_TO_POINTER(handle.DATA_memoffset);
+		};
+		uint32_t convert_to_FinalWaitDesc();
+	};
+	template<typename T> static T* getDesc_fromHandle(VKDATAHANDLE handle) { return (T*)T::getDesc_fromHandle(handle); }
+	static void setRGSTATUS(RGReconstructionStatus stat);
+
+
 };
 template<class T>
 bool isWorkloaded(T* pass) {

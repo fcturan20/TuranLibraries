@@ -41,24 +41,32 @@ extern dearimgui_tgfx* TGFXIMGUI = nullptr;
 
 //Global variables
 extern unsigned int devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = UINT32_MAX;
-extern texture_tgfx_handle swapchain_textures[2] = {NULL, NULL}, depthbuffer_handle = NULL;
+extern texture_tgfx_handle swapchain_textures[2] = {NULL, NULL}, depthbuffer_handle = NULL, orange_texture = NULL;
 extern window_tgfx_handle firstwindow = NULL;
 extern buffer_tgfx_handle shaderuniformsbuffer = NULL;
-extern transferpass_tgfx_handle framebegincopy_TP = NULL, barrierbeforecompute_TP = NULL, barrierbeforeraster_TP = NULL, barrierbeforeswapchain_TP = NULL;
-extern subdrawpass_tgfx_handle framerendering_subDP = NULL;
-extern windowpass_tgfx_handle swapchain_windowpass = NULL;
-extern computepass_tgfx_handle ComputebeforeRasterization_CP = NULL;
 extern vertexattributelayout_tgfx_handle vertexattriblayout = NULL;
-texture_tgfx_handle orange_texture = NULL;
+
+
+extern transferpass_tgfx_handle framebegin_TP = NULL;
+extern subtransferpass_tgfx_handle framebegin_subTPs[2] = {NULL, NULL};
+
+extern subcomputepass_tgfx_handle subCP = NULL;
+extern computepass_tgfx_handle ComputebeforeRasterization_CP = NULL;
+
+extern subdrawpass_tgfx_handle framerendering_subDP = NULL;
+extern drawpass_tgfx_handle framerendering_DP = NULL;
+
+extern windowpass_tgfx_handle swapchain_windowpass = NULL;
+
 
 class TURANLIBRARY_LOADER {
 public:
 	static void printf_log_tgfx(result_tgfx result, const char* text) {
 		printf("TGFX Result %u: %s\n", (unsigned int)result, text);
-		if (result == result_tgfx_NOTCODED || result == result_tgfx_FAIL) {
+		if (result != result_tgfx_SUCCESS && result != result_tgfx_WARNING) {
 			int i = 0;
-			printf("TGFX RESULT ISN'T CODED HERE, PLEASE ENTER IF YOU WANT TO CONTINUE: ");
-			scanf("%u", &i);
+			printf("TGFX RESULT ISN'T CODED HERE\n");
+			//scanf("%u", &i);
 		}
 	}
 
@@ -91,9 +99,6 @@ public:
 		if(!aosloader){ printf("Array of Strings System DLL doesn't contain load_plugin function, which it should. You are probably using a newer version that uses different load scheme!"); }
 		ARRAY_OF_STRINGS_TAPI_LOAD_TYPE aos = (ARRAY_OF_STRINGS_TAPI_LOAD_TYPE)aosloader(regsys, 0);
 		if (!aos) { printf("Array of Strings System loading has failed!"); }
-		array_of_strings_tapi* first_array = aos->virtual_allocator->create_array_of_string(virmem_loc, 1 << 30, 0);
-		aos->virtual_allocator->change_string(first_array, 0, "wassup?");
-		printf("%s", aos->virtual_allocator->read_string(first_array, 0));
 
 		auto threadingsysdll = DLIB_LOAD_TAPI("tapi_threadedjobsys.dll");
 		load_plugin_func threadingloader = (load_plugin_func)DLIB_FUNC_LOAD_TAPI(threadingsysdll, "load_plugin");
@@ -116,7 +121,6 @@ public:
 		LOGGER_TAPI_PLUGIN_LOAD_TYPE loggersystype = (LOGGER_TAPI_PLUGIN_LOAD_TYPE)loggerloader(regsys, 0);
 		if (!loggersystype) { printf("Logger System loading has failed!"); }
 		else { loggersys = loggersystype->funcs; }
-		loggersys->log_status("First log!");
 
 		auto bitsetsysdll = DLIB_LOAD_TAPI("tapi_bitset.dll");
 		if (!bitsetsysdll) { printf("There is no tapi_bitset.dll file!"); }
@@ -125,9 +129,6 @@ public:
 		BITSET_TAPI_PLUGIN_LOAD_TYPE bitsetsystype = (BITSET_TAPI_PLUGIN_LOAD_TYPE)bitsetloader(regsys, 0);
 		if (!bitsetsystype) { printf("Bitset System loading has failed!"); }
 		else { bitsetsys = bitsetsystype->funcs; }
-		bitset_tapi* firstbitset = bitsetsys->create_bitset(100);
-		bitsetsys->setbit_true(firstbitset, 5);
-		printf("First true bit: %u and bitset size: %u\n", bitsetsys->getindex_firsttrue(firstbitset), bitsetsys->getbyte_length(firstbitset));
 
 		auto profilersysdll = DLIB_LOAD_TAPI("tapi_profiler.dll");
 		if (!profilersysdll) { printf("There is no tapi_profiler.dll"); }
@@ -185,35 +186,35 @@ public:
 		TURANLIBRARY_LOADER::printf_log_tgfx(result_tgfx_SUCCESS, (std::string("Monitor Count: ") + std::to_string(monitorcount)).c_str());
 		textureusageflag_tgfx_handle swapchaintexture_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, true, true, true, false);
 		TGFXCORE->create_window(window_resolution.x, window_resolution.y, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", nullptr, nullptr, &firstwindow);
-		texture_tgfx_handle swapchaintextures[3];
-		TGFXCORE->create_swapchain(firstwindow, windowpresentation_tgfx_FIFO, windowcomposition_tgfx_OPAQUE, colorspace_tgfx_sRGB_NONLINEAR, texture_channels_tgfx_BGRA8UNORM, swapchaintexture_usageflag, swapchaintextures);
+		TGFXCORE->create_swapchain(firstwindow, windowpresentation_tgfx_FIFO, windowcomposition_tgfx_OPAQUE, colorspace_tgfx_sRGB_NONLINEAR, texture_channels_tgfx_BGRA8UNORM, swapchaintexture_usageflag, swapchain_textures);
 	}
 
-	static void ReconstructRenderGraph_Simple(){/*
+	static void ReconstructRenderGraph_Simple(){
 		TGFXRENDERER->Start_RenderGraphConstruction();
 
+		//3 of these passes are merged: FRAMEBEGIN - FIRSTCP - FRAMERENDERING
 
-		//First Copy TP Creation
-		subtransferpassdescription_tgfx_handle subtpdescs[3] = { TGFXHELPER->CreateSubTransferPassDescription((passwaitdescription_tgfx_listhandle)(&TGFXCORE->INVALIDHANDLE), transferpasstype_tgfx_COPY),
-			TGFXHELPER->CreateSubTransferPassDescription((passwaitdescription_tgfx_listhandle)(&TGFXCORE->INVALIDHANDLE), transferpasstype_tgfx_COPY), (subtransferpassdescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
-		subtransferpass_tgfx_handle subtps[2];
-		TGFXRENDERER->Create_TransferPass(subtpdescs, subtps, &framebegincopy_TP);
+		//FrameBegin TP Creation
+		passwaitdescription_tgfx_handle wait_for_copytp[2] = { TGFXHELPER->CreatePassWait_SubTransferPass(&framebegin_TP, 0, TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
+		passwaitdescription_tgfx_handle wait_for_subcp[2] = { TGFXHELPER->CreatePassWait_SubComputePass(&ComputebeforeRasterization_CP, 0, TGFXHELPER->CreateWaitSignal_ComputeShader(true, true, true), false), (passwaitdescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
+		waitsignaldescription_tgfx_handle framerendering_waitsignals[2] = { TGFXHELPER->CreateWaitSignal_FragmentShader(true, true, true), (waitsignaldescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
+		passwaitdescription_tgfx_handle wait_for_raster[2] = { TGFXHELPER->CreatePassWait_SubDrawPass(&framerendering_DP, 0, framerendering_waitsignals, false), (passwaitdescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
+		subtransferpassdescription_tgfx_handle subtpdescs[5] = { 
+			TGFXHELPER->CreateSubTransferPassDescription((passwaitdescription_tgfx_listhandle)(&TGFXCORE->INVALIDHANDLE), transferpasstype_tgfx_COPY),
+			TGFXHELPER->CreateSubTransferPassDescription(wait_for_copytp, transferpasstype_tgfx_BARRIER),
+			TGFXHELPER->CreateSubTransferPassDescription(wait_for_subcp, transferpasstype_tgfx_BARRIER),
+			TGFXHELPER->CreateSubTransferPassDescription(wait_for_raster, transferpasstype_tgfx_BARRIER),
+			(subtransferpassdescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
+		TGFXRENDERER->Create_TransferPass(subtpdescs, framebegin_subTPs, &framebegin_TP);
 
-
-		//First Barrier TP Creation
-		passwaitdescription_tgfx_handle wait_for_copytp[2] = { TGFXHELPER->CreatePassWait_TransferPass(&framebegincopy_TP, transferpasstype_tgfx_COPY, TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
-		TGFXRENDERER->Create_TransferPass(wait_for_copytp, transferpasstype_tgfx_BARRIER, "FirstBarrierTP", &barrierbeforecompute_TP);
 
 		//First Compute Pass Creation
-		passwaitdescription_tgfx_handle cp_waits[2] = { TGFXHELPER->CreatePassWait_TransferPass(&barrierbeforecompute_TP, transferpasstype_tgfx_BARRIER,
-			TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
-		TGFXRENDERER->Create_ComputePass(cp_waits, 1, "FirstCP", &ComputebeforeRasterization_CP);
+		passwaitdescription_tgfx_handle subcp_waits[2] = { TGFXHELPER->CreatePassWait_SubTransferPass(&framebegin_TP, 1, TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+		subcomputepassdescription_tgfx_handle subcpdescs[2] = { TGFXHELPER->CreateSubComputePassDescription(subcp_waits), (subcomputepassdescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
+		TGFXRENDERER->Create_ComputePass(subcpdescs, &subCP, &ComputebeforeRasterization_CP);
 
-		passwaitdescription_tgfx_handle barrier_waits[2] = { TGFXHELPER->CreatePassWait_ComputePass(&ComputebeforeRasterization_CP, 0, TGFXHELPER->CreateWaitSignal_ComputeShader(true, true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
-		TGFXRENDERER->Create_TransferPass(barrier_waits, transferpasstype_tgfx_BARRIER, "BarrierBeforeDP", &barrierbeforeraster_TP);
 
 		//Draw Pass Creation
-
 		vec4_tgfx white; white.x = 255; white.y = 255; white.z = 255; white.w = 0;
 		rtslotdescription_tgfx_handle rtslot_descs[3] = {
 			TGFXHELPER->CreateRTSlotDescription_Color(swapchain_textures[0], swapchain_textures[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white),
@@ -224,23 +225,14 @@ public:
 			TGFXHELPER->CreateRTSlotUsage_Depth(rtslot_descs[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, operationtype_tgfx_UNUSED, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)TGFXINVALID };
 		inheritedrtslotset_tgfx_handle irtslotset;
 		TGFXCONTENTMANAGER->Inherite_RTSlotSet(rtslotusages, rtslotset_handle, &irtslotset);
-		subdrawpassdescription_tgfx_handle subdp_descs[2] = { TGFXHELPER->CreateSubDrawPassDescription(irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)TGFXINVALID };
-		passwaitdescription_tgfx_handle raster_waits[2] = { TGFXHELPER->CreatePassWait_TransferPass(&barrierbeforeraster_TP, transferpasstype_tgfx_BARRIER, 
-			TGFXHELPER->CreateWaitSignal_Transfer(true, true), false),  (passwaitdescription_tgfx_handle)TGFXINVALID };
-		subdrawpass_tgfx_listhandle sub_dps;
-		drawpass_tgfx_handle dp;
-		TGFXRENDERER->Create_DrawPass(subdp_descs, rtslotset_handle, raster_waits, "First DP", &sub_dps, &dp);
-		framerendering_subDP = sub_dps[0];
+		passwaitdescription_tgfx_handle subdp_waits[2] = { TGFXHELPER->CreatePassWait_SubTransferPass(&framebegin_TP, 2, TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
+		subdrawpassdescription_tgfx_handle subdp_descs[2] = { TGFXHELPER->CreateSubDrawPassDescription(subdp_waits, irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)TGFXINVALID };
+		TGFXRENDERER->Create_DrawPass(subdp_descs, rtslotset_handle, &framerendering_subDP, &framerendering_DP);
 
-		//Final Barrier TP Creation
-		waitsignaldescription_tgfx_handle waitsignaldescs[2] = { TGFXHELPER->CreateWaitSignal_FragmentShader(true, true, true), (waitsignaldescription_tgfx_handle)TGFXINVALID };
-		passwaitdescription_tgfx_handle final_tp_waits[2] = { TGFXHELPER->CreatePassWait_DrawPass(&dp, 0, waitsignaldescs, false), (passwaitdescription_tgfx_handle)TGFXINVALID };
-		TGFXRENDERER->Create_TransferPass(final_tp_waits, transferpasstype_tgfx_BARRIER, "Final TP", &barrierbeforeswapchain_TP);
 
 		//Window Pass Creation
-		waitsignaldescription_tgfx_handle wait_for_finaltp_signal = TGFXHELPER->CreateWaitSignal_Transfer(true, true);
-		passwaitdescription_tgfx_handle wait_for_dp[2] = { TGFXHELPER->CreatePassWait_TransferPass(&barrierbeforeswapchain_TP, transferpasstype_tgfx_BARRIER, wait_for_finaltp_signal, false), (passwaitdescription_tgfx_handle)TGFXINVALID };
-		TGFXRENDERER->Create_WindowPass(wait_for_dp, "First WP", &swapchain_windowpass);
-		TGFXRENDERER->Finish_RenderGraphConstruction(sub_dps[0]);*/
+		passwaitdescription_tgfx_handle wait_for_dp[2] = { TGFXHELPER->CreatePassWait_SubTransferPass(&framebegin_TP, 3, TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXINVALID };
+		TGFXRENDERER->Create_WindowPass(wait_for_dp, &swapchain_windowpass);
+		TGFXRENDERER->Finish_RenderGraphConstruction(framerendering_subDP);
 	}
 };

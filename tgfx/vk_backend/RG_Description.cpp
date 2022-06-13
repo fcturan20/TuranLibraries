@@ -10,15 +10,6 @@
 #include <imgui_impl_glfw.h>
 #include "queue.h"
 
-RenderGraph* VKGLOBAL_RG = nullptr;
-RGReconstructionStatus renderer_public::RGSTATUS() {
-	return VKGLOBAL_RG->STATUS;
-}
-RenderGraph::DP_VK* RenderGraph::SubDP_VK::getDP() {
-	DP_VK* dp = (DP_VK*)(uintptr_t(this) - (sizeof(SubDP_VK) * RG_BINDINDEX) - sizeof(DP_VK));
-	if (dp->PASS_ID != DP_ID) { printer(result_tgfx_FAIL, "SubDP-MainDP doesn't match!"); }
-	return dp;
-}
 
 struct RG_RECDATA {
 	static std::atomic<VK_PASS_ID_TYPE> ID_GENERATOR;
@@ -27,51 +18,6 @@ struct RG_RECDATA {
 		subDP = 0,
 		subCP = 1,
 		subTP = 2
-	};
-	struct WaitDesc_SubDP  {
-		bool isWaitingForLastFrame : 1;
-		uint32_t SubPassIndex : 31;
-		drawpass_tgfx_handle* passhandle;
-		VKDATAHANDLE getHandle_ofDesc() {
-			VKDATAHANDLE handle;
-			handle.type = VKHANDLETYPEs::WAITDESC_SUBDP;
-			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
-			return handle;
-		};
-		static WaitDesc_SubDP* getDesc_fromHandle(VKDATAHANDLE handle) {
-			if (handle.type != VKHANDLETYPEs::WAITDESC_SUBDP) { return nullptr; }
-			return (WaitDesc_SubDP*)VK_MEMOFFSET_TO_POINTER(handle.DATA_memoffset);
-		};
-	};
-	struct WaitDesc_SubCP {
-		bool isWaitingForLastFrame : 1;
-		uint32_t SubPassIndex : 31;
-		computepass_tgfx_handle* passhandle;
-		VKDATAHANDLE getHandle_ofDesc() {
-			VKDATAHANDLE handle;
-			handle.type = VKHANDLETYPEs::WAITDESC_SUBCP;
-			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
-			return handle;
-		};
-		static WaitDesc_SubCP* getDesc_fromHandle(VKDATAHANDLE handle) {
-			if (handle.type != VKHANDLETYPEs::WAITDESC_SUBCP) { return nullptr; }
-			return (WaitDesc_SubCP*)VK_MEMOFFSET_TO_POINTER(handle.DATA_memoffset);
-		};
-	};
-	struct WaitDesc_SubTP {
-		bool isWaitingForLastFrame : 1;
-		uint32_t SubPassIndex : 31;
-		transferpass_tgfx_handle* passhandle;
-		VKDATAHANDLE getHandle_ofDesc() {
-			VKDATAHANDLE handle;
-			handle.type = VKHANDLETYPEs::WAITDESC_SUBTP;
-			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
-			return handle;
-		};
-		static WaitDesc_SubTP* getDesc_fromHandle(VKDATAHANDLE handle) {
-			if (handle.type != VKHANDLETYPEs::WAITDESC_SUBTP) { return nullptr; }
-			return (WaitDesc_SubTP*)VK_MEMOFFSET_TO_POINTER(handle.DATA_memoffset);
-		};
 	};
 	struct SubDPDESC {
 		uint32_t IRTSLOTSET_ID = UINT32_MAX;
@@ -110,13 +56,12 @@ struct RG_RECDATA {
 			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
 			return handle;
 		};
-		static WaitDesc_SubCP* getDesc_fromHandle(VKDATAHANDLE handle) {
+		static RenderGraph::WaitDesc_SubCP* getDesc_fromHandle(VKDATAHANDLE handle) {
 			if (handle.type != VKHANDLETYPEs::RGRECDATA_SUBCPDESC) { return nullptr; }
-			return (WaitDesc_SubCP*)VK_MEMOFFSET_TO_POINTER(handle.DATA_memoffset);
+			return (RenderGraph::WaitDesc_SubCP*)VK_MEMOFFSET_TO_POINTER(handle.DATA_memoffset);
 		};
 	};
 	template<typename T> static VKDATAHANDLE getHandle_ofDesc(T* obj) { return obj->getHandle_ofDesc(); }
-	template<typename T> static T* getDesc_fromHandle(VKDATAHANDLE handle) { return (T*)T::getDesc_fromHandle(handle); }
 
 	static RenderGraph* RG_wip;
 };
@@ -124,19 +69,43 @@ RenderGraph* RG_RECDATA::RG_wip = nullptr;
 std::atomic<VK_PASS_ID_TYPE> RG_RECDATA::ID_GENERATOR = 0;
 vk_virmem::dynamicmem* RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM = nullptr;
 
+RenderGraph* VKGLOBAL_RG = nullptr;
+RGReconstructionStatus renderer_public::RGSTATUS() {
+	if (!VKGLOBAL_RG) { 
+		if (!RG_RECDATA::RG_wip) { return RGReconstructionStatus::Invalid; }
+		else { return RG_RECDATA::RG_wip->STATUS; }
+	}
+	return VKGLOBAL_RG->STATUS;
+}
+void RenderGraph::setRGSTATUS(RGReconstructionStatus stat) {
+	if (!VKGLOBAL_RG) {
+		if (!RG_RECDATA::RG_wip) { return; }
+		else { RG_RECDATA::RG_wip->STATUS = stat; return; }
+	}
+	VKGLOBAL_RG->STATUS = stat;
+}
+
+RenderGraph::DP_VK* RenderGraph::SubDP_VK::getDP() {
+	DP_VK* dp = (DP_VK*)(uintptr_t(this) - (sizeof(SubDP_VK) * RG_BINDINDEX) - sizeof(DP_VK));
+	if (dp->PASS_ID != DP_ID) { printer(result_tgfx_FAIL, "SubDP-MainDP doesn't match!"); }
+	return dp;
+}
+
+
 void Start_RenderGraphConstruction() {
 	//Apply resource changes made by user
 	contentmanager->Resource_Finalizations();
-
+	
 	if (renderer->RGSTATUS() == RGReconstructionStatus::FinishConstructionCalled || renderer->RGSTATUS() == RGReconstructionStatus::StartedConstruction) {
 		printer(result_tgfx_FAIL, "GFXRENDERER->Start_RenderGraphCreation() has failed because you have wrong function call order!"); return;
 	}
-	VKGLOBAL_RG->STATUS = RGReconstructionStatus::StartedConstruction;
 
-	uint32_t dynamicmemoffset = 0;
-	RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM = vk_virmem::allocate_dynamicmem(RenderGraph::VKCONST_VIRMEM_RGALLOCATION_PAGECOUNT, &dynamicmemoffset);
-	RG_RECDATA::RG_wip = (RenderGraph*)VK_MEMOFFSET_TO_POINTER(dynamicmemoffset);
-	RG_RECDATA::RG_wip->PASSES_PTR = dynamicmemoffset;
+	RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM = vk_virmem::allocate_dynamicmem(RenderGraph::VKCONST_VIRMEM_RGALLOCATION_PAGECOUNT);
+	RG_RECDATA::RG_wip = (RenderGraph*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof(RenderGraph));
+	RG_RECDATA::RG_wip->PASSES_PTR = VK_POINTER_TO_MEMOFFSET(RG_RECDATA::RG_wip) + sizeof(RenderGraph);
+
+
+	RenderGraph::setRGSTATUS(RGReconstructionStatus::StartedConstruction);
 }
 
 bool Get_SlotSets_fromSubDP(subdrawpass_tgfx_handle subdp_handle, RTSLOTSET_VKOBJ** rtslotset, IRTSLOTSET_VKOBJ** irtslotset) {
@@ -174,30 +143,11 @@ static void Fill_ColorVkAttachmentDescription(VkAttachmentDescription& Desc, con
 
 	Desc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	Desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	if (Attachment->RT->CHANNELs == texture_channels_tgfx_D32) {
-		if (Attachment->RT_OPERATIONTYPE == operationtype_tgfx_READ_ONLY) {
-			Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-		}
-		else {
-			Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-		}
-	}
-	else if (Attachment->RT->CHANNELs == texture_channels_tgfx_D24S8) {
-		if (Attachment->RT_OPERATIONTYPE == operationtype_tgfx_READ_ONLY) {
-			Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-		}
-		else {
-			Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		}
-	}
-	else {
-		printer(result_tgfx_NOTCODED, "This type of texture channel isn't supported by Fill_ColorVkAttachmentDescription");
-	}
 	Desc.flags = 0;
 }
 static void Fill_SubpassStructs(IRTSLOTSET_VKOBJ* slotset, subdrawpassaccess_tgfx WaitedOp, subdrawpassaccess_tgfx ContinueOp, unsigned char SubpassIndex, VkSubpassDescription& descs, VkSubpassDependency& dependencies) {
 	RTSLOTSET_VKOBJ* BASESLOTSET = contentmanager->GETRTSLOTSET_ARRAY().getOBJbyINDEX(slotset->BASESLOTSET);
-	VkAttachmentReference* COLOR_ATTACHMENTs = (VkAttachmentReference*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof(VkAttachmentReference) * BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT);
+	VkAttachmentReference* COLOR_ATTACHMENTs = (VkAttachmentReference*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(VkAttachmentReference) * BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT);
 	VkAttachmentReference* DS_Attach = nullptr;
 
 	for (unsigned int i = 0; i < BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT; i++) {
@@ -217,7 +167,7 @@ static void Fill_SubpassStructs(IRTSLOTSET_VKOBJ* slotset, subdrawpassaccess_tgf
 	//Depth Stencil Attachment
 	if (BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
 		depthstencilslot_vk* depthslot = BASESLOTSET->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT;
-		DS_Attach = (VkAttachmentReference*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof(VkAttachmentReference));
+		DS_Attach = (VkAttachmentReference*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(VkAttachmentReference));
 		rendergpu->EXTMANAGER()->Fill_DepthAttachmentReference(*DS_Attach, BASESLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT,
 			depthslot->RT->CHANNELs, slotset->DEPTH_OPTYPE, slotset->STENCIL_OPTYPE);
 	}
@@ -248,7 +198,7 @@ static void Fill_SubpassStructs(IRTSLOTSET_VKOBJ* slotset, subdrawpassaccess_tgf
 }
 
 //For second order subpasses, check waitdescs
-//Check against if 2 different mainpasses of the same type are waited for
+//Check if 2 different mainpasses of the same type are waited for
 result_tgfx check_waitdescs_of_subpass(passwaitdescription_tgfx_listhandle waits, drawpass_tgfx_handle** dphandle, computepass_tgfx_handle** cphandle, transferpass_tgfx_handle** tphandle) {
 	TGFXLISTCOUNT(core_tgfx_main, waits, waitlistsize);
 	for (unsigned int wait_i = 0; wait_i < waitlistsize; wait_i++) {
@@ -257,21 +207,21 @@ result_tgfx check_waitdescs_of_subpass(passwaitdescription_tgfx_listhandle waits
 		switch (handle.type) {
 		case VKHANDLETYPEs::WAITDESC_SUBDP:
 		{
-			RG_RECDATA::WaitDesc_SubDP* waitdesc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::WaitDesc_SubDP>(handle);
+			RenderGraph::WaitDesc_SubDP* waitdesc = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubDP>(handle);
 			if (*dphandle) { if (waitdesc->passhandle != *dphandle) { return printer(1); } }
 			else { *dphandle = waitdesc->passhandle; }
 		}
 		break;
 		case VKHANDLETYPEs::WAITDESC_SUBCP:
 		{
-			RG_RECDATA::WaitDesc_SubCP* waitdesc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::WaitDesc_SubCP>(handle);
+			RenderGraph::WaitDesc_SubCP* waitdesc = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubCP>(handle);
 			if (*cphandle) { if (waitdesc->passhandle != *cphandle) { return printer(1); } }
 			else { *cphandle = waitdesc->passhandle; }
 		}
 		break;
 		case VKHANDLETYPEs::WAITDESC_SUBTP:
 		{
-			RG_RECDATA::WaitDesc_SubTP* waitdesc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::WaitDesc_SubTP>(handle);
+			RenderGraph::WaitDesc_SubTP* waitdesc = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubTP>(handle);
 			if (*tphandle) { if (waitdesc->passhandle != *tphandle) { return printer(1); } }
 			else { *tphandle = waitdesc->passhandle; }
 		}
@@ -312,7 +262,7 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 #ifdef VULKAN_DEBUGGING
 	//Check first subdrawpass
 	{
-		RG_RECDATA::SubDPDESC* dpdesc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[0]);
+		RG_RECDATA::SubDPDESC* dpdesc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[0]);
 		if (dpdesc->IRTSLOTSET_ID == UINT32_MAX) {
 			printer(result_tgfx_INVALIDARGUMENT, "First subdrawpass should have valid irtslotset!");
 			return result_tgfx_INVALIDARGUMENT; }
@@ -330,17 +280,18 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 			if (!dpdesc->waits[wait_i]) { continue; }
 			VKDATAHANDLE handle = *(VKDATAHANDLE*)&dpdesc->waits[wait_i];
 			if (handle.type == VKHANDLETYPEs::WAITDESC_SUBDP) {
-				RG_RECDATA::WaitDesc_SubDP* waitdesc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::WaitDesc_SubDP>(handle);
+				RenderGraph::WaitDesc_SubDP* waitdesc = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubDP>(handle);
 				if (waitdesc->passhandle == DPHandle) { printer(result_tgfx_INVALIDARGUMENT, "First subdrawpass can't wait for any subpass of the same drawpass"); return result_tgfx_INVALIDARGUMENT; }
 			}
 		}
 	}
 #endif
+	RenderPass_subDPs_COUNT = 1;
 	//Check other subdrawpasses
 	computepass_tgfx_handle* merged_computepass = nullptr;
 	transferpass_tgfx_handle* merged_transferpass = nullptr;
 	for (unsigned int subdp_i = 1; subdp_i < SubDPsLISTSIZE; subdp_i++) {
-		RG_RECDATA::SubDPDESC* dpdesc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[0]);
+		RG_RECDATA::SubDPDESC* dpdesc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[0]);
 		if (dpdesc->IRTSLOTSET_ID == UINT32_MAX) { BarrierOnly_subDPs_COUNT++; }
 		else { RenderPass_subDPs_COUNT++; }
 #ifdef VULKAN_DEBUGGING
@@ -376,11 +327,11 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 
 
 	//SubDrawPass creation
-	VkSubpassDependency* SubpassDepends = (VkSubpassDependency*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof(VkSubpassDependency) * RenderPass_subDPs_COUNT);
-	VkSubpassDescription* SubpassDescs = (VkSubpassDescription*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof(VkSubpassDescription) * RenderPass_subDPs_COUNT);
+	VkSubpassDependency* SubpassDepends = (VkSubpassDependency*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(VkSubpassDependency) * RenderPass_subDPs_COUNT);
+	VkSubpassDescription* SubpassDescs = (VkSubpassDescription*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(VkSubpassDescription) * RenderPass_subDPs_COUNT);
 
 	for (unsigned int i = 0; i < SubDPsLISTSIZE; i++) {
-		RG_RECDATA::SubDPDESC* Subpass_gfxdesc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[i]);
+		RG_RECDATA::SubDPDESC* Subpass_gfxdesc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[i]);
 		if (!Subpass_gfxdesc) { continue; }
 		IRTSLOTSET_VKOBJ* Subpass_Slotset = contentmanager->GETIRTSLOTSET_ARRAY().getOBJbyINDEX(Subpass_gfxdesc->IRTSLOTSET_ID);
 		Fill_SubpassStructs(Subpass_Slotset, Subpass_gfxdesc->WAITOP, Subpass_gfxdesc->CONTINUEOP, i, SubpassDescs[i], SubpassDepends[i]);
@@ -388,7 +339,7 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 
 	//vkRenderPass generation
 	{
-		VkAttachmentDescription* AttachmentDescs = (VkAttachmentDescription*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof(VkAttachmentDescription) * 
+		VkAttachmentDescription* AttachmentDescs = (VkAttachmentDescription*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(VkAttachmentDescription) *
 			(SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT + 1));
 		uint8_t attachmentdescs_count = 0;
 		//Create Attachment Descriptions
@@ -440,8 +391,8 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 	RenderGraph::SubDP_VK* Final_Subpasses = (RenderGraph::SubDP_VK*)(uintptr_t(DP_final) + sizeof(RenderGraph::DP_VK));
 	for (unsigned int i = 0, s = 0, rp_bi = 0; i < DP_final->ALLSubDPsCOUNT; i++) {
 		//Get next valid desc
-		RG_RECDATA::SubDPDESC* desc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[s++]);
-		while (!desc) { desc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[s++]); }
+		RG_RECDATA::SubDPDESC* desc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[s++]);
+		while (!desc) { desc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[s++]); }
 
 		//Fill subdp
 		RenderGraph::SubDP_VK& subdp = Final_Subpasses[i];
@@ -463,6 +414,7 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 		if (i == 0) {
 			DP_final->passwaits = desc->waits;
 		}
+		subdp.subpasswaits = desc->waits;
 		VKOBJHANDLE subdp_finalhandle = getHandle_ofpass(&Final_Subpasses[i]);
 		SubDrawPassHandles[i] = *(subdrawpass_tgfx_handle*)&subdp_finalhandle;
 	}
@@ -484,9 +436,9 @@ static result_tgfx Create_TransferPass(subtransferpassdescription_tgfx_listhandl
 	drawpass_tgfx_handle* merged_dp = nullptr;
 	for (unsigned int subpass_i = 0; subpass_i < subtplistsize; subpass_i++) {
 		if (!subTPdescs[subpass_i]) { continue; }
-		RG_RECDATA::SubTPDESC* desc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::SubTPDESC>(*(VKDATAHANDLE*)&subTPdescs[subpass_i]);
+		RG_RECDATA::SubTPDESC* desc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubTPDESC>(*(VKDATAHANDLE*)&subTPdescs[subpass_i]);
 		if (desc->type == transferpasstype_tgfx_BARRIER) { barrier_subtpcount++;}
-		if(desc->type == transferpasstype_tgfx_COPY){copy_subtpcount++;}
+		else if(desc->type == transferpasstype_tgfx_COPY){copy_subtpcount++;}
 #ifdef VULKAN_DEBUGGING
 		else { return printer(3);}
 		check_waitdescs_of_subpass(desc->waits, &merged_dp, &merged_cp, &TPHandle);
@@ -495,7 +447,8 @@ static result_tgfx Create_TransferPass(subtransferpassdescription_tgfx_listhandl
 	
 	uint32_t size_of_subtps = (sizeof(RenderGraph::SubTPCOPY_VK) * copy_subtpcount) + (sizeof(RenderGraph::SubTPBARRIER_VK) * barrier_subtpcount);
 	uint32_t sizeof_malloc = sizeof(RenderGraph::TP_VK) + size_of_subtps;
-	RenderGraph::TP_VK* tp = (RenderGraph::TP_VK*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof_malloc);
+	uint32_t tp_memoffset = vk_virmem::allocate_from_dynamicmem(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof_malloc);
+	RenderGraph::TP_VK* tp = (RenderGraph::TP_VK*)(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + tp_memoffset);
 	*tp = RenderGraph::TP_VK();
 	tp->PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
 	tp->SubPassesCount = barrier_subtpcount + copy_subtpcount;
@@ -504,11 +457,14 @@ static result_tgfx Create_TransferPass(subtransferpassdescription_tgfx_listhandl
 	uintptr_t last_ptr = uintptr_t(tp) + sizeof(RenderGraph::TP_VK);
 	for (unsigned int subpass_i = 0; subpass_i < barrier_subtpcount + copy_subtpcount; subpass_i++) {
 		if (!subTPdescs[subpass_i]) { continue; }
-		RG_RECDATA::SubTPDESC* desc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::SubTPDESC>(*(VKDATAHANDLE*)&subTPdescs[subpass_i]);
+		RG_RECDATA::SubTPDESC* desc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubTPDESC>(*(VKDATAHANDLE*)&subTPdescs[subpass_i]);
 		if (desc->type == transferpasstype_tgfx_BARRIER) { 
 			RenderGraph::SubTPBARRIER_VK* tpbar = (RenderGraph::SubTPBARRIER_VK*)last_ptr;
+			*tpbar = RenderGraph::SubTPBARRIER_VK();
 			tpbar->BufferBarriers = VK_VECTOR_ADDONLY<RenderGraph::VK_BufBarrierInfo, 1 << 16>();
 			tpbar->TextureBarriers = VK_VECTOR_ADDONLY<RenderGraph::VK_ImBarrierInfo, 1 << 16>();
+			tpbar->common.subpasswaits = desc->waits;
+			tpbar->common.SubTP_ID = subpass_i;
 
 			VKOBJHANDLE subdp_finalhandle = getHandle_ofpass(tpbar);
 			subTPHandles[subpass_i] = *(subtransferpass_tgfx_handle*)&subdp_finalhandle;
@@ -517,9 +473,12 @@ static result_tgfx Create_TransferPass(subtransferpassdescription_tgfx_listhandl
 		}
 		if (desc->type == transferpasstype_tgfx_COPY) {
 			RenderGraph::SubTPCOPY_VK* tpcopy = (RenderGraph::SubTPCOPY_VK*)last_ptr;
+			*tpcopy = RenderGraph::SubTPCOPY_VK();
 			tpcopy->BUFBUFCopies = VK_VECTOR_ADDONLY<RenderGraph::VK_BUFtoBUFinfo, 1 << 16>();
 			tpcopy->BUFIMCopies = VK_VECTOR_ADDONLY<RenderGraph::VK_BUFtoIMinfo, 1 << 16>();
 			tpcopy->IMIMCopies = VK_VECTOR_ADDONLY<RenderGraph::VK_IMtoIMinfo, 1 << 16>();
+			tpcopy->common.subpasswaits = desc->waits;
+			tpcopy->common.SubTP_ID = subpass_i;
 
 			VKOBJHANDLE subdp_finalhandle = getHandle_ofpass(tpcopy);
 			subTPHandles[subpass_i] = *(subtransferpass_tgfx_handle*)&subdp_finalhandle;
@@ -550,15 +509,16 @@ static result_tgfx Create_ComputePass(subcomputepassdescription_tgfx_listhandle 
 	transferpass_tgfx_handle* merged_tp = nullptr;
 	for (unsigned int subpass_i = 0; subpass_i < subcplistsize; subpass_i++) {
 		if (!subCPdescs[subpass_i]) { continue; }
-		RG_RECDATA::SubCPDESC* desc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::SubCPDESC>(*(VKDATAHANDLE*)&subCPdescs[subpass_i]);
+		RG_RECDATA::SubCPDESC* desc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubCPDESC>(*(VKDATAHANDLE*)&subCPdescs[subpass_i]);
 #ifdef VULKAN_DEBUGGING
 		check_waitdescs_of_subpass(desc->waits, &merged_dp, &CPHandle, &merged_tp);
 #endif
 		subcpcount++;
 	}
-
-	uint32_t sizeof_malloc = sizeof(RenderGraph::CP_VK) + (sizeof(RenderGraph::SubCP_VK*) * subcpcount);
-	RenderGraph::CP_VK* CP = (RenderGraph::CP_VK*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof_malloc);
+	uint32_t sizeof_malloc = (sizeof(RenderGraph::SubCP_VK) * subcpcount) + sizeof(RenderGraph::CP_VK);
+	uint32_t cp_memoffset = vk_virmem::allocate_from_dynamicmem(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof_malloc);
+	RenderGraph::CP_VK* CP = (RenderGraph::CP_VK*)(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + cp_memoffset);
+	*CP = RenderGraph::CP_VK();
 	CP->PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
 	CP->SubPassesCount = subcpcount;
 	RenderGraph::SubCP_VK* final_subcps = (RenderGraph::SubCP_VK*)(uintptr_t(CP) + sizeof(RenderGraph::CP_VK));
@@ -568,13 +528,14 @@ static result_tgfx Create_ComputePass(subcomputepassdescription_tgfx_listhandle 
 			continue;
 		}
 
-		RG_RECDATA::SubCPDESC* desc = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::SubCPDESC>(*(VKDATAHANDLE*)&subCPdescs[subpass_i]);
+		RG_RECDATA::SubCPDESC* desc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubCPDESC>(*(VKDATAHANDLE*)&subCPdescs[subpass_i]);
 		RenderGraph::SubCP_VK* subcp = &final_subcps[subpass_i];
 		if (subpass_i == 0) {
 			CP->passwaits = desc->waits;
 		}
 		*subcp = RenderGraph::SubCP_VK();
-
+		subcp->subpasswaits = desc->waits;
+		
 		VKOBJHANDLE handle = getHandle_ofpass(subcp);
 		subCPHandles[subpass_i] = *(subcomputepass_tgfx_handle*)&handle;
 
@@ -593,6 +554,7 @@ static result_tgfx Create_WindowPass(passwaitdescription_tgfx_listhandle WaitDes
 
 
 	RenderGraph::WP_VK* WP = (RenderGraph::WP_VK*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof(RenderGraph::WP_VK));
+	*WP = RenderGraph::WP_VK();
 	WP->WindowCalls = VK_VECTOR_ADDONLY<RenderGraph::windowcall_vk, 256>();
 	WP->PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
 	WP->passwaits = WaitDescriptions;
@@ -605,15 +567,19 @@ static result_tgfx Create_WindowPass(passwaitdescription_tgfx_listhandle WaitDes
 
 inline static bool Check_WaitHandles() {
 	uint16_t current_PASS_ID = 0;
-	uintptr_t last_ptr = (uintptr_t)VKCONST_VIRMEMSPACE_BEGIN + RG_RECDATA::RG_wip->PASSES_PTR;
+	uintptr_t last_ptr = ((uintptr_t)VKCONST_VIRMEMSPACE_BEGIN) + RG_RECDATA::RG_wip->PASSES_PTR;
 	while (current_PASS_ID < RG_RECDATA::ID_GENERATOR.load() && 
-		last_ptr < uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + (RG_RECDATA::RG_wip->VKCONST_VIRMEM_RGALLOCATION_PAGECOUNT * VKCONST_VIRMEMPAGESIZE)) {
+		last_ptr < uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + RG_RECDATA::RG_wip->PASSES_PTR + (RG_RECDATA::RG_wip->VKCONST_VIRMEM_RGALLOCATION_PAGECOUNT * VKCONST_VIRMEMPAGESIZE)) {
+		uintptr_t sdf = last_ptr - (uintptr_t)VKCONST_VIRMEMSPACE_BEGIN;
 		VK_PASSTYPE type = *(VK_PASSTYPE*)last_ptr;
 		passwaitdescription_tgfx_listhandle waitlist = nullptr;
 		switch (type) {
 		case VK_PASSTYPE::DP:
-			if (current_PASS_ID != ((RenderGraph::DP_VK*)last_ptr)->PASS_ID) { printer(9); return false; }
-			waitlist = ((RenderGraph::DP_VK*)last_ptr)->passwaits;
+		{
+			RenderGraph::DP_VK* dp = (RenderGraph::DP_VK*)last_ptr;
+			if (current_PASS_ID != dp->PASS_ID) { printer(9); return false; }
+			waitlist = dp->passwaits;
+		}
 			break;
 		case VK_PASSTYPE::CP:
 			waitlist = ((RenderGraph::CP_VK*)last_ptr)->passwaits;
@@ -623,6 +589,7 @@ inline static bool Check_WaitHandles() {
 			break;
 		case VK_PASSTYPE::WP:
 			waitlist = ((RenderGraph::WP_VK*)last_ptr)->passwaits;
+			break;
 		default:
 			printer(6);
 			return false;
@@ -634,7 +601,7 @@ inline static bool Check_WaitHandles() {
 			switch (passwaitdesc_handle.type) {
 			case VKHANDLETYPEs::WAITDESC_SUBDP:
 			{
-				RG_RECDATA::WaitDesc_SubDP* wait_subdp = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::WaitDesc_SubDP>(passwaitdesc_handle);
+				RenderGraph::WaitDesc_SubDP* wait_subdp = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubDP>(passwaitdesc_handle);
 				VKOBJHANDLE passhandle = *(VKOBJHANDLE*)wait_subdp->passhandle;
 				if (passhandle.type != VKHANDLETYPEs::DRAWPASS) { printer(7); }
 				RenderGraph::DP_VK* dp = getPass_fromHandle<RenderGraph::DP_VK>(passhandle);
@@ -644,7 +611,7 @@ inline static bool Check_WaitHandles() {
 			break;
 			case VKHANDLETYPEs::WAITDESC_SUBCP:
 			{
-				RG_RECDATA::WaitDesc_SubCP* wait_subcp = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::WaitDesc_SubCP>(passwaitdesc_handle);
+				RenderGraph::WaitDesc_SubCP* wait_subcp = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubCP>(passwaitdesc_handle);
 				VKOBJHANDLE passhandle = *(VKOBJHANDLE*)wait_subcp->passhandle;
 				if (passhandle.type != VKHANDLETYPEs::COMPUTEPASS) { printer(7); }
 				RenderGraph::CP_VK* cp = getPass_fromHandle<RenderGraph::CP_VK>(passhandle);
@@ -654,7 +621,7 @@ inline static bool Check_WaitHandles() {
 			break;
 			case VKHANDLETYPEs::WAITDESC_SUBTP:
 			{
-				RG_RECDATA::WaitDesc_SubTP* wait_subtp = RG_RECDATA::getDesc_fromHandle<RG_RECDATA::WaitDesc_SubTP>(passwaitdesc_handle);
+				RenderGraph::WaitDesc_SubTP* wait_subtp = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubTP>(passwaitdesc_handle);
 				VKOBJHANDLE passhandle = *(VKOBJHANDLE*)wait_subtp->passhandle;
 				if (passhandle.type != VKHANDLETYPEs::TRANSFERPASS) { printer(7); }
 				RenderGraph::TP_VK* tp = getPass_fromHandle<RenderGraph::TP_VK>(passhandle);
@@ -675,8 +642,9 @@ inline static bool Check_WaitHandles() {
 	return true;
 }
 extern void CheckIMGUIVKResults(VkResult result);
+extern void Allocate_finalWaitMemory();
 unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpass) {
-	if (VKGLOBAL_RG->STATUS != RGReconstructionStatus::StartedConstruction) {
+	if (renderer->RGSTATUS() != RGReconstructionStatus::StartedConstruction) {
 		printer(result_tgfx_FAIL, "VulkanRenderer->Finish_RenderGraphCreation() has failed because you didn't call Start_RenderGraphConstruction() before!");
 		return false;
 	}
@@ -684,9 +652,56 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 	//Checks wait handles of the render nodes, if matching fails return false
 	if (!Check_WaitHandles()) {
 		printer(result_tgfx_NOTCODED, "VulkanRenderer->Finish_RenderGraphConstruction() has failed but should return to old RenderGraph. This is not the case for now! Fixes: Return back to old rendergraph, destroy all vk objects created for deleted passes");
-		VKGLOBAL_RG->STATUS = RGReconstructionStatus::Invalid;	//User can change only waits of a pass, so all rendergraph falls to invalid in this case
+		RenderGraph::setRGSTATUS(RGReconstructionStatus::Invalid);	//User can change only waits of a pass, so all rendergraph falls to invalid in this case
 		//It needs to be reconstructed by calling Start_RenderGraphConstruction()
 		return false;
+	}
+
+	Allocate_finalWaitMemory();
+
+
+	//Wait handles is in current frame's memory block and it's hard to search them fast
+	//So move all waits to a seperate memory block (so CPU can cache them)
+	{
+		uintptr_t last_ptr = (uintptr_t)VKCONST_VIRMEMSPACE_BEGIN + RG_RECDATA::RG_wip->PASSES_PTR;
+		uint16_t current_PassID = false;
+		for (current_PassID; current_PassID < RG_RECDATA::ID_GENERATOR.load(); current_PassID++) {
+			VK_PASSTYPE type = *(VK_PASSTYPE*)(last_ptr);
+			switch (type) {
+			case VK_PASSTYPE::DP:
+			{
+				RenderGraph::DP_VK* dp = ((RenderGraph::DP_VK*)last_ptr);
+				if (current_PassID != dp->PASS_ID) { printer(9); return false; }
+				dp->convert_waits();
+			}
+			break;
+			case VK_PASSTYPE::CP:
+			{
+				RenderGraph::CP_VK* cp = ((RenderGraph::CP_VK*)last_ptr);
+				if (current_PassID != cp->PASS_ID) { printer(9); return false; }
+				cp->convert_waits();
+			}
+			break;
+			case VK_PASSTYPE::TP:
+			{
+				RenderGraph::TP_VK* tp = ((RenderGraph::TP_VK*)last_ptr);
+				if (current_PassID != tp->PASS_ID) { printer(9); return false; }
+				tp->convert_waits();
+			}
+			break;
+			case VK_PASSTYPE::WP:
+			{
+				RenderGraph::WP_VK* wp = ((RenderGraph::WP_VK*)last_ptr);
+				if (current_PassID != wp->PASS_ID) { printer(9); return false; }
+				wp->convert_waits();
+			}
+			break;
+			default:
+				printer(15); return false;
+			}
+
+			last_ptr += RenderGraph::GetSize_ofType(type, (void*)last_ptr);
+		}
 	}
 
 
@@ -706,7 +721,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 			//If subdrawpass has more than one color slot, return false
 			if (SLOTSET->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT != 1) {
 				printer(result_tgfx_FAIL, "The Drawpass that's gonna render dear IMGUI should only have one color slot!");
-				VKGLOBAL_RG->STATUS = RGReconstructionStatus::Invalid;	//User can delete a draw pass, dear Imgui fails in this case.
+				RenderGraph::setRGSTATUS(RGReconstructionStatus::Invalid);	//User can delete a draw pass, dear Imgui fails in this case.
 				//To avoid this, it needs to be reconstructed by calling Start_RenderGraphConstruction()
 				return false;
 			}
@@ -768,7 +783,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 	}
 #endif
 
-	VKGLOBAL_RG->STATUS = RGReconstructionStatus::FinishConstructionCalled;
+	RenderGraph::setRGSTATUS(RGReconstructionStatus::FinishConstructionCalled);
 	RG_RECDATA::ID_GENERATOR.store(0);
 	vk_virmem::free_dynamicmem(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM);
 	return true;
@@ -791,8 +806,8 @@ static passwaitdescription_tgfx_handle CreatePassWait_SubDrawPass(drawpass_tgfx_
 	waitsignaldescription_tgfx_handle* WaitInfos, unsigned char isLastFrame) {
 	if (!PassHandle) { printer(result_tgfx_INVALIDARGUMENT, "CreatePassWait_SubDrawPass()'s first argument can't be nullptr!"); return nullptr; }
 	TGFXLISTCOUNT(core_tgfx_main, WaitInfos, waitlistsize);
-	if (waitlistsize) { printer(result_tgfx_NOTCODED, "waitsignaldescription isn't supported for now!"); }
-	RG_RECDATA::WaitDesc_SubDP* waitdesc = (RG_RECDATA::WaitDesc_SubDP*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(RG_RECDATA::WaitDesc_SubDP));
+	if (waitlistsize) { printer(result_tgfx_WARNING, "waitsignaldescription isn't supported for now!"); }
+	RenderGraph::WaitDesc_SubDP* waitdesc = (RenderGraph::WaitDesc_SubDP*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(RenderGraph::WaitDesc_SubDP));
 	waitdesc->passhandle = PassHandle;
 	waitdesc->SubPassIndex = SubDPIndex;
 	waitdesc->isWaitingForLastFrame = isLastFrame;
@@ -807,7 +822,7 @@ static passwaitdescription_tgfx_handle CreatePassWait_SubDrawPass(drawpass_tgfx_
 static passwaitdescription_tgfx_handle CreatePassWait_SubComputePass(computepass_tgfx_handle* PassHandle, unsigned int SubCPIndex,
 	waitsignaldescription_tgfx_handle WaitInfo, unsigned char isLastFrame) {
 	if (!PassHandle) { printer(result_tgfx_INVALIDARGUMENT, "CreatePassWait_SubComputePass()'s first argument can't be nullptr!"); return nullptr; }
-	RG_RECDATA::WaitDesc_SubCP* waitdesc = (RG_RECDATA::WaitDesc_SubCP*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(RG_RECDATA::WaitDesc_SubCP));
+	RenderGraph::WaitDesc_SubCP* waitdesc = (RenderGraph::WaitDesc_SubCP*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(RenderGraph::WaitDesc_SubCP));
 	waitdesc->passhandle = PassHandle;
 	waitdesc->SubPassIndex = SubCPIndex;
 	waitdesc->isWaitingForLastFrame = isLastFrame;
@@ -821,7 +836,7 @@ static passwaitdescription_tgfx_handle CreatePassWait_SubComputePass(computepass
 static passwaitdescription_tgfx_handle CreatePassWait_SubTransferPass(transferpass_tgfx_handle* PassHandle, unsigned int SubTPIndex,
 	waitsignaldescription_tgfx_handle WaitInfo, unsigned char isLastFrame) {
 	if (!PassHandle) { printer(result_tgfx_INVALIDARGUMENT, "CreatePassWait_SubTransferPass()'s first argument can't be nullptr!"); return nullptr; }
-	RG_RECDATA::WaitDesc_SubTP* waitdesc = (RG_RECDATA::WaitDesc_SubTP*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(RG_RECDATA::WaitDesc_SubTP));
+	RenderGraph::WaitDesc_SubTP* waitdesc = (RenderGraph::WaitDesc_SubTP*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(RenderGraph::WaitDesc_SubTP));
 	waitdesc->passhandle = PassHandle;
 	waitdesc->SubPassIndex = SubTPIndex;
 	waitdesc->isWaitingForLastFrame = isLastFrame;
@@ -852,26 +867,57 @@ static subdrawpassdescription_tgfx_handle CreateSubDrawPassDescription(passwaitd
 	return *(subdrawpassdescription_tgfx_handle*)&handle;
 }
 static subcomputepassdescription_tgfx_handle CreateSubComputePassDescription(passwaitdescription_tgfx_listhandle waitdescs) {
-	RG_RECDATA::SubDPDESC* desc = (RG_RECDATA::SubDPDESC*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(RG_RECDATA::SubCPDESC));
+	RG_RECDATA::SubCPDESC* desc = (RG_RECDATA::SubCPDESC*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(RG_RECDATA::SubCPDESC));
 	desc->waits = waitdescs;
 
 	VKDATAHANDLE handle = RG_RECDATA::getHandle_ofDesc(desc);
 	return *(subcomputepassdescription_tgfx_handle*)&handle;
 }
+static subtransferpassdescription_tgfx_handle CreateSubTransferPassDescription(passwaitdescription_tgfx_listhandle waits, transferpasstype_tgfx type_i) {
+#ifdef TURAN_DEBUGGING
+	if (type_i > transferpasstype_tgfx_COPY) { printer(21); }
+#endif
+	RG_RECDATA::SubTPDESC* desc = (RG_RECDATA::SubTPDESC*)VK_ALLOCATE_AND_GETPTR(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(RG_RECDATA::SubTPDESC));
+	desc->waits = waits;
+	desc->type = type_i;
+	
+	VKDATAHANDLE handle = RG_RECDATA::getHandle_ofDesc(desc);
+	return *(subtransferpassdescription_tgfx_handle*)&handle;
+}
+
+
+//These are jibberish because they'll be implemented properly in the future
+waitsignaldescription_tgfx_handle waitsignal_cs(unsigned char fds, unsigned char sdf, unsigned char lsdfv) { return nullptr; }
+waitsignaldescription_tgfx_handle waitsignal_drawindirectconsume(){ return nullptr; }
+waitsignaldescription_tgfx_handle waitsignal_tr(unsigned char dslkþfk, unsigned char sdfsd){ return nullptr; }
+
+
 
 void set_RGCreation_funcptrs() {
 	core_tgfx_main->renderer->Start_RenderGraphConstruction = &Start_RenderGraphConstruction;
 	core_tgfx_main->renderer->Finish_RenderGraphConstruction = &Finish_RenderGraphConstruction;
 	core_tgfx_main->renderer->Destroy_RenderGraph = &Destroy_RenderGraph;
 
-	core_tgfx_main->renderer->Create_TransferPass = &Create_TransferPass;
 	core_tgfx_main->renderer->Create_DrawPass = &Create_DrawPass;
-	core_tgfx_main->renderer->Create_WindowPass = &Create_WindowPass;
 	core_tgfx_main->renderer->Create_ComputePass = &Create_ComputePass;
+	core_tgfx_main->renderer->Create_TransferPass = &Create_TransferPass;
+	core_tgfx_main->renderer->Create_WindowPass = &Create_WindowPass;
 
 	core_tgfx_main->helpers->CreatePassWait_SubDrawPass = &CreatePassWait_SubDrawPass;
 	core_tgfx_main->helpers->CreatePassWait_SubComputePass = &CreatePassWait_SubComputePass;
 	core_tgfx_main->helpers->CreatePassWait_SubTransferPass = &CreatePassWait_SubTransferPass;
 	core_tgfx_main->helpers->CreatePassWait_WindowPass = &CreatePassWait_WindowPass;
+
+
 	core_tgfx_main->helpers->CreateSubDrawPassDescription = &CreateSubDrawPassDescription;
+	core_tgfx_main->helpers->CreateSubComputePassDescription = &CreateSubComputePassDescription;
+	core_tgfx_main->helpers->CreateSubTransferPassDescription = &CreateSubTransferPassDescription;
+
+	core_tgfx_main->helpers->CreateWaitSignal_ComputeShader = &waitsignal_cs;
+	core_tgfx_main->helpers->CreateWaitSignal_DrawIndirectConsume = &waitsignal_drawindirectconsume;
+	core_tgfx_main->helpers->CreateWaitSignal_FragmentShader = &waitsignal_cs;
+	core_tgfx_main->helpers->CreateWaitSignal_FragmentTests = &waitsignal_cs;
+	core_tgfx_main->helpers->CreateWaitSignal_Transfer = &waitsignal_tr;
+	core_tgfx_main->helpers->CreateWaitSignal_VertexInput = &waitsignal_tr;
+	core_tgfx_main->helpers->CreateWaitSignal_VertexShader = &waitsignal_cs;
 }

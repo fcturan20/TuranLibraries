@@ -147,19 +147,26 @@ struct DESCSET_VKOBJ {
 	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::DESCSET;
 	static uint16_t GET_EXTRAFLAGS(DESCSET_VKOBJ* obj) { return Find_VKCONST_DESCSETID_byVkDescType(obj->DESCTYPE); }
 	
-	DESCSET_VKOBJ() : isUpdatedCounter(0), Stages(0), isALIVE(true), Layout(VK_NULL_HANDLE){}
+	DESCSET_VKOBJ(VkDescriptorType type, uint32_t elementCount) : isUpdatedCounter(0), Stages(0), isALIVE(true), Layout(VK_NULL_HANDLE)
+		, DESCTYPE(type), bufferDescELEMENTs() {
+		if (DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) { bufferDescELEMENTs.resize(elementCount); }
+		if (DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE || DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE) { textureDescELEMENTs.resize(elementCount); }
+		if (DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLER) { samplerDescELEMENTs.resize(elementCount); }
+	}
 	void operator = (const DESCSET_VKOBJ& copyFrom) { 
 		isALIVE.store(true);
 		for (unsigned int i = 0; i < VKCONST_BUFFERING_IN_FLIGHT; i++) {
 			Sets[i] = copyFrom.Sets[i];
 		}
 		Layout = copyFrom.Layout;
-		DESCTYPE = copyFrom.DESCTYPE;
-		if (DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLER) { samplerDescELEMENTs = copyFrom.samplerDescELEMENTs; }
-		if (DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE || DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) { textureDescELEMENTs = copyFrom.textureDescELEMENTs; }
-		if (DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER || DESCTYPE == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) { bufferDescELEMENTs = copyFrom.bufferDescELEMENTs; }
 		isUpdatedCounter.store(copyFrom.isUpdatedCounter.load());
 		Stages = copyFrom.Stages;
+		//All of them are identical anyway
+		DESCTYPE = copyFrom.DESCTYPE;
+		if (DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) { bufferDescELEMENTs = copyFrom.bufferDescELEMENTs; }
+		if (DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE || DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE) { textureDescELEMENTs = copyFrom.textureDescELEMENTs; }
+		if (DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLER) { samplerDescELEMENTs = copyFrom.samplerDescELEMENTs; }
+		bufferDescELEMENTs = copyFrom.bufferDescELEMENTs;
 	}
 	VkDescriptorSet Sets[VKCONST_BUFFERING_IN_FLIGHT] = {};
 	VkDescriptorSetLayout Layout = VK_NULL_HANDLE;

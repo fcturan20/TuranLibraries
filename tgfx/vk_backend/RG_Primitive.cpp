@@ -9,9 +9,11 @@
 #include "synchronization_sys.h"
 #include "RG.h"
 
+//These are reconstructred RG specific datas
+//so other RG .cpps don't have to know about this
 struct framegraphsys_vk {
-	static std::vector<VK_PassDesc*> VKPASSes;
-	static std::vector<VK_PassDesc*> Execution_Order;
+	static vk_virmem::dynamicmem* WAITs_DYNAMICMEM;
+	static constexpr uint32_t WAITs_DYNAMICMEM_PAGECOUNT = 2000;
 
 	static std::vector<fence_idtype_vk> RENDERING_FENCEs[2];
 	//We need this struct to destroy rendering submission semaphores waited by VkQueuePresentKHR
@@ -21,59 +23,11 @@ struct framegraphsys_vk {
 		std::vector<semaphore_idtype_vk> semaphores;
 	};
 	static std::vector<swapchain_fence> swapchain_fences;
-public:
 };
-void Create_FrameGraphs() {
-	//While constructing main pass info, we should find the merged passes by pointer comparison
-	//Because merged pass info doesn't help while constructing RG
+vk_virmem::dynamicmem* framegraphsys_vk::WAITs_DYNAMICMEM = nullptr;
 
-
-	//Check merged pass consistency across all passes
-	//For example: If DP-A is merged with TP-A, TP-A shouldn't merge with any other DP
-	//Return if fail
-
-
-	//Check if two pass waits for each other in first subpass (not-merged) 
-	//This shouldn't happen, only happen in a merged way or either of them wait for last frame
-	//Return if fail
-
-	//Find passes that has either no pass or waits only for last frame passes
-	//They create the first branch abd
-
-
-
-	VKPASSes.clear();
-
-	VK_PassDesc* searched_dependency = nullptr;
-	Execution_Order.clear();
-	bool is_searching = true;
-	while (is_searching) {
-		is_searching = false;
-		for (unsigned int pass_i = 0; pass_i < VKPASSes.size(); pass_i++) {
-			VK_PassDesc* main_pass = VKPASSes[pass_i];
-			if (main_pass->WAITsCOUNT == 0) {
-				if (!searched_dependency) {
-					Execution_Order.push_back(main_pass);
-					searched_dependency = main_pass;
-					is_searching = true;
-					break;
-				}
-				else {
-					continue;
-				}
-			}
-			//Primitive RenderGraph doesn't support multiple dependencies, each pass can have only one dependency and it's a valid pass!
-			if (*main_pass->WAITs[0].WaitedPass == searched_dependency) {
-				Execution_Order.push_back(main_pass);
-				searched_dependency = main_pass;
-				is_searching = true;
-				break;
-			}
-		}
-	}
-}
 inline static void find_and_clear_swapchainfence(WINDOW_VKOBJ* window) {
-	for (unsigned int fence_i = 0; fence_i < swapchain_fences.size(); fence_i++) {
+	/*for (unsigned int fence_i = 0; fence_i < swapchain_fences.size(); fence_i++) {
 		framegraphsys_vk::swapchain_fence& fence = swapchain_fences[fence_i];
 		for (unsigned int window_i = 0; window_i < swapchain_fences[fence_i].windows.size(); window_i++) {
 			if (fence.windows[window_i] == window) {
@@ -84,14 +38,45 @@ inline static void find_and_clear_swapchainfence(WINDOW_VKOBJ* window) {
 		}
 		swapchain_fences.erase(swapchain_fences.begin() + fence_i);
 		fence_i--;
-	}
+	}*/
 }
-std::vector<VK_PassDesc*> framegraphsys_vk::VKPASSes = std::vector<VK_PassDesc*>(), framegraphsys_vk::Execution_Order = std::vector<VK_PassDesc*>();
 std::vector<fence_idtype_vk> framegraphsys_vk::RENDERING_FENCEs[2] = { {}, {} };
 std::vector<framegraphsys_vk::swapchain_fence> framegraphsys_vk::swapchain_fences = {};
 
 
+void Allocate_finalWaitMemory(){
+	if (framegraphsys_vk::WAITs_DYNAMICMEM) { vk_virmem::free_dynamicmem(framegraphsys_vk::WAITs_DYNAMICMEM); }
+	framegraphsys_vk::WAITs_DYNAMICMEM = vk_virmem::allocate_dynamicmem(framegraphsys_vk::WAITs_DYNAMICMEM_PAGECOUNT);
+}
 
+void Create_FrameGraphs() {
+	//---------------- Algorithm Summary
+	//Check merged pass consistency across all passes
+	//For example: If DP-A is merged with TP-A, TP-A shouldn't merge with any other DP
+	//If fail; return
+
+
+	//Check if two pass waits for each other in first subpass (not-merged) 
+	//This shouldn't happen, only happen in a merged way or either of them wait for last frame
+	//If fail; return
+
+
+	//Find merged passes and create RGBranch from them
+	//There is no need to add other passes at the start of these branches
+	// because DynamicOptimization step will merge them as if needed
+	//That also means user can define main pass wait one time, not again for the merged ones
+
+
+	//Find passes that waits for no pass or waits only for last frame passes
+	//These are FrameBegin branches
+	//-----------------
+
+
+
+
+}
+
+/*
 void SetBarrier_BetweenPasses(VkCommandBuffer CB, VK_PassDesc* CurrentPass, VK_PassDesc* LastPass, VkPipelineStageFlags& srcPipelineStage) {
 	printer(result_tgfx_WARNING, "SetBarrier_BetweenPasses() isn't coded");
 }
@@ -484,3 +469,223 @@ result_tgfx Execute_RenderGraph() {
 
 	return result_tgfx_SUCCESS;
 }
+*/
+void WaitForRenderGraphCommandBuffers() {}
+result_tgfx Execute_RenderGraph() { return result_tgfx_NOTCODED; }
+
+
+
+template<typename targetTYPE>
+VK_PASS_ID_TYPE find_mergedpass(passwaitdescription_tgfx_listhandle waitlist) {
+	VK_PASS_ID_TYPE mergedpass = VK_PASS_INVALID_ID;
+	TGFXLISTCOUNT(core_tgfx_main, waitlist, waitlistsize);
+	for (uint32_t i = 0; i < waitlistsize; i++) {
+		VKDATAHANDLE handle = *(VKDATAHANDLE*)&waitlist[i];
+		VK_PASSTYPE found_passtype = VK_PASSTYPE::INVALID;
+		switch (handle.type) {
+		case VKHANDLETYPEs::WAITDESC_SUBCP:
+			found_passtype = VK_PASSTYPE::CP; break;
+		case VKHANDLETYPEs::WAITDESC_SUBDP:
+			found_passtype = VK_PASSTYPE::DP; break;
+		case VKHANDLETYPEs::WAITDESC_SUBTP:
+			found_passtype = VK_PASSTYPE::TP; break;
+		default:
+			break;
+		}
+		if (found_passtype == targetTYPE::STATICPASSTYPE) {
+			if (mergedpass == VK_PASS_INVALID_ID) { 
+				targetTYPE* targetpass = (targetTYPE*)VK_MEMOFFSET_TO_POINTER(handle.DATA_memoffset); 
+				mergedpass = targetpass->PASS_ID;
+			}
+			else { printer(18); }
+		}
+	}
+	return mergedpass;
+}
+//------------------
+//Convert wait handles to a tighter data structure to visit faster
+//------------------
+void ConvertWaits(uint32_t& PassWaitsPTR, uint16_t& PassWaitCount, passwaitdescription_tgfx_listhandle passwaits) {
+	PassWaitsPTR = 0;
+	PassWaitCount = 0;
+	//Allocate new wait descs sequantially, 
+	//this is valid as long as converting whole RG's waits is single threaded
+	TGFXLISTCOUNT(core_tgfx_main, passwaits, waitlistsize);
+	for (uint32_t wait_i = 0; wait_i < waitlistsize; wait_i++) {
+		VKDATAHANDLE waithandle = *(VKDATAHANDLE*)&passwaits[wait_i];
+		uint32_t passwaitPTR = 0;
+		switch (waithandle.type) {
+		case VKHANDLETYPEs::WAITDESC_SUBCP:
+			passwaitPTR = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubCP>(waithandle)->convert_to_FinalWaitDesc();
+			PassWaitCount++;	break;
+		case VKHANDLETYPEs::WAITDESC_SUBDP:
+			passwaitPTR = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubDP>(waithandle)->convert_to_FinalWaitDesc();
+			PassWaitCount++;	break;
+		case VKHANDLETYPEs::WAITDESC_SUBTP:
+			passwaitPTR = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubTP>(waithandle)->convert_to_FinalWaitDesc();
+			PassWaitCount++;	break;
+		default:
+			printer(16);
+			return;
+		}
+		if (!PassWaitsPTR) { PassWaitsPTR = passwaitPTR; }
+	}
+}
+void ConvertSubpassWaits(passwaitdescription_tgfx_listhandle passwaits, VKHANDLETYPEs passwaittype, uint32_t mainPassPTR) {
+	TGFXLISTCOUNT(core_tgfx_main, passwaits, waitlistsize);
+	for (uint32_t wait_i = 0; wait_i < waitlistsize; wait_i++) {
+		VKDATAHANDLE waithandle = *(VKDATAHANDLE*)&passwaits[wait_i];
+		uint32_t targetmainpassptr = UINT32_MAX;
+		uint16_t subpassindex = 0;
+		switch (waithandle.type) {
+		case VKHANDLETYPEs::WAITDESC_SUBCP:
+		{	RenderGraph::WaitDesc_SubCP* desc = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubCP>(waithandle);
+			VKOBJHANDLE mainpasshandle = *(VKOBJHANDLE*)desc->passhandle;
+			targetmainpassptr = mainpasshandle.OBJ_memoffset;
+			subpassindex = desc->SubPassIndex;
+		} break;
+		case VKHANDLETYPEs::WAITDESC_SUBDP:
+		{	RenderGraph::WaitDesc_SubDP* desc = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubDP>(waithandle);
+			VKOBJHANDLE mainpasshandle = *(VKOBJHANDLE*)desc->passhandle;
+			targetmainpassptr = mainpasshandle.OBJ_memoffset;
+			subpassindex = desc->SubPassIndex;
+		} break;
+		case VKHANDLETYPEs::WAITDESC_SUBTP:
+		{	RenderGraph::WaitDesc_SubTP* desc = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubTP>(waithandle);
+			VKOBJHANDLE mainpasshandle = *(VKOBJHANDLE*)desc->passhandle;
+			targetmainpassptr = mainpasshandle.OBJ_memoffset;
+			subpassindex = desc->SubPassIndex;
+		} break;
+		default:
+			printer(16);
+			return;
+		}
+		if (targetmainpassptr == mainPassPTR && passwaittype == waithandle.type) {
+			
+		}
+	}
+}
+void RenderGraph::DP_VK::convert_waits() {
+	passwaitdescription_tgfx_listhandle des = passwaits;
+	ConvertWaits(PassWaitsPTR.PassWaitsPTR, PassWaitsPTR.waitcount, des);
+
+	RenderGraph::SubDP_VK* subdps = getSUBDPs();
+	for (uint32_t i = 1; i < ALLSubDPsCOUNT; i++) {
+		RenderGraph::SubDP_VK& subdp = subdps[i];
+		passwaitdescription_tgfx_listhandle waits = subdp.subpasswaits;
+		ConvertSubpassWaits(waits, VKHANDLETYPEs::WAITDESC_SUBDP, VK_POINTER_TO_MEMOFFSET(this));
+	}
+
+	MERGEDCP_ID = find_mergedpass<RenderGraph::CP_VK>(des);
+	MERGEDTP_ID = find_mergedpass<RenderGraph::TP_VK>(des);
+}
+void RenderGraph::CP_VK::convert_waits() {
+	passwaitdescription_tgfx_listhandle des = passwaits;
+	ConvertWaits(PassWaitsPTR.PassWaitsPTR, PassWaitsPTR.waitcount, des);
+
+	RenderGraph::SubCP_VK* subdps = GetSubpasses();
+	for (uint32_t i = 1; i < SubPassesCount; i++) {
+		RenderGraph::SubCP_VK& subdp = subdps[i];
+		passwaitdescription_tgfx_listhandle waits = subdp.subpasswaits;
+		ConvertSubpassWaits(waits, VKHANDLETYPEs::WAITDESC_SUBDP, VK_POINTER_TO_MEMOFFSET(this));
+
+		VK_PASS_ID_TYPE dp_id = find_mergedpass<RenderGraph::DP_VK>(waits);
+		if (MERGEDDP_ID != VK_PASS_INVALID_ID && MERGEDDP_ID != dp_id) { printer(20); return; }
+		MERGEDDP_ID = dp_id;
+
+
+		VK_PASS_ID_TYPE tp_id = find_mergedpass<RenderGraph::TP_VK>(waits);
+		if (MERGEDTP_ID != VK_PASS_INVALID_ID && MERGEDTP_ID != tp_id) { printer(20); return; }
+		MERGEDTP_ID = tp_id;
+	}
+
+	MERGEDDP_ID = find_mergedpass<RenderGraph::DP_VK>(des);
+	MERGEDTP_ID = find_mergedpass<RenderGraph::TP_VK>(des);
+}
+void RenderGraph::TP_VK::convert_waits() {
+	passwaitdescription_tgfx_listhandle des = passwaits;
+	ConvertWaits(PassWaitsPTR.PassWaitsPTR, PassWaitsPTR.waitcount, des);
+
+	uint32_t subtp_i = 0;
+	void* subtp = ((char*)this) + sizeof(TP_VK);
+	for (subtp_i; subtp_i < SubPassesCount; subtp_i++) {
+		RenderGraph::TP_VK::SUBTP_COMMON* subpass = (RenderGraph::TP_VK::SUBTP_COMMON*)subtp;
+		if (subpass->TYPE == VK_PASSTYPE::SUBTP_BARRIER || subpass->TYPE == VK_PASSTYPE::SUBTP_COPY) {
+			passwaitdescription_tgfx_listhandle waits = subpass->subpasswaits;
+			ConvertSubpassWaits(waits, VKHANDLETYPEs::WAITDESC_SUBDP, VK_POINTER_TO_MEMOFFSET(this));
+			if (subpass->TYPE == VK_PASSTYPE::SUBTP_BARRIER) { subtp = ((char*)subtp) + sizeof(RenderGraph::SubTPBARRIER_VK); subtp_i++;}
+			if (subpass->TYPE == VK_PASSTYPE::SUBTP_COPY) { subtp = ((char*)subtp) + sizeof(RenderGraph::SubTPCOPY_VK); subtp_i++; }
+			
+			VK_PASS_ID_TYPE cp_id = find_mergedpass<RenderGraph::CP_VK>(waits);
+			if (MERGEDCP_ID != VK_PASS_INVALID_ID && MERGEDCP_ID != cp_id) { printer(20); return; }
+			MERGEDCP_ID = cp_id;
+
+
+			VK_PASS_ID_TYPE dp_id = find_mergedpass<RenderGraph::DP_VK>(waits);
+			if (MERGEDDP_ID != VK_PASS_INVALID_ID && MERGEDDP_ID != dp_id) { printer(20); return; }
+			MERGEDDP_ID = dp_id;
+		}
+		else {
+			printer(19);
+		}
+	}
+
+}
+void RenderGraph::WP_VK::convert_waits() {
+	passwaitdescription_tgfx_listhandle des = passwaits;
+	ConvertWaits(PassWaitsPTR.PassWaitsPTR, PassWaitsPTR.waitcount, des);
+}
+
+
+
+uint32_t RenderGraph::WaitDesc_SubDP::convert_to_FinalWaitDesc() {
+#ifdef VULKAN_DEBUGGING
+	VKOBJHANDLE target_mainpasshandle = (*(VKOBJHANDLE*)passhandle);
+	if (target_mainpasshandle.type != VKHANDLETYPEs::DRAWPASS) { printer(17); return UINT32_MAX; }
+	RenderGraph::DP_VK* targetcp = (RenderGraph::DP_VK*)VK_MEMOFFSET_TO_POINTER(target_mainpasshandle.OBJ_memoffset);
+	if (targetcp->PASSTYPE != VK_PASSTYPE::DP) { printer(17); return UINT32_MAX; }
+	if (targetcp->ALLSubDPsCOUNT <= SubPassIndex) { printer(8); return UINT32_MAX; }
+#endif
+	uint32_t passwaitPTR = vk_virmem::allocate_from_dynamicmem(framegraphsys_vk::WAITs_DYNAMICMEM, sizeof(RenderGraph::WaitDescFinal));
+	RenderGraph::WaitDescFinal* finaldesc = (RenderGraph::WaitDescFinal*)VK_MEMOFFSET_TO_POINTER(passwaitPTR);
+	finaldesc->isWaitingForLastFrame = isWaitingForLastFrame;
+	finaldesc->MainPassPTR = target_mainpasshandle.OBJ_memoffset;
+	finaldesc->SubpassIndex = SubPassIndex;
+	finaldesc->WaitedOP_TRANSFER = false;
+	finaldesc->WaitedOP_COPY = false;
+	return passwaitPTR;
+};
+uint32_t RenderGraph::WaitDesc_SubCP::convert_to_FinalWaitDesc() {
+#ifdef VULKAN_DEBUGGING
+	VKOBJHANDLE target_mainpasshandle = (*(VKOBJHANDLE*)passhandle);
+	if (target_mainpasshandle.type != VKHANDLETYPEs::COMPUTEPASS) { printer(17); return UINT32_MAX; }
+	RenderGraph::CP_VK* targetcp = (RenderGraph::CP_VK*)VK_MEMOFFSET_TO_POINTER(target_mainpasshandle.OBJ_memoffset);
+	if (targetcp->PASSTYPE != VK_PASSTYPE::CP) { printer(17); return UINT32_MAX; }
+	if (targetcp->SubPassesCount <= SubPassIndex) { printer(8); return UINT32_MAX; }
+#endif
+	uint32_t passwaitPTR = vk_virmem::allocate_from_dynamicmem(framegraphsys_vk::WAITs_DYNAMICMEM, sizeof(RenderGraph::WaitDescFinal));
+	RenderGraph::WaitDescFinal* finaldesc = (RenderGraph::WaitDescFinal*)VK_MEMOFFSET_TO_POINTER(passwaitPTR);
+	finaldesc->isWaitingForLastFrame = isWaitingForLastFrame;
+	finaldesc->MainPassPTR = target_mainpasshandle.OBJ_memoffset;
+	finaldesc->SubpassIndex = SubPassIndex;
+	finaldesc->WaitedOP_TRANSFER = false;
+	finaldesc->WaitedOP_COPY = false;
+	return passwaitPTR;
+};
+uint32_t RenderGraph::WaitDesc_SubTP::convert_to_FinalWaitDesc() {
+#ifdef VULKAN_DEBUGGING
+	VKOBJHANDLE target_mainpasshandle = (*(VKOBJHANDLE*)passhandle);
+	if (target_mainpasshandle.type != VKHANDLETYPEs::TRANSFERPASS) { printer(17); return UINT32_MAX; }
+	RenderGraph::TP_VK* targetcp = (RenderGraph::TP_VK*)VK_MEMOFFSET_TO_POINTER(target_mainpasshandle.OBJ_memoffset);
+	if (targetcp->PASSTYPE != VK_PASSTYPE::TP) { printer(17); return UINT32_MAX; }
+	if (targetcp->SubPassesCount <= SubPassIndex) { printer(8); return UINT32_MAX; }
+#endif
+	uint32_t passwaitPTR = vk_virmem::allocate_from_dynamicmem(framegraphsys_vk::WAITs_DYNAMICMEM, sizeof(RenderGraph::WaitDescFinal));
+	RenderGraph::WaitDescFinal* finaldesc = (RenderGraph::WaitDescFinal*)VK_MEMOFFSET_TO_POINTER(passwaitPTR);
+	finaldesc->isWaitingForLastFrame = isWaitingForLastFrame;
+	finaldesc->MainPassPTR = target_mainpasshandle.OBJ_memoffset;
+	finaldesc->SubpassIndex = SubPassIndex;
+	finaldesc->WaitedOP_TRANSFER = false;
+	finaldesc->WaitedOP_COPY = false;
+	return passwaitPTR;
+};

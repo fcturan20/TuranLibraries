@@ -12,7 +12,7 @@ void* virtual_reserve(unsigned long long size){
 
 //Initialize the reserved memory with zeros.
 void virtual_commit(void* ptr, unsigned long long commitsize){
-    if(VirtualAlloc(ptr, commitsize, MEM_COMMIT, PAGE_READWRITE) == NULL){while(1){} }
+    if(VirtualAlloc(ptr, commitsize, MEM_COMMIT, PAGE_READWRITE) == NULL && commitsize){while(1){} }
 }
 
 //Return back the committed memory to reserved state

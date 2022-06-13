@@ -26,6 +26,7 @@ typedef struct error_structs {
 	error_structs(result_tgfx r, const char* o) : result(r), output(o){}
 } error_structs;
 static error_structs errors[]{
+	//If you can't find the index of the code, do arithmetic on line numbers! :D
 	error_structs(result_tgfx_NOTCODED, "NO_OUTPUT_CODE!"),
 	error_structs(result_tgfx_INVALIDARGUMENT, "Second order subpasses has invalid wait desc"),
 	error_structs(result_tgfx_FAIL, "This type of wait description isn't supported by Create_DrawPass()!"),
@@ -40,7 +41,14 @@ static error_structs errors[]{
 	error_structs(result_tgfx_FAIL, "There are more descsets than supported!"),
 	error_structs(result_tgfx_FAIL, "No descset is found!"),
 	error_structs(result_tgfx_FAIL, "Subpass handle isn't valid!"),
-	error_structs(result_tgfx_FAIL, "Object handle's type didn't match!")
+	error_structs(result_tgfx_FAIL, "Object handle's type didn't match!"),
+	error_structs(result_tgfx_FAIL, "This type of pass isn't supported to be checked for merge status!"),
+	error_structs(result_tgfx_FAIL, "Pass wait description's type isn't supported, please report this!"),
+	error_structs(result_tgfx_FAIL, "Pass wait description's target main pass handle is wrong!"),
+	error_structs(result_tgfx_FAIL, "There are multiple of the same main pass type in a wait list, which isn't supported!"),
+	error_structs(result_tgfx_FAIL, "SubTP wait handles couldn't be converted because subtp finding has failed! This is a backend issue, please report this"),
+	error_structs(result_tgfx_FAIL, "Converting waits has failed because there is merged pass conflicts!"),
+	error_structs(result_tgfx_INVALIDARGUMENT, "CreateSubTransferPassDescription() has invalid transfer type argument!")
 };
 static constexpr uint32_t errors_count = sizeof(errors) / sizeof(error_structs);
 
@@ -59,8 +67,6 @@ uint64_t VKCONST_VIRMEMPAGESIZE = 0;
 void* VKCONST_VIRMEMSPACE_BEGIN = nullptr;
 uintptr_t begin_loc = 0;
 
-#include "tgfx_core.h"
-#include <string>
 
 struct VK_PAGEINFO {
 	uint32_t isALIVE : 1;
@@ -157,7 +163,7 @@ vk_virmem::dynamicmem* vk_virmem::allocate_dynamicmem(uint32_t pagecount, uint32
 	vk_virmem::dynamicmem* dynamicmem = (vk_virmem::dynamicmem*)(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + start);
 	virmemsys->virtual_commit(dynamicmem, VKCONST_VIRMEMPAGESIZE);
 	dynamicmem->all_space = pagecount * VKCONST_VIRMEMPAGESIZE;
-	dynamicmem->remaining_space.store(dynamicmem->all_space);
+	dynamicmem->remaining_space.store(dynamicmem->all_space - sizeof(vk_virmem::dynamicmem));
 	if (dynamicmemstart) { *dynamicmemstart = start + sizeof(vk_virmem::dynamicmem); }
 	return dynamicmem;
 }

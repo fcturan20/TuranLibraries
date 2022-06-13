@@ -48,7 +48,10 @@ enum class VK_PASSTYPE : unsigned char {
 	DP = 1,
 	TP,
 	CP,
-	WP
+	WP,
+	//for subpasses
+	SUBTP_BARRIER,
+	SUBTP_COPY
 };
 typedef uint16_t VK_PASS_ID_TYPE;
 static constexpr VK_PASS_ID_TYPE VK_PASS_INVALID_ID = UINT16_MAX;

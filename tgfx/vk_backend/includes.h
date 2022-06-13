@@ -196,7 +196,7 @@ static inline VkDescriptorType Find_VkDescType_byVKCONST_DESCSETID(unsigned int 
 	case VKCONST_DESCSETID_STORAGEIMAGE:
 		return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 	default:
-		printer(result_tgfx_FAIL, "(Find_VkDescType_byVKCONST_DESCSETID() doesn't support this type of descriptor!");
+		printer(result_tgfx_FAIL, "Find_VkDescType_byVKCONST_DESCSETID() doesn't support this type of descriptor!");
 		return VK_DESCRIPTOR_TYPE_MAX_ENUM;
 	}
 }

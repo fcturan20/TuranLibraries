@@ -121,8 +121,8 @@ static rtslotdescription_tgfx_handle CreateRTSlotDescription_Color(texture_tgfx_
     desc->isUsedLater = isUsedLater;
     desc->loadtype = LOADTYPE;
     desc->optype = OPTYPE;
-    desc->textures[0] = (TEXTURE_VKOBJ*)Texture0;
-    desc->textures[1] = (TEXTURE_VKOBJ*)Texture1;
+    desc->textures[0] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*) & Texture0);
+    desc->textures[1] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*)&Texture1);
     return (rtslotdescription_tgfx_handle)desc;
 }
 static rtslotdescription_tgfx_handle CreateRTSlotDescription_DepthStencil(texture_tgfx_handle Texture0, texture_tgfx_handle Texture1,
@@ -134,8 +134,8 @@ static rtslotdescription_tgfx_handle CreateRTSlotDescription_DepthStencil(textur
     desc->isUsedLater = true;
     desc->loadtype = DEPTHLOAD;
     desc->optype = DEPTHOP;
-    desc->textures[0] = (TEXTURE_VKOBJ*)Texture0;
-    desc->textures[1] = (TEXTURE_VKOBJ*)Texture1;
+    desc->textures[0] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*)&Texture0);
+    desc->textures[1] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*)&Texture1);
     return (rtslotdescription_tgfx_handle)desc;
 }
 static rtslotusage_tgfx_handle CreateRTSlotUsage_Color(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE){

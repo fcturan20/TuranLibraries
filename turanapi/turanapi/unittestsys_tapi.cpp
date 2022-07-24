@@ -1,5 +1,5 @@
 #include "unittestsys_tapi.h"
-#include "registrysys_tapi.h"
+#include "ecs_tapi.h"
 #include "array_of_strings_tapi.h"
 
 unittestsys_tapi_type* utsys;
@@ -14,6 +14,7 @@ void* add_unittest(const char* name, unsigned int classification_flag, unittest_
     const char* test_result;
     test_interface.test(&test_result, NULL);
     printf("Test Name: %s\n Result: %s", name, test_result);
+    return nullptr;
 }
 
 void remove_unittest(const char* name, unsigned int classification_flag){
@@ -25,7 +26,7 @@ void run_tests(unsigned int classification_flag, const char* name, void (*testou
 }
 
 
-FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* reg_sys, unsigned char reload){
+ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
     utsys = (unittestsys_tapi_type*)malloc(sizeof(unittestsys_tapi_type));
     utsys->data = (unittestsys_tapi_d*)malloc(sizeof(unittestsys_tapi_d));
     utsys->funcs = (unittestsys_tapi*)malloc(sizeof(unittestsys_tapi));
@@ -34,11 +35,9 @@ FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* reg_sys, unsigned char relo
     utsys->funcs->remove_unittest = &remove_unittest;
     utsys->funcs->run_tests = &run_tests;
 
-    reg_sys->add(UNITTEST_TAPI_PLUGIN_NAME, 0, utsys);
-
-    return utsys;
+    ecssys->addSystem(UNITTEST_TAPI_PLUGIN_NAME, 0, utsys);
 }
-FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* reg_sys, unsigned char reload){
+ECSPLUGIN_EXIT(ecssys, reloadFlag) {
     free(utsys->data);
     free(utsys->funcs);
     free(utsys);

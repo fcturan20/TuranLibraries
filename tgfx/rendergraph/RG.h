@@ -30,13 +30,49 @@ struct RenderGraph {
 
 		drawcallbase_vk base;
 	};
-	struct WaitDescFinal {
-		bool isWaitingForLastFrame : 1;
-		bool WaitedOP_TRANSFER : 1, WaitedOP_COPY : 1;
-		uint16_t SubpassIndex;
-		uint32_t MainPassPTR;
+	struct MainPassCOMMON {
+		VK_PASSTYPE PASSTYPE = VK_PASSTYPE::INVALID;
+		VK_PASS_ID_TYPE PASS_ID = VK_PASS_INVALID_ID;
+		VK_PASS_ID_TYPE ALLSUBPASSESCOUNT = VK_PASS_INVALID_ID;	//This is all subpasses that can be waited upon
+		//This is to identify quickly which passes are waited as what in whole mainpass
+		//So this is not precise, just helps if algorithm should further examine (by searching subpasses, last frame dependencies etc.)
+		struct MainPassWait {
+			bool isWaitedLastFrame : 1, isWaitedCurrentFrame : 1, isMerged : 1;
+			VK_PASSTYPE waited_PASSTYPE = VK_PASSTYPE::INVALID;
+			VK_PASS_ID_TYPE waited_PASSID = VK_PASS_INVALID_ID;
+		};
+		union {
+			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
+			struct finalWaitsPTR {
+				uint32_t PassWaitsPTR = UINT32_MAX;		//PTR to a MainPassWait list
+				uint16_t waitcount = 0;
+			};
+			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
+		};
+		MainPassCOMMON(VK_PASSTYPE type, uint16_t passcount = VK_PASS_INVALID_ID) : PASSTYPE(type), ALLSUBPASSESCOUNT(passcount) {}
+	};
+	struct SubPassCOMMON {
+		VK_PASS_ID_TYPE main_passID = VK_PASS_INVALID_ID, sub_passID = VK_PASS_INVALID_ID;
 
-		WaitDescFinal() : isWaitingForLastFrame(false), SubpassIndex(0), MainPassPTR(UINT32_MAX) {}
+		//This is to define subpass dependencies precisely for best performance
+		struct SubPassWait {
+			bool isWaitingForLastFrame : 1;
+			bool WaitedOP_TRANSFER : 1, WaitedOP_COPY : 1;
+			uint16_t SubpassIndex;
+			uint32_t MainPassPTR;
+
+			SubPassWait() : isWaitingForLastFrame(false), SubpassIndex(0), MainPassPTR(UINT32_MAX) {}
+		};
+
+
+		union {
+			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
+			struct finalWaitsPTR {
+				uint32_t PassWaitsPTR = UINT32_MAX;		//PTR to a SubPassWait list
+				uint16_t waitcount = 0;
+			};
+			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
+		};
 	};
 	struct DP_VK;
 	struct SubDP_VK {
@@ -85,29 +121,19 @@ struct RenderGraph {
 		//For template definitions
 		static constexpr VK_PASSTYPE STATICPASSTYPE = VK_PASSTYPE::DP;
 		static constexpr VKHANDLETYPEs STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBDP;
+		MainPassCOMMON base;
 
-		VK_PASSTYPE PASSTYPE = STATICPASSTYPE;
-		VK_PASS_ID_TYPE PASS_ID = VK_PASS_INVALID_ID;
 		
 		boxregion_tgfx RenderRegion;
 		uint32_t BASESLOTSET_ID;
-		uint32_t ALLSubDPsCOUNT, BO_SubDPsCOUNT;
+		uint32_t BO_SubDPsCOUNT;
 		std::atomic<unsigned char> SlotSetChanged = true;
 
 
 		VkFramebuffer FBs[VKCONST_BUFFERING_IN_FLIGHT]{ VK_NULL_HANDLE };
 		VkRenderPass RenderPassObject;
 
-		union {
-			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
-			struct finalWaitsPTR {
-				uint32_t PassWaitsPTR = UINT32_MAX;
-				uint16_t waitcount = 0;
-			};
-			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
-		};
 
-		VK_PASS_ID_TYPE MERGEDCP_ID = VK_PASS_INVALID_ID, MERGEDTP_ID = VK_PASS_INVALID_ID;
 		SubDP_VK* getSUBDPs() { return (SubDP_VK*)(uintptr_t(this) + sizeof(DP_VK)); }
 
 		bool isWorkloaded();
@@ -116,17 +142,17 @@ struct RenderGraph {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::DRAWPASS;
 			handle.OBJ_memoffset = VK_POINTER_TO_MEMOFFSET(this);
-			handle.EXTRA_FLAGs = PASS_ID;
+			handle.EXTRA_FLAGs = base.PASS_ID;
 			return handle;
 		}
 		static DP_VK* getPassFromHandle(VKOBJHANDLE handle) {
 			if (handle.type != VKHANDLETYPEs::DRAWPASS) { printer(14); return nullptr; }
 			return (DP_VK*)VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
 		}
-		DP_VK() {}
+		DP_VK() : base(VK_PASSTYPE::DP) {}
 	};
 
-	//TRANSFER PASS
+	//---------  TRANSFER PASS
 
 	struct VK_BUFtoIMinfo {
 		VkImage TargetImage;
@@ -159,22 +185,10 @@ struct RenderGraph {
 		//For template definitions
 		static constexpr VK_PASSTYPE STATICPASSTYPE = VK_PASSTYPE::TP;
 		static constexpr VKHANDLETYPEs STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBTP;
+		MainPassCOMMON base;
 
-
-		VK_PASSTYPE PASSTYPE = STATICPASSTYPE;
-		VK_PASS_ID_TYPE PASS_ID = VK_PASS_INVALID_ID;
-		uint16_t SubPassesCount = UINT16_MAX;
 		uint32_t SubPassesList_SizeInBytes;
-		union {
-			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
-			struct finalWaitsPTR {
-				uint32_t PassWaitsPTR = UINT32_MAX;
-				uint16_t waitcount = 0;
-			};
-			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
-		};
 
-		VK_PASS_ID_TYPE MERGEDCP_ID = VK_PASS_INVALID_ID, MERGEDDP_ID = VK_PASS_INVALID_ID;
 		
 		//SubTPs should have this as their first variable
 		struct SUBTP_COMMON {
@@ -196,13 +210,13 @@ struct RenderGraph {
 			SUBTP_COMMON() : subpasswaits(nullptr) {}
 		};
 
-		TP_VK() {}
+		TP_VK() : base(VK_PASSTYPE::TP) {}
 		void convert_waits();
 		VKOBJHANDLE getHANDLE() {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::TRANSFERPASS;
 			handle.OBJ_memoffset = VK_POINTER_TO_MEMOFFSET(this);
-			handle.EXTRA_FLAGs = PASS_ID;
+			handle.EXTRA_FLAGs = base.PASS_ID;
 			return handle;
 		}
 		static TP_VK* getPassFromHandle(VKOBJHANDLE handle) {
@@ -251,21 +265,20 @@ struct RenderGraph {
 		SubTPBARRIER_VK() { common.TYPE = VK_PASSTYPE::SUBTP_BARRIER; }
 	};
 
+
+
+
+
+	//------------- WINDOW PASS
+
+
+
 	struct windowcall_vk {
 		uint32_t WindowID = UINT32_MAX;
 	};
 	struct WP_VK {
-		VK_PASSTYPE PASSTYPE = VK_PASSTYPE::WP;
-		VK_PASS_ID_TYPE PASS_ID = VK_PASS_INVALID_ID;
+		MainPassCOMMON base;
 		VK_VECTOR_ADDONLY<windowcall_vk, 256> WindowCalls;
-		union {
-			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
-			struct finalWaitsPTR {
-				uint32_t PassWaitsPTR = UINT32_MAX;
-				uint16_t waitcount = 0;
-			};
-			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
-		};
 
 		bool isWorkloaded();
 		void convert_waits();
@@ -273,15 +286,18 @@ struct RenderGraph {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::WINDOWPASS;
 			handle.OBJ_memoffset = VK_POINTER_TO_MEMOFFSET(this);
-			handle.EXTRA_FLAGs = PASS_ID;
+			handle.EXTRA_FLAGs = base.PASS_ID;
 			return handle;
 		}
 		static WP_VK* getPassFromHandle(VKOBJHANDLE handle) {
 			if (handle.type != VKHANDLETYPEs::WINDOWPASS) { printer(14); return nullptr; }
 			return (WP_VK*)VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
 		}
-		WP_VK() {}
+		WP_VK() : base(VK_PASSTYPE::INVALID, 0) {}
 	};
+
+
+	//------------- COMPUTE PASS
 	struct dispatchcall_vk {
 		VkPipelineLayout Layout = VK_NULL_HANDLE;
 		VkPipeline Pipeline = VK_NULL_HANDLE;
@@ -321,21 +337,9 @@ struct RenderGraph {
 		//For template definitions
 		static constexpr VK_PASSTYPE STATICPASSTYPE = VK_PASSTYPE::CP;
 		static constexpr VKHANDLETYPEs STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBCP;
-		
+		MainPassCOMMON base;
 
 
-		VK_PASSTYPE PASSTYPE = STATICPASSTYPE;
-		VK_PASS_ID_TYPE PASS_ID = VK_PASS_INVALID_ID;
-		uint16_t SubPassesCount;
-
-		union {
-			passwaitdescription_tgfx_listhandle passwaits; //This is used while reconstructing
-			struct finalWaitsPTR {
-				uint32_t PassWaitsPTR = UINT32_MAX;
-				uint16_t waitcount = 0;
-			};
-			finalWaitsPTR PassWaitsPTR;	//This is used after reconstructing
-		};
 		VK_PASS_ID_TYPE MERGEDDP_ID = VK_PASS_INVALID_ID, MERGEDTP_ID = VK_PASS_INVALID_ID;
 
 
@@ -345,7 +349,7 @@ struct RenderGraph {
 			VKOBJHANDLE handle;
 			handle.type = VKHANDLETYPEs::COMPUTEPASS;
 			handle.OBJ_memoffset = VK_POINTER_TO_MEMOFFSET(this);
-			handle.EXTRA_FLAGs = PASS_ID;
+			handle.EXTRA_FLAGs = base.PASS_ID;
 			return handle;
 		}
 		static CP_VK* getPassFromHandle(VKOBJHANDLE handle) {
@@ -353,18 +357,23 @@ struct RenderGraph {
 			return (CP_VK*)VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
 		}
 		bool isWorkloaded();
-		CP_VK() {}
+		CP_VK() : base(VK_PASSTYPE::INVALID) {}
 	};
+
+
+
+	//-------------- GENERAL RG functionality
+
 	//4MB is enough for all pass data, i guess?
 	static constexpr unsigned int VKCONST_VIRMEM_RGALLOCATION_PAGECOUNT = 2000;
 	uint32_t PASSES_PTR = UINT32_MAX;
 	static uint32_t GetSize_ofType(VK_PASSTYPE type, void* pass) {
 		switch (type) {
 		case VK_PASSTYPE::DP:
-		{	DP_VK* dp = (DP_VK*)pass; return sizeof(DP_VK) + (dp->ALLSubDPsCOUNT * sizeof(SubDP_VK)); }
+		{	DP_VK* dp = (DP_VK*)pass; return sizeof(DP_VK) + (dp->base.ALLSUBPASSESCOUNT * sizeof(SubDP_VK)); }
 		break;
 		case VK_PASSTYPE::CP:
-		{	CP_VK* cp = (CP_VK*)pass; return sizeof(CP_VK) + (cp->SubPassesCount * sizeof(SubCP_VK)); }
+		{	CP_VK* cp = (CP_VK*)pass; return sizeof(CP_VK) + (cp->base.ALLSUBPASSESCOUNT * sizeof(SubCP_VK)); }
 		break;
 		case VK_PASSTYPE::TP:
 		{	TP_VK* tp = (TP_VK*)pass; return sizeof(TP_VK) + tp->SubPassesList_SizeInBytes; }
@@ -404,6 +413,9 @@ struct RenderGraph {
 
 		//All temporary WaitDescs should have these below
 		static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBDP;
+		static constexpr VKHANDLETYPEs TARGETPASS_HANDLETYPE = VKHANDLETYPEs::DRAWPASS;
+		static constexpr VK_PASSTYPE TARGETPASS_TYPE = VK_PASSTYPE::DP;
+		typedef TP_VK TARGETPASS_STRUCT;
 		VKDATAHANDLE getHandle_ofDesc() {
 			VKDATAHANDLE handle;
 			handle.type = HANDLETYPE;
@@ -422,6 +434,9 @@ struct RenderGraph {
 		computepass_tgfx_handle* passhandle;
 
 		static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBCP;
+		static constexpr VKHANDLETYPEs TARGETPASS_HANDLETYPE = VKHANDLETYPEs::COMPUTEPASS;
+		static constexpr VK_PASSTYPE TARGETPASS_TYPE = VK_PASSTYPE::CP;
+		typedef CP_VK TARGETPASS_STRUCT;
 		VKDATAHANDLE getHandle_ofDesc() {
 			VKDATAHANDLE handle;
 			handle.type = HANDLETYPE;
@@ -440,6 +455,9 @@ struct RenderGraph {
 		transferpass_tgfx_handle* passhandle;
 
 		static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBTP;
+		static constexpr VKHANDLETYPEs TARGETPASS_HANDLETYPE = VKHANDLETYPEs::TRANSFERPASS;
+		static constexpr VK_PASSTYPE TARGETPASS_TYPE = VK_PASSTYPE::TP;
+		typedef TP_VK TARGETPASS_STRUCT;
 		VKDATAHANDLE getHandle_ofDesc() {
 			VKDATAHANDLE handle;
 			handle.type = HANDLETYPE;

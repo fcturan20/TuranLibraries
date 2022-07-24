@@ -87,7 +87,7 @@ void RenderGraph::setRGSTATUS(RGReconstructionStatus stat) {
 
 RenderGraph::DP_VK* RenderGraph::SubDP_VK::getDP() {
 	DP_VK* dp = (DP_VK*)(uintptr_t(this) - (sizeof(SubDP_VK) * RG_BINDINDEX) - sizeof(DP_VK));
-	if (dp->PASS_ID != DP_ID) { printer(result_tgfx_FAIL, "SubDP-MainDP doesn't match!"); }
+	if (dp->base.PASS_ID != DP_ID) { printer(result_tgfx_FAIL, "SubDP-MainDP doesn't match!"); }
 	return dp;
 }
 
@@ -312,7 +312,7 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 	RenderGraph::DP_VK VKDrawPass;
 	
 	VKDrawPass.BASESLOTSET_ID = contentmanager->GETRTSLOTSET_ARRAY().getINDEXbyOBJ(SLOTSET);
-	VKDrawPass.ALLSubDPsCOUNT = RenderPass_subDPs_COUNT + BarrierOnly_subDPs_COUNT;
+	VKDrawPass.base.ALLSUBPASSESCOUNT = RenderPass_subDPs_COUNT + BarrierOnly_subDPs_COUNT;
 
 	VKDrawPass.RenderRegion.XOffset = 0;
 	VKDrawPass.RenderRegion.YOffset = 0;
@@ -373,7 +373,7 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 	//Create DP struct in reconstructed RenderGraph memory block
 	uint32_t dp_malloc_size = sizeof(RenderGraph::DP_VK) + (SubDPsLISTSIZE * sizeof(RenderGraph::SubDP_VK));
 	RenderGraph::DP_VK* DP_final = (RenderGraph::DP_VK*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, dp_malloc_size);
-	DP_final->PASSTYPE = VK_PASSTYPE::DP;
+	DP_final->base.PASSTYPE = VK_PASSTYPE::DP;
 	DP_final->BASESLOTSET_ID = VKDrawPass.BASESLOTSET_ID;
 	for (unsigned int i = 0; i < VKCONST_BUFFERING_IN_FLIGHT; i++) {
 		DP_final->FBs[i] = VKDrawPass.FBs[i];
@@ -381,15 +381,15 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 	DP_final->RenderPassObject = VKDrawPass.RenderPassObject;
 	DP_final->RenderRegion = VKDrawPass.RenderRegion;
 	DP_final->SlotSetChanged.store(VKDrawPass.SlotSetChanged.load());
-	DP_final->ALLSubDPsCOUNT = VKDrawPass.ALLSubDPsCOUNT;
+	DP_final->base.ALLSUBPASSESCOUNT = VKDrawPass.base.ALLSUBPASSESCOUNT;
 
 	//Create new element in the BasePass list
-	DP_final->PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
+	DP_final->base.PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
 
 
 	//Create subpass structures too
 	RenderGraph::SubDP_VK* Final_Subpasses = (RenderGraph::SubDP_VK*)(uintptr_t(DP_final) + sizeof(RenderGraph::DP_VK));
-	for (unsigned int i = 0, s = 0, rp_bi = 0; i < DP_final->ALLSubDPsCOUNT; i++) {
+	for (unsigned int i = 0, s = 0, rp_bi = 0; i < DP_final->base.ALLSUBPASSESCOUNT; i++) {
 		//Get next valid desc
 		RG_RECDATA::SubDPDESC* desc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[s++]);
 		while (!desc) { desc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubDPDESC>(*(VKDATAHANDLE*)&subDPdescs[s++]); }
@@ -398,7 +398,7 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 		RenderGraph::SubDP_VK& subdp = Final_Subpasses[i];
 		subdp.RG_BINDINDEX = i;
 		subdp.continueop = desc->CONTINUEOP;
-		subdp.DP_ID = DP_final->PASS_ID;
+		subdp.DP_ID = DP_final->base.PASS_ID;
 		if (desc->IRTSLOTSET_ID == UINT32_MAX) {
 			subdp.IRTSLOTSET_ID = UINT32_MAX;
 			subdp.is_RENDERPASSRELATED = false;
@@ -412,7 +412,7 @@ static result_tgfx Create_DrawPass(subdrawpassdescription_tgfx_listhandle subDPd
 		subdp.render_dearIMGUI = false;		//This will be set when you finish RG reconstruction
 		subdp.waitop = desc->WAITOP;
 		if (i == 0) {
-			DP_final->passwaits = desc->waits;
+			DP_final->base.passwaits = desc->waits;
 		}
 		subdp.subpasswaits = desc->waits;
 		VKOBJHANDLE subdp_finalhandle = getHandle_ofpass(&Final_Subpasses[i]);
@@ -450,8 +450,8 @@ static result_tgfx Create_TransferPass(subtransferpassdescription_tgfx_listhandl
 	uint32_t tp_memoffset = vk_virmem::allocate_from_dynamicmem(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof_malloc);
 	RenderGraph::TP_VK* tp = (RenderGraph::TP_VK*)(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + tp_memoffset);
 	*tp = RenderGraph::TP_VK();
-	tp->PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
-	tp->SubPassesCount = barrier_subtpcount + copy_subtpcount;
+	tp->base.PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
+	tp->base.ALLSUBPASSESCOUNT = barrier_subtpcount + copy_subtpcount;
 	tp->SubPassesList_SizeInBytes = size_of_subtps;
 	//Fill Subpass structs
 	uintptr_t last_ptr = uintptr_t(tp) + sizeof(RenderGraph::TP_VK);
@@ -487,7 +487,7 @@ static result_tgfx Create_TransferPass(subtransferpassdescription_tgfx_listhandl
 		}
 
 		if (subpass_i == 0) {
-			tp->passwaits = desc->waits;
+			tp->base.passwaits = desc->waits;
 		}
 	}
 
@@ -519,8 +519,8 @@ static result_tgfx Create_ComputePass(subcomputepassdescription_tgfx_listhandle 
 	uint32_t cp_memoffset = vk_virmem::allocate_from_dynamicmem(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof_malloc);
 	RenderGraph::CP_VK* CP = (RenderGraph::CP_VK*)(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + cp_memoffset);
 	*CP = RenderGraph::CP_VK();
-	CP->PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
-	CP->SubPassesCount = subcpcount;
+	CP->base.PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
+	CP->base.ALLSUBPASSESCOUNT = subcpcount;
 	RenderGraph::SubCP_VK* final_subcps = (RenderGraph::SubCP_VK*)(uintptr_t(CP) + sizeof(RenderGraph::CP_VK));
 	//Fill the pass wait description list
 	for (unsigned int subpass_i = 0, list_i = 0; list_i < subcplistsize; list_i++) {
@@ -531,7 +531,7 @@ static result_tgfx Create_ComputePass(subcomputepassdescription_tgfx_listhandle 
 		RG_RECDATA::SubCPDESC* desc = RenderGraph::getDesc_fromHandle<RG_RECDATA::SubCPDESC>(*(VKDATAHANDLE*)&subCPdescs[subpass_i]);
 		RenderGraph::SubCP_VK* subcp = &final_subcps[subpass_i];
 		if (subpass_i == 0) {
-			CP->passwaits = desc->waits;
+			CP->base.passwaits = desc->waits;
 		}
 		*subcp = RenderGraph::SubCP_VK();
 		subcp->subpasswaits = desc->waits;
@@ -556,8 +556,8 @@ static result_tgfx Create_WindowPass(passwaitdescription_tgfx_listhandle WaitDes
 	RenderGraph::WP_VK* WP = (RenderGraph::WP_VK*)VK_ALLOCATE_AND_GETPTR(RG_RECDATA::VKGLOBAL_VIRMEM_RGRECDYNAMICMEM, sizeof(RenderGraph::WP_VK));
 	*WP = RenderGraph::WP_VK();
 	WP->WindowCalls = VK_VECTOR_ADDONLY<RenderGraph::windowcall_vk, 256>();
-	WP->PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
-	WP->passwaits = WaitDescriptions;
+	WP->base.PASS_ID = RG_RECDATA::ID_GENERATOR.fetch_add(1);
+	WP->base.passwaits = WaitDescriptions;
 
 	
 	VKOBJHANDLE handle = getHandle_ofpass(WP);
@@ -577,18 +577,18 @@ inline static bool Check_WaitHandles() {
 		case VK_PASSTYPE::DP:
 		{
 			RenderGraph::DP_VK* dp = (RenderGraph::DP_VK*)last_ptr;
-			if (current_PASS_ID != dp->PASS_ID) { printer(9); return false; }
-			waitlist = dp->passwaits;
+			if (current_PASS_ID != dp->base.PASS_ID) { printer(9); return false; }
+			waitlist = dp->base.passwaits;
 		}
 			break;
 		case VK_PASSTYPE::CP:
-			waitlist = ((RenderGraph::CP_VK*)last_ptr)->passwaits;
+			waitlist = ((RenderGraph::CP_VK*)last_ptr)->base.passwaits;
 			break;
 		case VK_PASSTYPE::TP:
-			waitlist = ((RenderGraph::TP_VK*)last_ptr)->passwaits;
+			waitlist = ((RenderGraph::TP_VK*)last_ptr)->base.passwaits;
 			break;
 		case VK_PASSTYPE::WP:
-			waitlist = ((RenderGraph::WP_VK*)last_ptr)->passwaits;
+			waitlist = ((RenderGraph::WP_VK*)last_ptr)->base.passwaits;
 			break;
 		default:
 			printer(6);
@@ -606,7 +606,7 @@ inline static bool Check_WaitHandles() {
 				if (passhandle.type != VKHANDLETYPEs::DRAWPASS) { printer(7); }
 				RenderGraph::DP_VK* dp = getPass_fromHandle<RenderGraph::DP_VK>(passhandle);
 				if (!dp) { printer(7); return false; }
-				if (wait_subdp->SubPassIndex >= dp->ALLSubDPsCOUNT) { printer(8); return false; }
+				if (wait_subdp->SubPassIndex >= dp->base.ALLSUBPASSESCOUNT) { printer(8); return false; }
 			}
 			break;
 			case VKHANDLETYPEs::WAITDESC_SUBCP:
@@ -616,7 +616,7 @@ inline static bool Check_WaitHandles() {
 				if (passhandle.type != VKHANDLETYPEs::COMPUTEPASS) { printer(7); }
 				RenderGraph::CP_VK* cp = getPass_fromHandle<RenderGraph::CP_VK>(passhandle);
 				if (!cp) { printer(7); return false; }
-				if (wait_subcp->SubPassIndex >= cp->SubPassesCount) { printer(8); return false; }
+				if (wait_subcp->SubPassIndex >= cp->base.ALLSUBPASSESCOUNT) { printer(8); return false; }
 			}
 			break;
 			case VKHANDLETYPEs::WAITDESC_SUBTP:
@@ -626,7 +626,7 @@ inline static bool Check_WaitHandles() {
 				if (passhandle.type != VKHANDLETYPEs::TRANSFERPASS) { printer(7); }
 				RenderGraph::TP_VK* tp = getPass_fromHandle<RenderGraph::TP_VK>(passhandle);
 				if (!tp) { printer(7); return false; }
-				if (wait_subtp->SubPassIndex >= tp->SubPassesCount) { printer(8); return false; }
+				if (wait_subtp->SubPassIndex >= tp->base.ALLSUBPASSESCOUNT) { printer(8); return false; }
 			}
 			break;
 			default:
@@ -671,28 +671,28 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 			case VK_PASSTYPE::DP:
 			{
 				RenderGraph::DP_VK* dp = ((RenderGraph::DP_VK*)last_ptr);
-				if (current_PassID != dp->PASS_ID) { printer(9); return false; }
+				if (current_PassID != dp->base.PASS_ID) { printer(9); return false; }
 				dp->convert_waits();
 			}
 			break;
 			case VK_PASSTYPE::CP:
 			{
 				RenderGraph::CP_VK* cp = ((RenderGraph::CP_VK*)last_ptr);
-				if (current_PassID != cp->PASS_ID) { printer(9); return false; }
+				if (current_PassID != cp->base.PASS_ID) { printer(9); return false; }
 				cp->convert_waits();
 			}
 			break;
 			case VK_PASSTYPE::TP:
 			{
 				RenderGraph::TP_VK* tp = ((RenderGraph::TP_VK*)last_ptr);
-				if (current_PassID != tp->PASS_ID) { printer(9); return false; }
+				if (current_PassID != tp->base.PASS_ID) { printer(9); return false; }
 				tp->convert_waits();
 			}
 			break;
 			case VK_PASSTYPE::WP:
 			{
 				RenderGraph::WP_VK* wp = ((RenderGraph::WP_VK*)last_ptr);
-				if (current_PassID != wp->PASS_ID) { printer(9); return false; }
+				if (current_PassID != wp->base.PASS_ID) { printer(9); return false; }
 				wp->convert_waits();
 			}
 			break;

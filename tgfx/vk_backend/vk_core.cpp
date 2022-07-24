@@ -1,6 +1,6 @@
-#include "predefinitions_vk.h"
-#include "includes.h"
-#include "core.h"
+#include "vk_predefinitions.h"
+#include "vk_includes.h"
+#include "vk_core.h"
 #include <registrysys_tapi.h>
 #include <virtualmemorysys_tapi.h>
 #include <threadingsys_tapi.h>
@@ -8,17 +8,17 @@
 #include <stdio.h>
 #include <vector>
 #include <string>
-#include "resource.h"
+#include "vk_resource.h"
 #include <tgfx_helper.h>
 #include <tgfx_renderer.h>
 #include <tgfx_gpucontentmanager.h>
 #include <tgfx_imgui.h>
 #include <vector>
 #include "memory.h"
-#include "queue.h"
-#include "extension.h"
+#include "vk_queue.h"
+#include "vk_extension.h"
 
-#include "gpucontentmanager.h"
+#include "vk_contentmanager.h"
 
 struct device_features_chainedstructs;
 struct core_functions {
@@ -62,7 +62,7 @@ extern void Create_IMGUI();
 #endif // !NO_IMGUI
 
 extern void Create_BackendAllocator();
-extern void Create_Renderer();
+extern void Create_VkRenderer();
 extern void Create_GPUContentManager(initialization_secondstageinfo* info);
 extern void set_helper_functions();
 extern void Create_AllocatorSys();
@@ -272,7 +272,7 @@ void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_h
 	}
 
 
-	Create_Renderer();
+	Create_VkRenderer();
 	
 	Create_GPUContentManager(vkinfo);
 	delete vkinfo;

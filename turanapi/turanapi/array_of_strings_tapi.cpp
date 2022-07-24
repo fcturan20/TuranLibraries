@@ -1,7 +1,7 @@
 #include "predefinitions_tapi.h"
 #include "array_of_strings_tapi.h"
 #include "virtualmemorysys_tapi.h"
-#include "registrysys_tapi.h"
+#include "ecs_tapi.h"
 #include "unittestsys_tapi.h"
 
 //FIX: This should be specified by the flag!
@@ -22,29 +22,29 @@ typedef struct array_of_strings_tapi_d{
 
 typedef struct standard_array_of_strings{
     char* list_of_chars;
-    unsigned long* list_of_ptrs;
-    unsigned long ptr_list_capacity, ptr_list_len, 
+    unsigned long long* list_of_ptrs;
+    unsigned long long ptr_list_capacity, ptr_list_len, 
         char_list_len;  //char list is always filled and searched, so there is no need for capacity
 } standard_array_of_strings;
 
-array_of_strings_tapi* standard_create_array(unsigned int initial_size, unsigned int char_expand_size){
+array_of_strings_tapi* standard_create_array(unsigned long long initial_size, unsigned long long char_expand_size){
     standard_array_of_strings* array = (standard_array_of_strings*)malloc(sizeof(standard_array_of_strings));
     array->ptr_list_len = 0;
     array->ptr_list_capacity = initial_size;
     if(array->ptr_list_capacity){
-        array->list_of_ptrs = malloc(array->ptr_list_capacity * sizeof(array->list_of_ptrs[0]));
+        array->list_of_ptrs = (unsigned long long*)malloc(array->ptr_list_capacity * sizeof(array->list_of_ptrs[0]));
     }
     array->list_of_chars = NULL;
     
-    return array;
+    return (array_of_strings_tapi*)array;
 }
-const char* standard_read_string(const array_of_strings_tapi* array_o, unsigned int element_index){
+const char* standard_read_string(const array_of_strings_tapi* array_o, unsigned long long element_index){
     const standard_array_of_strings* array = (const standard_array_of_strings*)array_o;
-    return array->list_of_chars[array->list_of_ptrs[element_index]];
+    return &array->list_of_chars[array->list_of_ptrs[element_index]];
 }
 
-unsigned long find_a_place_for_string(char* list_of_chars, unsigned long char_list_len, unsigned long len_str){
-    unsigned long current_pointer = 0, found_size = 0;
+unsigned long long find_a_place_for_string(char* list_of_chars, unsigned long char_list_len, unsigned long len_str){
+    unsigned long long current_pointer = 0, found_size = 0;
     while(current_pointer < char_list_len){
         if(list_of_chars[current_pointer] == -1){
             found_size++;
@@ -58,7 +58,7 @@ unsigned long find_a_place_for_string(char* list_of_chars, unsigned long char_li
     }
     return ULONG_MAX;
 }
-unsigned long standard_expand_char_array(standard_array_of_strings* array){
+unsigned long long standard_expand_char_array(standard_array_of_strings* array){
     char* newlist = (char*)malloc(array->char_list_len * 2);
     memcpy(newlist, array->list_of_chars, array->char_list_len);
     free(array->list_of_chars);
@@ -68,12 +68,12 @@ unsigned long standard_expand_char_array(standard_array_of_strings* array){
 }
 void standard_push_back(array_of_strings_tapi* array_o, const char* string){
     standard_array_of_strings* array = (standard_array_of_strings*)array_o;
-    unsigned long len_str = strlen(string) + 1;
+    unsigned long long len_str = strlen(string) + 1;
     
     //Expand list of pointers if full
     if(array->ptr_list_len == array->ptr_list_capacity){
         array->ptr_list_capacity *= 2;
-        unsigned long* new_list_of_ptrs = (unsigned long*)malloc(sizeof(array->list_of_ptrs[0]) * array->ptr_list_capacity);
+        unsigned long long* new_list_of_ptrs = (unsigned long long*)malloc(sizeof(array->list_of_ptrs[0]) * array->ptr_list_capacity);
         memcpy(new_list_of_ptrs, array->list_of_ptrs, array->ptr_list_len * sizeof(array->list_of_ptrs[0]));
         free(array->list_of_ptrs);
         array->list_of_ptrs = new_list_of_ptrs;
@@ -86,7 +86,7 @@ void standard_push_back(array_of_strings_tapi* array_o, const char* string){
     memcpy(&array->list_of_chars[found_place], string, len_str);
     array->list_of_ptrs[array->ptr_list_len++] = found_place;
 }
-void standard_delete_string(array_of_strings_tapi* array_o, unsigned long element_index){
+void standard_delete_string(array_of_strings_tapi* array_o, unsigned long long element_index){
     standard_array_of_strings* array = (standard_array_of_strings*)array_o;
     memset(&array->list_of_chars[array->list_of_ptrs[element_index]], -1, strlen(&array->list_of_chars[array->list_of_ptrs[element_index]]));
     for(unsigned long i = element_index + 1; i < array->ptr_list_capacity; i++){
@@ -94,10 +94,10 @@ void standard_delete_string(array_of_strings_tapi* array_o, unsigned long elemen
     }
     array->ptr_list_len--;
 }
-void standard_change_string(array_of_strings_tapi* array_o, unsigned long element_index, const char* string){
+void standard_change_string(array_of_strings_tapi* array_o, unsigned long long element_index, const char* string){
     standard_array_of_strings* array = (standard_array_of_strings*)array_o;
     unsigned long len_str = strlen(string) + 1;
-    unsigned long previous_str_len = strlen(array->list_of_chars[array->list_of_ptrs[element_index]]) + 1;
+    unsigned long previous_str_len = strlen(&array->list_of_chars[array->list_of_ptrs[element_index]]) + 1;
     if(len_str <= previous_str_len){
         memcpy(&array->list_of_chars[array->list_of_ptrs[element_index]], string, len_str);
         memset(&array->list_of_chars[array->list_of_ptrs[element_index] + len_str], -1, previous_str_len - len_str);
@@ -120,38 +120,38 @@ typedef struct virtual_array_of_strings{
     unsigned int all_memoryblock_len, committed_charpagecount, committed_ptrpagecount;
 } virtual_array_of_strings;
 
-array_of_strings_tapi* virtual_create_array(void* virtualmem_loc, unsigned long memsize, unsigned long allocator_flag){
+array_of_strings_tapi* virtual_create_array(void* virtualmem_loc, unsigned long long memsize, unsigned long long allocator_flag){
     //Commit to place object at the beginning
     virmem_sys->virtual_commit(virtualmem_loc, pagesize);
     //Place base object at the beginning
-    virtual_array_of_strings* array = (virtual_array_of_strings*)virtualmem_loc;
-    array->all_memoryblock_len = memsize;
+    virtual_array_of_strings* arry = (virtual_array_of_strings*)virtualmem_loc;
+    arry->all_memoryblock_len = memsize;
     
     //Place ptr list at the end of base object
-    array->list_of_ptrs = (unsigned long*)((char*)array + sizeof(virtual_array_of_strings));
+    arry->list_of_ptrs = (unsigned long*)((char*)arry + sizeof(virtual_array_of_strings));
     //Place char list far away from the ptr list's start
     //Placement is like this: page0[baseobj - ptrlist_beginning], page1-x[ptrlist_continue], pagex-end[charlist]
     //[x,end] range is "(tapi_average_string_len / sizeof(unsigned int))-1" times bigger than [1-x] range
-    array->list_of_chars = (char*)array + (pagesize * (memsize / pagesize) / (tapi_average_string_len / sizeof(unsigned int)));
-    virmem_sys->virtual_commit((char*)array + pagesize, pagesize);
-    array->committed_ptrpagecount = 1;
+    arry->list_of_chars = (char*)arry + (pagesize * (memsize / pagesize) / (tapi_average_string_len / sizeof(unsigned int)));
+    virmem_sys->virtual_commit((char*)arry + pagesize, pagesize);
+    arry->committed_ptrpagecount = 1;
 
     //Commit to make array usable
-    virmem_sys->virtual_commit(array->list_of_chars, pagesize);
-    array->committed_charpagecount = 1;
+    virmem_sys->virtual_commit(arry->list_of_chars, pagesize);
+    arry->committed_charpagecount = 1;
     unsigned int i = 0;
-    while(i < pagesize){array->list_of_chars[i] = -1; i++;}
+    while(i < pagesize){ arry->list_of_chars[i] = -1; i++;}
 
-    return array;
+    return (array_of_strings_tapi*)arry;
 }
-const char* virtual_read_string(const array_of_strings_tapi* array_o, unsigned int element_index){
+const char* virtual_read_string(const array_of_strings_tapi* array_o, unsigned long long element_index){
     virtual_array_of_strings* array = (virtual_array_of_strings*)array_o;
     if(element_index < ((array->committed_ptrpagecount * pagesize) + (pagesize - sizeof(virtual_array_of_strings)))/ 4){
         return &array->list_of_chars[array->list_of_ptrs[element_index]];
     }
     return NULL;
 }
-unsigned long virtual_change_string(array_of_strings_tapi* array_o, unsigned int element_index, const char* string){
+unsigned long long virtual_change_string(array_of_strings_tapi* array_o, unsigned long long element_index, const char* string){
     virtual_array_of_strings* array = (virtual_array_of_strings*)array_o;
     unsigned int length = strlen(string) + 1;
     unsigned int i = 0;
@@ -168,7 +168,7 @@ unsigned long virtual_change_string(array_of_strings_tapi* array_o, unsigned int
         if(current_length >= length){
             memcpy(&array->list_of_chars[i - current_length], string, length);
             array->list_of_ptrs[element_index] = i - current_length;
-            return;
+            return ULONG_MAX;
         }
         i++;
     }
@@ -179,7 +179,7 @@ unsigned long virtual_change_string(array_of_strings_tapi* array_o, unsigned int
     return ULONG_MAX;
 }
 //returned: status of the operation depending on the given allocator_flag while creating the array
-unsigned long virtual_delete_string(array_of_strings_tapi* array_o, unsigned int element_index){
+unsigned long long virtual_delete_string(array_of_strings_tapi* array_o, unsigned long long element_index){
     virtual_array_of_strings* array = (virtual_array_of_strings*)array_o;
     if((element_index < ((array->committed_ptrpagecount * pagesize) + (pagesize - sizeof(virtual_array_of_strings)))/ 4)){
         char* stringptr;
@@ -198,8 +198,8 @@ unsigned char ut_0(const char** output_string, void* data){
     return 255;
 }
 
-void set_unittests(registrysys_tapi* reg_sys){
-    UNITTEST_TAPI_LOAD_TYPE ut_sys = (UNITTEST_TAPI_LOAD_TYPE)reg_sys->get(UNITTEST_TAPI_PLUGIN_NAME, 0, 0);
+void set_unittests(ecs_tapi* ecsSYS){
+    UNITTEST_TAPI_LOAD_TYPE ut_sys = (UNITTEST_TAPI_LOAD_TYPE)ecsSYS->getSystem(UNITTEST_TAPI_PLUGIN_NAME);
     //If unit test system is available, add unit tests to it
     if(ut_sys){
         /*unittest_interface_tapi x;
@@ -207,15 +207,15 @@ void set_unittests(registrysys_tapi* reg_sys){
         ut_sys->funcs->add_unittest("array_of_strings", 0, x);*/
     }
     else{
-        printf("Array of Strings: Unit tests aren't implemented because unit test system isn't available!");
+        printf("Array of Strings: Unit tests aren't implemented because unit test system isn't available!\n");
     }
 }
 
-FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* reg_sys, unsigned char reload){
-    virtualmemorysys_tapi_type* virmemtype = (VIRTUALMEMORY_TAPI_PLUGIN_TYPE)reg_sys->get(VIRTUALMEMORY_TAPI_PLUGIN_NAME, MAKE_PLUGIN_VERSION_TAPI(0, 0, 0), 0);
+ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
+    virtualmemorysys_tapi_type* virmemtype = (VIRTUALMEMORY_TAPI_PLUGIN_TYPE)ecsSys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
     virmem_sys = virmemtype->funcs;
     pagesize = virmem_sys->get_pagesize();
-    set_unittests(reg_sys);
+    set_unittests(ecsSys);
     
 
     aos = (array_of_strings_tapi_type*)malloc(sizeof(array_of_strings_tapi_type));
@@ -238,12 +238,10 @@ FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* reg_sys, unsigned char relo
     aos_virtual->delete_string = &virtual_delete_string;
     aos_virtual->read_string = &virtual_read_string;
 
-    reg_sys->add(ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME, ARRAY_OF_STRINGS_TAPI_VERSION, virmemtype);
-
-    return aos;
+    ecsSys->addSystem(ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME, ARRAY_OF_STRINGS_TAPI_VERSION, virmemtype);
 }
 
-void unload_plugin(registrysys_tapi* reg_sys, unsigned char reload){
+ECSPLUGIN_EXIT(ecsSys, reloadFlag) {
     free(aos_standard);
     free(aos_virtual);
     free(aos_sys_d);

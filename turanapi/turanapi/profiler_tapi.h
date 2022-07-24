@@ -26,9 +26,9 @@ typedef struct profiler_tapi_type{
 } profiler_tapi_type;
 
 
-#define TURAN_PROFILE_SCOPE_NAS(profilertapi, name, duration_ptr) profilertapi->start_profiling(NULL, name, duration_ptr, 0); {
-#define TURAN_PROFILE_SCOPE_MCS(profilertapi, name, duration_ptr) profilertapi->start_profiling(NULL, name, duration_ptr, 1); {
-#define TURAN_PROFILE_SCOPE_MLS(profilertapi, name, duration_ptr) profilertapi->start_profiling(NULL, name, duration_ptr, 2); {
-#define TURAN_PROFILE_SCOPE_SEC(profilertapi, name, duration_ptr) profilertapi->start_profiling(NULL, name, duration_ptr, 3); {
-#define STOP_PROFILE_PRINTLESS_TAPI(profilertapi) } profilertapi->threadlocal_finish_last_profiling(0);
-#define STOP_PROFILE_PRINTFUL_TAPI(profilertapi) } profilertapi->threadlocal_finish_last_profiling(1);
+#define TURAN_PROFILE_SCOPE_NAS(profilertapi, name, duration_ptr) profiledscope_handle_tapi profile##__LINE__; profilertapi->start_profiling(&profile##__LINE__, name, duration_ptr, 0)
+#define TURAN_PROFILE_SCOPE_MCS(profilertapi, name, duration_ptr) profiledscope_handle_tapi profile##__LINE__; profilertapi->start_profiling(&profile##__LINE__, name, duration_ptr, 1)
+#define TURAN_PROFILE_SCOPE_MLS(profilertapi, name, duration_ptr) profiledscope_handle_tapi profile##__LINE__; profilertapi->start_profiling(&profile##__LINE__, name, duration_ptr, 2)
+#define TURAN_PROFILE_SCOPE_SEC(profilertapi, name, duration_ptr) profiledscope_handle_tapi profile##__LINE__; profilertapi->start_profiling(&profile##__LINE__, name, duration_ptr, 3)
+#define STOP_PROFILE_PRINTLESS_TAPI(profilertapi)  profilertapi->threadlocal_finish_last_profiling(0)
+#define STOP_PROFILE_PRINTFUL_TAPI(profilertapi)  profilertapi->threadlocal_finish_last_profiling(1)

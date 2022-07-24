@@ -1,22 +1,23 @@
 ﻿cmake_minimum_required (VERSION 3.8)
 
 
-#Registry System
-add_library (tapi_registrysys SHARED
-"${CMAKE_SOURCE_DIR}/turanapi/turanapi/registrysys_tapi.c" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/virtualmemorysys_tapi.c"
-"${CMAKE_SOURCE_DIR}/turanapi/turanapi/registrysys_tapi.h" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/virtualmemorysys_tapi.h")
-set_target_properties(tapi_registrysys PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
-set_target_properties(tapi_registrysys PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
-install(TARGETS tapi_registrysys RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
+#ECS System
+add_library (tapi_ecs SHARED
+"${CMAKE_SOURCE_DIR}/turanapi/turanapi/ecs_tapi.cpp" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/virtualmemorysys_tapi.c"
+"${CMAKE_SOURCE_DIR}/turanapi/turanapi/ecs_tapi.h" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/virtualmemorysys_tapi.h"
+"${CMAKE_SOURCE_DIR}/turanapi/turanapi/allocator_tapi.cpp" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/allocator_tapi.h")
+set_target_properties(tapi_ecs PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
+set_target_properties(tapi_ecs PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
+install(TARGETS tapi_ecs RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
 
 #Unit Test System
-add_library (tapi_unittest SHARED "${CMAKE_SOURCE_DIR}/turanapi/turanapi/unittestsys_tapi.c" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/unittestsys_tapi.h")
+add_library (tapi_unittest SHARED "${CMAKE_SOURCE_DIR}/turanapi/turanapi/unittestsys_tapi.cpp" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/unittestsys_tapi.h")
 set_target_properties(tapi_unittest PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 set_target_properties(tapi_unittest PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
 install(TARGETS tapi_unittest RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
 
 #Array of Strings System
-add_library (tapi_array_of_strings_sys SHARED "${CMAKE_SOURCE_DIR}/turanapi/turanapi/array_of_strings_tapi.c" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/array_of_strings_tapi.h")
+add_library (tapi_array_of_strings_sys SHARED "${CMAKE_SOURCE_DIR}/turanapi/turanapi/array_of_strings_tapi.cpp" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/array_of_strings_tapi.h")
 set_target_properties(tapi_array_of_strings_sys PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 set_target_properties(tapi_array_of_strings_sys PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
 install(TARGETS tapi_array_of_strings_sys RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
@@ -50,9 +51,3 @@ add_library (tapi_profiler SHARED "${CMAKE_SOURCE_DIR}/turanapi/turanapi/profile
 set_target_properties(tapi_profiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 set_target_properties(tapi_profiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
 install(TARGETS tapi_profiler RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
-
-#Allocator System
-add_library (tapi_allocator SHARED "${CMAKE_SOURCE_DIR}/turanapi/turanapi/allocator_tapi.cpp" "${CMAKE_SOURCE_DIR}/turanapi/turanapi/allocator_tapi.h")
-set_target_properties(tapi_allocator PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
-set_target_properties(tapi_allocator PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
-install(TARGETS tapi_allocator RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)

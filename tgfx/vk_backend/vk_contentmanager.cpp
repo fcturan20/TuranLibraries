@@ -1,16 +1,15 @@
-#include "gpucontentmanager.h"
+#include "vk_contentmanager.h"
 #include <tgfx_core.h>
 #include <tgfx_gpucontentmanager.h>
-#include "predefinitions_vk.h"
-#include "extension.h"
-#include "core.h"
-#include "includes.h"
+#include "vk_predefinitions.h"
+#include "vk_extension.h"
+#include "vk_core.h"
+#include "vk_includes.h"
 #include "renderer.h"
 #include <mutex>
-#include "resource.h"
+#include "vk_resource.h"
 #include "memory.h"
-#include "includes.h"
-#include "helper.h"
+#include "vk_helper.h"
 #include <glslang/SPIRV/GlslangToSpv.h>
 
 TBuiltInResource glsl_to_spirv_limitationtable;
@@ -1494,7 +1493,7 @@ inline void set_functionpointers() {
 	core_tgfx_main->contentmanager->Upload_toBuffer = Upload_toBuffer;
 	core_tgfx_main->contentmanager->SetBindingTable_Buffer = SetDescriptor_Buffer;
 }
-extern void Create_GPUContentManager(initialization_secondstageinfo* info) {
+void Create_GPUContentManager(initialization_secondstageinfo* info) {
 	contentmanager = new gpudatamanager_public;
 	contentmanager->hidden = new gpudatamanager_private;
 	hidden = contentmanager->hidden;

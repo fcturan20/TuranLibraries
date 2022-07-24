@@ -470,7 +470,10 @@ result_tgfx Execute_RenderGraph() {
 	return result_tgfx_SUCCESS;
 }
 */
-void WaitForRenderGraphCommandBuffers() {}
+
+void WaitForRenderGraphCommandBuffers() {
+
+}
 result_tgfx Execute_RenderGraph() { return result_tgfx_NOTCODED; }
 
 
@@ -508,7 +511,7 @@ VK_PASS_ID_TYPE find_mergedpass(passwaitdescription_tgfx_listhandle waitlist) {
 void ConvertWaits(uint32_t& PassWaitsPTR, uint16_t& PassWaitCount, passwaitdescription_tgfx_listhandle passwaits) {
 	PassWaitsPTR = 0;
 	PassWaitCount = 0;
-	//Allocate new wait descs sequantially, 
+	//Allocate new wait descs sequentially, 
 	//this is valid as long as converting whole RG's waits is single threaded
 	TGFXLISTCOUNT(core_tgfx_main, passwaits, waitlistsize);
 	for (uint32_t wait_i = 0; wait_i < waitlistsize; wait_i++) {
@@ -516,7 +519,7 @@ void ConvertWaits(uint32_t& PassWaitsPTR, uint16_t& PassWaitCount, passwaitdescr
 		uint32_t passwaitPTR = 0;
 		switch (waithandle.type) {
 		case VKHANDLETYPEs::WAITDESC_SUBCP:
-			passwaitPTR = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubCP>(waithandle)->convert_to_FinalWaitDesc();
+			passwaitPTR = convert_waitdesc_toSubPassWait() RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubCP>(waithandle)->convert_to_FinalWaitDesc();
 			PassWaitCount++;	break;
 		case VKHANDLETYPEs::WAITDESC_SUBDP:
 			passwaitPTR = RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubDP>(waithandle)->convert_to_FinalWaitDesc();
@@ -566,11 +569,11 @@ void ConvertSubpassWaits(passwaitdescription_tgfx_listhandle passwaits, VKHANDLE
 	}
 }
 void RenderGraph::DP_VK::convert_waits() {
-	passwaitdescription_tgfx_listhandle des = passwaits;
-	ConvertWaits(PassWaitsPTR.PassWaitsPTR, PassWaitsPTR.waitcount, des);
+	passwaitdescription_tgfx_listhandle des = base.passwaits;
+	ConvertWaits(base.PassWaitsPTR.PassWaitsPTR, base.PassWaitsPTR.waitcount, des);
 
 	RenderGraph::SubDP_VK* subdps = getSUBDPs();
-	for (uint32_t i = 1; i < ALLSubDPsCOUNT; i++) {
+	for (uint32_t i = 1; i < base.ALLSUBPASSESCOUNT; i++) {
 		RenderGraph::SubDP_VK& subdp = subdps[i];
 		passwaitdescription_tgfx_listhandle waits = subdp.subpasswaits;
 		ConvertSubpassWaits(waits, VKHANDLETYPEs::WAITDESC_SUBDP, VK_POINTER_TO_MEMOFFSET(this));
@@ -580,11 +583,11 @@ void RenderGraph::DP_VK::convert_waits() {
 	MERGEDTP_ID = find_mergedpass<RenderGraph::TP_VK>(des);
 }
 void RenderGraph::CP_VK::convert_waits() {
-	passwaitdescription_tgfx_listhandle des = passwaits;
-	ConvertWaits(PassWaitsPTR.PassWaitsPTR, PassWaitsPTR.waitcount, des);
+	passwaitdescription_tgfx_listhandle des = base.passwaits;
+	ConvertWaits(base.PassWaitsPTR.PassWaitsPTR, base.PassWaitsPTR.waitcount, des);
 
 	RenderGraph::SubCP_VK* subdps = GetSubpasses();
-	for (uint32_t i = 1; i < SubPassesCount; i++) {
+	for (uint32_t i = 1; i < base.ALLSUBPASSESCOUNT; i++) {
 		RenderGraph::SubCP_VK& subdp = subdps[i];
 		passwaitdescription_tgfx_listhandle waits = subdp.subpasswaits;
 		ConvertSubpassWaits(waits, VKHANDLETYPEs::WAITDESC_SUBDP, VK_POINTER_TO_MEMOFFSET(this));
@@ -603,12 +606,12 @@ void RenderGraph::CP_VK::convert_waits() {
 	MERGEDTP_ID = find_mergedpass<RenderGraph::TP_VK>(des);
 }
 void RenderGraph::TP_VK::convert_waits() {
-	passwaitdescription_tgfx_listhandle des = passwaits;
-	ConvertWaits(PassWaitsPTR.PassWaitsPTR, PassWaitsPTR.waitcount, des);
+	passwaitdescription_tgfx_listhandle des = base.passwaits;
+	ConvertWaits(base.PassWaitsPTR.PassWaitsPTR, base.PassWaitsPTR.waitcount, des);
 
 	uint32_t subtp_i = 0;
 	void* subtp = ((char*)this) + sizeof(TP_VK);
-	for (subtp_i; subtp_i < SubPassesCount; subtp_i++) {
+	for (subtp_i; subtp_i < base.ALLSUBPASSESCOUNT; subtp_i++) {
 		RenderGraph::TP_VK::SUBTP_COMMON* subpass = (RenderGraph::TP_VK::SUBTP_COMMON*)subtp;
 		if (subpass->TYPE == VK_PASSTYPE::SUBTP_BARRIER || subpass->TYPE == VK_PASSTYPE::SUBTP_COPY) {
 			passwaitdescription_tgfx_listhandle waits = subpass->subpasswaits;
@@ -632,19 +635,41 @@ void RenderGraph::TP_VK::convert_waits() {
 
 }
 void RenderGraph::WP_VK::convert_waits() {
-	passwaitdescription_tgfx_listhandle des = passwaits;
-	ConvertWaits(PassWaitsPTR.PassWaitsPTR, PassWaitsPTR.waitcount, des);
+	passwaitdescription_tgfx_listhandle des = base.passwaits;
+	ConvertWaits(base.PassWaitsPTR.PassWaitsPTR, base.PassWaitsPTR.waitcount, des);
 }
 
 
+template<typename WaitDescStruct>
+uint32_t convert_waitdesc_toSubPassWait(VKDATAHANDLE deschandle) {
+	WaitDescStruct* desc = RenderGraph::getDesc_fromHandle<WaitDescStruct>(deschandle);
+#ifdef VULKAN_DEBUGGING
+	VKOBJHANDLE target_mainpasshandle = (*(VKOBJHANDLE*)desc->passhandle);
+	if (target_mainpasshandle.type != WaitDescStruct::TARGETPASS_HANDLETYPE) { printer(17); return UINT32_MAX; }
+	WaitDescStruct::TARGETPASS_STRUCT* targetpass = (WaitDescStruct::TARGETPASS_STRUCT*)VK_MEMOFFSET_TO_POINTER(target_mainpasshandle.OBJ_memoffset);
+	if (targetcp->base.PASSTYPE != VK_PASSTYPE::DP) { printer(17); return UINT32_MAX; }
+	if (targetcp->base.ALLSUBPASSESCOUNT <= SubPassIndex) { printer(8); return UINT32_MAX; }
+#endif
+	uint32_t passwaitPTR = vk_virmem::allocate_from_dynamicmem(framegraphsys_vk::WAITs_DYNAMICMEM, sizeof(RenderGraph::WaitDescFinal));
+	RenderGraph::SubPassCOMMON::SubPassWait* finaldesc = (RenderGraph::SubPassCOMMON::SubPassWait*)VK_MEMOFFSET_TO_POINTER(passwaitPTR);
+	finaldesc->isWaitingForLastFrame = desc->isWaitingForLastFrame;
+	finaldesc->MainPassPTR = target_mainpasshandle.OBJ_memoffset;
+	finaldesc->SubpassIndex = desc->SubPassIndex;
+	finaldesc->WaitedOP_TRANSFER = false;
+	finaldesc->WaitedOP_COPY = false;
+	return passwaitPTR;
+}
 
+uint32_t convert_waitdesc_toMainPassWait() {
+
+}
 uint32_t RenderGraph::WaitDesc_SubDP::convert_to_FinalWaitDesc() {
 #ifdef VULKAN_DEBUGGING
 	VKOBJHANDLE target_mainpasshandle = (*(VKOBJHANDLE*)passhandle);
 	if (target_mainpasshandle.type != VKHANDLETYPEs::DRAWPASS) { printer(17); return UINT32_MAX; }
 	RenderGraph::DP_VK* targetcp = (RenderGraph::DP_VK*)VK_MEMOFFSET_TO_POINTER(target_mainpasshandle.OBJ_memoffset);
-	if (targetcp->PASSTYPE != VK_PASSTYPE::DP) { printer(17); return UINT32_MAX; }
-	if (targetcp->ALLSubDPsCOUNT <= SubPassIndex) { printer(8); return UINT32_MAX; }
+	if (targetcp->base.PASSTYPE != VK_PASSTYPE::DP) { printer(17); return UINT32_MAX; }
+	if (targetcp->base.ALLSUBPASSESCOUNT <= SubPassIndex) { printer(8); return UINT32_MAX; }
 #endif
 	uint32_t passwaitPTR = vk_virmem::allocate_from_dynamicmem(framegraphsys_vk::WAITs_DYNAMICMEM, sizeof(RenderGraph::WaitDescFinal));
 	RenderGraph::WaitDescFinal* finaldesc = (RenderGraph::WaitDescFinal*)VK_MEMOFFSET_TO_POINTER(passwaitPTR);
@@ -660,8 +685,8 @@ uint32_t RenderGraph::WaitDesc_SubCP::convert_to_FinalWaitDesc() {
 	VKOBJHANDLE target_mainpasshandle = (*(VKOBJHANDLE*)passhandle);
 	if (target_mainpasshandle.type != VKHANDLETYPEs::COMPUTEPASS) { printer(17); return UINT32_MAX; }
 	RenderGraph::CP_VK* targetcp = (RenderGraph::CP_VK*)VK_MEMOFFSET_TO_POINTER(target_mainpasshandle.OBJ_memoffset);
-	if (targetcp->PASSTYPE != VK_PASSTYPE::CP) { printer(17); return UINT32_MAX; }
-	if (targetcp->SubPassesCount <= SubPassIndex) { printer(8); return UINT32_MAX; }
+	if (targetcp->base.PASSTYPE != VK_PASSTYPE::CP) { printer(17); return UINT32_MAX; }
+	if (targetcp->base.ALLSUBPASSESCOUNT <= SubPassIndex) { printer(8); return UINT32_MAX; }
 #endif
 	uint32_t passwaitPTR = vk_virmem::allocate_from_dynamicmem(framegraphsys_vk::WAITs_DYNAMICMEM, sizeof(RenderGraph::WaitDescFinal));
 	RenderGraph::WaitDescFinal* finaldesc = (RenderGraph::WaitDescFinal*)VK_MEMOFFSET_TO_POINTER(passwaitPTR);
@@ -677,8 +702,8 @@ uint32_t RenderGraph::WaitDesc_SubTP::convert_to_FinalWaitDesc() {
 	VKOBJHANDLE target_mainpasshandle = (*(VKOBJHANDLE*)passhandle);
 	if (target_mainpasshandle.type != VKHANDLETYPEs::TRANSFERPASS) { printer(17); return UINT32_MAX; }
 	RenderGraph::TP_VK* targetcp = (RenderGraph::TP_VK*)VK_MEMOFFSET_TO_POINTER(target_mainpasshandle.OBJ_memoffset);
-	if (targetcp->PASSTYPE != VK_PASSTYPE::TP) { printer(17); return UINT32_MAX; }
-	if (targetcp->SubPassesCount <= SubPassIndex) { printer(8); return UINT32_MAX; }
+	if (targetcp->base.PASSTYPE != VK_PASSTYPE::TP) { printer(17); return UINT32_MAX; }
+	if (targetcp->base.ALLSUBPASSESCOUNT <= SubPassIndex) { printer(8); return UINT32_MAX; }
 #endif
 	uint32_t passwaitPTR = vk_virmem::allocate_from_dynamicmem(framegraphsys_vk::WAITs_DYNAMICMEM, sizeof(RenderGraph::WaitDescFinal));
 	RenderGraph::WaitDescFinal* finaldesc = (RenderGraph::WaitDescFinal*)VK_MEMOFFSET_TO_POINTER(passwaitPTR);

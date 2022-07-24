@@ -1,22 +1,5 @@
-/*	Turan API supports:
-1) File I/O and Data Types and Serialization/Deserialization
-2) GLM math library
-3) STD libraries
-4) Image read/write
-5) Run-time Type Introspection (Just enable in VS 2019, no specific code!)
-6) IMGUI (Needs to be implemented for each GFX_API)
-7) Basic profiler (Only calculates time)
-
-	Future supports:
-1) Multi-thread, ECS, Job
-2) Networking
-3) Compression, Hashing, Algorithms
-4) Unit Testing Framework
-*/
-
 #pragma once
 
-#define TURANAPI
 #define TURAN_DEBUGGING
 
 #define MAKE_PLUGIN_VERSION_TAPI(major, mid, minor) (((major < 255 ? major : 255) << 16) | \
@@ -50,20 +33,31 @@
 #error "Project configurations should be corrupted because environment is neither 32 bit or 64 bit! So project failed to compile"
 #endif
 
-#ifdef T_SUPPORTEDPLATFORM
+// Define FUNC_DLIB_EXPORT as a C macro for the compiler
+// Microsoft
+#if defined(_MSC_VER)
+//Add extern "C" for C++ compilers
+#if defined(__cplusplus)
+#define FUNC_DLIB_EXPORT extern "C" __declspec(dllexport)
+#else
+#define FUNC_DLIB_EXPORT __declspec(dllexport)
+#endif
+
+// GCC
+#elif defined(__GNUC__)
+//Add extern "C" for C++ compilers
+#if defined(__cplusplus)
+#define FUNC_DLIB_EXPORT extern "C" __attribute__((visibility("default")))
+#else
+#define FUNC_DLIB_EXPORT __attribute__((visibility("default")))
+#endif
+#endif
 
 
-
+#if defined(T_SUPPORTEDPLATFORM) & defined(TAPI_INCLUDE_PLATFORM_LIBS)
 #if defined(_WIN32)
 #include "windows.h"
 
-#if defined(_MSC_VER)
-    //  Microsoft 
-    #define FUNC_DLIB_EXPORT __declspec(dllexport)
-#elif defined(__GNUC__)
-    //  GCC
-    #define FUNC_DLIB_EXPORT __attribute__((visibility("default")))
-#endif
 
     #define DLIB_LOAD_TAPI(dlib_path) LoadLibrary(TEXT(dlib_path))
     #define DLIB_FUNC_LOAD_TAPI(dlib_var_name, func_name) GetProcAddress(dlib_var_name, func_name)
@@ -74,8 +68,6 @@
 #endif
 
 
-#else
-#error "Platform isn't supported!"
 #endif
 
 

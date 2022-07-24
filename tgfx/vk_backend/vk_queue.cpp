@@ -1,7 +1,7 @@
-#include "queue.h"
-#include "core.h"
+#include "vk_queue.h"
+#include "vk_core.h"
 #include <mutex>
-#include "synchronization_sys.h"
+#include "vk_synchronization.h"
 
 struct commandbuffer_vk {
 	VkCommandBuffer CB;

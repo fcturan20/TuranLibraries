@@ -17,11 +17,11 @@ typedef struct tapi_array_of_strings* array_of_strings_tapi;
 //Element indexes are dynamic, means that if an element is deleted every other element that comes after changes index (element index a is deleted, element index a+1 becomes a etc.)
 typedef struct array_of_strings_standardallocator_tapi{
     //You can set both of the arguments to 0, it is just for optimization
-    array_of_strings_tapi* (*create_array_of_string)(unsigned long initial_size, unsigned long char_expand_size);
-    const char* (*read_string)(const array_of_strings_tapi* array, unsigned long element_index);
-    void (*change_string)(array_of_strings_tapi* array, unsigned long element_index, const char* string);
+    array_of_strings_tapi* (*create_array_of_string)(unsigned long long initial_size, unsigned long long char_expand_size);
+    const char* (*read_string)(const array_of_strings_tapi* array, unsigned long long element_index);
+    void (*change_string)(array_of_strings_tapi* array, unsigned long long element_index, const char* string);
     void (*push_back)(array_of_strings_tapi* array, const char* string);
-    void (*delete_string)(array_of_strings_tapi* array, unsigned long element_index);
+    void (*delete_string)(array_of_strings_tapi* array, unsigned long long element_index);
 } array_of_strings_standardallocator_tapi;
 
 //Uses virtual memory to allocate buffers
@@ -30,12 +30,12 @@ typedef struct array_of_strings_virtualallocatorsys_tapi{
     //virtualmem_loc: location of the reserved (but not committed) address space
     //memsize: how much bytes are allowed to be used
     //allocator_flag (use with ALLOCATOR_FLAG_TAPI): specify virtual memory tricks
-    array_of_strings_tapi* (*create_array_of_string)(void* virtualmem_loc, unsigned long memsize, unsigned long allocator_flag);
-    const char* (*read_string)(const array_of_strings_tapi* array, unsigned long element_index);
+    array_of_strings_tapi* (*create_array_of_string)(void* virtualmem_loc, unsigned long long memsize, unsigned long long allocator_flag);
+    const char* (*read_string)(const array_of_strings_tapi* array, unsigned long long element_index);
     //returned: status of the operation depending on the given allocator_flag while creating the array
-    unsigned long (*change_string)(array_of_strings_tapi* array, unsigned long element_index, const char* string);
+    unsigned long long (*change_string)(array_of_strings_tapi* array, unsigned long long element_index, const char* string);
     //returned: status of the operation depending on the given allocator_flag while creating the array
-    unsigned long (*delete_string)(array_of_strings_tapi* array, unsigned long element_index);
+    unsigned long long (*delete_string)(array_of_strings_tapi* array, unsigned long long element_index);
 } array_of_strings_virtualallocatorsys_tapi;
 
 typedef struct array_of_strings_tapi_d array_of_strings_tapi_d;

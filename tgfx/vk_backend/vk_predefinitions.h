@@ -129,7 +129,8 @@ extern void* VKCONST_VIRMEMSPACE_BEGIN;
 extern uint64_t VKCONST_VIRMEMPAGESIZE;
 
 
-
+//BRANCHING RELATED
+static constexpr bool VKCONST_onlyRenderImGui = true;
 
 
 

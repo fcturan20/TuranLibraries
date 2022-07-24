@@ -8,6 +8,8 @@ set_target_properties(tgfx_core PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAK
 set_target_properties(tgfx_core PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
 install(TARGETS tgfx_core RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
 
+#RenderGraph
+add_subdirectory("rendergraph")
 
 #Vulkan
 add_subdirectory("vk_backend")

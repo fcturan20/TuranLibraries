@@ -1,6 +1,6 @@
 #include "profiler_tapi.h"
 #include "threadingsys_tapi.h"
-#include "registrysys_tapi.h"
+#include "ecs_tapi.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -98,9 +98,9 @@ void threadlocal_finish_last_profiling(unsigned char ShouldPrint) {
     delete profil;
 }
 
-extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned char reload){
+ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
     unsigned int threadcount = 1;
-    THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadsystype = (THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE)regsys->get(THREADINGSYS_TAPI_PLUGIN_NAME, THREADINGSYS_TAPI_PLUGIN_VERSION, 0);
+    THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadsystype = (THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE)ecssys->getSystem(THREADINGSYS_TAPI_PLUGIN_NAME);
     if(threadsystype){ threadcount = threadsystype->funcs->thread_count(); }
 
     profiler_tapi_type* type = (profiler_tapi_type*)malloc(sizeof(profiler_tapi_type));
@@ -108,7 +108,7 @@ extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned
     type->funcs = (profiler_tapi*)malloc(sizeof(profiler_tapi));
     profiler_data = type->data;
 
-    regsys->add(PROFILER_TAPI_PLUGIN_NAME, PROFILER_TAPI_PLUGIN_VERSION, type);
+    ecssys->addSystem(PROFILER_TAPI_PLUGIN_NAME, PROFILER_TAPI_PLUGIN_VERSION, type);
 
     type->funcs->start_profiling = &start_profiling;
     type->funcs->finish_profiling = &finish_profiling;
@@ -118,10 +118,8 @@ extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned
     type->data->threadcount = threadcount;
     type->data->last_handles = (profiledscope_handle_tapi*)malloc(sizeof(profiledscope_handle_tapi) * threadcount);
     memset(type->data->last_handles, 0, sizeof(profiledscope_handle_tapi) * threadcount);
-
-    return type;
 }
 
-extern "C" FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* regsys, unsigned char reload){
+ECSPLUGIN_EXIT(ecssys, reloadFlag) {
 
 }

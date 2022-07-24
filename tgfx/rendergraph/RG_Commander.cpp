@@ -21,6 +21,14 @@
 typedef struct renderer_private{
 	RGReconstructionStatus RG_Status = RGReconstructionStatus::Invalid;
 	VkDescriptorPool IMGUIPOOL = VK_NULL_HANDLE;
+	
+
+	//Just for now to render IMGUI
+	VkCommandPool ImGuiCommandPool = VK_NULL_HANDLE;
+	VkCommandBuffer ImGuiCommandBuffer[2] = {};
+	VkFence ImGuiCBFences[2] = {};
+	VkRenderPass ImGuiRP[2] = {};
+	VkFramebuffer ImGuiFBs[2] = {};
 } renderer_private;
 static renderer_private* hidden = nullptr;
 
@@ -28,52 +36,165 @@ static renderer_private* hidden = nullptr;
 			//RENDERGRAPH OPERATIONS
 
 
+static void initializeImGuiCommandBufferAndFence() {
+	//CommandPool Gen
+	{
+		VkCommandPoolCreateInfo ci = {};
+		ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		ci.pNext = nullptr;
+		ci.queueFamilyIndex = queuesys->get_queuefam_index(rendergpu, rendergpu->GRAPHICSQUEUEFAM());
+		ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		ThrowIfFailed(vkCreateCommandPool(rendergpu->LOGICALDEVICE(), &ci, nullptr, &hidden->ImGuiCommandPool), "ImGui CommandPool gen failed!");
+	}
+	//Allocate command buffers
+	{
+		VkCommandBufferAllocateInfo ai = {};
+		ai.commandBufferCount = 2;
+		ai.commandPool = hidden->ImGuiCommandPool;
+		ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		ai.pNext = nullptr;
+		ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		ThrowIfFailed(vkAllocateCommandBuffers(rendergpu->LOGICALDEVICE(), &ai, hidden->ImGuiCommandBuffer), "ImGui CommandBuffer alloc failed!");
+	}
+	//Create fences
+	for (uint8_t i = 0; i < 2; i++) {
+		VkFenceCreateInfo ci = {};
+		ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		ci.pNext = nullptr; ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		ThrowIfFailed(vkCreateFence(rendergpu->LOGICALDEVICE(), &ci, nullptr, &hidden->ImGuiCBFences[i]), "ImGui Fence gen failed!");
+	}
+	//Create RPs
+	for (uint8_t i = 0; i < 2; i++) {
+		VkRenderPassCreateInfo ci = {};
+		ci.attachmentCount = 1;
+		ci.dependencyCount = 0;
+		ci.flags = 0;
+		VkAttachmentDescription at_d = {};
+		{
+			at_d.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			at_d.flags = 0;
+			auto texture = contentmanager->GETTEXTURES_ARRAY().getOBJbyINDEX(core_vk->GETWINDOWs()[0]->Swapchain_Textures[i]);
+			at_d.format = Find_VkFormat_byTEXTURECHANNELs(texture->CHANNELs);
+			at_d.initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			at_d.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			at_d.samples = VK_SAMPLE_COUNT_1_BIT;
+			at_d.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		}
+		ci.pAttachments = &at_d;
+		ci.pDependencies = nullptr;
+		ci.pNext = nullptr;
+		VkSubpassDescription sp_d = {};
+		{
+			sp_d.colorAttachmentCount = 1;
+			sp_d.flags = 0;
+			sp_d.inputAttachmentCount = 0;
+			VkAttachmentReference at_r = {};
+			at_r.attachment = 0; at_r.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			sp_d.pColorAttachments = &at_r;
+			sp_d.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+			sp_d.preserveAttachmentCount = 0;
+		}
+		ci.pSubpasses = &sp_d;
+		ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		ci.subpassCount = 1;
+		ThrowIfFailed(vkCreateRenderPass(rendergpu->LOGICALDEVICE(), &ci, nullptr, &hidden->ImGuiRP[i]), "ImGui RenderPass gen failed!");
+	}
+	//Create FBs
+	for (uint8_t i = 0; i < 2; i++) {
+		VkFramebufferCreateInfo ci = {};
+		ci.attachmentCount = 1;
+		ci.flags = 0;
+		ci.height = core_vk->GETWINDOWs()[0]->NEWHEIGHT;
+		ci.layers = 0;
+		auto texture = contentmanager->GETTEXTURES_ARRAY().getOBJbyINDEX(core_vk->GETWINDOWs()[0]->Swapchain_Textures[i]);
+		ci.pAttachments = &texture->ImageView;
+		ci.pNext = nullptr;
+		ci.renderPass = hidden->ImGuiRP[i];
+		ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		ci.width = core_vk->GETWINDOWs()[0]->NEWWIDTH;
+		ThrowIfFailed(vkCreateFramebuffer(rendergpu->LOGICALDEVICE(), &ci, nullptr, &hidden->ImGuiFBs[i]), "ImGui FB gen failed!");
+	}
+}
 struct renderer_funcs {
 	static void PrepareForNextFrame() {
 		VKGLOBAL_FRAMEINDEX = (VKGLOBAL_FRAMEINDEX + 1) % VKCONST_BUFFERING_IN_FLIGHT;
 		take_inputs();
 		if(imgui){ imgui->NewFrame(); }
 	}
-
 	//Rendering operations
 	static void Run() {
+
 		unsigned char frame_i = renderer->Get_FrameIndex(false);
+		//For now, just to test editor functionality
+		if (VKCONST_onlyRenderImGui) {
+			//Just for now, to render ImGui
+			if (hidden->ImGuiCommandPool == VK_NULL_HANDLE) {
+				initializeImGuiCommandBufferAndFence();
+			}
 
-		//Wait for command buffers that are sent to render N-2th frame (N is the current frame)
-		//As the name says, this function stops the thread while waiting for render calls (raster-compute-transfer-barrier calls).
-		//With this way, we are sure that no command buffer execution will collide so we can change descriptor sets according to that.
-		WaitForRenderGraphCommandBuffers();
+			ThrowIfFailed(vkWaitForFences(rendergpu->LOGICALDEVICE(), 1, &hidden->ImGuiCBFences[frame_i], VK_TRUE, UINT64_MAX), "waitingForFence failed!");
 
-
-		//Descriptor Set changes, vkFramebuffer changes etc.
-		contentmanager->Apply_ResourceChanges();
-		
-		
-
-		//This function is defined in rendergraph_primitive.cpp
-		//Recording command buffers and queue submissions is handled here
-		//That means: Sending CBs to queues and presenting swapchain to window happens here.
-		Execute_RenderGraph();
-
-
-
-		//Shift window semaphores
-		VK_STATICVECTOR<WINDOW_VKOBJ, 50>& windows = core_vk->GETWINDOWs();
-		for (unsigned char WindowIndex = 0; WindowIndex < windows.size(); WindowIndex++) {
-			WINDOW_VKOBJ* VKWINDOW = windows[WindowIndex];
-
-			semaphore_idtype_vk penultimate_semaphore = VKWINDOW->PresentationSemaphores[0];
-			VKWINDOW->PresentationSemaphores[0] = VKWINDOW->PresentationSemaphores[1];
-			VKWINDOW->PresentationSemaphores[1] = penultimate_semaphore;
-
-			fence_idtype_vk penultimate_fence = VKWINDOW->PresentationFences[0];
-			VKWINDOW->PresentationFences[0] = VKWINDOW->PresentationFences[1];
-			VKWINDOW->PresentationFences[1] = penultimate_fence;
+			//CB begin
+			{
+				VkCommandBufferBeginInfo bi = {};
+				bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+				bi.pNext = nullptr; bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+				bi.pInheritanceInfo = {};
+				ThrowIfFailed(vkBeginCommandBuffer(hidden->ImGuiCommandBuffer[frame_i], &bi), "beginningCB failed!");
+			}
+			{
+				VkRenderPassBeginInfo bi = {};
+				bi.clearValueCount = 1;
+				bi.framebuffer = hidden->ImGuiFBs[frame_i];
+				VkClearValue clear_value = {};
+				clear_value.color.uint32[0] = 255; clear_value.color.uint32[1] = 255; clear_value.color.uint32[2] = 255;
+				bi.pClearValues = &clear_value;
+				bi.pNext = nullptr; bi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+				bi.renderArea.extent.height = core_vk->GETWINDOWs()[0]->NEWHEIGHT;
+				bi.renderArea.extent.width = core_vk->GETWINDOWs()[0]->NEWWIDTH;
+				bi.renderArea.offset = {};
+				bi.renderPass = hidden->ImGuiRP[frame_i];
+				vkCmdBeginRenderPass(hidden->ImGuiCommandBuffer[frame_i], &bi, VK_SUBPASS_CONTENTS_INLINE);
+			}
 		}
+		else {
 
-		//Current frame has finished, so every call after this call affects to the next frame
-		//That means we should make some changes/clean-ups for every system to work fine
-		PrepareForNextFrame();
+			//Wait for command buffers that are sent to render N-2th frame (N is the current frame)
+			//As the name says, this function stops the thread while waiting for render calls (raster-compute-transfer-barrier calls).
+			//With this way, we are sure that no command buffer execution will collide so we can change descriptor sets according to that.
+			WaitForRenderGraphCommandBuffers();
+
+
+			//Descriptor Set changes, vkFramebuffer changes etc.
+			contentmanager->Apply_ResourceChanges();
+
+
+
+			//This function is defined in rendergraph_primitive.cpp
+			//Recording command buffers and queue submissions is handled here
+			//That means: Sending CBs to queues and presenting swapchain to window happens here.
+			Execute_RenderGraph();
+
+
+
+			//Shift window semaphores
+			VK_STATICVECTOR<WINDOW_VKOBJ, 50>& windows = core_vk->GETWINDOWs();
+			for (unsigned char WindowIndex = 0; WindowIndex < windows.size(); WindowIndex++) {
+				WINDOW_VKOBJ* VKWINDOW = windows[WindowIndex];
+
+				semaphore_idtype_vk penultimate_semaphore = VKWINDOW->PresentationSemaphores[0];
+				VKWINDOW->PresentationSemaphores[0] = VKWINDOW->PresentationSemaphores[1];
+				VKWINDOW->PresentationSemaphores[1] = penultimate_semaphore;
+
+				fence_idtype_vk penultimate_fence = VKWINDOW->PresentationFences[0];
+				VKWINDOW->PresentationFences[0] = VKWINDOW->PresentationFences[1];
+				VKWINDOW->PresentationFences[1] = penultimate_fence;
+			}
+
+			//Current frame has finished, so every call after this call affects to the next frame
+			//That means we should make some changes/clean-ups for every system to work fine
+			PrepareForNextFrame();
+		}
 	}
 	static void DrawDirect(buffer_tgfx_handle VertexBuffer_ID, buffer_tgfx_handle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
 		unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, rasterpipelineinstance_tgfx_handle MaterialInstance_ID,
@@ -397,7 +518,7 @@ bool RenderGraph::SubTPBARRIER_VK::isWorkloaded() {
 }
 bool RenderGraph::CP_VK::isWorkloaded() {
 	SubCP_VK* subpasses = (SubCP_VK*)(uintptr_t(this) + sizeof(CP_VK));
-	for (unsigned char SubpassIndex = 0; SubpassIndex < SubPassesCount; SubpassIndex++) {
+	for (unsigned char SubpassIndex = 0; SubpassIndex < base.ALLSUBPASSESCOUNT; SubpassIndex++) {
 		SubCP_VK& SP = subpasses[SubpassIndex];
 		if (SP.isThereWorkload()) {
 			return true;
@@ -411,7 +532,7 @@ bool RenderGraph::WP_VK::isWorkloaded() {
 }
 bool RenderGraph::DP_VK::isWorkloaded() {
 	SubDP_VK* subpasses = (SubDP_VK*)(uintptr_t(this) + sizeof(DP_VK));
-	for (unsigned char SubpassIndex = 0; SubpassIndex < ALLSubDPsCOUNT; SubpassIndex++) {
+	for (unsigned char SubpassIndex = 0; SubpassIndex < base.ALLSUBPASSESCOUNT; SubpassIndex++) {
 		SubDP_VK& SP = subpasses[SubpassIndex];
 		if (SP.isThereWorkload()) {
 			return true;

@@ -1,5 +1,5 @@
 #include "bitset_tapi.h"
-#include "registrysys_tapi.h"
+#include "ecs_tapi.h"
 #include <iostream>
 
 
@@ -121,13 +121,13 @@ void ExpandBitset(bitset_tapi* set, unsigned int expand_size) {
 typedef struct bitsetsys_tapi_d{
     bitsetsys_tapi_type* type;
 }bitsetsys_tapi_d;
-extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned char reload){
+ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
     bitsetsys_tapi_type* type = (bitsetsys_tapi_type*)malloc(sizeof(bitsetsys_tapi_type));
     type->data = (bitsetsys_tapi_d*)malloc(sizeof(bitsetsys_tapi_d));
     type->funcs = (bitsetsys_tapi*)malloc(sizeof(bitsetsys_tapi));
     type->data->type = type;
 
-    regsys->add(BITSET_TAPI_PLUGIN_NAME, BITSET_TAPI_PLUGIN_VERSION, type);
+    ecssys->addSystem(BITSET_TAPI_PLUGIN_NAME, BITSET_TAPI_PLUGIN_VERSION, type);
 
     type->funcs->clear_bitset = &ClearBitset;
     type->funcs->create_bitset = &CreateBitset;
@@ -138,9 +138,7 @@ extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned
     type->funcs->getindex_firsttrue = &tapi_GetIndex_FirstTrue;
     type->funcs->setbit_false = &SetBit_False;
     type->funcs->setbit_true = &SetBit_True;
-
-    return type;
 }
-extern "C" FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* regsys, unsigned char reload){
+ECSPLUGIN_EXIT(ecssys, reloadFlag) {
     
 }

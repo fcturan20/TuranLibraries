@@ -10,7 +10,7 @@
 #include <atomic>
 
 #include "threadingsys_tapi.h"
-#include "registrysys_tapi.h"
+#include "ecs_tapi.h"
 
 
 
@@ -168,8 +168,9 @@ void load_in_cpp(){
 	else {
 		ThreadCount--;
 	}
-	for (unsigned int ThreadIndex = 0; ThreadIndex < ThreadCount; ThreadIndex++) {
-		std::thread newthread([ThreadIndex]() {JOBSYS->ThreadIDs.insert(std::pair<std::thread::id, unsigned char>(std::this_thread::get_id(), ThreadIndex + 1)); JobSearch(); });
+	for (uint32_t ThreadIndex = 0; ThreadIndex < ThreadCount; ThreadIndex++) {
+		std::thread newthread([ThreadIndex]() {
+			JOBSYS->ThreadIDs.insert(std::pair<std::thread::id, unsigned char>(std::this_thread::get_id(), ThreadIndex + 1)); JobSearch(); });
 		newthread.detach();
 	}
 }
@@ -178,7 +179,7 @@ typedef struct threadingsys_tapi_d{
 	JobSystem* JOBSYS = nullptr;
 	threadingsys_tapi_type* plugin_type_ptr = nullptr;
 } threadingsys_tapi_d;
-extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* reg_sys, unsigned char reload){
+ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
 	load_in_cpp();
 
 	threadingsys_tapi_type* type = (threadingsys_tapi_type*)malloc(sizeof(threadingsys_tapi_type));
@@ -198,12 +199,10 @@ extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* reg_sys, unsigne
 	type->funcs->waitjob_busy = &waitJob_busy;
 	type->funcs->waitjob_empty = &waitJob_empty;
 	
-	reg_sys->add(THREADINGSYS_TAPI_PLUGIN_NAME, THREADINGSYS_TAPI_PLUGIN_VERSION, type);
-
-	return type;
+	ecssys->addSystem(THREADINGSYS_TAPI_PLUGIN_NAME, THREADINGSYS_TAPI_PLUGIN_VERSION, type);
 }
-extern "C" FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* reg_sys, unsigned char reload){
-	printf("qwe");
+ECSPLUGIN_EXIT(ecssys, reloadFlag) {
+	printf("Threaded job sys exit isn't coded");
 }
 /*
 

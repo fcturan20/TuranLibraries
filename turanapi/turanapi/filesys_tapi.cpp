@@ -1,5 +1,5 @@
 #include "filesys_tapi.h"
-#include "registrysys_tapi.h"
+#include "ecs_tapi.h"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -89,7 +89,7 @@ typedef struct filesys_tapi_d{
     filesys_tapi_type* type;
 } filesys_tapi_d;
 
-extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned char reload){
+ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
     filesys_tapi_type* type = (filesys_tapi_type*)malloc(sizeof(filesys_tapi_type));
     type->data = (filesys_tapi_d*)malloc(sizeof(filesys_tapi_d));
     type->funcs = (filesys_tapi*)malloc(sizeof(filesys_tapi));
@@ -102,10 +102,9 @@ extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned
     type->funcs->write_textfile = &write_textfile;
     type->funcs->delete_file = &delete_file;
 
-    regsys->add(FILESYS_TAPI_PLUGIN_NAME, FILESYS_TAPI_PLUGIN_VERSION, type);
-    return type;
+    ecssys->addSystem(FILESYS_TAPI_PLUGIN_NAME, FILESYS_TAPI_PLUGIN_VERSION, type);
 }
 
-extern "C" FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* regsys, unsigned char reload){
+ECSPLUGIN_EXIT(ecssys, reloadFlag) {
 
 }

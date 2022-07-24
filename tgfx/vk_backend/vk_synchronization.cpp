@@ -1,4 +1,4 @@
-#include "synchronization_sys.h"
+#include "vk_synchronization.h"
 
 
 extern void Create_SyncSystems() {

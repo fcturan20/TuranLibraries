@@ -7,13 +7,6 @@ typedef struct tgfx_gpu_obj* gpu_tgfx_handle;
 typedef struct tgfx_window_obj* window_tgfx_handle;
 typedef struct tgfx_texture_obj* texture_tgfx_handle;
 typedef struct tgfx_monitor_obj* monitor_tgfx_handle;
-typedef struct tgfx_drawpass_obj* drawpass_tgfx_handle;
-typedef struct tgfx_computepass_obj* computepass_tgfx_handle;
-typedef struct tgfx_transferpass_obj* transferpass_tgfx_handle;
-typedef struct tgfx_windowpass_obj* windowpass_tgfx_handle;
-typedef struct tgfx_subdrawpass_obj* subdrawpass_tgfx_handle;
-typedef struct tgfx_subcomputepass_obj* subcomputepass_tgfx_handle;
-typedef struct tgfx_subtransferpass_obj* subtransferpass_tgfx_handle;
 typedef struct tgfx_rtslotset_obj* rtslotset_tgfx_handle;
 typedef struct tgfx_buffer_obj* buffer_tgfx_handle;
 typedef struct tgfx_samplingtype_obj* samplingtype_tgfx_handle;
@@ -25,18 +18,17 @@ typedef struct tgfx_rasterpipelinetype_obj* rasterpipelinetype_tgfx_handle;
 typedef struct tgfx_rasterpipelineinstance_obj* rasterpipelineinstance_tgfx_handle;
 typedef struct tgfx_inheritedrtslotset_obj* inheritedrtslotset_tgfx_handle;
 typedef struct tgfx_bindingtable_obj* bindingtable_tgfx_handle;
-
-
+typedef struct tgfx_commandbundle_obj* commandbundle_tgfx_handle;
+typedef struct tgfx_gpuqueue_obj* gpuqueue_tgfx_handle; //This is a Vulkan Queue, not Queue Family
+typedef struct tgfx_renderpass_obj* renderpass_tgfx_handle;
+typedef struct tgfx_rendersubpass_obj* rendersubpass_tgfx_handle;
+typedef struct tgfx_fence_obj* fence_tgfx_handle;
+typedef struct tgfx_semaphore_obj* semaphore_tgfx_handle;
 
             //DATAS
 
 typedef struct tgfx_extension_data* extension_tgfx_handle;
 typedef struct tgfx_textureusageflag_data* textureusageflag_tgfx_handle;
-typedef struct tgfx_waitsignaldescription_data* waitsignaldescription_tgfx_handle;
-typedef struct tgfx_passwaitdescription_data* passwaitdescription_tgfx_handle;
-typedef struct tgfx_subdrawpassdescription_data* subdrawpassdescription_tgfx_handle;
-typedef struct tgfx_subcomputepassdescription_data* subcomputepassdescription_tgfx_handle;
-typedef struct tgfx_subtransferpassdescription_data* subtransferpassdescription_tgfx_handle;
 typedef struct tgfx_vertexattributedata* vertexattributetgfx_handle;
 typedef struct tgfx_shaderstageflag_data* shaderstageflag_tgfx_handle;
 typedef struct tgfx_rtslotdescription_data* rtslotdescription_tgfx_handle;
@@ -49,28 +41,24 @@ typedef struct tgfx_bindingtypeinfo_data* bindingtypeinfo_tgfx_handle;
 typedef struct tgfx_blendinginfo_data* blendinginfo_tgfx_handle;
 typedef struct tgfx_buffereddrawcall* buffereddrawcall_tgfx_handle;
 typedef struct tgfx_buffereddispatchcall* buffereddispatchcall_tgfx_handle;
+typedef struct tgfx_commandbuffer_data* commandbuffer_tgfx_handle;
 
 
             //LISTS
 
-typedef waitsignaldescription_tgfx_handle* waitsignaldescription_tgfx_listhandle;
-typedef passwaitdescription_tgfx_handle* passwaitdescription_tgfx_listhandle;
 typedef monitor_tgfx_handle* monitor_tgfx_listhandle;
 typedef gpu_tgfx_handle* gpu_tgfx_listhandle;
 typedef extension_tgfx_handle* extension_tgfx_listhandle;
-typedef subdrawpassdescription_tgfx_handle* subdrawpassdescription_tgfx_listhandle;
-typedef subcomputepassdescription_tgfx_handle* subcomputepassdescription_tgfx_listhandle;
-typedef subtransferpassdescription_tgfx_handle* subtransferpassdescription_tgfx_listhandle;
 typedef rtslotdescription_tgfx_handle* rtslotdescription_tgfx_listhandle;
 typedef rtslotusage_tgfx_handle* rtslotusage_tgfx_listhandle;
 typedef memorytype_tgfx_handle* memorytype_tgfx_listhandle;
-typedef subdrawpass_tgfx_handle* subdrawpass_tgfx_listhandle;
-typedef subcomputepass_tgfx_handle* subcomputepass_tgfx_listhandle;
-typedef subtransferpass_tgfx_handle* subtransferpass_tgfx_listhandle;
 typedef shadersource_tgfx_handle* shadersource_tgfx_listhandle;
 typedef blendinginfo_tgfx_handle* blendinginfo_tgfx_listhandle;
 typedef samplingtype_tgfx_handle* samplingtype_tgfx_listhandle;
 typedef bindingtable_tgfx_handle* bindingtable_tgfx_listhandle;
+typedef commandbuffer_tgfx_handle* commandbuffer_tgfx_listhandle;
+typedef fence_tgfx_handle* fence_tgfx_listhandle;
+typedef semaphore_tgfx_handle* semaphore_tgfx_listhandle;
 
 
             //ENUMS

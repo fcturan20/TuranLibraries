@@ -1,5 +1,5 @@
 #include "logger_tapi.h"
-#include "registrysys_tapi.h"
+#include "ecs_tapi.h"
 #include "array_of_strings_tapi.h"
 #include "filesys_tapi.h"
 #include "virtualmemorysys_tapi.h"
@@ -155,36 +155,35 @@ typedef struct logger_tapi_d{
     logger_tapi_type* type;
     Logger* log_sys;
 } logger_tapi_d;
-extern "C" FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* regsys, unsigned char reload){
-    VIRTUALMEMORY_TAPI_PLUGIN_TYPE virmemsys_type = (VIRTUALMEMORY_TAPI_PLUGIN_TYPE)regsys->get(VIRTUALMEMORY_TAPI_PLUGIN_NAME, VIRTUALMEMORY_TAPI_PLUGIN_VERSION, 0);
-    ARRAY_OF_STRINGS_TAPI_LOAD_TYPE array_of_strings_sys_type = (ARRAY_OF_STRINGS_TAPI_LOAD_TYPE)regsys->get(ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME, ARRAY_OF_STRINGS_TAPI_VERSION, 0);
-    FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys_type = (FILESYS_TAPI_PLUGIN_LOAD_TYPE)regsys->get(FILESYS_TAPI_PLUGIN_NAME, FILESYS_TAPI_PLUGIN_VERSION, 0);
+ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
+	VIRTUALMEMORY_TAPI_PLUGIN_TYPE virmemsys_type = (VIRTUALMEMORY_TAPI_PLUGIN_TYPE)ecssys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
+	ARRAY_OF_STRINGS_TAPI_LOAD_TYPE array_of_strings_sys_type = (ARRAY_OF_STRINGS_TAPI_LOAD_TYPE)ecssys->getSystem(ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME);
+	FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys_type = (FILESYS_TAPI_PLUGIN_LOAD_TYPE)ecssys->getSystem(FILESYS_TAPI_PLUGIN_NAME);
 
-    if(!virmemsys_type || !array_of_strings_sys_type || !filesys_type){
-        printf("Logger system needs virtual memory, array of strings and file systems loaded. So loading failed!");
-        return NULL;
-    }
+	if (!virmemsys_type || !array_of_strings_sys_type || !filesys_type) {
+		printf("Logger system needs virtual memory, array of strings and file systems loaded. So loading failed!");
+		return;
+	}
 
-    LOGGER_TAPI_PLUGIN_LOAD_TYPE type = (LOGGER_TAPI_PLUGIN_LOAD_TYPE)malloc(sizeof(logger_tapi_type));
-    type->data = (logger_tapi_d*)malloc(sizeof(logger_tapi_d));
-    type->funcs = (logger_tapi*)malloc(sizeof(logger_tapi));
-    type->data->type = type;
+	LOGGER_TAPI_PLUGIN_LOAD_TYPE type = (LOGGER_TAPI_PLUGIN_LOAD_TYPE)malloc(sizeof(logger_tapi_type));
+	type->data = (logger_tapi_d*)malloc(sizeof(logger_tapi_d));
+	type->funcs = (logger_tapi*)malloc(sizeof(logger_tapi));
+	type->data->type = type;
 
-    type->funcs->log_crashing = &LOG_CRASHING;
-    type->funcs->log_error = &LOG_ERROR;
-    type->funcs->log_notcoded = &LOG_NOTCODED;
-    type->funcs->log_status = &LOG_STATUS;
-    type->funcs->log_warning = &LOG_WARNING;
-    type->funcs->writelogs_tofile = &WRITE_LOGs_toFILEs;
+	type->funcs->log_crashing = &LOG_CRASHING;
+	type->funcs->log_error = &LOG_ERROR;
+	type->funcs->log_notcoded = &LOG_NOTCODED;
+	type->funcs->log_status = &LOG_STATUS;
+	type->funcs->log_warning = &LOG_WARNING;
+	type->funcs->writelogs_tofile = &WRITE_LOGs_toFILEs;
 
-    regsys->add(LOGGER_TAPI_PLUGIN_NAME, LOGGER_TAPI_PLUGIN_VERSION, type);
+	ecssys->addSystem(LOGGER_TAPI_PLUGIN_NAME, LOGGER_TAPI_PLUGIN_VERSION, type);
 
-    
-	LOGSYS = new Logger;
-    type->data->log_sys = LOGSYS;
 
-    return type;
+	LOGSYS = new Logger; 
+	type->data->log_sys = LOGSYS;
+
 }
-extern "C" FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* regsys, unsigned char reload){
+ECSPLUGIN_EXIT(ecssys, reloadFlag) {
     printf("Not coded!");
 }

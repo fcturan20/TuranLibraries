@@ -4,6 +4,7 @@
 
 */
 #pragma once
+#define T_INCLUDE_PLATFORM_LIBS
 #include "registrysys_tapi.h"
 #include "virtualmemorysys_tapi.h"
 #include "unittestsys_tapi.h"

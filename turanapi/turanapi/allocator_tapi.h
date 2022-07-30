@@ -56,7 +56,7 @@ typedef struct vector_allocator_tapi {
   unsigned int (*capacity)(const void* hnd);
   // @param src: Source data to copy from
   // @param copyFunc: Used to copy the element
-  // @return 0 if fails; 1 if succeeds. May fail if mem allocation fais or upper limit is reached.
+  // @return 0 if fails; 1 if succeeds. May fail if mem commit fails or upper limit is reached.
   unsigned char (*push_back)(void* hnd, const void* src);
   // @return 0 if there is no such object, 1 if succeeds
   unsigned char (*erase)(void* hnd, unsigned int elementIndex);

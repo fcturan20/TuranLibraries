@@ -54,7 +54,7 @@ typedef struct primitiveData_pecf* primDataHnd_pecf;
 typedef struct primitiveType_pecf* primTypeHnd_pecf;
 
 
-typedef struct ecstapi_entityType* entityTypeHnd_ecstapi;
+typedef struct ecstapi_idOnlyPointer* entityTypeHnd_ecstapi;
 typedef struct ecstapi_compType* compTypeHnd_ecstapi;
 typedef struct ecstapi_component* componentHnd_ecstapi;
 typedef struct ecstapi_entity* entityHnd_ecstapi;

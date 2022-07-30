@@ -28,22 +28,25 @@ extern "C" {
 #define ECS_TAPI_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
 //To help users to minimize accessing issues, each type name has its pointer
 //With this way, users can't use an entityTypeID mistakenly as entityID etc.
-typedef struct ecstapi_entityType* entityTypeHnd_ecstapi;
-typedef struct ecstapi_compType* compTypeHnd_ecstapi;
+typedef struct ecstapi_idOnlyPointer* entityTypeHnd_ecstapi;
+typedef struct ecstapi_compType* compType_ecstapi;      // This should point to a component type defined by user
+typedef struct ecstapi_compTypeID* compTypeID_ecstapi;  // This is an ID to find component type internally
 typedef struct ecstapi_component* componentHnd_ecstapi;
 typedef struct ecstapi_entity* entityHnd_ecstapi;
 typedef struct ecstapi_plugin* pluginHnd_ecstapi;
+
+// Use this to match base of a component type with a overriden one
+typedef struct ecs_compTypePair {
+  compTypeID_ecstapi base;
+  compType_ecstapi overriden;
+} ecs_compTypePair;
 
 // Each component should handle its allocations in its own manager
 // So there is no general componentManager for all components
 // If a system will use a component; it should include the header that has component's type
 typedef struct ecs_componentManager{
-    void* (*createComponent)(componentHnd_ecstapi* handle);
-    // Called by ECSManager to get compTypeHnd of the most derived component type's implementation
-    // ECSManager stores compTypeHnds for components of each entity type to allow inheritance
-    // Also if name is NULL, it should return the main component
-    compTypeHnd_ecstapi (*getComponentType)(const char* componentTypeName);
-    void  (*destroyComponent)();
+    componentHnd_ecstapi (*createComponent)();
+    void  (*destroyComponent)(componentHnd_ecstapi hnd);
 } componentManager_ecs;
 
 typedef struct ecs_d ecs_d;
@@ -67,33 +70,37 @@ typedef struct ecs_tapi{
   void (*addSystem)(const char* name, unsigned int version, void* system_ptr);
   void (*destroySystem)(void* systemPTR);
 
+
+
   // COMPONENT
   ////////////////////////////
 
   // @var NULL if there is any component inheritance conflicts
-  unsigned char (*addComponentType)(componentManager_ecs manager);
+  compTypeID_ecstapi (*addComponentType)(const char* name, compType_ecstapi mainType, componentManager_ecs manager, const ecs_compTypePair* pairList, unsigned int pairListSize);
+
 
   // ENTITY
+  ////////////////////////////
 
-
-  entityTypeHnd_ecstapi(*addEntityType)(const compTypeHnd_ecstapi* compTypeList, unsigned int listSize);
+  entityTypeHnd_ecstapi(*addEntityType)(const compTypeID_ecstapi* compTypeList, unsigned int listSize);
   // Create an entity
   entityHnd_ecstapi(*createEntity)(entityTypeHnd_ecstapi typeHandle);
   // Find entity type handle
   entityTypeHnd_ecstapi(*findEntityType_byEntityHnd)(entityHnd_ecstapi entityHnd);
   //@return 1 if entity type contains the component type; otherwise 0
-  unsigned char(*doesContains_entityType)(entityTypeHnd_ecstapi entityType, compTypeHnd_ecstapi compType);
+  unsigned char(*doesContains_entityType)(entityTypeHnd_ecstapi entityType, compTypeID_ecstapi compType);
   // Get a specific type of component of an entity
-  // @param compTypeID: A pointer because of inheritance, component may be a child type
-  //  so you should access component variables with updated compTypeID.
+  // @param compTypeID: ID of the component type user wants to access
+  // @param returnedCompType: Pointer to overriden component type, you should cast and use this to access data of the component
   // @return nullptr if there is no such component; otherwise valid pointer to use with new compTypeID
   // @example
-  // compTypeHnd_ecstapi baseXXXComponentType = XXXCompManager->GetComponentType()
-  // compHnd_ecstapi compData = get_comp_byEntityHnd(firstEntity, &baseXXXComponentType);
-  // int ABCvarValue = ((XXX*)baseXXXComponentType)->get_ABCvar(compData);
+  // compTypeID_ecstapi baseXXXCompTypeID = XXXCompManager->GetComponentTypeID();
+  // compType_ecstapi overridenCompType;
+  // compHnd_ecstapi compData = get_comp_byEntityHnd(firstEntity, baseXXXComponentType, &overridenCompType);
+  // int ABCvarValue = ((XXX*)overridenCompType)->get_ABCvar(compData);
   // NOTE: Don't do ->    int ABCvarValue = ((XXX*)XXXCompManager->GetComponentType())->get_ABCvar(compData);
   //  because it will break inheritance
-  componentHnd_ecstapi(*get_component_byEntityHnd)(entityHnd_ecstapi entityID, compTypeHnd_ecstapi* compTypeID);
+  componentHnd_ecstapi(*get_component_byEntityHnd)(entityHnd_ecstapi entityID, compTypeID_ecstapi compTypeID, compType_ecstapi* returnedCompType);
 
   ecs_d* data;
 } ecs_tapi;

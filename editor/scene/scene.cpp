@@ -4,19 +4,18 @@
 
 componentManager_ecs ecs_mngr;
 struct sceneSettingsComponentManager{
-  static void* createComponent(componentHnd_ecstapi* handle) {
+  static componentHnd_ecstapi createComponent() {
     return nullptr;
   }
   static compTypeHnd_ecstapi getComponent(const char* componentName) {
     return nullptr;
   }
-  static void  destroyComponent() {
+  static void destroyComponent(componentHnd_ecstapi) {
 
   }
   static componentManagerInfo_pecf getManager() {
     ecs_mngr.createComponent = sceneSettingsComponentManager::createComponent;
     ecs_mngr.destroyComponent = sceneSettingsComponentManager::destroyComponent;
-    ecs_mngr.getComponentType = sceneSettingsComponentManager::getComponent;
 
     componentManagerInfo_pecf c;
     c.compName = SCENE_SETTINGS_COMP_NAME;
@@ -43,6 +42,8 @@ ECSPLUGIN_ENTRY(ecssys, reloadflag) {
   }
 
   
-  ThrowFor_PECF_Register(pecfmngr->add_componentType(sceneSettingsComponentManager::getManager()), compRegFailedText);
-  
+  ThrowFor_PECF_Register
+  (
+    pecfmngr->add_componentType(sceneSettingsComponentManager::getManager()), compRegFailedText
+  );
 }

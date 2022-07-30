@@ -54,7 +54,7 @@
 #endif
 
 
-#if defined(T_SUPPORTEDPLATFORM) & defined(TAPI_INCLUDE_PLATFORM_LIBS)
+#if defined(T_SUPPORTEDPLATFORM) & defined(T_INCLUDE_PLATFORM_LIBS)
 #if defined(_WIN32)
 #include "windows.h"
 

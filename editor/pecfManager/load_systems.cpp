@@ -12,6 +12,7 @@
 #include <random>
 #include <string>
 
+allocator_sys_tapi* allocatorSys = nullptr;
 uint64_t destructionCount = 0;
 struct pluginElement {
   pluginHnd_ecstapi pluginPTR;
@@ -63,7 +64,7 @@ void load_systems() {
   pluginHnd_ecstapi loggerPlugin = editorECS->loadPlugin("tapi_logger.dll");
   auto loggerSys = (LOGGER_TAPI_PLUGIN_LOAD_TYPE)editorECS->getSystem(LOGGER_TAPI_PLUGIN_NAME);
   
-  auto allocatorSys = (ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE)editorECS->getSystem(ALLOCATOR_TAPI_PLUGIN_NAME);
+  allocatorSys = (ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE)editorECS->getSystem(ALLOCATOR_TAPI_PLUGIN_NAME);
   unsigned long long Resizes[1000];
   static constexpr uint64_t vectorMaxSize = uint64_t(1) << uint64_t(36);
   for (unsigned int i = 0; i < 1000; i++) {
@@ -87,29 +88,4 @@ void load_systems() {
     STOP_PROFILE_PRINTLESS_TAPI(profilerSys->funcs);
     loggerSys->funcs->log_status(("Loading systems took: " + std::to_string(duration)).c_str());
   }
-  destructionCount = 0;
-
-  std::vector<pluginElement> pluginList;
-  {
-    profiledscope_handle_tapi profiling; unsigned long long duration = 0;
-    TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "Vector STD", &duration);
-    pluginList.resize(100);
-    printf("MaxSize stdVector: %u8", pluginList.max_size());
-    for (unsigned int i = 0; i < 1000; i++) {
-      pluginList.resize(Resizes[i]);
-    }
-    STOP_PROFILE_PRINTLESS_TAPI(profilerSys->funcs);
-    loggerSys->funcs->log_status(("Loading systems took: " + std::to_string(duration)).c_str());
-  }
-
-  for (unsigned int i = 0; i < Resizes[999]; i++) {
-    if (pluginList[i].copyCount > 0) {
-      printf("%d\n", pluginList[i].copyCount);
-    }
-    if (pluginList[i].copyCount != v_pluginElements[i].copyCount) {
-      printf("Memory doesn't match!");
-    }
-  }
-
-
 }

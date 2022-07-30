@@ -199,6 +199,21 @@ void endofpage_free(supermemoryblock_tapi* memBlock, void* returnedAllocPTR) {
 }
 
 
+//Standard alloc
+void* standard_malloc(supermemoryblock_tapi* memBlock, unsigned int size) {
+  const unsigned long long requestedAllocSize = size + sizeof(unsigned int);
+
+  void* base = allocateFromSuperMemoryBlock(memBlock, requestedAllocSize);
+  virtual_commit(base, requestedAllocSize);
+  return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(base) + sizeof(unsigned int));
+}
+void standard_free(supermemoryblock_tapi* memBlock, void* returnedAllocPTR) {
+  const uint32_t requestedAllocSize = *(((unsigned int*)returnedAllocPTR) - 1);
+  if (!requestedAllocSize || requestedAllocSize == UINT32_MAX) { printf("Standard allocator failed to free the allocation!"); return; }
+  void* base = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(returnedAllocPTR) - sizeof(unsigned int));
+  freeFromSuperMemoryBlock(memBlock, base);
+}
+
 
 
 
@@ -322,13 +337,15 @@ unsigned int get_vector_capacity(const void* data) {
 }
 unsigned char push_back(void* data, const void* src) {
   vector_tapi* hnd = getVectorTapi(data);
-  void* dstElement = (unsigned char*)data + (hnd->elementSize * hnd->count);
+  void* dstElement = (unsigned char*)data + (hnd->elementSize * hnd->count++);
   virtual_commit(dstElement, hnd->elementSize);
-  if (hnd->flag & vector_flagbit_copy_tapi) {
-    find_copyfunc(hnd)(src, dstElement);
-  }
-  else {
-    memcpy(dstElement, src, hnd->elementSize);
+  if (src) {
+    if (hnd->flag & vector_flagbit_copy_tapi) {
+      find_copyfunc(hnd)(src, dstElement);
+    }
+    else {
+      memcpy(dstElement, src, hnd->elementSize);
+    }
   }
   return 1;
 }
@@ -381,6 +398,9 @@ allocator_sys_tapi* initialize(void* allocatorSys) {
   sys->freeSuperMemoryBlock = freeSuperMemoryBlock;
 
   // Standard Allocator
+  sys->standard->malloc = standard_malloc;
+  sys->standard->free = standard_free;
+
 
   // End of Page Buffer Allocator
   sys->end_of_page->malloc = &endofpage_malloc;

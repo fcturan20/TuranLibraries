@@ -1,5 +1,5 @@
 #include "renderer.h"
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #include <tgfx_structs.h>
 #include <tgfx_core.h>
 #include <tgfx_renderer.h>
@@ -196,8 +196,8 @@ struct renderer_funcs {
 			PrepareForNextFrame();
 		}
 	}
-	static void DrawDirect(buffer_tgfx_handle VertexBuffer_ID, buffer_tgfx_handle IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
-		unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, rasterpipelineinstance_tgfx_handle MaterialInstance_ID,
+	static void DrawDirect(buffer_tgfxhnd VertexBuffer_ID, buffer_tgfxhnd IndexBuffer_ID, unsigned int Count, unsigned int VertexOffset,
+		unsigned int FirstIndex, unsigned int InstanceCount, unsigned int FirstInstance, rasterPipelineInstance_tgfxhnd MaterialInstance_ID,
 		unsigned int DrawCallIndex, void* CallBufferSourceData, unsigned char CallBufferSourceCopySize, unsigned char CallBufferTargetOffset, subdrawpass_tgfx_handle SubDrawPass_ID) {
 		VKOBJHANDLE sphandle = *(VKOBJHANDLE*)SubDrawPass_ID;
 		RenderGraph::SubDP_VK* SP = getPass_fromHandle<RenderGraph::SubDP_VK>(sphandle);
@@ -260,7 +260,7 @@ struct renderer_funcs {
 		}
 	}
 
-	static void SwapBuffers(window_tgfx_handle WindowHandle, windowpass_tgfx_handle WindowPassHandle) {
+	static void SwapBuffers(window_tgfxhnd WindowHandle, windowpass_tgfx_handle WindowPassHandle) {
 		WINDOW_VKOBJ* VKWINDOW = (WINDOW_VKOBJ*)WindowHandle;
 		if (VKWINDOW->isSwapped.load()) {
 			return;
@@ -291,7 +291,7 @@ struct renderer_funcs {
 		wp->WindowCalls.push_back(call);
 	}
 	
-	static void FindBufferOBJ_byBufType(buffer_tgfx_handle Handle, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
+	static void FindBufferOBJ_byBufType(buffer_tgfxhnd Handle, VkBuffer& TargetBuffer, VkDeviceSize& TargetOffset) {
 		VKOBJHANDLE objhandle = *(VKOBJHANDLE*)&Handle;
 		switch (objhandle.type) {
 		case VKHANDLETYPEs::GLOBALSSBO:
@@ -322,8 +322,8 @@ struct renderer_funcs {
 
 	//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 	//Target Buffer should be created with DEVICELOCAL
-	static void CopyBuffer_toBuffer(subtransferpass_tgfx_handle TransferPassHandle, buffer_tgfx_handle SourceBuffer_Handle,
-		buffer_tgfx_handle TargetBuffer_Handle, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) {
+	static void CopyBuffer_toBuffer(subtransferpass_tgfx_handle TransferPassHandle, buffer_tgfxhnd SourceBuffer_Handle,
+		buffer_tgfxhnd TargetBuffer_Handle, unsigned int SourceBuffer_Offset, unsigned int TargetBuffer_Offset, unsigned int Size) {
 		VkBuffer SourceBuffer, DistanceBuffer;
 		VkDeviceSize SourceOffset = static_cast<VkDeviceSize>(SourceBuffer_Offset), DistanceOffset = static_cast<VkDeviceSize>(TargetBuffer_Offset);
 		FindBufferOBJ_byBufType(SourceBuffer_Handle, SourceBuffer, SourceOffset);
@@ -343,8 +343,8 @@ struct renderer_funcs {
 	}
 
 	//Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
-	static void CopyBuffer_toImage(subtransferpass_tgfx_handle TransferPassHandle, buffer_tgfx_handle SourceBuffer_Handle, texture_tgfx_handle TextureHandle,
-		unsigned int SourceBuffer_offset, boxregion_tgfx TargetTextureRegion, unsigned int TargetMipLevel,
+	static void CopyBuffer_toImage(subtransferpass_tgfx_handle TransferPassHandle, buffer_tgfxhnd SourceBuffer_Handle, texture_tgfxhnd TextureHandle,
+		unsigned int SourceBuffer_offset, boxRegion_tgfx TargetTextureRegion, unsigned int TargetMipLevel,
 		cubeface_tgfx TargetCubeMapFace) {
 		TEXTURE_VKOBJ* TEXTURE = (TEXTURE_VKOBJ*)TextureHandle;
 		VkDeviceSize finaloffset = static_cast<VkDeviceSize>(SourceBuffer_offset);
@@ -393,11 +393,11 @@ struct renderer_funcs {
 		subTP->BUFIMCopies.push_back(x);
 	}
 
-	static void CopyImage_toImage(subtransferpass_tgfx_handle TransferPassHandle, texture_tgfx_handle SourceTextureHandle, texture_tgfx_handle TargetTextureHandle,
+	static void CopyImage_toImage(subtransferpass_tgfx_handle TransferPassHandle, texture_tgfxhnd SourceTextureHandle, texture_tgfxhnd TargetTextureHandle,
 		uvec3_tgfx SourceTextureOffset, uvec3_tgfx CopySize, uvec3_tgfx TargetTextureOffset, unsigned int SourceMipLevel, unsigned int TargetMipLevel,
 		cubeface_tgfx SourceCubeMapFace, cubeface_tgfx TargetCubeMapFace);
 
-	static void ImageBarrier(subtransferpass_tgfx_handle BarrierTPHandle, texture_tgfx_handle TextureHandle, image_access_tgfx LAST_ACCESS,
+	static void ImageBarrier(subtransferpass_tgfx_handle BarrierTPHandle, texture_tgfxhnd TextureHandle, image_access_tgfx LAST_ACCESS,
 		image_access_tgfx NEXT_ACCESS, unsigned int TargetMipLevel, cubeface_tgfx TargetCubeMapFace) {
 		TEXTURE_VKOBJ* Texture = (TEXTURE_VKOBJ*)TextureHandle;
 		VKOBJHANDLE subTPhandle = *(VKOBJHANDLE*)&BarrierTPHandle;
@@ -436,7 +436,7 @@ struct renderer_funcs {
 		tp->TextureBarriers.push_back(im_bi);
 	}
 
-	static void Dispatch_Compute(subcomputepass_tgfx_handle ComputePassHandle, computeshaderinstance_tgfx_handle CSInstanceHandle, uvec3_tgfx DispatchSize) {
+	static void Dispatch_Compute(subcomputepass_tgfx_handle ComputePassHandle, computeShaderInstance_tgfxhnd CSInstanceHandle, uvec3_tgfx DispatchSize) {
 		VKOBJHANDLE CPhandle = *(VKOBJHANDLE*)&ComputePassHandle;
 		RenderGraph::SubCP_VK* subCP = getPass_fromHandle<RenderGraph::SubCP_VK>(CPhandle);
 
@@ -453,37 +453,6 @@ struct renderer_funcs {
 	}
 };
 
-void renderer_public::RendererResource_Finalizations() {
-	//Handle RTSlotSet changes by recreating framebuffers of draw passes
-	//by "RTSlotSet changes": DrawPass' slotset is changed to different one or slotset's slots is changed.
-	RenderGraph::DP_VK* DP = (RenderGraph::DP_VK*)VKGLOBAL_RG->GetNextPass(nullptr, VK_PASSTYPE::DP);
-	while (DP) {
-		unsigned char ChangeInfo = DP->SlotSetChanged.load();
-		RTSLOTSET_VKOBJ* slotset = contentmanager->GETRTSLOTSET_ARRAY().getOBJbyINDEX(DP->BASESLOTSET_ID);
-		if (ChangeInfo == VKGLOBAL_FRAMEINDEX + 1 || ChangeInfo == 3 || slotset->PERFRAME_SLOTSETs[VKGLOBAL_FRAMEINDEX].IsChanged.load()) {
-			if (DP->FBs[VKGLOBAL_FRAMEINDEX]) {
-				//This is safe because this FB is used 2 frames ago and CPU already waits for the frame's GPU process to end
-				vkDestroyFramebuffer(rendergpu->LOGICALDEVICE(), DP->FBs[VKGLOBAL_FRAMEINDEX], nullptr);
-			}
-
-			VkFramebufferCreateInfo fb_ci = slotset->FB_ci[VKGLOBAL_FRAMEINDEX];
-			fb_ci.renderPass = DP->RenderPassObject;
-			if (vkCreateFramebuffer(rendergpu->LOGICALDEVICE(), &fb_ci, nullptr, &DP->FBs[VKGLOBAL_FRAMEINDEX]) != VK_SUCCESS) {
-				printer(result_tgfx_FAIL, "vkCreateFramebuffer() has failed while changing one of the drawpasses' current frame slot's texture! Please report this!");
-				return;
-			}
-
-			slotset->PERFRAME_SLOTSETs[VKGLOBAL_FRAMEINDEX].IsChanged.store(false);
-			for (unsigned int SlotIndex = 0; SlotIndex < slotset->PERFRAME_SLOTSETs[VKGLOBAL_FRAMEINDEX].COLORSLOTs_COUNT; SlotIndex++) {
-				slotset->PERFRAME_SLOTSETs[VKGLOBAL_FRAMEINDEX].COLOR_SLOTs[SlotIndex].IsChanged.store(false);
-			}
-
-			if (ChangeInfo) {
-				DP->SlotSetChanged.store(ChangeInfo - VKGLOBAL_FRAMEINDEX - 1);
-			}
-		}
-	}
-}
 unsigned char GetCurrentFrameIndex() {return renderer->Get_FrameIndex(false);}
 extern void set_RGCreation_funcptrs();
 void set_rendersysptrs() {

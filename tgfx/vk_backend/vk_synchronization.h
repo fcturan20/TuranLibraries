@@ -1,16 +1,14 @@
 #pragma once
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #include <vector>
-#include "core.h"
-
-//Synchronization primitives shouldn't cause call stack to grow
-//So everything is inlined here and you should only include if you have use functions. Otherwise, use the predefinitions_vk's forward declaration to store an instance of the structs
+#include "vk_core.h"
 
 struct semaphore_vk {
 public:
 	enum semaphore_status : unsigned char {
 		invalid_status = 0,
-		unused_status = 1,	//No pending execution, state unknown (rendergraph or you should handle it)
+		// No pending execution, state unknown (rendergraph or you should handle it)
+		unused_status = 1,
 		used_status = 2
 	};
 private:
@@ -32,9 +30,10 @@ public:
 	inline semaphore_status status() { return current_status; };
 };
 struct semaphoresys_vk {
-	inline static void ClearList() { printer(result_tgfx_NOTCODED, "SemaphoreSys->ClearList() isn't coded!"); }
-	//Searches for the previously created but later destroyed semaphores, if there isn't
-	//Then creates a new VkSemaphore object
+	inline static void ClearList()
+	 { printer(result_tgfx_NOTCODED, "SemaphoreSys->ClearList() isn't coded!"); }
+	// Searches for the previously created but later destroyed semaphores, if there isn't
+	// Then creates a new VkSemaphore object
 	inline static semaphore_vk & Create_Semaphore() {
 		for (unsigned int i = 0; i < semaphoresys->Semaphores.size(); i++) {
 			if (semaphoresys->Semaphores[i]->current_status == semaphore_vk::unused_status) {
@@ -119,10 +118,11 @@ struct fence_vk {
 	};
 	VkFence Fence_o = VK_NULL_HANDLE;
 	fence_status current_status = fence_status::invalid;
-	//Each wait semaphore in a queue submission is unsignaled and never signaled in the same submission
+	// Each wait semaphore in a queue submission is unsignaled and
+	//		never signaled in the same submission
 	std::vector<semaphore_idtype_vk> wait_semaphores;
 #ifdef VULKAN_DEBUGGING
-	fence_idtype_vk ID;
+	fence_idtype_vk ID = invalid_fenceid;
 #endif
 	inline fence_idtype_vk getID(){
 #ifdef VULKAN_DEBUGGING
@@ -176,11 +176,12 @@ public:
 	}
 	inline fence_vk& getfence_byid(fence_idtype_vk id) {
 #ifdef VULKAN_DEBUGGING
-		for (fence_vk* fence : Fences) {
+		for (fence_vk* fence : fencesys->Fences) {
 			if (fence->ID == id) {
 				return *fence;
 			}
 		}
+		return fence_vk();
 #else
 		return *(fence_vk*)id;
 #endif
@@ -191,7 +192,7 @@ public:
 		for (unsigned int fence_i = 0; fence_i < fences.size(); fence_i++) {
 			Fence_objects[fence_i] = getfence_byid(fences[fence_i]).Fence_o;
 		}
-		if (vkWaitForFences(rendergpu->LOGICALDEVICE(), Fence_objects.size(), Fence_objects.data(), VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
+		if (vkWaitForFences(rendergpu->LOGICALDEVICE(), (uint32_t)Fence_objects.size(), Fence_objects.data(), (uint32_t)VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
 			printer(result_tgfx_FAIL, "vkWaitForFences() has failed!");
 			return;
 		}

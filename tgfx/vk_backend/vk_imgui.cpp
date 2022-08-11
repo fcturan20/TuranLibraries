@@ -1,13 +1,13 @@
 #include <stdio.h>
-#include "imgui_vktgfx.h"
-#include "core.h"
+#include "vk_imgui.h"
+#include "vk_core.h"
 #include <tgfx_core.h>
 #include <tgfx_imgui.h>
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
 #include <imgui_impl_glfw.h>
-#include "queue.h"
-#include "renderer.h"
+#include "vk_queue.h"
+#include "vk_renderer.h"
 #ifndef NO_IMGUI
 
 unsigned char Check_IMGUI_Version();
@@ -69,8 +69,8 @@ unsigned char Slider_Vec3(const char* name, vec3_tgfx* data, float min, float ma
 unsigned char Slider_Vec4(const char* name, vec4_tgfx* data, float min, float max);
 
 
-void Delete_WINDOW(imguiwindow_tgfx* Window);
-void Register_WINDOW(imguiwindow_tgfx* Window);
+void Delete_WINDOW(imguiWindow_tgfx* Window);
+void Register_WINDOW(imguiWindow_tgfx* Window);
 void Run_IMGUI_WINDOWs();
 
 void set_imguifuncptrs() {
@@ -124,7 +124,7 @@ void CheckIMGUIVKResults(VkResult result) {
 		printer(result_tgfx_FAIL, "IMGUI's Vulkan backend has failed, please report!");
 	}
 }
-void imgui_vk::Change_DrawPass(subdrawpass_tgfx_handle Subpass) { printer(result_tgfx_NOTCODED, "imgui_vk->ChangeDrawPass() isn't coded"); }
+void imgui_vk::Change_DrawPass(renderSubPass_tgfxhnd Subpass) { printer(result_tgfx_NOTCODED, "imgui_vk->ChangeDrawPass() isn't coded"); }
 void imgui_vk::NewFrame() {
 	if (STAT == IMGUI_STATUS::NEW_FRAME) {
 		printer(result_tgfx_WARNING, "You have mismatching IMGUI_VK calls, NewFrame() called twice without calling Render()!");
@@ -220,7 +220,7 @@ void imgui_vk::Destroy_IMGUIResources() {
 struct imgui_vk::imgui_vk_hidden {
 	ImGuiContext* Context = nullptr;
 
-	std::vector<imguiwindow_tgfx*> ALL_IMGUI_WINDOWs, Windows_toClose, Windows_toOpen;
+	std::vector<imguiWindow_tgfx*> ALL_IMGUI_WINDOWs, Windows_toClose, Windows_toOpen;
 };
 static imgui_vk::imgui_vk_hidden* hidden = nullptr;
 
@@ -257,13 +257,13 @@ extern void Create_IMGUI() {
 
 void Run_IMGUI_WINDOWs() {
 	for (unsigned int i = 0; i < hidden->ALL_IMGUI_WINDOWs.size(); i++) {
-		imguiwindow_tgfx* window = hidden->ALL_IMGUI_WINDOWs[i];
+		imguiWindow_tgfx* window = hidden->ALL_IMGUI_WINDOWs[i];
 		window->RunWindow(window);
 	}
 
 	if (hidden->Windows_toClose.size() > 0) {
 		for (unsigned int window_delete_i = 0; window_delete_i < hidden->Windows_toClose.size(); window_delete_i++) {
-			imguiwindow_tgfx* window_to_close = hidden->Windows_toClose[window_delete_i];
+			imguiWindow_tgfx* window_to_close = hidden->Windows_toClose[window_delete_i];
 			for (unsigned int deleted_window_main_i = 0; deleted_window_main_i < hidden->ALL_IMGUI_WINDOWs.size(); deleted_window_main_i++) {
 				if (window_to_close == hidden->ALL_IMGUI_WINDOWs[deleted_window_main_i]) {
 					hidden->ALL_IMGUI_WINDOWs.erase(hidden->ALL_IMGUI_WINDOWs.begin() + deleted_window_main_i);
@@ -280,7 +280,7 @@ void Run_IMGUI_WINDOWs() {
 		unsigned int previous_size = hidden->ALL_IMGUI_WINDOWs.size();
 
 		for (unsigned int i = 0; i < hidden->Windows_toOpen.size(); i++) {
-			imguiwindow_tgfx* window_to_open = hidden->Windows_toOpen[i];
+			imguiWindow_tgfx* window_to_open = hidden->Windows_toOpen[i];
 			hidden->ALL_IMGUI_WINDOWs.push_back(window_to_open);
 		}
 		hidden->Windows_toOpen.clear();
@@ -290,10 +290,10 @@ void Run_IMGUI_WINDOWs() {
 		}
 	}
 }
-void Register_WINDOW(imguiwindow_tgfx* Window) {
+void Register_WINDOW(imguiWindow_tgfx* Window) {
 	hidden->Windows_toOpen.push_back(Window);
 }
-void Delete_WINDOW(imguiwindow_tgfx* Window) {
+void Delete_WINDOW(imguiWindow_tgfx* Window) {
 	hidden->Windows_toClose.push_back(Window);
 }
 

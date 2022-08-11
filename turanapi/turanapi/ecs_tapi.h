@@ -49,8 +49,8 @@ typedef struct ecs_componentManager{
     void  (*destroyComponent)(componentHnd_ecstapi hnd);
 } componentManager_ecs;
 
-typedef struct ecs_d ecs_d;
-typedef struct ecs_tapi{
+typedef struct tapi_ecs_d ecs_d_tapi;
+typedef struct tapi_ecs{
   // PLUGIN
   ////////////////////////////
   
@@ -75,9 +75,10 @@ typedef struct ecs_tapi{
   // COMPONENT
   ////////////////////////////
 
-  // @var NULL if there is any component inheritance conflicts
+  // @param mainType: If main type can't be inherited, set NULL.
+  // @return NULL if there is any component inheritance conflicts
   compTypeID_ecstapi (*addComponentType)(const char* name, compType_ecstapi mainType, componentManager_ecs manager, const ecs_compTypePair* pairList, unsigned int pairListSize);
-
+  componentManager_ecs(*getCompManager)(compTypeID_ecstapi compType);
 
   // ENTITY
   ////////////////////////////
@@ -102,11 +103,11 @@ typedef struct ecs_tapi{
   //  because it will break inheritance
   componentHnd_ecstapi(*get_component_byEntityHnd)(entityHnd_ecstapi entityID, compTypeID_ecstapi compTypeID, compType_ecstapi* returnedCompType);
 
-  ecs_d* data;
+  ecs_d_tapi* data;
 } ecs_tapi;
 
 //Program that owns the ECS should use these types to convert loaded function pointer
-typedef ecs_tapi* (*load_ecstapi_func)();
+typedef tapi_ecs* (*load_ecstapi_func)();
 typedef unsigned char (*unload_ecstapi_func)();
 
 //ECS TAPI MACROS

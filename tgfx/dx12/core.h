@@ -14,7 +14,7 @@ private:
 	friend struct allocatorsys_dx;
 	friend struct queuesys_dx;
 	gpu_private* hidden = nullptr;
-	gpudescription_tgfx desc;
+	tgfx_gpu_description desc;
 	unsigned int TRANSFERs_supportedqueuecount = 0, COMPUTE_supportedqueuecount = 0, GRAPHICS_supportedqueuecount = 0;
 
 

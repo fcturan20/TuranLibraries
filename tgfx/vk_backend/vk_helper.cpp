@@ -1,33 +1,35 @@
 #include <iostream>
-#include "tgfx_forwarddeclarations.h"
-#include "tgfx_structs.h"
-#include "helper.h"
+#include <stdarg.h>
+#include <tgfx_forwarddeclarations.h>
 #include <tgfx_core.h>
 #include <tgfx_helper.h>
-#include "core.h"
-#include "extension.h"
-#include "resource.h"
-#include "predefinitions_vk.h"
-#include "includes.h"
-#include "renderer.h"
-#include "gpucontentmanager.h"
+#include <tgfx_structs.h>
+#include "tgfx_structs.h"
+#include "vk_helper.h"
+#include "vk_core.h"
+#include "vk_extension.h"
+#include "vk_resource.h"
+#include "vk_predefinitions.h"
+#include "vk_includes.h"
+#include "vk_renderer.h"
+#include "vk_contentmanager.h"
 
 //Hardware Capability Helpers
-static void  GetGPUInfo_General(gpu_tgfx_handle GPUHandle, const char** NAME, unsigned int* API_VERSION, unsigned int* DRIVER_VERSION, gpu_type_tgfx* GPUTYPE, const memory_description_tgfx** MemType_descs,
-    unsigned int* MemType_descsCount, unsigned char* isGraphicsOperationsSupported, unsigned char* isComputeOperationsSupported, unsigned char* isTransferOperationsSupported) {
-    GPU_VKOBJ* VKGPU = (GPU_VKOBJ*)GPUHandle;
-    if (NAME) { *NAME = VKGPU->DEVICENAME(); }
-    if (API_VERSION) { *API_VERSION = VKGPU->APIVERSION(); }
-    if (DRIVER_VERSION) { *DRIVER_VERSION = VKGPU->DRIVERSION(); }
-    if (GPUTYPE) { *GPUTYPE = VKGPU->DEVICETYPE(); }
+static void  GetGPUInfo_General(gpu_tgfxhnd h, tgfx_gpu_description* dsc) {
+    GPU_VKOBJ* VKGPU = (GPU_VKOBJ*)h;
+    dsc->NAME = VKGPU->DEVICENAME();
+    dsc->API_VERSION = VKGPU->APIVERSION();
+    dsc->DRIVER_VERSION = VKGPU->DRIVERSION();
+    dsc->GPU_TYPE = VKGPU->DEVICETYPE();
 
-    if (MemType_descs) { *MemType_descs = VKGPU->DESC().MEMTYPEs; *MemType_descsCount = VKGPU->DESC().MEMTYPEsCOUNT; }
-    if (isGraphicsOperationsSupported) { *isGraphicsOperationsSupported = VKGPU->GRAPHICSSUPPORTED(); }
-    if (isComputeOperationsSupported) { *isComputeOperationsSupported = VKGPU->COMPUTESUPPORTED(); }
-    if (isTransferOperationsSupported) { *isTransferOperationsSupported = VKGPU->TRANSFERSUPPORTED(); }
+    dsc->MEMTYPEs = VKGPU->DESC().MEMTYPEs;
+    dsc->MEMTYPEsCOUNT = VKGPU->DESC().MEMTYPEsCOUNT;
+    dsc->is_GraphicOperations_Supported = VKGPU->GRAPHICSSUPPORTED();
+    dsc->is_ComputeOperations_Supported = VKGPU->COMPUTESUPPORTED();
+    dsc->is_TransferOperations_Supported = VKGPU->TRANSFERSUPPORTED();
 }
-static unsigned char  GetTextureTypeLimits(texture_dimensions_tgfx dims, texture_order_tgfx dataorder, texture_channels_tgfx channeltype,
-    textureusageflag_tgfx_handle usageflag, gpu_tgfx_handle GPUHandle, unsigned int* MAXWIDTH, unsigned int* MAXHEIGHT, unsigned int* MAXDEPTH,
+static unsigned char  GetTextureTypeLimits(texture_dimensions_tgfx dims, textureOrder_tgfx dataorder, textureChannels_tgfx channeltype,
+    textureUsageFlag_tgfxhnd usageflag, gpu_tgfxhnd GPUHandle, unsigned int* MAXWIDTH, unsigned int* MAXHEIGHT, unsigned int* MAXDEPTH,
     unsigned int* MAXMIPLEVEL) {
     VkImageFormatProperties props;
     VkImageUsageFlags flag = *(VkImageUsageFlags*)usageflag;
@@ -47,7 +49,7 @@ static unsigned char  GetTextureTypeLimits(texture_dimensions_tgfx dims, texture
     if(MAXMIPLEVEL){ *MAXMIPLEVEL = props.maxMipLevels; }
     return true;
 }
-static textureusageflag_tgfx_handle CreateTextureUsageFlag(unsigned char isCopiableFrom, unsigned char isCopiableTo,
+static textureUsageFlag_tgfxhnd CreateTextureUsageFlag(unsigned char isCopiableFrom, unsigned char isCopiableTo,
     unsigned char isRenderableTo, unsigned char isSampledReadOnly, unsigned char isRandomlyWrittenTo) {
     VkImageUsageFlags* UsageFlag = nullptr, FlagObj = 0;
     if (VKCONST_isPointerContainVKFLAG) { UsageFlag = &FlagObj; }
@@ -57,22 +59,19 @@ static textureusageflag_tgfx_handle CreateTextureUsageFlag(unsigned char isCopia
         ((isRenderableTo) ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : 0) |
         ((isSampledReadOnly) ? VK_IMAGE_USAGE_SAMPLED_BIT : 0) |
         ((isRandomlyWrittenTo) ? VK_IMAGE_USAGE_STORAGE_BIT : 0);
-    if (VKCONST_isPointerContainVKFLAG) { return *(textureusageflag_tgfx_handle*)&FlagObj; }
-    else { return (textureusageflag_tgfx_handle)UsageFlag; }
+    if (VKCONST_isPointerContainVKFLAG) { return *(textureUsageFlag_tgfxhnd*)&FlagObj; }
+    else { return (textureUsageFlag_tgfxhnd)UsageFlag; }
 }
 //You can't create a memory type, only set allocation size of a given Memory Type (Memory Type is given by the GFX initialization process)
-extern result_tgfx SetMemoryTypeInfo(unsigned int MemoryType_id, unsigned long long AllocationSize, extension_tgfx_listhandle Extensions);
-static initializationsecondstageinfo_tgfx_handle Create_GFXInitializationSecondStageInfo(
-    gpu_tgfx_handle RendererGPU,
-    unsigned int MAXDYNAMICSAMPLER_DESCCOUNT, unsigned int MAXSAMPLEDTEXTURE_DESCCOUNT, unsigned int MAXSTORAGEIMAGE_DESCCOUNT, unsigned int MAXBUFFER_DESCCOUNT,
-    unsigned int CALLBUFFERSIZE,
-    unsigned char ShouldActive_dearIMGUI,
-    extension_tgfx_listhandle EXTList) {
-    GPU_VKOBJ* VKGPU = (GPU_VKOBJ*)RendererGPU;
+extern result_tgfx SetMemoryTypeInfo(unsigned int MemoryType_id, unsigned long long AllocationSize, extension_tgfxlsthnd Extensions);
+
+static initSecondStageInfo_tgfxhnd Create_GFXInitializationSecondStageInfo
+(initSecondStageInfo_tgfx* info, extension_tgfxlsthnd EXTList) {
+    GPU_VKOBJ* VKGPU = (GPU_VKOBJ*)info->RendererGPU;
 
 
     
-    if (VKGPU->EXTMANAGER()->GETMAXDESCALL() < MAXDYNAMICSAMPLER_DESCCOUNT + MAXSAMPLEDTEXTURE_DESCCOUNT + MAXSTORAGEIMAGE_DESCCOUNT + MAXBUFFER_DESCCOUNT) { printer(result_tgfx_FAIL, "MAX****_DESCCOUNT's total exceeds the max number of descriptors your GPU supports!"); return NULL;}
+    if (VKGPU->EXTMANAGER()->GETMAXDESCALL() < info->MAXDYNAMICSAMPLER_DESCCOUNT + info->MAXDYNAMICSAMPLEDIMAGE_DESCCOUNT + info->MAXDYNAMICSTORAGEIMAGE_DESCCOUNT + info->MAXDYNAMICBUFFER_DESCCOUNT) { printer(result_tgfx_FAIL, "MAX****_DESCCOUNT's total exceeds the max number of descriptors your GPU supports!"); return NULL;}
     else{
         unsigned int TOTALNEEDEDDESCCOUNTS_PERTYPE[VKCONST_DYNAMICDESCRIPTORTYPESCOUNT] = {}, TOTAL_NEEDEDDESCSETCOUNT = 0;
         const unsigned int maxdessetcount = VKGPU->EXTMANAGER()->GETMAXBOUNDDESCSETCOUNT();
@@ -82,21 +81,21 @@ static initializationsecondstageinfo_tgfx_handle Create_GFXInitializationSecondS
     }
 
 
-    initialization_secondstageinfo* info = new initialization_secondstageinfo;
+    initialization_secondstageinfo* vkinfo = new initialization_secondstageinfo;
 
-    info->renderergpu = VKGPU;
-    info->shouldActivate_DearIMGUI = ShouldActive_dearIMGUI;
-    info->MAXDESCCOUNTs[VKCONST_DESCSETID_BUFFER] = MAXBUFFER_DESCCOUNT;
-    info->MAXDESCCOUNTs[VKCONST_DESCSETID_DYNAMICSAMPLER] = MAXDYNAMICSAMPLER_DESCCOUNT;
-    info->MAXDESCCOUNTs[VKCONST_DESCSETID_SAMPLEDTEXTURE] = MAXSAMPLEDTEXTURE_DESCCOUNT;
-    info->MAXDESCCOUNTs[VKCONST_DESCSETID_STORAGEIMAGE] = MAXSTORAGEIMAGE_DESCCOUNT;
+    vkinfo->renderergpu = VKGPU;
+    vkinfo->shouldActivate_DearIMGUI = info->ShouldActive_dearIMGUI;
+    vkinfo->MAXDESCCOUNTs[VKCONST_DESCSETID_BUFFER] = info->MAXDYNAMICBUFFER_DESCCOUNT;
+    vkinfo->MAXDESCCOUNTs[VKCONST_DESCSETID_DYNAMICSAMPLER] = info->MAXDYNAMICSAMPLER_DESCCOUNT;
+    vkinfo->MAXDESCCOUNTs[VKCONST_DESCSETID_SAMPLEDTEXTURE] = info->MAXDYNAMICSAMPLEDIMAGE_DESCCOUNT;
+    vkinfo->MAXDESCCOUNTs[VKCONST_DESCSETID_STORAGEIMAGE] = info->MAXDYNAMICSTORAGEIMAGE_DESCCOUNT;
 
-    return (initializationsecondstageinfo_tgfx_handle)info;
+    return (initSecondStageInfo_tgfxhnd)info;
 }
 
 
 
-static shaderstageflag_tgfx_handle CreateShaderStageFlag(unsigned char count, ...) {
+static shaderStageFlag_tgfxhnd CreateShaderStageFlag(unsigned char count, ...) {
     //If size of a pointer isn't bigger than or equal to a VkShaderStageFlag, we should return a pointer to the flag otherwise data is lost
     VkShaderStageFlags* flag = nullptr;
     VkShaderStageFlags flag_d = 0;
@@ -111,10 +110,10 @@ static shaderstageflag_tgfx_handle CreateShaderStageFlag(unsigned char count, ..
         if (type == shaderstage_tgfx_COMPUTESHADER) { *flag = *flag | VK_SHADER_STAGE_COMPUTE_BIT; }
     }
     va_end(args);
-    if (VKCONST_isPointerContainVKFLAG) { return (shaderstageflag_tgfx_handle)*flag; }
-    else { return (shaderstageflag_tgfx_handle)flag; }
+    if (VKCONST_isPointerContainVKFLAG) { return (shaderStageFlag_tgfxhnd)*flag; }
+    else { return (shaderStageFlag_tgfxhnd)flag; }
 }
-static rtslotdescription_tgfx_handle CreateRTSlotDescription_Color(texture_tgfx_handle Texture0, texture_tgfx_handle Texture1,
+static RTSlotDescription_tgfxhnd CreateRTSlotDescription_Color(texture_tgfxhnd Texture0, texture_tgfxhnd Texture1,
     operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE, unsigned char isUsedLater, unsigned char SLOTINDEX, vec4_tgfx clear_value) {
     rtslot_create_description_vk* desc = new rtslot_create_description_vk;
     desc->clear_value = clear_value;
@@ -123,9 +122,9 @@ static rtslotdescription_tgfx_handle CreateRTSlotDescription_Color(texture_tgfx_
     desc->optype = OPTYPE;
     desc->textures[0] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*) & Texture0);
     desc->textures[1] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*)&Texture1);
-    return (rtslotdescription_tgfx_handle)desc;
+    return (RTSlotDescription_tgfxhnd)desc;
 }
-static rtslotdescription_tgfx_handle CreateRTSlotDescription_DepthStencil(texture_tgfx_handle Texture0, texture_tgfx_handle Texture1,
+static RTSlotDescription_tgfxhnd CreateRTSlotDescription_DepthStencil(texture_tgfxhnd Texture0, texture_tgfxhnd Texture1,
     operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD, operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD,
     float DEPTHCLEARVALUE, unsigned char STENCILCLEARVALUE) {
     printer(result_tgfx_WARNING, "CreateRTSlotDescription_DepthStencil should be implemented properly!");
@@ -136,9 +135,9 @@ static rtslotdescription_tgfx_handle CreateRTSlotDescription_DepthStencil(textur
     desc->optype = DEPTHOP;
     desc->textures[0] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*)&Texture0);
     desc->textures[1] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*)&Texture1);
-    return (rtslotdescription_tgfx_handle)desc;
+    return (RTSlotDescription_tgfxhnd)desc;
 }
-static rtslotusage_tgfx_handle CreateRTSlotUsage_Color(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE){
+static rtslotusage_tgfx_handle CreateRTSlotUsage_Color(RTSlotDescription_tgfxhnd base_slot, operationtype_tgfx OPTYPE, drawpassload_tgfx LOADTYPE){
     printer(result_tgfx_WARNING, "Vulkan backend doesn't use LOADTYPE for now!");
     if (!base_slot) { printer(result_tgfx_INVALIDARGUMENT, "CreateRTSlotUsage_Color() has failed because base_slot is nullptr!"); return nullptr; }
     rtslot_create_description_vk* baseslot = (rtslot_create_description_vk*)base_slot;
@@ -157,7 +156,7 @@ static rtslotusage_tgfx_handle CreateRTSlotUsage_Color(rtslotdescription_tgfx_ha
     usage->LOADTYPESTENCIL = drawpassload_tgfx_CLEAR;
     return (rtslotusage_tgfx_handle)usage;
 }
-static rtslotusage_tgfx_handle CreateRTSlotUsage_Depth(rtslotdescription_tgfx_handle base_slot, operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD,
+static rtslotusage_tgfx_handle CreateRTSlotUsage_Depth(RTSlotDescription_tgfxhnd base_slot, operationtype_tgfx DEPTHOP, drawpassload_tgfx DEPTHLOAD,
     operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD) {
     if (!base_slot) { printer(result_tgfx_INVALIDARGUMENT, "CreateRTSlotUsage_Color() has failed because base_slot is nullptr!"); return nullptr; }
     rtslot_create_description_vk* baseslot = (rtslot_create_description_vk*)base_slot;
@@ -176,7 +175,7 @@ static rtslotusage_tgfx_handle CreateRTSlotUsage_Depth(rtslotdescription_tgfx_ha
     usage->LOADTYPESTENCIL = STENCILLOAD;
     return (rtslotusage_tgfx_handle)usage;
 }
-static depthsettings_tgfx_handle CreateDepthConfiguration(unsigned char ShouldWrite, depthtest_tgfx COMPAREOP, extension_tgfx_listhandle EXTENSIONS) {
+static depthsettings_tgfxhnd CreateDepthConfiguration(unsigned char ShouldWrite, depthtest_tgfx COMPAREOP, extension_tgfxlsthnd EXTENSIONS) {
     depthsettingsdesc_vk* desc = new depthsettingsdesc_vk;
     TGFXLISTCOUNT(core_tgfx_main, EXTENSIONS, extcount);
     for (unsigned int ext_i = 0; ext_i < extcount; ext_i++) {
@@ -189,9 +188,9 @@ static depthsettings_tgfx_handle CreateDepthConfiguration(unsigned char ShouldWr
     }
     desc->ShouldWrite = ShouldWrite;
     desc->DepthCompareOP = Find_CompareOp_byGFXDepthTest(COMPAREOP);
-    return (depthsettings_tgfx_handle)desc;
+    return (depthsettings_tgfxhnd)desc;
 }
-static stencilsettings_tgfx_handle CreateStencilConfiguration(unsigned char Reference, unsigned char WriteMask, unsigned char CompareMask,
+static stencilcnfg_tgfxnd CreateStencilConfiguration(unsigned char Reference, unsigned char WriteMask, unsigned char CompareMask,
     stencilcompare_tgfx CompareOP, stencilop_tgfx DepthFailOP, stencilop_tgfx StencilFailOP, stencilop_tgfx AllSuccessOP) {
     return nullptr;
 }
@@ -225,7 +224,7 @@ extern void set_helper_functions() {
     core_tgfx_main->helpers->CreateRTSlotUsage_Depth = &CreateRTSlotUsage_Depth;
     core_tgfx_main->helpers->CreateStencilConfiguration = &CreateStencilConfiguration;
     core_tgfx_main->helpers->CreateTextureUsageFlag = &CreateTextureUsageFlag;
-    core_tgfx_main->helpers->Create_GFXInitializationSecondStageInfo = &Create_GFXInitializationSecondStageInfo;
+    core_tgfx_main->helpers->createInitSecondStageInfo = &Create_GFXInitializationSecondStageInfo;
     core_tgfx_main->helpers->Destroy_ExtensionData = &Destroy_ExtensionData;
     core_tgfx_main->helpers->GetGPUInfo_General = &GetGPUInfo_General;
     core_tgfx_main->helpers->GetTextureTypeLimits = &GetTextureTypeLimits;

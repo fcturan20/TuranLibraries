@@ -7,7 +7,7 @@ struct sceneSettingsComponentManager{
   static componentHnd_ecstapi createComponent() {
     return nullptr;
   }
-  static compTypeHnd_ecstapi getComponent(const char* componentName) {
+  static compType_ecstapi getComponent(const char* componentName) {
     return nullptr;
   }
   static void destroyComponent(componentHnd_ecstapi) {
@@ -22,9 +22,9 @@ struct sceneSettingsComponentManager{
     c.ecsManager = &ecs_mngr;
     return c;
   }
-  static compTypeHnd_ecstapi COMPTYPE;
+  static compType_ecstapi COMPTYPE;
 };
-compTypeHnd_ecstapi sceneSettingsComponentManager::COMPTYPE = nullptr;
+compType_ecstapi sceneSettingsComponentManager::COMPTYPE = nullptr;
 
 void ThrowFor_PECF_Register(void* result, const char* msg) { if (!result) { throw(msg); } }
 const char* compRegFailedText = "Registering a component failed, but it's not designed to do so!";

@@ -11,10 +11,11 @@
 #include <string.h>
 #include <mutex>
 #include <atomic>
+#include <functional>
 
 //Systems 
 
-struct core_tgfx;
+typedef struct tgfx_core core_tgfx;
 extern core_tgfx* core_tgfx_main;
 struct core_public;
 extern core_public* core_vk;
@@ -77,11 +78,19 @@ struct IRTSLOTSET_VKOBJ;
 struct RTSLOTSET_VKOBJ;
 struct WINDOW_VKOBJ;
 
-
+std::function<void()> VKGLOBAL_emptyCallback = []() {};
 //If you want to throw error if the func doesn't return VK_SUCCESS, don't use throwResultFromCall argument
 //If you want to give a specific TGFXResult to printer, you should use returnTGFXResult argument
 //This function throws std::exception in Release build if func isn't VK_SUCCESS and doesn't use printer() func
-inline void ThrowIfFailed(VkResult func, const char* errorstring, result_tgfx returnTGFXResult = result_tgfx_FAIL, VkResult throwResultFromCall = VK_RESULT_MAX_ENUM) {
+inline void ThrowIfFailed
+(
+	VkResult func,
+	const char* errorstring,
+	result_tgfx returnTGFXResult = result_tgfx_FAIL,
+	VkResult throwResultFromCall = VK_RESULT_MAX_ENUM,
+	std::function<void()>& callback = VKGLOBAL_emptyCallback
+) {
+	callback();
 #ifdef VULKAN_DEBUGGING
 	if (throwResultFromCall != VK_RESULT_MAX_ENUM && func == throwResultFromCall) {
 		printer(returnTGFXResult, errorstring);

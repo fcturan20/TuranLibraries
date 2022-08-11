@@ -13,64 +13,99 @@ struct vk_renderer_private {
 
 };
 
-commandbuffer_tgfx_handle vk_getCommandBuffer(gpu_tgfx_handle gpu, extension_tgfx_listhandle exts) {
+commandbuffer_tgfx_handle vk_getCommandBuffer(gpu_tgfxhnd gpu, extension_tgfxlsthnd exts) {
+  return nullptr;
+}
+void vk_executeBundles(commandbuffer_tgfx_handle commandBuffer, commandBundle_tgfxhnd* bundles, const unsigned long long* bundleSortKeys, tgfx_rendererKeySortFunc sortFunc, extension_tgfxlsthnd exts) {
 
 }
-void vk_executeBundles(commandbuffer_tgfx_handle commandBuffer, commandbundle_tgfx_handle* bundles, const unsigned long long* bundleSortKeys, tgfx_rendererKeySortFunc sortFunc, extension_tgfx_listhandle exts) {
+void vk_start_renderpass(commandbuffer_tgfx_handle commandBuffer, renderPass_tgfxhnd renderPass) {
 
 }
-void vk_start_renderpass(commandbuffer_tgfx_handle commandBuffer, renderpass_tgfx_handle renderPass) {
-
-}
-void vk_next_rendersubpass(commandbuffer_tgfx_handle commandBuffer, rendersubpass_tgfx_handle renderSubPass) {
+void vk_next_rendersubpass(commandbuffer_tgfx_handle commandBuffer, renderSubPass_tgfxhnd renderSubPass) {
 
 }
 void vk_end_renderpass(commandbuffer_tgfx_handle commandBuffer) {
 
 }
-void vk_submitQueue(gpuqueue_tgfx_handle queue, commandbuffer_tgfx_listhandle commandBuffersList, fence_tgfx_listhandle fenceList, semaphore_tgfx_listhandle waitSemaphoreList, semaphore_tgfx_listhandle signalSemaphoreList, extension_tgfx_listhandle exts) {
+void vk_submitQueue(gpuQueue_tgfxhnd queue, commandbuffer_tgfxlsthnd commandBuffersList, fence_tgfxlsthnd fenceList, semaphore_tgfxlsthnd waitSemaphoreList, semaphore_tgfxlsthnd signalSemaphoreList, extension_tgfxlsthnd exts) {
 
 }
 
 // Synchronization Functions
 
-void vk_createFences(gpu_tgfx_handle gpu, unsigned int fenceCount, const unsigned char* isSignaled, fence_tgfx_listhandle fenceList) {
+void vk_createFences(gpu_tgfxhnd gpu, unsigned int fenceCount, const unsigned char* isSignaled, fence_tgfxlsthnd fenceList) {
 
 }
-void vk_createSemaphores(gpu_tgfx_handle gpu, unsigned int semaphoreCount, semaphore_tgfx_listhandle semaphoreList) {
+void vk_createSemaphores(gpu_tgfxhnd gpu, unsigned int semaphoreCount, semaphore_tgfxlsthnd semaphoreList) {
 
 }
 
 // Command Bundle Functions
 ////////////////////////////
 
-commandbundle_tgfx_handle vk_createCommandBundle(rendersubpass_tgfx_handle subpassHandle, tgfx_rendererKeySortFunc sortFunc) {
+commandBundle_tgfxhnd vk_createCommandBundle(renderSubPass_tgfxhnd subpassHandle, tgfx_rendererKeySortFunc sortFunc) {
+  return nullptr;
+}
+void vk_cmdBindBindingTable(commandBundle_tgfxhnd bundle, unsigned long long sortKey, bindingTable_tgfxhnd bindingtable) {
 
 }
-void vk_cmdBindBindingTable(commandbundle_tgfx_handle bundle, unsigned long long sortKey, bindingtable_tgfx_handle bindingtable) {
+void vk_cmdBindVertexBuffer(commandBundle_tgfxhnd bundle, unsigned long long sortKey, buffer_tgfxhnd buffer, unsigned long long offset, unsigned long long boundSize) {
 
 }
-void vk_cmdBindVertexBuffer(commandbundle_tgfx_handle bundle, unsigned long long sortKey, buffer_tgfx_handle buffer, unsigned long long offset, unsigned long long boundSize) {
+void vk_cmdBindIndexBuffers(commandBundle_tgfxhnd bundle, unsigned long long sortKey, buffer_tgfxhnd buffer, unsigned long long offset, unsigned char indexDataTypeSize) {
 
 }
-void vk_cmdBindIndexBuffers(commandbundle_tgfx_handle bundle, unsigned long long sortKey, buffer_tgfx_handle buffer, unsigned long long offset, unsigned char indexDataTypeSize) {
+void vk_cmdDrawNonIndexedDirect(commandBundle_tgfxhnd bundle, unsigned long long sortKey, unsigned int vertexCount, unsigned int instanceCount, unsigned int firstVertex, unsigned int firstInstance) {
 
 }
-void vk_cmdDrawNonIndexedDirect(commandbundle_tgfx_handle bundle, unsigned long long sortKey, unsigned int vertexCount, unsigned int instanceCount, unsigned int firstVertex, unsigned int firstInstance) {
+void vk_cmdDrawIndexedDirect(commandBundle_tgfxhnd bundle, unsigned long long sortKey, unsigned int indexCount, unsigned int instanceCount, unsigned int firstIndex, int vertexOffset, unsigned int firstInstance) {
 
 }
-void vk_cmdDrawIndexedDirect(commandbundle_tgfx_handle bundle, unsigned long long sortKey, unsigned int indexCount, unsigned int instanceCount, unsigned int firstIndex, int vertexOffset, unsigned int firstInstance) {
+void vk_cmdDrawNonIndexedIndirect(commandBundle_tgfxhnd, unsigned long long sortKey,
+  buffer_tgfxhnd drawDataBuffer, unsigned long long drawDataBufferOffset, buffer_tgfxhnd drawCountBuffer, unsigned long long drawCountBufferOffset, extension_tgfxlsthnd exts) {
 
 }
-void vk_cmdDrawNonIndexedIndirect(commandbundle_tgfx_handle, unsigned long long sortKey,
-  buffer_tgfx_handle drawDataBuffer, unsigned long long drawDataBufferOffset, buffer_tgfx_handle drawCountBuffer, unsigned long long drawCountBufferOffset, extension_tgfx_listhandle exts) {
+void vk_cmdDrawIndexedIndirect(commandBundle_tgfxhnd, unsigned long long sortKey, buffer_tgfxhnd drawCountBuffer, unsigned long long drawCountBufferOffset, extension_tgfxlsthnd exts) {
 
 }
-void vk_cmdDrawIndexedIndirect(commandbundle_tgfx_handle, unsigned long long sortKey, buffer_tgfx_handle drawCountBuffer, unsigned long long drawCountBufferOffset, extension_tgfx_listhandle exts) {
+void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
 
 }
-void vk_destroyCommandBundle(commandbundle_tgfx_handle hnd) {
+void renderer_public::RendererResource_Finalizations() {
+  /*
+  // Handle RTSlotSet changes by recreating framebuffers of draw passes
+  //  by "RTSlotSet changes": DrawPass' slotset is changed to different one or slotset's slots is changed.
+  RenderGraph::DP_VK* DP = (RenderGraph::DP_VK*)VKGLOBAL_RG->GetNextPass(nullptr, VK_PASSTYPE::DP);
+  while (DP) {
+    unsigned char ChangeInfo = DP->SlotSetChanged.load();
+    RTSLOTSET_VKOBJ* slotset = contentmanager->GETRTSLOTSET_ARRAY().getOBJbyINDEX(DP->BASESLOTSET_ID);
+    if (ChangeInfo == VKGLOBAL_FRAMEINDEX + 1 || ChangeInfo == 3 || slotset->PERFRAME_SLOTSETs[VKGLOBAL_FRAMEINDEX].IsChanged.load()) {
+      if (DP->FBs[VKGLOBAL_FRAMEINDEX]) {
+        //This is safe because this FB is used 2 frames ago and CPU already waits for the frame's GPU process to end
+        vkDestroyFramebuffer(rendergpu->LOGICALDEVICE(), DP->FBs[VKGLOBAL_FRAMEINDEX], nullptr);
+      }
 
+      VkFramebufferCreateInfo fb_ci = slotset->FB_ci[VKGLOBAL_FRAMEINDEX];
+      fb_ci.renderPass = DP->RenderPassObject;
+      if (vkCreateFramebuffer(rendergpu->LOGICALDEVICE(), &fb_ci, nullptr, &DP->FBs[VKGLOBAL_FRAMEINDEX]) != VK_SUCCESS) {
+        printer(result_tgfx_FAIL, "vkCreateFramebuffer() has failed while changing one of the drawpasses' current frame slot's texture! Please report this!");
+        return;
+      }
+
+      slotset->PERFRAME_SLOTSETs[VKGLOBAL_FRAMEINDEX].IsChanged.store(false);
+      for (unsigned int SlotIndex = 0; SlotIndex < slotset->PERFRAME_SLOTSETs[VKGLOBAL_FRAMEINDEX].COLORSLOTs_COUNT; SlotIndex++) {
+        slotset->PERFRAME_SLOTSETs[VKGLOBAL_FRAMEINDEX].COLOR_SLOTs[SlotIndex].IsChanged.store(false);
+      }
+
+      if (ChangeInfo) {
+        DP->SlotSetChanged.store(ChangeInfo - VKGLOBAL_FRAMEINDEX - 1);
+      }
+    }
+  }*/
+}
+RGReconstructionStatus renderer_public::RGSTATUS() {
+  return RGReconstructionStatus::Valid;
 }
 
 void set_VkRenderer_funcPtrs() {

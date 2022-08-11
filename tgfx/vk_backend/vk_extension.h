@@ -1,5 +1,5 @@
 #pragma once
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #include <float.h>
 
 
@@ -37,7 +37,7 @@ private:
 public:
     extension_manager();
     void (*Fill_DepthAttachmentReference)(VkAttachmentReference& Ref, unsigned int index,
-        texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
+        textureChannels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
     void (*Fill_DepthAttachmentDescription)(VkAttachmentDescription& Desc, depthstencilslot_vk* DepthSlot);
 
     //GETTER-SETTERS

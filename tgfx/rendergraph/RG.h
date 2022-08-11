@@ -2,7 +2,7 @@
 //Include this header for .cpps that will change framegraph
 //For example: renderer.cpp will add passes and calls, rg_***.cpp will reconstruct RG or record CBs etc
 //So don't include this in contentmanager.cpp or core.cpp etc.
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #include <stdint.h>
 #include "renderer.h"
 
@@ -124,7 +124,7 @@ struct RenderGraph {
 		MainPassCOMMON base;
 
 		
-		boxregion_tgfx RenderRegion;
+		boxRegion_tgfx RenderRegion;
 		uint32_t BASESLOTSET_ID;
 		uint32_t BO_SubDPsCOUNT;
 		std::atomic<unsigned char> SlotSetChanged = true;

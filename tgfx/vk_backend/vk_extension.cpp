@@ -1,15 +1,15 @@
-#include "extension.h"
-#include "resource.h"
+#include "vk_extension.h"
+#include "vk_resource.h"
 #include <tgfx_forwarddeclarations.h>
 #include <atomic>
 #include <glm/glm.hpp>
-#include "resource.h"
-#include "includes.h"
-#include "core.h"
+#include "vk_resource.h"
+#include "vk_includes.h"
+#include "vk_core.h"
 
 //Seperated Depth Stencil Layouts
-void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
-void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
+void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, textureChannels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
+void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsigned int index, textureChannels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
 void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription& Desc, depthstencilslot_vk* DepthSlot);
 void Fill_DepthAttachmentDescription_NOSeperated(VkAttachmentDescription& Desc, depthstencilslot_vk* DepthSlot);
 
@@ -61,7 +61,7 @@ void extension_manager::CheckDeviceExtensionProperties(GPU_VKOBJ* VKGPU) {
 		MaxBoundDescSet = VKGPU->DEVICEPROPERTIES().limits.maxBoundDescriptorSets;
 	}
 }
-void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE) {
+void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, textureChannels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE) {
 	Ref.attachment = index;
 	if (channels == texture_channels_tgfx_D32) {
 		switch (DEPTHOPTYPE) {
@@ -115,7 +115,7 @@ void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref
 		}
 	}
 }
-void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsigned int index, texture_channels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE) {
+void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsigned int index, textureChannels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE) {
 	Ref.attachment = index;
 	if (DEPTHOPTYPE == operationtype_tgfx_UNUSED) {
 		Ref.attachment = VK_ATTACHMENT_UNUSED;

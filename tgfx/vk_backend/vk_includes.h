@@ -2,7 +2,7 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 #include <stdio.h>
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #include <threadingsys_tapi.h>
 #include <iostream>
 #include <mutex>
@@ -108,7 +108,7 @@ public:
 
 
 
-inline unsigned char GetByteSizeOf_TextureChannels(texture_channels_tgfx channeltype) {
+inline unsigned char GetByteSizeOf_TextureChannels(textureChannels_tgfx channeltype) {
 	switch (channeltype)
 	{
 	case texture_channels_tgfx_R8B:
@@ -157,7 +157,7 @@ inline VkFormat Find_VkFormat_byDataType(datatype_tgfx datatype) {
 		return VK_FORMAT_UNDEFINED;
 	}
 }
-inline VkFormat Find_VkFormat_byTEXTURECHANNELs(texture_channels_tgfx channels) {
+inline VkFormat Find_VkFormat_byTEXTURECHANNELs(textureChannels_tgfx channels) {
 	switch (channels) {
 	case texture_channels_tgfx_BGRA8UNORM:
 		return VK_FORMAT_B8G8R8A8_UNORM;
@@ -481,7 +481,7 @@ inline VkBlendFactor Find_BlendFactor_byGFXBlendFactor(blendfactor_tgfx factor) 
 		return VK_BLEND_FACTOR_MAX_ENUM;
 	}
 }
-inline void Fill_ComponentMapping_byCHANNELs(texture_channels_tgfx channels, VkComponentMapping& mapping) {
+inline void Fill_ComponentMapping_byCHANNELs(textureChannels_tgfx channels, VkComponentMapping& mapping) {
 	switch (channels)
 	{
 	case texture_channels_tgfx_D32:
@@ -758,11 +758,11 @@ inline VkImageType Find_VkImageType(texture_dimensions_tgfx dimensions) {
 		return VkImageType::VK_IMAGE_TYPE_MAX_ENUM;
 	}
 }
-inline VkImageTiling Find_VkTiling(texture_order_tgfx order) {
+inline VkImageTiling Find_VkTiling(textureOrder_tgfx order) {
 	switch (order) {
-	case texture_order_tgfx_SWIZZLE:
+	case textureOrder_tgfx_SWIZZLE:
 		return VK_IMAGE_TILING_OPTIMAL;
-	case texture_order_tgfx_LINEAR:
+	case textureOrder_tgfx_LINEAR:
 		return VK_IMAGE_TILING_LINEAR;
 	default:
 		printer(result_tgfx_NOTCODED, "Find_VkTiling() doesn't support this order!");

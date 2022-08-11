@@ -9,3 +9,5 @@ set_target_properties(editor PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE
 install(TARGETS editor RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
 
 add_subdirectory("scene")
+add_subdirectory("UI")
+add_subdirectory("gameLinker")

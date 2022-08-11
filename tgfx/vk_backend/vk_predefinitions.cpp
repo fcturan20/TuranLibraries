@@ -1,5 +1,5 @@
-#include "predefinitions_vk.h"
-#include "resource.h"
+#include "vk_predefinitions.h"
+#include "vk_resource.h"
 
 core_tgfx* core_tgfx_main = nullptr;
 core_public* core_vk = nullptr;

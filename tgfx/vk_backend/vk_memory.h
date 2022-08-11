@@ -1,5 +1,5 @@
 #pragma once
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 
 struct memoryblock_vk;
 struct allocatorsys_data;

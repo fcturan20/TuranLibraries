@@ -1,6 +1,6 @@
 #pragma once
-#include "predefinitions_vk.h"
-#include "resource.h"
+#include "vk_predefinitions.h"
+#include "vk_resource.h"
 
 struct gpudatamanager_private;
 struct gpudatamanager_public {

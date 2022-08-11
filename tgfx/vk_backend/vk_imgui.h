@@ -1,5 +1,5 @@
 #pragma once
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #ifndef NO_IMGUI
 struct imgui_vk {
 public:
@@ -9,9 +9,9 @@ public:
 		NEW_FRAME = 2,
 		RENDERED = 3
 	};
-	inline subdrawpass_tgfx_handle Get_SubDrawPassHandle() const { return Subdrawpass; }
+	inline renderSubPass_tgfxhnd Get_SubDrawPassHandle() const { return Subdrawpass; }
 	inline IMGUI_STATUS Get_IMGUIStatus() { return STAT; }
-	void Change_DrawPass(subdrawpass_tgfx_handle Subpass);
+	void Change_DrawPass(renderSubPass_tgfxhnd Subpass);
 	void NewFrame();
 	void Render_AdditionalWindows();
 	void Render_toCB(VkCommandBuffer cb);
@@ -23,7 +23,7 @@ public:
 	VkDescriptorPool descpool;
 private:
 	IMGUI_STATUS STAT = IMGUI_STATUS::UNINITIALIZED;
-	subdrawpass_tgfx_handle Subdrawpass;
+	renderSubPass_tgfxhnd Subdrawpass;
 	friend void Create_IMGUI();
 };
 #endif

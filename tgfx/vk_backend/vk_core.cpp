@@ -14,22 +14,23 @@
 #include <tgfx_gpucontentmanager.h>
 #include <tgfx_imgui.h>
 #include <vector>
-#include "memory.h"
+#include "vk_memory.h"
 #include "vk_queue.h"
 #include "vk_extension.h"
+#include "vk_synchronization.h"
 
 #include "vk_contentmanager.h"
 
 struct device_features_chainedstructs;
 struct core_functions {
 public:
-	static void initialize_secondstage(initializationsecondstageinfo_tgfx_handle info);
+	static void initialize_secondstage(initSecondStageInfo_tgfxhnd info);
 	//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
-	static void createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor,
-		windowmode_tgfx Mode, const char* NAME, tgfx_windowResizeCallback ResizeCB, void* UserPointer, window_tgfx_handle* window);
-	static result_tgfx create_swapchain(window_tgfx_handle window, windowpresentation_tgfx presentationMode, windowcomposition_tgfx composition,
-		colorspace_tgfx colorSpace, texture_channels_tgfx channels, textureusageflag_tgfx_handle SwapchainUsage, texture_tgfx_handle* textures);
-	static void change_window_resolution(window_tgfx_handle WindowHandle, unsigned int width, unsigned int height);
+	static void createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfxhnd monitor,
+		windowmode_tgfx Mode, const char* NAME, tgfx_windowResizeCallback ResizeCB, void* UserPointer, window_tgfxhnd* window);
+	static result_tgfx create_swapchain(window_tgfxhnd window, windowpresentation_tgfx presentationMode, windowcomposition_tgfx composition,
+		colorspace_tgfx colorSpace, textureChannels_tgfx channels, textureUsageFlag_tgfxhnd SwapchainUsage, texture_tgfxhnd* textures);
+	static void change_window_resolution(window_tgfxhnd WindowHandle, unsigned int width, unsigned int height);
 	static void getmonitorlist(monitor_tgfx_listhandle* MonitorList);
 	static void getGPUlist(gpu_tgfx_listhandle* GpuList);
 
@@ -234,7 +235,7 @@ inline void core_functions::Activate_DeviceExtension_Features(GPU_VKOBJ* VKGPU, 
 		}
 	}
 }
-void core_functions::initialize_secondstage(initializationsecondstageinfo_tgfx_handle info) {
+void core_functions::initialize_secondstage(initSecondStageInfo_tgfxhnd info) {
 	initialization_secondstageinfo* vkinfo = (initialization_secondstageinfo*)info;
 	rendergpu = vkinfo->renderergpu;
 
@@ -392,7 +393,7 @@ void core_functions::Save_Monitors() {
 		//Get monitor's physical size, developer may want to use it!
 		int physical_width, physical_height;
 		glfwGetMonitorPhysicalSize(monitor, &physical_width, &physical_height);
-		if (PHYSICALWIDTH == 0 || PHYSICALHEIGHT == 0) {
+		if (physical_width == 0 || physical_height == 0) {
 			printer(result_tgfx_WARNING, "One of the monitors have invalid physical sizes, please be careful");
 		}
 		Monitor->physical_width = physical_width;
@@ -689,13 +690,12 @@ bool Create_WindowSwapchain(WINDOW_VKOBJ* Vulkan_Window, unsigned int WIDTH, uns
 	return true;
 }
 
-#include "synchronization_sys.h"
 void GLFWwindowresizecallback(GLFWwindow* glfwwindow, int width, int height) {
 	WINDOW_VKOBJ* vkwindow = (WINDOW_VKOBJ*)glfwGetWindowUserPointer(glfwwindow);
-	vkwindow->resize_cb((window_tgfx_handle)vkwindow, vkwindow->UserPTR, width, height, (texture_tgfx_handle*)vkwindow->Swapchain_Textures);
+	vkwindow->resize_cb((window_tgfxhnd)vkwindow, vkwindow->UserPTR, width, height, (texture_tgfxhnd*)vkwindow->Swapchain_Textures);
 }
-void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfx_handle monitor,
-	windowmode_tgfx Mode, const char* NAME, tgfx_windowResizeCallback ResizeCB, void* UserPointer, window_tgfx_handle* window) {
+void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfxhnd monitor,
+	windowmode_tgfx Mode, const char* NAME, tgfx_windowResizeCallback ResizeCB, void* UserPointer, window_tgfxhnd* window) {
 	if (ResizeCB) { glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); }
 	else { glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); }
 	GLFWwindow* glfw_window = glfwCreateWindow(WIDTH, HEIGHT, NAME, nullptr, nullptr);
@@ -770,10 +770,10 @@ void core_functions::createwindow_vk(unsigned int WIDTH, unsigned int HEIGHT, mo
 
 	hidden->WINDOWs.push_back(Vulkan_Window);
 	VKOBJHANDLE handle = hidden->WINDOWs.returnHANDLEfromOBJ(hidden->WINDOWs[hidden->WINDOWs.size() - 1]);
-	*window = *(window_tgfx_handle*)&handle;
+	*window = *(window_tgfxhnd*)&handle;
 }
-result_tgfx core_functions::create_swapchain(window_tgfx_handle window, windowpresentation_tgfx presentationMode, windowcomposition_tgfx composition,
-	colorspace_tgfx colorSpace, texture_channels_tgfx channels, textureusageflag_tgfx_handle SwapchainUsage, texture_tgfx_handle* SwapchainTextureHandles) {
+result_tgfx core_functions::create_swapchain(window_tgfxhnd window, windowpresentation_tgfx presentationMode, windowcomposition_tgfx composition,
+	colorspace_tgfx colorSpace, textureChannels_tgfx channels, textureUsageFlag_tgfxhnd SwapchainUsage, texture_tgfxhnd* SwapchainTextureHandles) {
 	WINDOW_VKOBJ* Vulkan_Window = hidden->WINDOWs.getOBJfromHANDLE(*(VKOBJHANDLE*)&window);
 	if (VKCONST_isPointerContainVKFLAG) { Vulkan_Window->SWAPCHAINUSAGE = *(VkImageUsageFlags*)&SwapchainUsage; }
 	else { Vulkan_Window->SWAPCHAINUSAGE = *(VkImageUsageFlags*)SwapchainUsage; }
@@ -883,8 +883,8 @@ result_tgfx core_functions::create_swapchain(window_tgfx_handle window, windowpr
 	Vulkan_Window->Swapchain_Textures[0] = contentmanager->GETTEXTURES_ARRAY().getINDEXbyOBJ(SWPCHNTEXTUREHANDLESVK[0]);
 	Vulkan_Window->Swapchain_Textures[1] = contentmanager->GETTEXTURES_ARRAY().getINDEXbyOBJ(SWPCHNTEXTUREHANDLESVK[1]);
 	VKOBJHANDLE handles[2] = { contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(SWPCHNTEXTUREHANDLESVK[0]), contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(SWPCHNTEXTUREHANDLESVK[1]) };
-	SwapchainTextureHandles[0] = *(texture_tgfx_handle*)&handles[0];
-	SwapchainTextureHandles[1] = *(texture_tgfx_handle*)&handles[1];
+	SwapchainTextureHandles[0] = *(texture_tgfxhnd*)&handles[0];
+	SwapchainTextureHandles[1] = *(texture_tgfxhnd*)&handles[1];
 	return result_tgfx_SUCCESS;
 }
 void take_inputs() {
@@ -942,18 +942,18 @@ void take_inputs() {
 
 
 inline void core_functions::getmonitorlist(monitor_tgfx_listhandle* MonitorList) {
-	*MonitorList = (monitor_tgfx_handle*)(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + vk_virmem::allocate_from_dynamicmem(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(VKDATAHANDLE) * (hidden->MONITORs.size() + 1)));
+	*MonitorList = (monitor_tgfxhnd*)(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + vk_virmem::allocate_from_dynamicmem(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(VKDATAHANDLE) * (hidden->MONITORs.size() + 1)));
 	for (unsigned int i = 0; i < hidden->MONITORs.size(); i++) {
-		(*MonitorList)[i] = (monitor_tgfx_handle)hidden->MONITORs[i];
+		(*MonitorList)[i] = (monitor_tgfxhnd)hidden->MONITORs[i];
 	}
-	(*MonitorList)[hidden->MONITORs.size()] = (monitor_tgfx_handle)core_tgfx_main->INVALIDHANDLE;
+	(*MonitorList)[hidden->MONITORs.size()] = (monitor_tgfxhnd)core_tgfx_main->INVALIDHANDLE;
 }
 inline void core_functions::getGPUlist(gpu_tgfx_listhandle* GPULIST) {
 	*GPULIST = (gpu_tgfx_listhandle)(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + vk_virmem::allocate_from_dynamicmem(VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(VKDATAHANDLE) * (hidden->DEVICE_GPUs.size() + 1)));
 	for (unsigned int i = 0; i < hidden->DEVICE_GPUs.size(); i++) {
-		(*GPULIST)[i] = (gpu_tgfx_handle)hidden->DEVICE_GPUs[i];
+		(*GPULIST)[i] = (gpu_tgfxhnd)hidden->DEVICE_GPUs[i];
 	}
-	(*GPULIST)[hidden->DEVICE_GPUs.size()] = (gpu_tgfx_handle)core_tgfx_main->INVALIDHANDLE;
+	(*GPULIST)[hidden->DEVICE_GPUs.size()] = (gpu_tgfxhnd)core_tgfx_main->INVALIDHANDLE;
 }
 
 

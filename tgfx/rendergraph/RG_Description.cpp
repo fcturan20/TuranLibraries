@@ -1,4 +1,4 @@
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #include <tgfx_renderer.h>
 #include <tgfx_helper.h>
 #include "renderer.h"
@@ -106,23 +106,6 @@ void Start_RenderGraphConstruction() {
 
 
 	RenderGraph::setRGSTATUS(RGReconstructionStatus::StartedConstruction);
-}
-
-bool Get_SlotSets_fromSubDP(subdrawpass_tgfx_handle subdp_handle, RTSLOTSET_VKOBJ** rtslotset, IRTSLOTSET_VKOBJ** irtslotset) {
-	VKOBJHANDLE subdphandle = *(VKOBJHANDLE*)&subdp_handle;
-	RenderGraph::SubDP_VK* subdp = getPass_fromHandle<RenderGraph::SubDP_VK>(subdphandle);
-	if (!subdp) { printer(13); return false; }
-	*rtslotset = contentmanager->GETRTSLOTSET_ARRAY().getOBJbyINDEX(subdp->getDP()->BASESLOTSET_ID);
-	*irtslotset = contentmanager->GETIRTSLOTSET_ARRAY().getOBJbyINDEX(subdp->IRTSLOTSET_ID);
-	return true;
-}
-bool Get_RPOBJ_andSPINDEX_fromSubDP(subdrawpass_tgfx_handle subdp_handle, VkRenderPass* rp_obj, unsigned int* sp_index) {
-	VKOBJHANDLE subdphandle = *(VKOBJHANDLE*)&subdp_handle;
-	RenderGraph::SubDP_VK* subdp = getPass_fromHandle<RenderGraph::SubDP_VK>(subdphandle);
-	if (!subdp) { printer(13); return false; }
-	*rp_obj = subdp->getDP()->RenderPassObject;
-	*sp_index = subdp->VKRP_BINDINDEX;
-	return true;
 }
 
 static void Fill_ColorVkAttachmentDescription(VkAttachmentDescription& Desc, const colorslot_vk* Attachment) {

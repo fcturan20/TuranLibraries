@@ -3,9 +3,9 @@
 #include <vector>
 #include <atomic>
 #include <string>
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #include "tgfx_structs.h"
-#include "extension.h"
+#include "vk_extension.h"
 
 struct core_public {
 	VK_STATICVECTOR<WINDOW_VKOBJ, 50>& GETWINDOWs();
@@ -32,7 +32,7 @@ private:
 	friend struct gpuallocatorsys_vk;
 	friend struct queuesys_vk;
 	gpu_private* hidden = nullptr;
-	gpudescription_tgfx desc;
+	tgfx_gpu_description desc;
 
 	VkPhysicalDevice Physical_Device = {};
 	VkPhysicalDeviceMemoryProperties MemoryProperties = {};
@@ -68,10 +68,10 @@ public:
 	inline VkDevice LOGICALDEVICE() { return Logical_Device; }
 	inline VkPhysicalDeviceFeatures DEVICEFEATURES_SUPPORTED() { return Supported_Features; }
 	inline VkPhysicalDeviceFeatures DEVICEFEATURES_ACTIVE() { return Active_Features; }
-	inline const gpudescription_tgfx& DESC() { return desc; }
+	inline const tgfx_gpu_description& DESC() { return desc; }
 	inline extension_manager* EXTMANAGER() { return &extensions; }
 	inline const unsigned int* MEMORYTYPE_IDS() { return memtype_ids.data(); }
-	inline unsigned int MEMORYTYPE_IDSCOUNT() { return memtype_ids.size(); }
+	inline unsigned int MEMORYTYPE_IDSCOUNT() { return (uint32_t)memtype_ids.size(); }
 	/*
 	//This function searches the best queue that has least specs but needed specs
 	//For example: Queue 1->Graphics,Transfer,Compute - Queue 2->Transfer, Compute - Queue 3->Transfer
@@ -127,14 +127,18 @@ struct MONITOR_VKOBJ {
 	static uint16_t GET_EXTRAFLAGS(MONITOR_VKOBJ* obj) { return 0; }
 	void operator = (const MONITOR_VKOBJ& copyFrom) {
 		isALIVE.store(true);
-		width = copyFrom.width; height = copyFrom.height; color_bites = copyFrom.color_bites; refresh_rate = copyFrom.refresh_rate;
-		physical_width = copyFrom.physical_width; physical_height = copyFrom.physical_height; name = copyFrom.name; monitorobj = copyFrom.monitorobj;
+		width = copyFrom.width; height = copyFrom.height;
+		color_bites = copyFrom.color_bites; refresh_rate = copyFrom.refresh_rate;
+		physical_width = copyFrom.physical_width;
+		physical_height = copyFrom.physical_height; name = copyFrom.name;
+		monitorobj = copyFrom.monitorobj;
 	}
 	MONITOR_VKOBJ() = default;
 	MONITOR_VKOBJ(const MONITOR_VKOBJ& copyFrom) { *this = copyFrom; }
-	unsigned int width, height, color_bites, refresh_rate, physical_width, physical_height;
-	const char* name;
-	GLFWmonitor* monitorobj;
+	unsigned int width = 0, height = 0, color_bites = 0, refresh_rate = 0,
+		physical_width = 0, physical_height = 0;
+	const char* name = NULL;
+	GLFWmonitor* monitorobj = NULL;
 };
 
 struct WINDOW_VKOBJ {
@@ -143,12 +147,21 @@ struct WINDOW_VKOBJ {
 	static uint16_t GET_EXTRAFLAGS(WINDOW_VKOBJ* obj) { return 0; }
 	void operator = (const WINDOW_VKOBJ& copyFrom) {
 		isALIVE.store(true);
-		LASTWIDTH = copyFrom.LASTWIDTH; LASTHEIGHT = copyFrom.LASTHEIGHT; NEWWIDTH = copyFrom.NEWWIDTH; NEWHEIGHT = copyFrom.NEWHEIGHT;
-		DISPLAYMODE = copyFrom.DISPLAYMODE; MONITOR = copyFrom.MONITOR; NAME = copyFrom.NAME; resize_cb = copyFrom.resize_cb;
-		UserPTR = copyFrom.UserPTR; CurrentFrameSWPCHNIndex = copyFrom.CurrentFrameSWPCHNIndex; isResized.store(copyFrom.isResized.load());
-		isSwapped.store(isSwapped.load()); presentationqueue = copyFrom.presentationqueue; Window_Surface = copyFrom.Window_Surface;
-		Window_SwapChain = copyFrom.Window_SwapChain; GLFW_WINDOW = copyFrom.GLFW_WINDOW; SurfaceCapabilities = copyFrom.SurfaceCapabilities;
-		presentationmodes = copyFrom.presentationmodes; SWAPCHAINUSAGE = copyFrom.SWAPCHAINUSAGE;
+		LASTWIDTH = copyFrom.LASTWIDTH; LASTHEIGHT = copyFrom.LASTHEIGHT;
+		NEWWIDTH = copyFrom.NEWWIDTH; NEWHEIGHT = copyFrom.NEWHEIGHT;
+		DISPLAYMODE = copyFrom.DISPLAYMODE; MONITOR = copyFrom.MONITOR;
+		NAME = copyFrom.NAME; resize_cb = copyFrom.resize_cb;
+		UserPTR = copyFrom.UserPTR;
+		CurrentFrameSWPCHNIndex = copyFrom.CurrentFrameSWPCHNIndex;
+		isResized.store(copyFrom.isResized.load());
+		isSwapped.store(isSwapped.load());
+		presentationqueue = copyFrom.presentationqueue;
+		Window_Surface = copyFrom.Window_Surface;
+		Window_SwapChain = copyFrom.Window_SwapChain;
+		GLFW_WINDOW = copyFrom.GLFW_WINDOW;
+		SurfaceCapabilities = copyFrom.SurfaceCapabilities;
+		presentationmodes = copyFrom.presentationmodes;
+		SWAPCHAINUSAGE = copyFrom.SWAPCHAINUSAGE;
 		for (unsigned int i = 0; i < VKCONST_SwapchainTextureCountPerWindow; i++) {
 			Swapchain_Textures[i] = copyFrom.Swapchain_Textures[i];
 			PresentationSemaphores[i] = copyFrom.PresentationSemaphores[i];

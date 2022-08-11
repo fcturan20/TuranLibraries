@@ -1,13 +1,14 @@
-#include "memory.h"
+#include "vk_memory.h"
 #include <atomic>
 #include <vector>
 #include <tgfx_core.h>
 #include <tgfx_structs.h>
-#include "core.h"
-#include "includes.h"
-#include "resource.h"
+#include "vk_core.h"
+#include "vk_includes.h"
+#include "vk_resource.h"
 #include <map>
 #include <numeric>
+
 
 extern VkBuffer Create_VkBuffer(unsigned int size, VkBufferUsageFlags usage);
 struct suballocation_vk {
@@ -126,7 +127,7 @@ inline result_tgfx suballocate_memoryblock(unsigned int memoryid, VkDeviceSize R
 }
 
 void gpuallocatorsys_vk::analize_gpumemory(GPU_VKOBJ* VKGPU) {
-	std::vector<memory_description_tgfx> mem_descs;
+	std::vector<tgfx_memory_description> mem_descs;
 	for (uint32_t MemoryTypeIndex = 0; MemoryTypeIndex < VKGPU->MemoryProperties.memoryTypeCount; MemoryTypeIndex++) {
 		VkMemoryType& MemoryType = VKGPU->MemoryProperties.memoryTypes[MemoryTypeIndex];
 		bool isDeviceLocal = false;
@@ -155,7 +156,7 @@ void gpuallocatorsys_vk::analize_gpumemory(GPU_VKOBJ* VKGPU) {
 			if (isHostVisible && isHostCoherent) {
 				unsigned int memid = hidden->memorytypes.push_back(memorytype_vk());
 
-				memory_description_tgfx memtype_desc;
+				tgfx_memory_description memtype_desc;
 				memtype_desc.allocationtype = memoryallocationtype_FASTHOSTVISIBLE;
 				memtype_desc.memorytype_id = memid;
 				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
@@ -170,7 +171,7 @@ void gpuallocatorsys_vk::analize_gpumemory(GPU_VKOBJ* VKGPU) {
 			else {
 				unsigned int memid = hidden->memorytypes.push_back(memorytype_vk());
 
-				memory_description_tgfx memtype_desc;
+				tgfx_memory_description memtype_desc;
 				memtype_desc.allocationtype = memoryallocationtype_DEVICELOCAL;
 				memtype_desc.memorytype_id = memid;
 				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
@@ -187,7 +188,7 @@ void gpuallocatorsys_vk::analize_gpumemory(GPU_VKOBJ* VKGPU) {
 			if (isHostCached) {
 				unsigned int memid = hidden->memorytypes.push_back(memorytype_vk());
 
-				memory_description_tgfx memtype_desc;
+				tgfx_memory_description memtype_desc;
 				memtype_desc.allocationtype = memoryallocationtype_READBACK;
 				memtype_desc.memorytype_id = memid;
 				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
@@ -202,7 +203,7 @@ void gpuallocatorsys_vk::analize_gpumemory(GPU_VKOBJ* VKGPU) {
 			else {
 				uint32_t memid = hidden->memorytypes.push_back(memorytype_vk());
 
-				memory_description_tgfx memtype_desc;
+				tgfx_memory_description memtype_desc;
 				memtype_desc.allocationtype = memoryallocationtype_HOSTVISIBLE;
 				memtype_desc.memorytype_id = memid;
 				memtype_desc.max_allocationsize = VKGPU->MemoryProperties.memoryHeaps[MemoryType.heapIndex].size;
@@ -217,7 +218,7 @@ void gpuallocatorsys_vk::analize_gpumemory(GPU_VKOBJ* VKGPU) {
 		}
 	}
 	VKGPU->desc.MEMTYPEsCOUNT = mem_descs.size();
-	memory_description_tgfx* memdescs_final = new memory_description_tgfx[mem_descs.size()];
+	tgfx_memory_description* memdescs_final = new tgfx_memory_description[mem_descs.size()];
 
 	for (uint32_t i = 0; i < mem_descs.size(); i++) {
 		memdescs_final[i] = mem_descs[i];
@@ -348,7 +349,7 @@ extern void Create_AllocatorSys() {
 	gpu_allocator = new gpuallocatorsys_vk;
 	hidden = new allocatorsys_data;
 }
-extern result_tgfx SetMemoryTypeInfo(unsigned int Memory_id, unsigned long long AllocationSize, extension_tgfx_listhandle Extensions) {
+extern result_tgfx SetMemoryTypeInfo(unsigned int Memory_id, unsigned long long AllocationSize, extension_tgfxlsthnd Extensions) {
 	memorytype_vk& ALLOC = *hidden->memorytypes[Memory_id];
 	if (AllocationSize > ALLOC.MaxSize) {
 		printer(result_tgfx_INVALIDARGUMENT, "SetMemoryTypeInfo() has failed because allocation size can't be larger than maximum size!");

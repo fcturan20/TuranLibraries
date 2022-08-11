@@ -1,8 +1,8 @@
 #pragma once
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 
 
-inline VkShaderStageFlags GetVkShaderStageFlags_fromTGFXHandle(shaderstageflag_tgfx_handle handle) {
+inline VkShaderStageFlags GetVkShaderStageFlags_fromTGFXHandle(shaderStageFlag_tgfxhnd handle) {
 	if (VKCONST_isPointerContainVKFLAG) { return *((VkShaderStageFlags*)&handle); }
 	else {return *((VkShaderStageFlags*)handle);}
 }

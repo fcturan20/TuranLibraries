@@ -1,5 +1,40 @@
 #include "tgfx_rendergraph_forwarddeclarations.h"
 
+typedef struct tgfx_rendergraph_helper {
+  //Barrier Dependency Helpers
+
+  waitsignaldescription_tgfx_handle(*CreateWaitSignal_DrawIndirectConsume)();
+  waitsignaldescription_tgfx_handle(*CreateWaitSignal_VertexInput)	(unsigned char IndexBuffer, unsigned char VertexAttrib);
+  waitsignaldescription_tgfx_handle(*CreateWaitSignal_VertexShader)	(unsigned char UniformRead, unsigned char StorageRead, unsigned char StorageWrite);
+  waitsignaldescription_tgfx_handle(*CreateWaitSignal_FragmentShader) (unsigned char UniformRead, unsigned char StorageRead, unsigned char StorageWrite);
+  waitsignaldescription_tgfx_handle(*CreateWaitSignal_ComputeShader)	(unsigned char UniformRead, unsigned char StorageRead, unsigned char StorageWrite);
+  waitsignaldescription_tgfx_handle(*CreateWaitSignal_FragmentTests)	(unsigned char isEarly, unsigned char isRead, unsigned char isWrite);
+  //Can't remember how a transfer signal should be, just added for now
+  waitsignaldescription_tgfx_handle(*CreateWaitSignal_Transfer)       (unsigned char UniformRead, unsigned char StorageRead);
+
+  //RENDERNODE HELPERS
+
+  //WaitInfos is a pointer because function expects a list of waits (Color attachment output and also VertexShader-UniformReads etc)
+  passwaitdescription_tgfx_handle(*CreatePassWait_SubDrawPass)(drawpass_tgfx_handle* PassHandle, unsigned int SubDPIndex,
+    waitsignaldescription_tgfx_handle* WaitInfos, unsigned char isLastFrame);
+  //WaitInfo is single, because function expects only one wait and it should be created with CreateWaitSignal_ComputeShader()
+  passwaitdescription_tgfx_handle(*CreatePassWait_SubComputePass)(computepass_tgfx_handle* PassHandle, unsigned int SubCPIndex,
+    waitsignaldescription_tgfx_handle WaitInfo, unsigned char isLastFrame);
+  //WaitInfo is single, because function expects only one wait and it should be created with CreateWaitSignal_Transfer()
+  passwaitdescription_tgfx_handle(*CreatePassWait_SubTransferPass)(transferpass_tgfx_handle* PassHandle, unsigned int SubTPIndex,
+    waitsignaldescription_tgfx_handle WaitInfo, unsigned char isLastFrame);
+  //There is no option because you can only wait for a penultimate window pass
+  //I'd like to support last frame wait too but it confuses the users and it doesn't have much use
+  passwaitdescription_tgfx_handle(*CreatePassWait_WindowPass)(windowpass_tgfx_handle* PassHandle);
+
+  //If you want to use subpasses only to do resource barrier operations, you can set irtslotset as nullptr
+  subdrawpassdescription_tgfx_handle(*CreateSubDrawPassDescription)(passwaitdescription_tgfx_listhandle waitdescs, inheritedrtslotset_tgfx_handle irtslotset, subdrawpassaccess_tgfx WaitOP, subdrawpassaccess_tgfx ContinueOP);
+  subcomputepassdescription_tgfx_handle(*CreateSubComputePassDescription)(passwaitdescription_tgfx_listhandle waitdescs);
+  subtransferpassdescription_tgfx_handle(*CreateSubTransferPassDescription)(passwaitdescription_tgfx_listhandle waitdescs, transferpasstype_tgfx type);
+
+
+};
+
 //RenderGraph Functions
 typedef struct tgfx_rendergraph_constructor {
   void (*Start_RenderGraphConstruction)();

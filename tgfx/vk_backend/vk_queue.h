@@ -1,5 +1,5 @@
 #pragma once
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #include <vector>
 
 struct commandpool_vk;

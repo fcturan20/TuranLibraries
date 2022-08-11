@@ -74,7 +74,7 @@ void load_systems() {
   supermemoryblock_tapi* superMemBlock = allocatorSys->createSuperMemoryBlock(1 << 30, "Vector Perf Test");
   pluginElement* v_pluginElements = nullptr;
   {
-    profiledscope_handle_tapi profiling; unsigned long long duration = 0;
+    unsigned long long duration = 0;
     TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "Vector Custom", &duration);
     v_pluginElements = (pluginElement*)allocatorSys->vector_manager->create_vector(
       sizeof(pluginElement), superMemBlock, 10, 1000, 
@@ -82,7 +82,7 @@ void load_systems() {
       //(vector_flagbits_tapi)(vector_flagbit_constructor_tapi | vector_flagbit_copy_tapi | vector_flagbit_destructor_tapi), 
       //pluginElement::defaultInitializePluginStruct, pluginElement::defaultCopyFuncPluginStruct, pluginElement::defaultDestructorPluginStruct
     );
-    for (unsigned int i = 0; i < 1000; i++) {
+    for (uint32_t i = 0; i < 1000; i++) {
       allocatorSys->vector_manager->resize(v_pluginElements, Resizes[i]);
     }
     STOP_PROFILE_PRINTLESS_TAPI(profilerSys->funcs);

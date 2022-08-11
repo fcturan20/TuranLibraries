@@ -1,9 +1,9 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <atomic>
-#include "predefinitions_vk.h"
+#include "vk_predefinitions.h"
 #include <tgfx_structs.h>
-#include "includes.h"
+#include "vk_includes.h"
 
 
 	//Memory Management
@@ -28,7 +28,7 @@ struct TEXTURE_VKOBJ {
 
 	unsigned int WIDTH, HEIGHT, DATA_SIZE;
 	unsigned char MIPCOUNT;
-	texture_channels_tgfx CHANNELs;
+	textureChannels_tgfx CHANNELs;
 	VkImageUsageFlags USAGE;
 	texture_dimensions_tgfx DIMENSION;
 	memoryblock_vk Block;
@@ -211,7 +211,7 @@ struct GRAPHICSPIPELINETYPE_VKOBJ {
 		GFX_Subpass = copyFrom.GFX_Subpass; PipelineLayout = copyFrom.PipelineLayout; PipelineObject = copyFrom.PipelineObject;
 		for (uint32_t i = 0; i < VKCONST_MAXDESCSET_PERLIST; i++) { TypeSETs[i] = UINT32_MAX; InstSETs_base[i] = UINT32_MAX; }
 	}
-	subdrawpass_tgfx_handle GFX_Subpass;
+	renderSubPass_tgfxhnd GFX_Subpass;
 
 	VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
 	VkPipeline PipelineObject = VK_NULL_HANDLE;
@@ -259,11 +259,11 @@ struct VERTEXATTRIBLAYOUT_VKOBJ {
 	
 	void operator = (const VERTEXATTRIBLAYOUT_VKOBJ& copyFrom) {
 		isALIVE.store(true);
-		Attributes = copyFrom.Attributes; Attribute_Number = copyFrom.Attribute_Number; size_perVertex = copyFrom.size_perVertex;
+		Attribs = copyFrom.Attribs; AttribCount = copyFrom.AttribCount; size_perVertex = copyFrom.size_perVertex;
 		BindingDesc = copyFrom.BindingDesc; AttribDescs = copyFrom.AttribDescs; AttribDesc_Count = copyFrom.AttribDesc_Count; PrimitiveTopology = copyFrom.PrimitiveTopology;
 	}
-	datatype_tgfx* Attributes;
-	unsigned int Attribute_Number, size_perVertex;
+	datatype_tgfx* Attribs;
+	unsigned int AttribCount, size_perVertex;
 	
 	VkVertexInputBindingDescription BindingDesc;	//Currently, only one binding is supported because I didn't understand bindings properly.
 	VkVertexInputAttributeDescription* AttribDescs;

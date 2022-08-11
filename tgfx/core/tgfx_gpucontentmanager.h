@@ -49,93 +49,180 @@
 	9) Please read "Resources_README.md" for details
 	*/
 
-typedef struct gpudatamanager_tgfx {
+typedef struct tgfx_gpudatamanager {
 	void (*Destroy_AllResources)();
 
-	//Don't forget that if sampler is used as constant, DX12 limits bordercolor to be vec4(0), vec4(0,0,0,1) and vec4(1)
-	result_tgfx (*Create_Sampler)(unsigned int MinimumMipLevel, unsigned int MaximumMipLevel, texture_mipmapfilter_tgfx MINFILTER, texture_mipmapfilter_tgfx MAGFILTER, texture_wrapping_tgfx WRAPPING_WIDTH,
-		texture_wrapping_tgfx WRAPPING_HEIGHT, texture_wrapping_tgfx WRAPPING_DEPTH, uvec4_tgfx bordercolor, samplingtype_tgfx_handle* SamplingTypeHandle);
+	// If sampler is used as constant;
+	//	DX12 limits bordercolor to be vec4(0), vec4(0,0,0,1) and vec4(1)
+	result_tgfx (*Create_Sampler)
+	(
+		unsigned int MinMipLevel, unsigned int MaxMipLevel,
+		texture_mipmapfilter_tgfx minFilter, texture_mipmapfilter_tgfx magFilter,
+		texture_wrapping_tgfx wrapWidth, texture_wrapping_tgfx wrapHeight,
+		texture_wrapping_tgfx wrapDepth, uvec4_tgfx bordercolor,
+		samplingType_tgfxhnd* hnd
+	);
 
-	//Attributes list should end with datatype_tgfx_UNDEFINED (one extra element at the end)
-    
-	result_tgfx (*Create_VertexAttributeLayout)(const datatype_tgfx* Attributes, vertexlisttypes_tgfx listtype, 
-		vertexattributelayout_tgfx_handle* VertexAttributeLayoutHandle);
-	void (*Delete_VertexAttributeLayout)(vertexattributelayout_tgfx_handle VertexAttributeLayoutHandle);
+	//Attributes list should end with UNDEFINED (one extra element at the end)
+	result_tgfx (*Create_VertexAttributeLayout)
+	(
+		const datatype_tgfx* attributes, vertexlisttypes_tgfx listType, 
+		vertexAttributeLayout_tgfxhnd* hnd
+	);
+	void (*Delete_VertexAttributeLayout)(vertexAttributeLayout_tgfxhnd hnd);
 
-	result_tgfx (*Upload_toBuffer)(buffer_tgfx_handle Handle, const void* DATA, unsigned int DATA_SIZE, unsigned int OFFSET);
-	//If your GPU supports buffer_GPUaddress_pointers, you can use this. Otherwise this function pointer is NULL
-	//You can pass pointers to buffers (call buffer struct data or classic GPU buffers) and use complex data structures and access strategies in shaders
-	result_tgfx(*GetBufferGPUPointer)(buffer_tgfx_handle Handle, unsigned long long* ptr);
+	result_tgfx (*Upload_toBuffer)
+	(buffer_tgfxhnd hnd, const void* data, unsigned int size, unsigned int offst);
+	//	If your GPU supports buffer_GPUaddress_pointers, you can use this.
+	//		Otherwise this function pointer is NULL
+	//	You can pass pointers to buffers (call buffer data or classic GPU buffers)
+	//		and use complex data structures and access strategies in shaders
+	result_tgfx(*GetBufferGPUPointer)(buffer_tgfxhnd hd, unsigned long long* ptr);
 
 
 	/*
-	* You should sort your vertex data according to attribute layout, don't forget that
+	* You should sort your vertex data according to attribute layout
 	* VertexCount shouldn't be 0
 	*/
-	result_tgfx (*Create_VertexBuffer)(vertexattributelayout_tgfx_handle VertexAttributeLayoutHandle, unsigned int VertexCount,
-		unsigned int MemoryTypeIndex, buffer_tgfx_handle* VertexBufferHandle);
-	void (*Unload_VertexBuffer)(buffer_tgfx_handle BufferHandle);
+	result_tgfx (*Create_VertexBuffer)
+	(
+		vertexAttributeLayout_tgfxhnd VertexAttributeLayoutHandle,
+		unsigned int VertexCount, memoryAllocator_tgfxlsthnd allocatorList,
+		buffer_tgfxhnd* VertexBufferHandle
+	);
+	void (*Unload_VertexBuffer)(buffer_tgfxhnd BufferHandle);
 
-	result_tgfx (*Create_IndexBuffer)(datatype_tgfx DataType, unsigned int IndexCount, unsigned int MemoryTypeIndex, buffer_tgfx_handle* IndexBufferHandle);
-	void (*Unload_IndexBuffer)(buffer_tgfx_handle BufferHandle);
+	result_tgfx (*Create_IndexBuffer)
+	(
+		datatype_tgfx DataType, unsigned int IndexCount,
+		memoryAllocator_tgfxlsthnd allocatorList, buffer_tgfxhnd* IndexBufferHandle
+	);
+	void (*Unload_IndexBuffer)(buffer_tgfxhnd BufferHandle);
 
-	result_tgfx (*Create_Texture)(texture_dimensions_tgfx DIMENSION, unsigned int WIDTH, unsigned int HEIGHT, texture_channels_tgfx CHANNEL_TYPE,
-		unsigned char MIPCOUNT, textureusageflag_tgfx_handle USAGE, texture_order_tgfx DATAORDER, unsigned int MemoryTypeIndex, texture_tgfx_handle* TextureHandle);
+	result_tgfx (*Create_Texture)
+	(
+		texture_dimensions_tgfx DIMENSION, unsigned int WIDTH, unsigned int HEIGHT,
+		textureChannels_tgfx CHANNEL_TYPE, unsigned char MIPCOUNT,
+		textureUsageFlag_tgfxhnd USAGE, textureOrder_tgfx DATAORDER,
+		memoryAllocator_tgfxlsthnd allocatorList, texture_tgfxhnd* TextureHandle
+	);
 	//TARGET OFFSET is the offset in the texture's buffer to copy to
-	result_tgfx (*Upload_Texture)(texture_tgfx_handle TextureHandle, const void* InputData, unsigned int DataSize, unsigned int TargetOffset);
-	void (*Delete_Texture)(texture_tgfx_handle TEXTUREHANDLE);
+	result_tgfx (*Upload_Texture)
+	(
+		texture_tgfxhnd TextureHandle, const void* InputData, unsigned int DataSize,
+		unsigned int TargetOffset
+	);
+	void (*Delete_Texture)(texture_tgfxhnd TEXTUREHANDLE);
 
 	//Extension can be UNIFORMBUFFER
-	result_tgfx (*Create_GlobalBuffer)(const char* BUFFER_NAME, unsigned int DATA_SIZE, unsigned int MemoryTypeIndex, extension_tgfx_listhandle exts, buffer_tgfx_handle* GlobalBufferHandle);
-	void (*Unload_GlobalBuffer)(buffer_tgfx_handle BUFFER_ID);
+	result_tgfx (*Create_GlobalBuffer)
+	(
+		const char* BUFFER_NAME, unsigned int DATA_SIZE,
+		memoryAllocator_tgfxlsthnd allocatorList, extension_tgfxlsthnd exts,
+		buffer_tgfxhnd* GlobalBufferHandle
+	);
+	void (*Unload_GlobalBuffer)(buffer_tgfxhnd BUFFER_ID);
 
-	//If DescriptorType is sampler, StaticSamplers can be used to use static samplers at binding index 0
+	//If descType is sampler, SttcSmplrs can be used at binding index 0
 	//If your GPU supports VariableDescCount, you set ElementCount to UINT32_MAX
-	result_tgfx (*Create_BindingTable)(shaderdescriptortype_tgfx DescriptorType, unsigned int ElementCount, 
-		shaderstageflag_tgfx_handle VisibleStages, samplingtype_tgfx_listhandle StaticSamplers, bindingtable_tgfx_handle* bindingTableHandle);
-	//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
-	void (*SetDescriptor_Sampler)(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
-		samplingtype_tgfx_handle samplerHandle);
-	//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_BUFFER
-	void (*SetDescriptor_Buffer)(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex, 
-		buffer_tgfx_handle bufferHandle, unsigned int bufferOffset, unsigned int BoundDataSize, extension_tgfx_listhandle exts);
-	//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLEDTEXTURE
-	void (*SetDescriptor_SampledTexture)(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
-		texture_tgfx_handle textureHandle);
-	//Set a descriptor of the binding table created with shaderdescriptortype_tgfx_STORAGEIMAGE
-	void (*SetDescriptor_StorageImage)(bindingtable_tgfx_handle bindingtable, unsigned int elementIndex,
-		texture_tgfx_handle textureHandle);
+	result_tgfx (*Create_BindingTable)
+	(
+		shaderdescriptortype_tgfx DescriptorType, unsigned int ElementCount, 
+		shaderStageFlag_tgfxhnd VisibleStages, samplingType_tgfxlsthnd SttcSmplrs,
+		bindingTable_tgfxhnd* bindingTableHandle
+	);
+	//Set a descriptor created with shaderdescriptortype_tgfx_SAMPLER
+	void (*SetDescriptor_Sampler)
+	(
+		bindingTable_tgfxhnd bindingtable, unsigned int elementIndex,
+		samplingType_tgfxhnd samplerHandle
+	);
+	//Set a descriptor created with shaderdescriptortype_tgfx_BUFFER
+	void (*SetDescriptor_Buffer)
+	(
+		bindingTable_tgfxhnd bindingtable, unsigned int elementIndex, 
+		buffer_tgfxhnd bufferHandle, unsigned int bufferOffset,
+		unsigned int BoundDataSize, extension_tgfxlsthnd exts
+	);
+	//Set a descriptor created with shaderdescriptortype_tgfx_SAMPLEDTEXTURE
+	void (*SetDescriptor_SampledTexture)
+	(
+		bindingTable_tgfxhnd bindingtable, unsigned int elementIndex,
+		texture_tgfxhnd textureHandle
+	);
+	//Set a descriptor created with shaderdescriptortype_tgfx_STORAGEIMAGE
+	void (*SetDescriptor_StorageImage)
+	(
+		bindingTable_tgfxhnd bindingtable, unsigned int elementIndex,
+		texture_tgfxhnd textureHandle
+	);
 
-	result_tgfx (*Compile_ShaderSource)(shaderlanguages_tgfx language, shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE, 
-		shadersource_tgfx_handle* ShaderSourceHandle);
-	void (*Delete_ShaderSource)(shadersource_tgfx_handle ShaderSourceHandle);
-	//For DX12 shaders;		You should use first slots for MatInstBindTables, then for MatTypeBindTables
-	//For Vulkan shaders;	You should use first slots for MatTypeBindTables, then for MatInstBindTables
-	result_tgfx (*Link_MaterialType)(shadersource_tgfx_listhandle ShaderSourcesList, 
-		bindingtable_tgfx_listhandle TypeBindingTables, bindingtable_tgfx_listhandle InstanceBindingTablesBASE,
-		vertexattributelayout_tgfx_handle AttributeLayout, subdrawpass_tgfx_handle Subdrawpass, cullmode_tgfx culling, 
-		polygonmode_tgfx polygonmode, depthsettings_tgfx_handle depthtest, stencilsettings_tgfx_handle StencilFrontFaced, 
-		stencilsettings_tgfx_handle StencilBackFaced, blendinginfo_tgfx_listhandle BLENDINGs, unsigned char CallBufferSize, rasterpipelinetype_tgfx_handle* MaterialHandle);
-	void (*Delete_MaterialType)(rasterpipelinetype_tgfx_handle ID);
-	result_tgfx (*Create_MaterialInst)(rasterpipelinetype_tgfx_handle MaterialType, bindingtable_tgfx_listhandle InstanceBindingTableOverrides, rasterpipelineinstance_tgfx_handle *MaterialInstHandle);
-	void (*Delete_MaterialInst)(rasterpipelineinstance_tgfx_handle ID);
+	result_tgfx (*Compile_ShaderSource)
+	(
+		shaderlanguages_tgfx language, shaderstage_tgfx shaderstage, void* DATA,
+		unsigned int DATA_SIZE, shaderSource_tgfxhnd* ShaderSourceHandle
+	);
+	void (*Delete_ShaderSource)(shaderSource_tgfxhnd ShaderSourceHandle);
+	//DX12;		You should use first slots for InstTables, then for TypeTables
+	//Vulkan;	You should use first slots for TypeTables, then for InstTables
+	result_tgfx (*Link_MaterialType)
+	(
+		shadersource_tgfx_listhandle ShaderSourcsLst,
+		bindingTable_tgfxlsthnd typeTables, bindingTable_tgfxlsthnd instanceTables,
+		vertexAttributeLayout_tgfxhnd AttribLayout, renderSubPass_tgfxhnd subpass,
+		cullmode_tgfx clling, polygonmode_tgfx plgnmode, depthsettings_tgfxhnd test,
+		stencilcnfg_tgfxnd StencilFrontFaced, stencilcnfg_tgfxnd StencilBackFaced,
+		blendingInfo_tgfxlsthnd BLENDINGs, unsigned char CallBufferSize,
+		rasterPipelineType_tgfxhnd* MaterialHandle
+	);
+	void (*Delete_MaterialType)(rasterPipelineType_tgfxhnd ID);
+	result_tgfx (*Create_MaterialInst)
+	(
+		rasterPipelineType_tgfxhnd rstrpipetype, bindingTable_tgfxlsthnd instcList,
+		rasterPipelineInstance_tgfxhnd *MaterialInstHandle
+	);
+	void (*Delete_MaterialInst)(rasterPipelineInstance_tgfxhnd ID);
 		
-	result_tgfx (*Create_ComputeType)(shadersource_tgfx_handle Source, bindingtable_tgfx_listhandle TypeBindingTables, bindingtable_tgfx_listhandle InstanceBindingTablesBASE, unsigned char isCallBufferSupported, computeshadertype_tgfx_handle* ComputeTypeHandle);
-	result_tgfx (*Create_ComputeInstance)(computeshadertype_tgfx_handle ComputeType, bindingtable_tgfx_listhandle InstanceBindingTableOverrides, computeshaderinstance_tgfx_handle* ComputeShaderInstanceHandle);
-	void (*Delete_ComputeShaderType)(computeshadertype_tgfx_handle ID);
-	void (*Delete_ComputeShaderInstance)(computeshaderinstance_tgfx_handle ID);
+	result_tgfx (*Create_ComputeType)
+	(
+		shaderSource_tgfxhnd Source, bindingTable_tgfxlsthnd TypeBindingTables,
+		bindingTable_tgfxlsthnd instancelst, unsigned char isCallBufferSupported,
+		computeShaderType_tgfxhnd* ComputeTypeHandle
+	);
+	result_tgfx (*Create_ComputeInstance)
+	(
+		computeShaderType_tgfxhnd computeType, bindingTable_tgfxlsthnd instanceList,
+		computeShaderInstance_tgfxhnd* ComputeShaderInstanceHandle
+	);
+	void (*Delete_ComputeShaderType)(computeShaderType_tgfxhnd ID);
+	void (*Delete_ComputeShaderInstance)(computeShaderInstance_tgfxhnd ID);
 
-	result_tgfx (*SetBindingTable_Texture)(bindingtable_tgfx_handle bindingtable, unsigned int BINDINDEX, texture_tgfx_handle TextureHandle, unsigned char isSampledTexture);
-	result_tgfx (*SetBindingTable_Buffer)(bindingtable_tgfx_handle bindingtable, unsigned int BINDINDEX, buffer_tgfx_handle BufferHandle, unsigned int TargetOffset, unsigned int BoundDataSize, extension_tgfx_listhandle exts);
+	result_tgfx (*SetBindingTable_Texture)
+	(
+		bindingTable_tgfxhnd table, unsigned int BINDINDEX, texture_tgfxhnd texture,
+		unsigned char isSampledTexture
+	);
+	result_tgfx (*SetBindingTable_Buffer)
+	(
+		bindingTable_tgfxhnd table, unsigned int BINDINDEX, buffer_tgfxhnd buffer,
+		unsigned int offset, unsigned int size, extension_tgfxlsthnd exts
+	);
 
 
 
-	result_tgfx (*Create_RTSlotset)(rtslotdescription_tgfx_listhandle Descriptions, rtslotset_tgfx_handle* RTSlotSetHandle);
-	void (*Delete_RTSlotSet)(rtslotset_tgfx_handle RTSlotSetHandle);
-	//Changes on RTSlots only happens at the frame slot is gonna be used
-	//For example; if you change next frame's slot, necessary API calls are gonna be called next frame
-	//For example; if you change slot but related slotset isn't used by drawpass, it doesn't happen until it is used
-	result_tgfx (*Change_RTSlotTexture)(rtslotset_tgfx_handle RTSlotHandle, unsigned char isColorRT, unsigned char SlotIndex, unsigned char FrameIndex, texture_tgfx_handle TextureHandle);
-	result_tgfx (*Inherite_RTSlotSet)(rtslotusage_tgfx_listhandle Descriptions, rtslotset_tgfx_handle RTSlotSetHandle, inheritedrtslotset_tgfx_handle* InheritedSlotSetHandle);
-	void (*Delete_InheritedRTSlotSet)(inheritedrtslotset_tgfx_handle InheritedRTSlotSetHandle);
+	result_tgfx (*Create_RTSlotset)
+		(RTSlotDescription_tgfxlsthnd descriptions, RTSlotset_tgfxhnd* slotsetHnd);
+	void (*Delete_RTSlotSet)(RTSlotset_tgfxhnd RTSlotSetHandle);
+	// Changes on RTSlots only happens at the frame slot is gonna be used
+	result_tgfx (*Change_RTSlotTexture)
+	(
+		RTSlotset_tgfxhnd SlotSetHnd, unsigned char isColor, unsigned char SlotIndx,
+		unsigned char FrameIndex, texture_tgfxhnd TextureHandle
+	);
+	result_tgfx (*Inherite_RTSlotSet)
+	(
+		RTSlotUsage_tgfxlsthnd descs, RTSlotset_tgfxhnd RTSlotSetHandle,
+		inheritedRTSlotset_tgfxhnd* InheritedSlotSetHandle
+	);
+	void (*Delete_InheritedRTSlotSet)(inheritedRTSlotset_tgfxhnd hnd);
 } gpudatamanager_tgfx;

@@ -2,11 +2,11 @@
 #include "loading_libraries.h"
 
 
-extern rasterpipelinetype_tgfx_handle base_3dshadertype = NULL;
-extern rasterpipelineinstance_tgfx_handle base_3dshaderinst = NULL;
-extern samplingtype_tgfx_handle linear1mip_repeatsampler = NULL;
-extern computeshadertype_tgfx_handle RT_computeshadertype = NULL;
-extern computeshaderinstance_tgfx_handle RT_computeshaderinstance = NULL;
+extern rasterPipelineType_tgfxhnd base_3dshadertype = NULL;
+extern rasterPipelineInstance_tgfxhnd base_3dshaderinst = NULL;
+extern samplingType_tgfxhnd linear1mip_repeatsampler = NULL;
+extern computeShaderType_tgfxhnd RT_computeshadertype = NULL;
+extern computeShaderInstance_tgfxhnd RT_computeshaderinstance = NULL;
 
 class SHADERS {
 public:

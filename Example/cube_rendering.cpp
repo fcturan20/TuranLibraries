@@ -32,7 +32,7 @@ void thread_print(){
 
 //Camera datas
 static vec3_tgfx objpos;
-void FirstWindow_Run(imguiwindow_tgfx* windowdata) {
+void FirstWindow_Run(imguiWindow_tgfx* windowdata) {
 	if (!windowdata->isWindowOpen) { TGFXIMGUI->Delete_WINDOW(windowdata); return; }
 	if (!TGFXIMGUI->Create_Window(windowdata->WindowName, &windowdata->isWindowOpen, false)) { TGFXIMGUI->End_Window(); }
 	TGFXIMGUI->Slider_Vec3("Object position", &objpos, -10.0, 10.0);
@@ -48,16 +48,16 @@ int main() {
 	
 	//Create a global buffer for shader inputs
 	shaderuniformsbuffer = nullptr;
-	TGFXCONTENTMANAGER->Create_GlobalBuffer("UniformBuffers", 4096, fastvisiblememtype_id, (extension_tgfx_listhandle)&TGFXCORE->INVALIDHANDLE, &shaderuniformsbuffer);
-	shaderstageflag_tgfx_handle onlycompute_shaderstage = TGFXHELPER->CreateShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER);
-	bindingtable_tgfx_handle firstbindingtable = nullptr;
+	TGFXCONTENTMANAGER->Create_GlobalBuffer("UniformBuffers", 4096, fastvisiblememtype_id, (extension_tgfxlsthnd)&TGFXCORE->INVALIDHANDLE, &shaderuniformsbuffer);
+	shaderStageFlag_tgfxhnd onlycompute_shaderstage = TGFXHELPER->CreateShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER);
+	bindingTable_tgfxhnd firstbindingtable = nullptr;
 	TGFXCONTENTMANAGER->Create_BindingTable(shaderdescriptortype_tgfx_BUFFER, 1, onlycompute_shaderstage, nullptr, &firstbindingtable);
 	TGFXCONTENTMANAGER->SetBindingTable_Buffer(firstbindingtable, 0, shaderuniformsbuffer, 0, 4096, nullptr);
 
 	//Create a depth buffer
-	buffer_tgfx_handle texturestagingbuffer;
-	textureusageflag_tgfx_handle renderonly_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, false, true, false, false);
-	TGFXCONTENTMANAGER->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_D32, 1, renderonly_usageflag, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &depthbuffer_handle);
+	buffer_tgfxhnd texturestagingbuffer;
+	textureUsageFlag_tgfxhnd renderonly_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, false, true, false, false);
+	TGFXCONTENTMANAGER->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_D32, 1, renderonly_usageflag, textureOrder_tgfx_SWIZZLE, devicelocalmemtype_id, &depthbuffer_handle);
 
 	TURANLIBRARY_LOADER::ReconstructRenderGraph_Simple();
 
@@ -87,7 +87,7 @@ int main() {
 		0, 1, 3,
 		4, 6, 7,
 		4, 5, 7 };
-	buffer_tgfx_handle firstvertexbuffer, firstindexbuffer, firststagingbuffer;
+	buffer_tgfxhnd firstvertexbuffer, firstindexbuffer, firststagingbuffer;
 	TGFXCONTENTMANAGER->Create_VertexBuffer(vertexattriblayout, 4, devicelocalmemtype_id, &firstvertexbuffer);
 	TGFXCONTENTMANAGER->Create_IndexBuffer(datatype_tgfx_VAR_UINT32, 6, devicelocalmemtype_id, &firstindexbuffer);
 	TGFXCONTENTMANAGER->Create_GlobalBuffer("FirstStagingBuffer", 6 * 100, fastvisiblememtype_id, nullptr, &firststagingbuffer);	//Allocate a little bit much
@@ -97,8 +97,8 @@ int main() {
 	TGFXRENDERER->CopyBuffer_toBuffer(framebegin_subTPs[0], firststagingbuffer, firstindexbuffer, vertexbufferdata.size() * sizeof(float), 0, indexbufferdata.size() * sizeof(unsigned int));
 
 	//Create texture, staging buffer upload data to and upload data
-	textureusageflag_tgfx_handle orange_textureusage = TGFXHELPER->CreateTextureUsageFlag(true, true, true, true, true);
-	TGFXCONTENTMANAGER->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, orange_textureusage, texture_order_tgfx_SWIZZLE, devicelocalmemtype_id, &orange_texture);
+	textureUsageFlag_tgfxhnd orange_textureusage = TGFXHELPER->CreateTextureUsageFlag(true, true, true, true, true);
+	TGFXCONTENTMANAGER->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, orange_textureusage, textureOrder_tgfx_SWIZZLE, devicelocalmemtype_id, &orange_texture);
 	vec4_tgfx color; color.x = 1.0f; color.y = 0.5f; color.z = 0.2f; color.w = 1.0f;
 	std::vector<vec4_tgfx> texture_data(1280 * 720, color);
 	TGFXCONTENTMANAGER->Create_GlobalBuffer("Texture Staging Buffer", 1280 * 720 * 20, fastvisiblememtype_id, nullptr, &texturestagingbuffer);
@@ -115,7 +115,7 @@ int main() {
 	TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformsbuffer, &rt_cameradata, sizeof(raytrace_cameradata), 64);
 
 
-	static imguiwindow_tgfx first_dearimgui_window;
+	static imguiWindow_tgfx first_dearimgui_window;
 	first_dearimgui_window.isWindowOpen = true;
 	first_dearimgui_window.WindowName = "First IMGUIWindow";
 	first_dearimgui_window.RunWindow = &FirstWindow_Run;

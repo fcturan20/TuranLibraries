@@ -145,22 +145,22 @@ void load_systems() {
     tgfx->createSwapchain(gpu, &swpchn_desc, nullptr);
     fence_tgfxhnd fence;
     renderer->createFences(gpu, 1, 15u, &fence);
-    for (uint32_t queueFamIndx = 0; queueFamIndx < gpuDesc.queueFamilyCount; queueFamIndx++) {
+    for (uint32_t queueFamIndx = 0; queueFamIndx < 1; queueFamIndx++) {
       gpuQueue_tgfxlsthnd queuesPerFam;
       tgfx->helpers->getGPUInfo_Queues(gpu, queueFamIndx, &queuesPerFam);
       TGFXLISTCOUNT(tgfx, queuesPerFam, queueCount_perFam);
-      for (uint32_t queueIndx = 0; queueIndx < queueCount_perFam; queueIndx++) {
+      for (uint32_t queueIndx = 0; queueIndx < 1; queueIndx++) {
         gpuQueue_tgfxhnd queue    = queuesPerFam[queueIndx];
         uint64_t         duration = 0;
         TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "queueSignal", &duration);
         static uint64_t waitValue = 15, signalValue = 25;
         fence_tgfxhnd   waitFences[2] = {fence, ( fence_tgfxhnd )tgfx->INVALIDHANDLE};
-        renderer->queueFenceSignalWait(queue, waitFences, &waitValue, waitFences, &signalValue);
+        renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
         renderer->queueSubmit(queue);
         window_tgfxhnd windowlst[2]     = {window, ( window_tgfxhnd )tgfx->INVALIDHANDLE};
         uint32_t       swpchnIndices[2] = {0};
-        // renderer->queuePresent(queue, windowlst, swpchnIndices);
-        // renderer->queueSubmit(queue);
+        renderer->queuePresent(queue, windowlst, swpchnIndices);
+        renderer->queueSubmit(queue);
 
         for (uint32_t i = 0; i < 3; i++) {
           _sleep(1 << 4);
@@ -168,6 +168,10 @@ void load_systems() {
           renderer->getFenceValue(fence, &value);
           printf("Fence Values: %u\n", value);
         }
+
+        swpchnIndices[0]++;
+        renderer->queuePresent(queue, windowlst, swpchnIndices);
+        renderer->queueSubmit(queue);
 
         STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);
         waitValue++;

@@ -73,7 +73,7 @@ struct WINDOW_VKOBJ {
   bool                      m_isResized = false, m_isSwapped = false;
   // Presentation Fences should only be used for CPU to wait
   fence_tgfxlsthnd m_presentationFences;
-  VkSemaphore      binarySemaphores[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
+  VkSemaphore      vk_binarySemaphores[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
 
   VkSurfaceKHR   vk_surface    = {};
   VkSwapchainKHR vk_swapchain  = {};

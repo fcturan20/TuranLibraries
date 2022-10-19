@@ -272,22 +272,36 @@ cmdBuffer_vk* manager_vk::get_commandbuffer(QUEUEFAM_VK* family, bool isSecondar
 
 VkCommandBuffer manager_vk::get_commandbufferobj(cmdBuffer_vk* id) { return id->CB; }
 
+static constexpr VkPipelineStageFlags
+  VKCONST_PRESENTWAITSTAGEs[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+
 void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
   switch (queue->activeQueueOp) {
     case QUEUE_VKOBJ::ERROR_QUEUEOPTYPE:
     case QUEUE_VKOBJ::CMDBUFFER: {
       VkSubmitInfo infos[VKCONST_MAXSUBMITCOUNT] = {};
       for (uint32_t i = 0; i < queue->m_submitInfos.size(); i++) {
-        infos[i] = queue->m_submitInfos[i]->vk_submit;
+        submit_vk* submit = queue->m_submitInfos[i];
+        infos[i]          = submit->vk_submit;
+        if (i == queue->m_submitInfos.size() - 1) {
+          submit->vk_signalSemaphores[submit->vk_submit.signalSemaphoreCount++] =
+            queue->vk_callSynchronizer;
+        }
       }
-      ThrowIfFailed(
-        vkQueueSubmit(queue->vk_queue, queue->m_submitInfos.size(), infos, VK_NULL_HANDLE),
-        "Queue Submission has failed!");
+      ThrowIfFailed(vkQueueSubmit(queue->vk_queue, queue->m_submitInfos.size(), infos, VK_NULL_HANDLE),
+                    "Queue Submission has failed!");
     } break;
     case QUEUE_VKOBJ::PRESENT: {
       VkSwapchainKHR swpchns[VKCONST_MAXPRESENTCOUNT_PERSUBMIT]       = {};
       uint32_t       swpchnIndices[VKCONST_MAXPRESENTCOUNT_PERSUBMIT] = {}, swpchnCount = 0;
-      window_tgfxhnd windows[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
+      WINDOW_VKOBJ*  windows[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
+      // Timeline Semaphores
+      VkSemaphore waitSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]   = {},
+                  signalSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
+      uint64_t waitValues[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]          = {},
+               signalValues[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]        = {};
+      uint32_t signalSemCount = 0, waitSemCount = 0;
 
       for (uint32_t submitIndx = 0; submitIndx < queue->m_submitInfos.size(); submitIndx++) {
         submit_vk* submit = queue->m_submitInfos[submitIndx];
@@ -301,21 +315,61 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
           for (uint32_t swpchnIndx = 0; swpchnIndx < submit->vk_present.swapchainCount &&
                                         swpchnCount < VKCONST_MAXPRESENTCOUNT_PERSUBMIT;
                swpchnIndx++) {
-            swpchnIndices[swpchnCount] = submit->vk_present.pImageIndices[swpchnIndx];
-            swpchns[swpchnCount]       = submit->vk_present.pSwapchains[swpchnIndx];
+            swpchnIndices[swpchnCount] =
+              submit->m_windows[swpchnIndx]->m_swapchainCurrentTextureIndx;
+            swpchns[swpchnCount] = submit->m_windows[swpchnIndx]->vk_swapchain;
+            windows[swpchnCount] = submit->m_windows[swpchnIndx];
 
             swpchnCount++;
           }
         } // If queue call is wait/signal
         else if (submit->vk_submit.sType == VK_STRUCTURE_TYPE_SUBMIT_INFO) {
-          printer(result_tgfx_NOTCODED, "Wait/Signal isn't supported in Present calls for now!");
+          for (uint32_t i = 0; i < submit->vk_submit.waitSemaphoreCount; i++) {
+            waitSemaphores[i + waitSemCount] = submit->vk_submit.pWaitSemaphores[i];
+            waitValues[i + waitSemCount]     = submit->vk_waitSemaphoreValues[i];
+          }
+          waitSemCount += submit->vk_submit.waitSemaphoreCount;
+
+          for (uint32_t i = 0; i < submit->vk_submit.signalSemaphoreCount; i++) {
+            signalSemaphores[i + signalSemCount] = submit->vk_submit.pSignalSemaphores[i];
+            signalValues[i + signalSemCount]     = submit->vk_signalSemaphoreValues[i];
+          }
+          signalSemCount += submit->vk_submit.signalSemaphoreCount;
         } // Queue call invalid
         else {
           printer(result_tgfx_FAIL, "One of the submits is invalid!");
         }
       }
+
+      VkSemaphore binarySignalSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
       // Submit for timeline -> binary conversion
-      {}
+      {
+        for (uint32_t i = 0; i < waitSemCount; i++) {
+          VkSemaphoreCreateInfo ci = {};
+          ci.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+          ThrowIfFailed(
+            vkCreateSemaphore(m_gpu->vk_logical, &ci, nullptr, &binarySignalSemaphores[i]),
+            "Present's Timeline->Binary converter failed at binary semaphore creation!");
+        }
+        VkTimelineSemaphoreSubmitInfo timInfo = {};
+        timInfo.pNext                         = nullptr;
+        timInfo.pSignalSemaphoreValues        = nullptr;
+        timInfo.signalSemaphoreValueCount     = 0;
+        timInfo.pWaitSemaphoreValues          = waitValues;
+        timInfo.waitSemaphoreValueCount       = waitSemCount;
+        timInfo.sType                         = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+        VkSubmitInfo si                       = {};
+        si.sType                              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        si.pNext                              = nullptr;
+        si.commandBufferCount                 = 0;
+        si.pWaitDstStageMask                  = VKCONST_PRESENTWAITSTAGEs;
+        si.waitSemaphoreCount                 = waitSemCount;
+        si.pWaitSemaphores                    = waitSemaphores;
+        si.signalSemaphoreCount               = waitSemCount;
+        si.pSignalSemaphores                  = binarySignalSemaphores;
+        ThrowIfFailed(vkQueueSubmit(queue->vk_queue, 1, &si, VK_NULL_HANDLE),
+                      "Present's Timeline->Binary converter failed at queue submission!");
+      }
 
       VkPresentInfoKHR info = {};
       info.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -325,47 +379,44 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
       info.pImageIndices    = swpchnIndices;
       // For now, all calls are synchronized after each other
       // Because we don't have timeline semaphore emulation in binary semaphores
-      info.waitSemaphoreCount = 1;
-      info.pWaitSemaphores    = &queue->vk_callSynchronizer;
-      info.pResults           = nullptr;
+      info.waitSemaphoreCount      = waitSemCount + 1;
+      waitSemaphores[waitSemCount] = queue->vk_callSynchronizer;
+      info.pWaitSemaphores         = waitSemaphores;
+      info.pResults                = nullptr;
       ThrowIfFailed(vkQueuePresentKHR(queue->vk_queue, &info), "Queue Present has failed!");
 
       VkSemaphore binAcquireSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
       for (uint32_t i = 0; i < swpchnCount; i++) {
         uint32_t swpchnIndx = 0;
-        ThrowIfFailed(
-          vkAcquireNextImageKHR(
-            queue->m_gpu->vk_logical, swpchns[i], UINT64_MAX,
-            core_vk->GETWINDOWs().getOBJfromHANDLE(windows[i])->binarySemaphores[swpchnIndices[i]],
-            nullptr, &swpchnIndx),
-          "Acquiring swapchain texture has failed!");
+        ThrowIfFailed(vkAcquireNextImageKHR(queue->m_gpu->vk_logical, swpchns[i], UINT64_MAX,
+                                            windows[i]->vk_binarySemaphores[swpchnIndices[i]],
+                                            nullptr, &swpchnIndx),
+                      "Acquiring swapchain texture has failed!");
+        binAcquireSemaphores[i] = windows[i]->vk_binarySemaphores[swpchnIndices[i]];
       }
 
-      /*
       // Send a submit to signal timeline semaphore when all binary semaphore are signaled
       {
-        VkPipelineStageFlags binWaitDstStageMasks[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {
-          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         VkTimelineSemaphoreSubmitInfo temSignalSemaphoresInfo = {};
         temSignalSemaphoresInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
         temSignalSemaphoresInfo.pWaitSemaphoreValues      = nullptr;
         temSignalSemaphoresInfo.waitSemaphoreValueCount   = 0;
         temSignalSemaphoresInfo.pNext                     = nullptr;
-        temSignalSemaphoresInfo.signalSemaphoreValueCount = ;
-        temSignalSemaphoresInfo.pSignalSemaphoreValues    = ;
+        temSignalSemaphoresInfo.signalSemaphoreValueCount = signalSemCount;
+        temSignalSemaphoresInfo.pSignalSemaphoreValues    = signalValues;
         VkSubmitInfo acquireSubmit                        = {};
         acquireSubmit.waitSemaphoreCount                  = swpchnCount;
         acquireSubmit.pWaitSemaphores                     = binAcquireSemaphores;
-        acquireSubmit.signalSemaphoreCount                = ;
-        acquireSubmit.pSignalSemaphores                   = ;
+        acquireSubmit.signalSemaphoreCount                = signalSemCount;
+        acquireSubmit.pSignalSemaphores                   = signalSemaphores;
         acquireSubmit.commandBufferCount                  = 0;
         acquireSubmit.pNext                               = nullptr;
-        acquireSubmit.pWaitDstStageMask                   = binWaitDstStageMasks;
+        acquireSubmit.pWaitDstStageMask                   = VKCONST_PRESENTWAITSTAGEs;
         acquireSubmit.sType                               = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         ThrowIfFailed(
           vkQueueSubmit(m_internalQueue->vk_queue, 1, &acquireSubmit, VK_NULL_HANDLE),
           "Internal queue submission for binary -> timeline semaphore conversion has failed!");
-      }*/
+      }
     } break;
     default:
       printer(result_tgfx_NOTCODED, "Active queue operation type isn't supported by VK backend!");

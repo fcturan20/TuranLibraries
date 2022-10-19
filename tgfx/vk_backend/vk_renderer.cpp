@@ -121,7 +121,7 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
   queue->activeQueueOp = QUEUE_VKOBJ::PRESENT;
   submit_vk* submit    = queue->m_submitInfos.add();
 
-  /*
+  
   uint32_t windowCount = 0;
   {
     TGFXLISTCOUNT(core_tgfx_main, windowlist, windowListSize);
@@ -130,10 +130,8 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
       if (!window) {
         continue;
       }
-      submit->vk_swapchains[windowCount]            = window->vk_swapchain;
-      submit->vk_swapchainImageIndices[windowCount] = window->m_swapchainCurrentTextureIndx;
-      window->m_swapchainCurrentTextureIndx =
-        (window->m_swapchainCurrentTextureIndx + 1) % (window->m_swapchainTextureCount);
+      submit->m_windows[windowCount] = window;
+      window->m_swapchainCurrentTextureIndx = imageIndices[i];
       windowCount++;
     }
   }
@@ -143,9 +141,9 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
   submit->vk_present.pWaitSemaphores    = nullptr;
   submit->vk_present.waitSemaphoreCount = 0;
   submit->vk_present.pResults           = nullptr;
-  submit->vk_present.pImageIndices      = submit->vk_swapchainImageIndices;
-  submit->vk_present.pSwapchains        = submit->vk_swapchains;
-  submit->vk_present.swapchainCount     = windowCount;*/
+  submit->vk_present.pImageIndices      = nullptr;
+  submit->vk_present.pSwapchains        = nullptr;
+  submit->vk_present.swapchainCount     = windowCount;
 }
 
 // Synchronization Functions

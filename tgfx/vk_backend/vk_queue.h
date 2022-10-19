@@ -56,8 +56,8 @@ struct submit_vk {
   vk_handleType   HANDLETYPE = VKHANDLETYPEs::INTERNAL;
   static uint16_t GET_EXTRAFLAGS(submit_vk* obj) { return 0; }
 
-  VkTimelineSemaphoreSubmitInfo vk_semaphoreInfo = {};
   VkSubmitInfo                  vk_submit        = {};
+  VkTimelineSemaphoreSubmitInfo vk_semaphoreInfo = {};
   VkPresentInfoKHR              vk_present       = {};
   VkBindSparseInfo              vk_bindSparse    = {};
 
@@ -67,7 +67,7 @@ struct submit_vk {
   uint64_t vk_signalSemaphoreValues[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {},
            vk_waitSemaphoreValues[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]   = {};
 
-  window_tgfxhnd windows[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
+  WINDOW_VKOBJ* m_windows[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
 };
 
 // Handle both has GPU's ID & QueueFamily's ID

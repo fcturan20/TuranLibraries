@@ -448,6 +448,20 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       }
     }
   }
+
+  // Create a semaphore for each swapchain texture
+  for (uint32_t i = window->m_swapchainTextureCount; i < desc->imageCount; i++) {
+    VkSemaphoreCreateInfo ci = {};
+    ci.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    vkCreateSemaphore(GPU->vk_logical, &ci, nullptr, &window->vk_binarySemaphores[i]);
+    uint32_t currentImageIndx = UINT32_MAX;
+    THROW_RETURN_IF_FAIL(vkAcquireNextImageKHR(GPU->vk_logical, window->vk_swapchain, 1,
+                            window->vk_binarySemaphores[i], VK_NULL_HANDLE, &currentImageIndx),
+      "Acquiring newly created swapchain textures has failed!", result_tgfx_FAIL);
+
+    //assert(i == currentImageIndx && "Acquired a non-intended swapchain texture!");
+  }
+
   window->m_swapchainTextureCount       = desc->imageCount;
   window->m_swapchainCurrentTextureIndx = 0;
   /*

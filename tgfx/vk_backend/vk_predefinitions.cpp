@@ -4,17 +4,17 @@
 
 #include "vk_resource.h"
 
-core_tgfx*             core_tgfx_main  = nullptr;
-core_public*           core_vk         = nullptr;
-renderer_public*       renderer        = nullptr;
-gpudatamanager_public* contentmanager  = nullptr;
-imgui_vk*              imgui           = nullptr;
-GPU_VKOBJ*             rendergpu       = nullptr;
-threadingsys_tapi*     threadingsys    = nullptr;
-unsigned int           threadcount     = 1;
-gpuallocatorsys_vk*    gpu_allocator   = nullptr;
-manager_vk*            queuesys        = nullptr;
-virtualmemorysys_tapi* virmemsys       = nullptr;
+core_tgfx*             core_tgfx_main    = nullptr;
+core_public*           core_vk           = nullptr;
+renderer_public*       renderer          = nullptr;
+gpudatamanager_public* contentmanager    = nullptr;
+imgui_vk*              imgui             = nullptr;
+GPU_VKOBJ*             rendergpu         = nullptr;
+threadingsys_tapi*     threadingsys      = nullptr;
+unsigned int           threadcount       = 1;
+gpuallocatorsys_vk*    gpu_allocator     = nullptr;
+manager_vk*            queuesys          = nullptr;
+virtualmemorysys_tapi* virmemsys         = nullptr;
 VkInstance             VKGLOBAL_INSTANCE = VK_NULL_HANDLE;
 VkApplicationInfo      VKGLOBAL_APPINFO;
 tgfx_PrintLogCallback  printer_cb                   = nullptr;
@@ -208,7 +208,7 @@ struct vk_virmem::dynamicmem {
 };
 vk_virmem::dynamicmem* vk_virmem::allocate_dynamicmem(uint32_t size, uint32_t* dynamicmemstart) {
   uint32_t               roundedUpSize = 0;
-  uint32_t               start = allocatePage(size, &roundedUpSize);
+  uint32_t               start         = allocatePage(size, &roundedUpSize);
   vk_virmem::dynamicmem* dynamicmem =
     ( vk_virmem::dynamicmem* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + start);
   virmemsys->virtual_commit(dynamicmem, VKCONST_VIRMEMPAGESIZE);

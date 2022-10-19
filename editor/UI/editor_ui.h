@@ -1,5 +1,5 @@
 #pragma once
-typedef struct component_pecf* compHnd_pecf;  // Not a direct pointer to component data
+typedef struct component_pecf*     compHnd_pecf; // Not a direct pointer to component data
 typedef struct componentType_pecf* compTypeHnd_pecf;
 
 // Visualize/Edit the component's values in editor

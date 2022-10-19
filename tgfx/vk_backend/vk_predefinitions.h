@@ -2,6 +2,7 @@
 // Vulkan Libs
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <tgfx_core.h>
@@ -12,7 +13,6 @@
 #include <functional>
 #include <mutex>
 #include <stdexcept>
-#include <assert.h>
 
 // NAMING RULES:
 // 1) Variables directly passed to Vulkan should have "vk_" prefix
@@ -115,7 +115,7 @@ void pNext_addToLast(void* targetStruct, void* attachStruct);
 #define vk_uint32c static constexpr unsigned int
 #define vk_float32c static constexpr float
 #define vk_handleType static constexpr VKHANDLETYPEs
-  // Dynamic Descriptor Types supported by Vulkan
+// Dynamic Descriptor Types supported by Vulkan
 vk_uint32c VKCONST_DYNAMICDESCRIPTORTYPESCOUNT = 4, VKCONST_DESCSETID_DYNAMICSAMPLER = 0,
            VKCONST_DESCSETID_SAMPLEDTEXTURE = 1, VKCONST_DESCSETID_STORAGEIMAGE = 2,
            VKCONST_DESCSETID_BUFFER = 3; // Dynamic Samplers, Storage Image, Sampled Texture, Buffer
@@ -558,9 +558,9 @@ class VK_VECTOR_ADDONLY {
 // and should have following variables: vk_handleType HANDLETYPE, std::atomic_bool
 // isDELETED (should be first variable)
 struct EXAMPLE_VKOBJECT_STRUCT {
-  bool                           isALIVE    = true;
-  vk_handleType HANDLETYPE = VKHANDLETYPEs::UNDEFINED;
-  static uint16_t                GET_EXTRAFLAGS(EXAMPLE_VKOBJECT_STRUCT* obj) { return 0; }
+  bool            isALIVE    = true;
+  vk_handleType   HANDLETYPE = VKHANDLETYPEs::UNDEFINED;
+  static uint16_t GET_EXTRAFLAGS(EXAMPLE_VKOBJECT_STRUCT* obj) { return 0; }
 
   uint64_t normal_objdata;
 };

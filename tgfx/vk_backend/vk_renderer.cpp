@@ -109,7 +109,7 @@ void vk_queueSubmit(gpuQueue_tgfxhnd i_queue) {
 void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlist,
                      const uint32_t* imageIndices) {
   getGPUfromQueueHnd(i_queue);
-  
+
   if (queue->activeQueueOp != QUEUE_VKOBJ::ERROR_QUEUEOPTYPE &&
       queue->activeQueueOp != QUEUE_VKOBJ::PRESENT) {
     printer(result_tgfx_FAIL,
@@ -118,9 +118,10 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
     return;
   }
 
-  queue->activeQueueOp   = QUEUE_VKOBJ::PRESENT;
-  submit_vk* submit      = queue->m_submitInfos.add();
+  queue->activeQueueOp = QUEUE_VKOBJ::PRESENT;
+  submit_vk* submit    = queue->m_submitInfos.add();
 
+  /*
   uint32_t windowCount = 0;
   {
     TGFXLISTCOUNT(core_tgfx_main, windowlist, windowListSize);
@@ -129,7 +130,7 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
       if (!window) {
         continue;
       }
-      submit->vk_swapchains[windowCount] = window->vk_swapchain;
+      submit->vk_swapchains[windowCount]            = window->vk_swapchain;
       submit->vk_swapchainImageIndices[windowCount] = window->m_swapchainCurrentTextureIndx;
       window->m_swapchainCurrentTextureIndx =
         (window->m_swapchainCurrentTextureIndx + 1) % (window->m_swapchainTextureCount);
@@ -137,14 +138,14 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
     }
   }
 
-  submit->vk_present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-  submit->vk_present.pNext = nullptr;
-  submit->vk_present.pWaitSemaphores = nullptr;
+  submit->vk_present.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  submit->vk_present.pNext              = nullptr;
+  submit->vk_present.pWaitSemaphores    = nullptr;
   submit->vk_present.waitSemaphoreCount = 0;
   submit->vk_present.pResults           = nullptr;
   submit->vk_present.pImageIndices      = submit->vk_swapchainImageIndices;
   submit->vk_present.pSwapchains        = submit->vk_swapchains;
-  submit->vk_present.swapchainCount     = windowCount;
+  submit->vk_present.swapchainCount     = windowCount;*/
 }
 
 // Synchronization Functions

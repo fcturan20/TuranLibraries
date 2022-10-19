@@ -162,10 +162,10 @@ vkext_depthStencil::vkext_depthStencil(GPU_VKOBJ* gpu) : vkext_interface(gpu, nu
 void vkext_depthStencil::inspect() {
   if (features.separateDepthStencilLayouts) {
     fillDepthAttachDesc = Fill_DepthAttachmentDescription_SeperatedDSLayouts;
-    fillDepthAttachRef   = Fill_DepthAttachmentReference_SeperatedDSLayouts;
+    fillDepthAttachRef  = Fill_DepthAttachmentReference_SeperatedDSLayouts;
   } else {
     fillDepthAttachDesc = Fill_DepthAttachmentDescription_NOSeperated;
-    fillDepthAttachRef   = Fill_DepthAttachmentReference_NOSeperated;
+    fillDepthAttachRef  = Fill_DepthAttachmentReference_NOSeperated;
     printer(result_tgfx_WARNING,
             (std::string(m_gpu->desc.NAME) + " doesn't support seperated depth stencil layouts, so "
                                              "layout transitions isn't gonna be precise!")

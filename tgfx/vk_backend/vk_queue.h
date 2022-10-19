@@ -67,8 +67,7 @@ struct submit_vk {
   uint64_t vk_signalSemaphoreValues[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {},
            vk_waitSemaphoreValues[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]   = {};
 
-  uint32_t       vk_swapchainImageIndices[VKCONST_MAXPRESENTCOUNT_PERSUBMIT] = {};
-  VkSwapchainKHR vk_swapchains[VKCONST_MAXPRESENTCOUNT_PERSUBMIT]            = {};
+  window_tgfxhnd windows[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
 };
 
 // Handle both has GPU's ID & QueueFamily's ID

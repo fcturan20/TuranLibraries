@@ -1,4 +1,5 @@
 #include "vkext_descIndexing.h"
+
 #include "vk_core.h"
 
 vkext_descIndexing::vkext_descIndexing(GPU_VKOBJ* gpu) : vkext_interface(gpu, &props, &features) {

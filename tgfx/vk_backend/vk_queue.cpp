@@ -287,6 +287,7 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
     case QUEUE_VKOBJ::PRESENT: {
       VkSwapchainKHR swpchns[VKCONST_MAXPRESENTCOUNT_PERSUBMIT]       = {};
       uint32_t       swpchnIndices[VKCONST_MAXPRESENTCOUNT_PERSUBMIT] = {}, swpchnCount = 0;
+      window_tgfxhnd windows[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
 
       for (uint32_t submitIndx = 0; submitIndx < queue->m_submitInfos.size(); submitIndx++) {
         submit_vk* submit = queue->m_submitInfos[submitIndx];
@@ -314,9 +315,7 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
         }
       }
       // Submit for timeline -> binary conversion
-      {
-
-      }
+      {}
 
       VkPresentInfoKHR info = {};
       info.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -334,11 +333,15 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
       VkSemaphore binAcquireSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
       for (uint32_t i = 0; i < swpchnCount; i++) {
         uint32_t swpchnIndx = 0;
-        ThrowIfFailed(vkAcquireNextImageKHR(queue->m_gpu->vk_logical, swpchns[i], UINT64_MAX,
-                                            window->binSemaphore, nullptr, &swpchnIndx),
-                      "Acquiring swapchain texture has failed!");
+        ThrowIfFailed(
+          vkAcquireNextImageKHR(
+            queue->m_gpu->vk_logical, swpchns[i], UINT64_MAX,
+            core_vk->GETWINDOWs().getOBJfromHANDLE(windows[i])->binarySemaphores[swpchnIndices[i]],
+            nullptr, &swpchnIndx),
+          "Acquiring swapchain texture has failed!");
       }
 
+      /*
       // Send a submit to signal timeline semaphore when all binary semaphore are signaled
       {
         VkPipelineStageFlags binWaitDstStageMasks[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {
@@ -362,7 +365,7 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
         ThrowIfFailed(
           vkQueueSubmit(m_internalQueue->vk_queue, 1, &acquireSubmit, VK_NULL_HANDLE),
           "Internal queue submission for binary -> timeline semaphore conversion has failed!");
-      }
+      }*/
     } break;
     default:
       printer(result_tgfx_NOTCODED, "Active queue operation type isn't supported by VK backend!");

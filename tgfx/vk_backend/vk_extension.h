@@ -2,6 +2,7 @@
 #include <float.h>
 
 #include <vector>
+
 #include "vk_predefinitions.h"
 
 struct vkext_interface;
@@ -75,11 +76,10 @@ struct vkext_interface {
   };
 
   vkext_interface(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct);
-  virtual void inspect()                             = 0;
+  virtual void inspect() = 0;
   // If functionality is TGFX Extension, then handle it in this function
   virtual void manage(VkStructureType structType, void* structPtr,
                       extension_tgfx_handle extData) = 0;
   vkext_types  m_type = vkext_count; // Derived classes should change this
   GPU_VKOBJ*   m_gpu  = nullptr;
 };
-

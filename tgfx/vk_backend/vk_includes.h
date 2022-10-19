@@ -788,6 +788,6 @@ inline gpu_type_tgfx Find_TGFXGPUTYPE_byVk(VkPhysicalDeviceType t) {
   switch (t) {
     case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return gpu_type_tgfx_DISCRETE_GPU;
     case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return gpu_type_tgfx_INTEGRATED_GPU;
-    default: return (gpu_type_tgfx)UINT32_MAX;
+    default: return ( gpu_type_tgfx )UINT32_MAX;
   }
 }

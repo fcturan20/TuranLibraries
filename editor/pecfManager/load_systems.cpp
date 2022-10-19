@@ -132,11 +132,12 @@ void load_systems() {
     window_tgfxhnd window;
     tgfx->createWindow(&windowDesc, nullptr, &window);
     tgfx_swapchain_description swpchn_desc;
-    swpchn_desc.channels         = texture_channels_tgfx_BGRA8UNORM;
-    swpchn_desc.colorSpace       = colorspace_tgfx_sRGB_NONLINEAR;
-    swpchn_desc.composition      = windowcomposition_tgfx_OPAQUE;
-    swpchn_desc.imageCount       = 2;
-    swpchn_desc.swapchainUsage   = tgfx->helpers->createUsageFlag_Texture(true, true, true, true, true);
+    swpchn_desc.channels    = texture_channels_tgfx_BGRA8UNORM;
+    swpchn_desc.colorSpace  = colorspace_tgfx_sRGB_NONLINEAR;
+    swpchn_desc.composition = windowcomposition_tgfx_OPAQUE;
+    swpchn_desc.imageCount  = 2;
+    swpchn_desc.swapchainUsage =
+      tgfx->helpers->createUsageFlag_Texture(true, true, true, true, true);
     swpchn_desc.presentationMode = windowpresentation_tgfx_FIFO;
     swpchn_desc.window           = window;
     tgfx_window_gpu_support swapchainSupport;
@@ -158,8 +159,8 @@ void load_systems() {
         renderer->queueSubmit(queue);
         window_tgfxhnd windowlst[2]     = {window, ( window_tgfxhnd )tgfx->INVALIDHANDLE};
         uint32_t       swpchnIndices[2] = {0};
-        //renderer->queuePresent(queue, windowlst, swpchnIndices);
-        //renderer->queueSubmit(queue);
+        // renderer->queuePresent(queue, windowlst, swpchnIndices);
+        // renderer->queueSubmit(queue);
 
         for (uint32_t i = 0; i < 3; i++) {
           _sleep(1 << 4);

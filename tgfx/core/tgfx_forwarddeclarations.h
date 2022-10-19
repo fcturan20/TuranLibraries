@@ -1,7 +1,23 @@
 #pragma once
 #include <predefinitions_tapi.h>
 
-            // OBJECT HANDLES
+
+//        NAMING RULES:
+//  Naming:
+//  1) Funcs starts with action (get, set, create, destroy etc.)
+//  2) camelCase for each searchable in-context keyword,
+//    seperate sub-context keywords with "_"
+//    Example: getBindingTableType -> BindingTableType is searchable keyword
+//    Example: getBindingTableType_Buffer -> Buffer is a searchable sub-context in BindingTableType
+//  3) Acronyms like CPU, CPU, RAM has to be all upper case
+//    Example: getBufferPointer_GPU -> BufferPointer is searchable context
+//        and GPU is a subcontext that returns a buffer's GPU side pointer value
+//  4) Enums and global callbacks uses type first naming to avoid wrong casting
+//    Example: texture_channels_tgfx_RGBA32F
+
+
+
+          // OBJECT HANDLES
 ///////////////////////////////////////
 
 typedef struct tgfx_gpu_obj* gpu_tgfxhnd;
@@ -10,22 +26,21 @@ typedef struct tgfx_texture_obj* texture_tgfxhnd;
 typedef struct tgfx_monitor_obj* monitor_tgfxhnd;
 typedef struct tgfx_rtslotset_obj* RTSlotset_tgfxhnd;
 typedef struct tgfx_buffer_obj* buffer_tgfxhnd;
-typedef struct tgfx_samplingtype_obj* samplingType_tgfxhnd;
+typedef struct tgfx_samplingtype_obj* sampler_tgfxhnd;
 typedef struct tgfx_vertexattributelayout_obj* vertexAttributeLayout_tgfxhnd;
+typedef struct tgfx_viewport_obj* viewport_tgfxhnd;
 typedef struct tgfx_shadersource_obj* shaderSource_tgfxhnd;
-typedef struct tgfx_computeshadertype_obj* computeShaderType_tgfxhnd;
-typedef struct tgfx_computeshaderinstance_obj* computeShaderInstance_tgfxhnd;
-typedef struct tgfx_rasterpipelinetype_obj* rasterPipelineType_tgfxhnd;
-typedef struct tgfx_rasterpipelineinstance_obj* rasterPipelineInstance_tgfxhnd;
+typedef struct tgfx_computepipeline_obj* computePipeline_tgfxhnd;
+typedef struct tgfx_rasterpipeline_obj* rasterPipeline_tgfxhnd;
 typedef struct tgfx_inheritedrtslotset_obj* inheritedRTSlotset_tgfxhnd;
+typedef struct tgfx_bindingtabletype_obj* bindingTableType_tgfxhnd;
 typedef struct tgfx_bindingtable_obj* bindingTable_tgfxhnd;
 typedef struct tgfx_commandbundle_obj* commandBundle_tgfxhnd;
 typedef struct tgfx_gpuqueue_obj* gpuQueue_tgfxhnd;
 typedef struct tgfx_renderpass_obj* renderPass_tgfxhnd;
 typedef struct tgfx_rendersubpass_obj* renderSubPass_tgfxhnd;
 typedef struct tgfx_fence_obj* fence_tgfxhnd;
-typedef struct tgfx_semaphore_obj* semaphore_tgfxhnd;
-typedef struct tgfx_memoryallocator_obj* memoryAllocator_tgfxhnd;
+typedef struct tgfx_heap_obj* heap_tgfxhnd;
 
             // DATA HANDLES
 //////////////////////////////////////
@@ -39,31 +54,33 @@ typedef struct tgfx_rtslotusage_data* rtslotusage_tgfx_handle;
 typedef struct tgfx_stencilsettings_data* stencilcnfg_tgfxnd;
 typedef struct tgfx_depthsettings_data* depthsettings_tgfxhnd;
 typedef struct tgfx_memorytype_data* memorytype_tgfx_handle;
-typedef struct tgfx_init_sec_stage_info_data* initSecondStageInfo_tgfxhnd;
 typedef struct tgfx_bindingtypeinfo_data* bindingtypeinfo_tgfx_handle;
 typedef struct tgfx_blendinginfo_data* blendinginfo_tgfx_handle;
 typedef struct tgfx_buffereddrawcall* buffereddrawcall_tgfx_handle;
 typedef struct tgfx_buffereddispatchcall* buffereddispatchcall_tgfx_handle;
 typedef struct tgfx_commandbuffer_data* commandbuffer_tgfx_handle;
+typedef struct tgfx_buffer_usage_flag_data* bufferUsageFlag_tgfxhnd;
 
 
             // LISTS
 //////////////////////////////////////
 
-typedef monitor_tgfxhnd* monitor_tgfx_listhandle;
-typedef gpu_tgfxhnd* gpu_tgfx_listhandle;
+typedef monitor_tgfxhnd* monitor_tgfxlsthnd;
+typedef gpu_tgfxhnd* gpu_tgfxlsthnd;
 typedef extension_tgfx_handle* extension_tgfxlsthnd;
 typedef RTSlotDescription_tgfxhnd* RTSlotDescription_tgfxlsthnd;
 typedef rtslotusage_tgfx_handle* RTSlotUsage_tgfxlsthnd;
-typedef memorytype_tgfx_handle* memorytype_tgfx_listhandle;
-typedef shaderSource_tgfxhnd* shadersource_tgfx_listhandle;
+typedef memorytype_tgfx_handle* memorytype_tgfxlsthnd;
+typedef shaderSource_tgfxhnd* shaderSource_tgfxlsthnd;
 typedef blendinginfo_tgfx_handle* blendingInfo_tgfxlsthnd;
-typedef samplingType_tgfxhnd* samplingType_tgfxlsthnd;
+typedef sampler_tgfxhnd* sampler_tgfxlsthnd;
+typedef bindingTableType_tgfxhnd* bindingTableType_tgfxlsthnd;
 typedef bindingTable_tgfxhnd* bindingTable_tgfxlsthnd;
 typedef commandbuffer_tgfx_handle* commandbuffer_tgfxlsthnd;
 typedef fence_tgfxhnd* fence_tgfxlsthnd;
-typedef semaphore_tgfxhnd* semaphore_tgfxlsthnd;
-typedef memoryAllocator_tgfxhnd* memoryAllocator_tgfxlsthnd;
+typedef viewport_tgfxhnd* viewport_tgfxlsthnd;
+typedef gpuQueue_tgfxhnd* gpuQueue_tgfxlsthnd;
+typedef window_tgfxhnd* window_tgfxlsthnd;
 
             // STRUCTS
 /////////////////////////////////////
@@ -78,8 +95,18 @@ typedef struct tgfx_boxRegion boxRegion_tgfx;
 typedef struct tgfx_cubeRegion cubeRegion_tgfx;
 typedef struct tgfx_memory_description memoryDescription_tgfx;
 typedef struct tgfx_gpu_description gpuDescription_tgfx;
+typedef struct tgfx_window_description windowDescription_tgfx;
+typedef struct tgfx_swapchain_description swapchainDescription_tgfx;
+typedef struct tgfx_texture_description textureDescription_tgfx;
+typedef struct tgfx_buffer_description bufferDescription_tgfx;
+typedef struct tgfx_binding_table_description bindingTableDescription_tgfx;
+typedef struct tgfx_raster_state_description rasterStateDescription_tgfx;
 typedef struct tgfx_init_secondstage_info initSecondStageInfo_tgfx;
 typedef struct tgfx_gpu_info gpuInfo_tgfx;
+typedef struct tgfx_heap_requirements_info heapRequirementsInfo_tgfx;
+typedef struct tgfx_window_gpu_support windowGPUsupport_tgfx;
+
+
 
 
             //ENUMS
@@ -260,12 +287,14 @@ typedef enum {
 typedef enum {
     texture_channels_tgfx_BGRA8UB,	//Unsigned but non-normalized char
     texture_channels_tgfx_BGRA8UNORM,	//Unsigned and normalized char
+    texture_channels_tgfx_BGRA8SRGB,
 
     texture_channels_tgfx_RGBA32F,
     texture_channels_tgfx_RGBA32UI,
     texture_channels_tgfx_RGBA32I,
     texture_channels_tgfx_RGBA8UB,
     texture_channels_tgfx_RGBA8B,
+    texture_channels_tgfx_RGBA16F,
 
     texture_channels_tgfx_RGB32F,
     texture_channels_tgfx_RGB32UI,
@@ -286,7 +315,8 @@ typedef enum {
     texture_channels_tgfx_R8B,
 
     texture_channels_tgfx_D32,
-    texture_channels_tgfx_D24S8
+    texture_channels_tgfx_D24S8,
+    texture_channels_tgfx_A2B10G10R10_UNORM
 }  textureChannels_tgfx;
 
 typedef enum {
@@ -439,14 +469,16 @@ typedef enum {
 } constantsampler_color;
 
 typedef enum {
-    colorspace_tgfx_sRGB_NONLINEAR
+    colorspace_tgfx_sRGB_NONLINEAR,
+    colorspace_tgfx_EXTENDED_sRGB_LINEAR,
+    colorspace_tgfx_HDR10_ST2084
 } colorspace_tgfx;
 
 typedef enum {
     windowcomposition_tgfx_OPAQUE
 } windowcomposition_tgfx;
 
-typedef enum {
+typedef enum windowpresentation_tgfx{
     windowpresentation_tgfx_FIFO,
     windowpresentation_tgfx_FIFO_RELAXED,
     windowpresentation_tgfx_IMMEDIATE,
@@ -464,3 +496,4 @@ typedef struct tgfx_helper helper_tgfx;
 typedef struct tgfx_gpudatamanager gpudatamanager_tgfx;
 typedef struct tgfx_renderer renderer_tgfx;
 typedef struct tgfx_dearimgui dearimgui_tgfx;
+

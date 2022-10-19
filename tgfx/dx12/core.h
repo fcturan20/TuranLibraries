@@ -18,7 +18,7 @@ private:
 	unsigned int TRANSFERs_supportedqueuecount = 0, COMPUTE_supportedqueuecount = 0, GRAPHICS_supportedqueuecount = 0;
 
 
-	ComPtr<ID3D12Device2> Logical_Device;
+	ComPtr<ID3D12Device2> vk_logical;
 public:
 	inline const char* DEVICENAME() { return desc.NAME; }
 	inline const unsigned int APIVERSION() { return desc.API_VERSION; }
@@ -27,7 +27,7 @@ public:
 	inline const bool GRAPHICSSUPPORTED() { return GRAPHICS_supportedqueuecount; }
 	inline const bool COMPUTESUPPORTED() { return COMPUTE_supportedqueuecount; }
 	inline const bool TRANSFERSUPPORTED() { return TRANSFERs_supportedqueuecount; }
-	inline ComPtr<ID3D12Device2> DEVICE() { return Logical_Device; }
+	inline ComPtr<ID3D12Device2> DEVICE() { return vk_logical; }
 };
 struct monitor_dx {
 	unsigned int width, height, color_bites, refresh_rate, physical_width, physical_height;

@@ -57,19 +57,19 @@ void finish_profiling(profiledscope_handle_tapi* handle, unsigned char ShouldPri
     switch (profil->TimingType) {
     case 0:
         *profil->DURATION = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count() - profil->START_POINT;
-        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + "nanoseconds!\n").c_str());}
+        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " nanoseconds!\n").c_str());}
         return;
     case 1:
         *profil->DURATION = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count() - profil->START_POINT;
-        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + "microseconds!\n").c_str());}
+        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " microseconds!\n").c_str());}
         return;
     case 2:
         *profil->DURATION = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count() - profil->START_POINT;
-        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + "milliseconds!\n").c_str());}
+        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " milliseconds!\n").c_str());}
         return;
     case 3:
         *profil->DURATION = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
-        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + "seconds!\n").c_str());}
+        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " seconds!\n").c_str());}
         return;
     }
     delete profil;
@@ -80,19 +80,19 @@ void threadlocal_finish_last_profiling(unsigned char ShouldPrint) {
     switch (profil->TimingType) {
     case 0:
         *profil->DURATION = std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count() - profil->START_POINT;
-        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + "nanoseconds!").c_str());}
+        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " nanoseconds!\n").c_str());}
         return;
     case 1:
         *profil->DURATION = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count() - profil->START_POINT;
-        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + "microseconds!").c_str());}
+        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " microseconds!\n").c_str());}
         return;
     case 2:
         *profil->DURATION = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count() - profil->START_POINT;
-        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + "milliseconds!").c_str());}
+        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " milliseconds!\n").c_str());}
         return;
     case 3:
         *profil->DURATION = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now()).time_since_epoch().count();
-        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + "seconds!").c_str());}
+        if (ShouldPrint) {printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " seconds!\n").c_str());}
         return;
     }
     delete profil;

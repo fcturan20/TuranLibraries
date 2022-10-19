@@ -48,16 +48,16 @@ int main() {
 	
 	//Create a global buffer for shader inputs
 	shaderuniformsbuffer = nullptr;
-	TGFXCONTENTMANAGER->Create_GlobalBuffer("UniformBuffers", 4096, fastvisiblememtype_id, (extension_tgfxlsthnd)&TGFXCORE->INVALIDHANDLE, &shaderuniformsbuffer);
+	TGFXCONTENTMANAGER->createGlobalBuffer("UniformBuffers", 4096, fastvisiblememtype_id, (extension_tgfxlsthnd)&TGFXCORE->INVALIDHANDLE, &shaderuniformsbuffer);
 	shaderStageFlag_tgfxhnd onlycompute_shaderstage = TGFXHELPER->CreateShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER);
 	bindingTable_tgfxhnd firstbindingtable = nullptr;
-	TGFXCONTENTMANAGER->Create_BindingTable(shaderdescriptortype_tgfx_BUFFER, 1, onlycompute_shaderstage, nullptr, &firstbindingtable);
-	TGFXCONTENTMANAGER->SetBindingTable_Buffer(firstbindingtable, 0, shaderuniformsbuffer, 0, 4096, nullptr);
+	TGFXCONTENTMANAGER->instantiateBindingTable(shaderdescriptortype_tgfx_BUFFER, 1, onlycompute_shaderstage, nullptr, &firstbindingtable);
+	TGFXCONTENTMANAGER->setBindingTable_Buffer(firstbindingtable, 0, shaderuniformsbuffer, 0, 4096, nullptr);
 
 	//Create a depth buffer
 	buffer_tgfxhnd texturestagingbuffer;
-	textureUsageFlag_tgfxhnd renderonly_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, false, true, false, false);
-	TGFXCONTENTMANAGER->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_D32, 1, renderonly_usageflag, textureOrder_tgfx_SWIZZLE, devicelocalmemtype_id, &depthbuffer_handle);
+	textureUsageFlag_tgfxhnd renderonly_usageflag = TGFXHELPER->createUsageFlag_Texture(false, false, true, false, false);
+	TGFXCONTENTMANAGER->createTexture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_D32, 1, renderonly_usageflag, textureOrder_tgfx_SWIZZLE, devicelocalmemtype_id, &depthbuffer_handle);
 
 	TURANLIBRARY_LOADER::ReconstructRenderGraph_Simple();
 
@@ -65,7 +65,7 @@ int main() {
 
 	//Create vertex attributelayout and buffer, then staging buffer to upload to and upload data
 	datatype_tgfx vertexattribs_datatypes[3]{ datatype_tgfx_VAR_VEC3, datatype_tgfx_VAR_VEC2, datatype_tgfx_UNDEFINED };
-	TGFXCONTENTMANAGER->Create_VertexAttributeLayout(vertexattribs_datatypes, vertexlisttypes_tgfx_TRIANGLELIST, &vertexattriblayout);
+	TGFXCONTENTMANAGER->createVertexAttribLayout(vertexattribs_datatypes, vertexlisttypes_tgfx_TRIANGLELIST, &vertexattriblayout);
 	std::vector<float> vertexbufferdata{ -1.0, -1.0, 0.0, 0.0, 0.0,
 		1.0, -1.0, 0.0, 0.0, 1.0, 
 		-1.0, 1.0, 0.0, 1.0, 0.0,
@@ -88,31 +88,31 @@ int main() {
 		4, 6, 7,
 		4, 5, 7 };
 	buffer_tgfxhnd firstvertexbuffer, firstindexbuffer, firststagingbuffer;
-	TGFXCONTENTMANAGER->Create_VertexBuffer(vertexattriblayout, 4, devicelocalmemtype_id, &firstvertexbuffer);
-	TGFXCONTENTMANAGER->Create_IndexBuffer(datatype_tgfx_VAR_UINT32, 6, devicelocalmemtype_id, &firstindexbuffer);
-	TGFXCONTENTMANAGER->Create_GlobalBuffer("FirstStagingBuffer", 6 * 100, fastvisiblememtype_id, nullptr, &firststagingbuffer);	//Allocate a little bit much
-	TGFXCONTENTMANAGER->Upload_toBuffer(firststagingbuffer, vertexbufferdata.data(), vertexbufferdata.size() * sizeof(float), 0);
-	TGFXCONTENTMANAGER->Upload_toBuffer(firststagingbuffer, indexbufferdata.data(), indexbufferdata.size() * sizeof(unsigned int), vertexbufferdata.size() * sizeof(float));
+	TGFXCONTENTMANAGER->createVertexBuffer(vertexattriblayout, 4, devicelocalmemtype_id, &firstvertexbuffer);
+	TGFXCONTENTMANAGER->createIndexBuffer(datatype_tgfx_VAR_UINT32, 6, devicelocalmemtype_id, &firstindexbuffer);
+	TGFXCONTENTMANAGER->createGlobalBuffer("FirstStagingBuffer", 6 * 100, fastvisiblememtype_id, nullptr, &firststagingbuffer);	//Allocate a little bit much
+	TGFXCONTENTMANAGER->uploadToBuffer(firststagingbuffer, vertexbufferdata.data(), vertexbufferdata.size() * sizeof(float), 0);
+	TGFXCONTENTMANAGER->uploadToBuffer(firststagingbuffer, indexbufferdata.data(), indexbufferdata.size() * sizeof(unsigned int), vertexbufferdata.size() * sizeof(float));
 	TGFXRENDERER->CopyBuffer_toBuffer(framebegin_subTPs[0], firststagingbuffer, firstvertexbuffer, 0, 0, vertexbufferdata.size() * sizeof(float));
 	TGFXRENDERER->CopyBuffer_toBuffer(framebegin_subTPs[0], firststagingbuffer, firstindexbuffer, vertexbufferdata.size() * sizeof(float), 0, indexbufferdata.size() * sizeof(unsigned int));
 
 	//Create texture, staging buffer upload data to and upload data
-	textureUsageFlag_tgfxhnd orange_textureusage = TGFXHELPER->CreateTextureUsageFlag(true, true, true, true, true);
-	TGFXCONTENTMANAGER->Create_Texture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, orange_textureusage, textureOrder_tgfx_SWIZZLE, devicelocalmemtype_id, &orange_texture);
+	textureUsageFlag_tgfxhnd orange_textureusage = TGFXHELPER->createUsageFlag_Texture(true, true, true, true, true);
+	TGFXCONTENTMANAGER->createTexture(texture_dimensions_tgfx_2D, 1280, 720, texture_channels_tgfx_RGBA32F, 1, orange_textureusage, textureOrder_tgfx_SWIZZLE, devicelocalmemtype_id, &orange_texture);
 	vec4_tgfx color; color.x = 1.0f; color.y = 0.5f; color.z = 0.2f; color.w = 1.0f;
 	std::vector<vec4_tgfx> texture_data(1280 * 720, color);
-	TGFXCONTENTMANAGER->Create_GlobalBuffer("Texture Staging Buffer", 1280 * 720 * 20, fastvisiblememtype_id, nullptr, &texturestagingbuffer);
-	TGFXCONTENTMANAGER->Upload_toBuffer(texturestagingbuffer, texture_data.data(), texture_data.size() * 16, 0);
+	TGFXCONTENTMANAGER->createGlobalBuffer("Texture Staging Buffer", 1280 * 720 * 20, fastvisiblememtype_id, nullptr, &texturestagingbuffer);
+	TGFXCONTENTMANAGER->uploadToBuffer(texturestagingbuffer, texture_data.data(), texture_data.size() * 16, 0);
 
 	//Upload light data
 	glm::vec4 directionallightdata[2] = { normalize(glm::vec4(0.3, 0.4, 0.5, 1.0)), glm::vec4(0.7, 0.3, 0.5, 1.0) };
-	TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformsbuffer, directionallightdata, 32, 0);
+	TGFXCONTENTMANAGER->uploadToBuffer(shaderuniformsbuffer, directionallightdata, 32, 0);
 	struct raytrace_cameradata {
 		glm::vec4 camera_worldpos = glm::vec4(-10.0, 0.0, 0.0, 1.0);
 		glm::mat4 camera_to_world;
 	};
 	raytrace_cameradata rt_cameradata; rt_cameradata.camera_to_world = glm::inverse(glm::perspective(glm::radians(90.0), double(16.0 / 9.0f), 0.1, 100.0));
-	TGFXCONTENTMANAGER->Upload_toBuffer(shaderuniformsbuffer, &rt_cameradata, sizeof(raytrace_cameradata), 64);
+	TGFXCONTENTMANAGER->uploadToBuffer(shaderuniformsbuffer, &rt_cameradata, sizeof(raytrace_cameradata), 64);
 
 
 	static imguiWindow_tgfx first_dearimgui_window;

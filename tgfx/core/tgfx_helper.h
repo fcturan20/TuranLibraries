@@ -3,7 +3,9 @@
 
 typedef struct tgfx_helper {
   //Hardware Capability Helpers
-  void (*GetGPUInfo_General)(gpu_tgfxhnd GPUhnd, gpuDescription_tgfx* desc);
+  void (*getGPUInfo_General)(gpu_tgfxhnd GPUhnd, gpuDescription_tgfx* desc);
+  void (*getGPUInfo_Queues)(gpu_tgfxhnd GPUhnd, unsigned int queueFamIndx,
+                            gpuQueue_tgfxlsthnd* queueList);
   unsigned char (*GetTextureTypeLimits)
   (
     texture_dimensions_tgfx dims, textureOrder_tgfx dataorder,
@@ -11,10 +13,20 @@ typedef struct tgfx_helper {
     gpu_tgfxhnd GPUHandle, unsigned int* MAXWIDTH, unsigned int* MAXHEIGHT,
     unsigned int* MAXDEPTH, unsigned int* MAXMIPLEVEL
   );
-  textureUsageFlag_tgfxhnd(*CreateTextureUsageFlag)
+  result_tgfx(*getWindow_GPUSupport)
+    (window_tgfxhnd window, gpu_tgfxhnd gpu, windowGPUsupport_tgfx* info);
+
+  textureUsageFlag_tgfxhnd(*createUsageFlag_Texture)
   (
     unsigned char copyFrom, unsigned char copyTo, unsigned char renderTo,
     unsigned char sampledReadOnly, unsigned char randomWrittenTo
+  );
+  bufferUsageFlag_tgfxhnd(*createUsageFlag_Buffer)
+  (
+    unsigned char copyFrom, unsigned char copyTo, unsigned char uniformBuffer,
+    unsigned char storageBuffer, unsigned char vertexBuffer,
+    unsigned char indexBuffer, unsigned char indirectBuffer,
+    unsigned char accessByPointerInShader
   );
   void (*GetSupportedAllocations_ofTexture)
   (unsigned int GPUIndex, unsigned int* SupportedMemoryTypesBitset);
@@ -30,9 +42,6 @@ typedef struct tgfx_helper {
   //  (Memory Type is given by the GFX initialization process)
   result_tgfx(*SetMemoryTypeInfo)
   (unsigned int ID, unsigned long long allocSize, extension_tgfxlsthnd exts);
-
-  initSecondStageInfo_tgfxhnd (*createInitSecondStageInfo)
-  (initSecondStageInfo_tgfx* info, extension_tgfxlsthnd EXTList);
 
 
   shaderStageFlag_tgfxhnd(*CreateShaderStageFlag)(unsigned char count, ...);

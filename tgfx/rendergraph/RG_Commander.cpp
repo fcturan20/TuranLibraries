@@ -118,7 +118,7 @@ static void initializeImGuiCommandBufferAndFence() {
 struct renderer_funcs {
 	static void PrepareForNextFrame() {
 		VKGLOBAL_FRAMEINDEX = (VKGLOBAL_FRAMEINDEX + 1) % VKCONST_BUFFERING_IN_FLIGHT;
-		take_inputs();
+		vk_takeInputs();
 		if(imgui){ imgui->NewFrame(); }
 	}
 	//Rendering operations

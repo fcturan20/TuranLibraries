@@ -63,14 +63,13 @@ bool Create_WindowSwapchain(window_dx* new_window, unsigned int WIDTH, unsigned 
 
 struct core_functions_dx {
 public:
-	static void initialize_secondstage(initSecondStageInfo_tgfxhnd info);
 	//SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not supported for now.
 	static void createwindow(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfxhnd monitor,
 		windowmode_tgfx Mode, const char* NAME, textureUsageFlag_tgfxhnd SwapchainUsage, tgfx_windowResizeCallback ResizeCB,
 		void* UserPointer, texture_tgfxhnd* SwapchainTextureHandles, window_tgfxhnd* window);
 	static void change_window_resolution(window_tgfxhnd WindowHandle, unsigned int width, unsigned int height);
-	static void getmonitorlist(monitor_tgfx_listhandle* MonitorList);
-	static void getGPUlist(gpu_tgfx_listhandle* GpuList);
+	static void getmonitorlist(monitor_tgfxlsthnd* MonitorList);
+	static void getGPUlist(gpu_tgfxlsthnd* GpuList);
 
 	//Debug callbacks are user defined callbacks, you should assign the function pointer if you want to use them
 	//As default, all backends set them as empty no-work functions
@@ -95,10 +94,10 @@ inline void ThrowIfFailed(HRESULT hr){
         throw std::exception();
     }
 }
-void printf_log_tgfx(result_tgfx result, const char* text) {
+void vk_printfLog(result_tgfx result, const char* text) {
 	printf("TGFX %u: %s\n", (unsigned int)result, text);
 }
-void GFX_Error_Callback(int error_code, const char* description) {
+void vk_errorCallback(int error_code, const char* description) {
 	printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
 }
 extern void set_helper_functions();
@@ -119,7 +118,7 @@ extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi * regsys, 
 	hidden = new core_private;
 
 	if (printcallback) { printer = printcallback; }
-	else { printer = printf_log_tgfx; }
+	else { printer = vk_printfLog; }
 
 
 	hInstance = GetModuleHandle(NULL);
@@ -127,7 +126,7 @@ extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi * regsys, 
 	set_helper_functions();
 
 	//Set error callback to handle all glfw errors (including initialization error)!
-	glfwSetErrorCallback(GFX_Error_Callback);
+	glfwSetErrorCallback(vk_errorCallback);
 
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);

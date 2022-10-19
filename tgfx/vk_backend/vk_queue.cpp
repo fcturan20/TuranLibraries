@@ -1,239 +1,376 @@
 #include "vk_queue.h"
-#include "vk_core.h"
+
+#include <threadingsys_tapi.h>
+
 #include <mutex>
-#include "vk_synchronization.h"
 
-struct commandbuffer_vk {
-	VkCommandBuffer CB;
-	bool is_Used = false;
-};
-struct commandpool_vk {
-	commandpool_vk() = default;
-	commandpool_vk(const commandpool_vk& RefCP) { CPHandle = RefCP.CPHandle;CBs = RefCP.CBs;}
-	void operator= (const commandpool_vk& RefCP) { CPHandle = RefCP.CPHandle;CBs = RefCP.CBs;}
-	commandbuffer_vk& CreateCommandBuffer();
-	void DestroyCommandBuffer();
-	VkCommandPool CPHandle = VK_NULL_HANDLE;
-	std::vector<commandbuffer_vk*> CBs;
-private:
-	std::mutex Sync;
-};
+#include "tgfx_renderer.h"
+#include "vk_core.h"
+#include "vkext_timelineSemaphore.h"
 
-struct queue_vk {
-	fence_idtype_vk RenderGraphFences[2];
-	VkQueue Queue = VK_NULL_HANDLE;
+vk_uint32c VKCONST_MAXFENCECOUNT_PERSUBMIT = 8, VKCONST_MAXCOMMANDBUFFERCOUNT_PERSUBMIT = 256;
+vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER = nullptr;
+
+queueflag_vk::operator uint8_t() const {
+  if constexpr (sizeof(queueflag_vk) == 1) {
+    return *(( uint8_t* )this);
+  } else {
+    printer(result_tgfx_NOTCODED, "queueflag_vk shouldn't be more than 1 byte");
+  }
+  return 0;
 };
-struct queuefam_vk {
-	uint32_t queueFamIndex = 0;
-	unsigned int queuecount = 0, featurescore = 0;
-	queueflag_vk supportflag;
-	queue_vk* queues = nullptr;
-	commandpool_vk CommandPools[2];
-};
-struct queuesys_data {
-	std::vector<queuefam_vk*> queuefams;
+struct cmdBuffer_vk {
+  bool            isALIVE = true;
+  VkCommandBuffer CB;
+  bool            is_Used = false;
+  // Pointer to allocated space for storing render calls below
+  unsigned int             DATAPTR = 0;
+  tgfx_rendererKeySortFunc sortFunc;
 };
 
-void queuesys_vk::analize_queues(GPU_VKOBJ* vkgpu) {
-	static constexpr unsigned char max_propertiescount = 10;
-	bool is_presentationfound = false;
-	vkgpu->queuefams = new queuefam_vk * [vkgpu->QUEUEFAMSCOUNT()];
-	VkQueueFamilyProperties properties[max_propertiescount]; uint32_t dontuse;
+struct cmdPool_vk {
+  cmdPool_vk() = default;
+  cmdPool_vk(const cmdPool_vk& RefCP) { CPHandle = RefCP.CPHandle; }
+  void          operator=(const cmdPool_vk& RefCP) { CPHandle = RefCP.CPHandle; }
+  cmdBuffer_vk& createCmdBuffer();
+  void          destroyCmdBuffer();
+  VkCommandPool CPHandle = VK_NULL_HANDLE;
+  // First cmdBuffer is the empty CB
+  VK_STATICVECTOR<cmdBuffer_vk, void*, 1 << 8> CBs;
+
+ private:
+  std::mutex Sync;
+};
+GPU_VKOBJ* QUEUE_VKOBJ::getGPUfromHandle(gpuQueue_tgfxhnd hnd) {
+  VKOBJHANDLE handle  = *( VKOBJHANDLE* )&hnd;
+  uint32_t    gpuIndx = handle.EXTRA_FLAGs >> 8;
+  return core_vk->getGPUs()[gpuIndx];
+}
+QUEUEFAM_VK* QUEUE_VKOBJ::getFAMfromHandle(gpuQueue_tgfxhnd hnd) {
+  GPU_VKOBJ*  gpu          = getGPUfromHandle(hnd);
+  VKOBJHANDLE handle       = *( VKOBJHANDLE* )&hnd;
+  uint32_t    queueFamIndx = (handle.EXTRA_FLAGs << 24) >> 24;
+  return gpu->manager()->m_queueFams[queueFamIndx];
+}
+
+manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
+  if (!VKGLOBAL_VIRMEM_MANAGER) {
+    // 16MB is enough I guess?
+    VKGLOBAL_VIRMEM_MANAGER = vk_virmem::allocate_dynamicmem(1 << 24);
+  }
+  manager_vk* mngr = new (VKGLOBAL_VIRMEM_MANAGER) manager_vk;
+  mngr->m_gpu      = gpu;
+  gpu->manager()   = mngr;
+
+  uint32_t queueFamiliesCount = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties2(gpu->vk_physical, &queueFamiliesCount, nullptr);
+  bool is_presentationfound = false;
+  for (uint32_t i = 0; i < VKCONST_MAXQUEUEFAMCOUNT_PERGPU; i++) {
+    gpu->vk_propsQueue[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2;
+    gpu->vk_propsQueue[i].pNext = nullptr;
+  }
 #ifdef VULKAN_DEBUGGING
-	if (max_propertiescount < vkgpu->QUEUEFAMSCOUNT()) { printer(result_tgfx_FAIL, "VK backend's queue analization process should support more queue families! Please report this!"); }
+  if (VKCONST_MAXQUEUEFAMCOUNT_PERGPU < queueFamiliesCount) {
+    printer(result_tgfx_FAIL,
+            "VK backend's queue analization process should support more queue families! Please "
+            "report this!");
+  }
 #endif
-	vkGetPhysicalDeviceQueueFamilyProperties(vkgpu->PHYSICALDEVICE(), &dontuse, properties);
-	for (unsigned int queuefamily_index = 0; queuefamily_index < vkgpu->QUEUEFAMSCOUNT(); queuefamily_index++) {
-		VkQueueFamilyProperties* QueueFamily = &properties[queuefamily_index];
-		queuefam_vk* queuefam = new queuefam_vk;
+  vkGetPhysicalDeviceQueueFamilyProperties2(gpu->vk_physical, &queueFamiliesCount,
+                                            gpu->vk_propsQueue);
+  gpu->desc.queueFamilyCount = queueFamiliesCount;
+  for (uint32_t queueFamIndx = 0; queueFamIndx < queueFamiliesCount; queueFamIndx++) {
+    VkQueueFamilyProperties2* props    = &gpu->vk_propsQueue[queueFamIndx];
+    QUEUEFAM_VK*              queueFam = mngr->m_queueFams.add();
 
+    queueFam->vk_queueFamIndex = queueFamIndx;
+    if (props->queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      gpu->desc.is_GraphicOperations_Supported     = true;
+      queueFam->m_supportFlag.is_GRAPHICSsupported = true;
+    }
+    if (props->queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) {
+      gpu->desc.is_ComputeOperations_Supported    = true;
+      queueFam->m_supportFlag.is_COMPUTEsupported = true;
+    }
+    if (props->queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) {
+      gpu->desc.is_TransferOperations_Supported    = true;
+      queueFam->m_supportFlag.is_TRANSFERsupported = true;
+    }
+    if (props->queueFamilyProperties.queueCount > VKCONST_MAXQUEUECOUNT_PERFAM) {
+      printer(result_tgfx_WARNING, "Your device supports more queue than Vulkan backend supports!");
+      props->queueFamilyProperties.queueCount = VKCONST_MAXQUEUECOUNT_PERFAM;
+    }
+    queueFam->m_gpu = gpu;
+  }
+  if (!gpu->desc.is_GraphicOperations_Supported || !gpu->desc.is_TransferOperations_Supported ||
+      !gpu->desc.is_ComputeOperations_Supported) {
+    printer(result_tgfx_FAIL,
+            "The GPU doesn't support one of the following operations, so we can't let you use this "
+            "GPU: Compute, Transfer, Graphics");
+    return nullptr;
+  }
+  // Select internal queue, then create other queue backend objects
+  QUEUEFAM_VK* bestQueueFam = nullptr;
+  for (uint32_t queueFamIndx = 0; queueFamIndx < queueFamiliesCount; queueFamIndx++) {
+    VkQueueFamilyProperties2* props    = &gpu->vk_propsQueue[queueFamIndx];
+    QUEUEFAM_VK*              queueFam = mngr->m_queueFams[queueFamIndx];
+    if (!bestQueueFam) {
+      bestQueueFam = queueFam;
+      break;
+    }
+    const VkQueueFamilyProperties& bestQueueProps =
+      gpu->vk_propsQueue[bestQueueFam->vk_queueFamIndex].queueFamilyProperties;
 
-		queuefam->queueFamIndex = static_cast<uint32_t>(queuefamily_index);
-		if (QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			vkgpu->desc.is_GraphicOperations_Supported = true;
-			queuefam->supportflag.is_GRAPHICSsupported = true;
-			vkgpu->GRAPHICS_supportedqueuecount++;
-			queuefam->featurescore++;
-			vkgpu->graphicsqueue = queuefam;
-		}
-		if (QueueFamily->queueFlags & VK_QUEUE_COMPUTE_BIT) {
-			vkgpu->desc.is_ComputeOperations_Supported = true;
-			queuefam->supportflag.is_COMPUTEsupported = true;
-			vkgpu->COMPUTE_supportedqueuecount++;
-			queuefam->featurescore++;
-		}
-		if (QueueFamily->queueFlags & VK_QUEUE_TRANSFER_BIT) {
-			vkgpu->desc.is_TransferOperations_Supported = true;
-			queuefam->supportflag.is_TRANSFERsupported = true;
-			vkgpu->TRANSFERs_supportedqueuecount++;
-			queuefam->featurescore++;
-		}
-		queuefam->queuecount = QueueFamily->queueCount;
-		queuefam->queues = new queue_vk[queuefam->queuecount];
-		data->queuefams.push_back(queuefam);
-		vkgpu->queuefams[queuefamily_index] = queuefam;
-	}
-	if (!vkgpu->desc.is_GraphicOperations_Supported || !vkgpu->desc.is_TransferOperations_Supported || !vkgpu->desc.is_ComputeOperations_Supported) {
-		printer(result_tgfx_FAIL, "The GPU doesn't support one of the following operations, so we can't let you use this GPU: Compute, Transfer, Graphics");
-		return;
-	}
-	//Sort the queue families by their feature score (Example: Element 0 is Transfer Only, Element 1 is Transfer-Compute, Element 2 is Graphics-Transfer-Compute etc)
-	//QuickSort Algorithm
-	if (vkgpu->QUEUEFAMSCOUNT()) {
-		bool should_Sort = true;
-		while (should_Sort) {
-			should_Sort = false;
-			for (unsigned char i = 0; i < vkgpu->QUEUEFAMSCOUNT() - 1; i++) {
-				if (vkgpu->queuefams[i + 1]->featurescore < vkgpu->queuefams[i]->featurescore) {
-					should_Sort = true;
-					queuefam_vk* secondqueuefam = vkgpu->queuefams[i + 1];
-					vkgpu->queuefams[i + 1] = vkgpu->queuefams[i];
-					vkgpu->queuefams[i] = secondqueuefam;
-				}
-			}
-		}
-	}
+    if (props->queueFamilyProperties.queueCount > bestQueueProps.queueCount) {
+      bestQueueFam = queueFam;
+      break;
+    }
+
+    // Bigger values in VkQueueFlags means more useful the queue gets
+    // For internal operations, we need a queue as useless as possible.
+    // For example: 4 is tranfer, 8 is sparse, 16 is protected bits which are supported by all
+    //  queues if device supports. Main difference between is generally in Graphics and Compute
+    //  bits. So Graphics & Compute bits are main usefulness detector.
+    if (props->queueFamilyProperties.queueFlags < bestQueueProps.queueFlags) {
+      bestQueueFam = queueFam;
+      break;
+    }
+  }
+  gpu->vk_propsQueue[bestQueueFam->vk_queueFamIndex].queueFamilyProperties.queueCount--;
+
+  // Create user queues
+  for (uint32_t queueFamIndx = 0; queueFamIndx < queueFamiliesCount; queueFamIndx++) {
+    const VkQueueFamilyProperties& props = gpu->vk_propsQueue[queueFamIndx].queueFamilyProperties;
+    QUEUEFAM_VK*                   queueFam = mngr->m_queueFams[queueFamIndx];
+
+    for (uint32_t i = 0; i < props.queueCount; i++) {
+      QUEUE_VKOBJ* queue      = queueFam->m_queues.add();
+      queue->m_gpu            = gpu;
+      queue->vk_queueFamIndex = queueFamIndx;
+      queue->vk_queue         = VK_NULL_HANDLE;
+    }
+  }
+
+  // Create internal queue
+  {
+    mngr->m_internalQueue                   = new (VKGLOBAL_VIRMEM_MANAGER) QUEUE_VKOBJ;
+    mngr->m_internalQueue->m_gpu            = gpu;
+    mngr->m_internalQueue->vk_queueFamIndex = bestQueueFam->vk_queueFamIndex;
+    mngr->m_internalQueue->vk_queue         = VK_NULL_HANDLE;
+    gpu->vk_propsQueue[bestQueueFam->vk_queueFamIndex].queueFamilyProperties.queueCount++;
+  }
+  return mngr;
 }
 
-
-//While creating VK Logical Device, we need which queues to create. Get that info from here.
-std::vector<VkDeviceQueueCreateInfo> queuesys_vk::get_queue_cis(GPU_VKOBJ* vkgpu) {
-	std::vector<VkDeviceQueueCreateInfo> QueueCreationInfos(0);
-	//Queue Creation Processes
-	for (unsigned int QueueIndex = 0; QueueIndex < vkgpu->QUEUEFAMSCOUNT(); QueueIndex++) {
-		queuefam_vk* queuefam = vkgpu->queuefams[QueueIndex];
-		VkDeviceQueueCreateInfo QueueInfo = {};
-		QueueInfo.flags = 0;
-		QueueInfo.pNext = nullptr;
-		QueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		QueueInfo.queueFamilyIndex = queuefam->queueFamIndex;
-		float QueuePriority = 1.0f;
-		float* priorities = new float[queuefam->queuecount];
-		QueueInfo.pQueuePriorities = priorities;
-		QueueInfo.queueCount = queuefam->queuecount;
-		for (unsigned int i = 0; i < queuefam->queuecount; i++) {
-			priorities[i] = 1.0f - (float(i) / float(queuefam->queuecount));
-		}
-		QueueCreationInfos.push_back(QueueInfo);
-	}
-	return QueueCreationInfos;
+static float VKCONST_DEFAULT_QUEUE_PRIORITIES[VKCONST_MAXQUEUECOUNT_PERFAM] = {};
+// While creating VK Logical Device, we need which queues to create. Get that info from here.
+manager_vk::queueCreateInfoList manager_vk::get_queue_cis() const {
+  for (uint32_t i = 0; i < VKCONST_MAXQUEUECOUNT_PERFAM; i++) {
+    VKCONST_DEFAULT_QUEUE_PRIORITIES[i] = std::min(float(i) / VKCONST_MAXQUEUECOUNT_PERFAM, 1.0f);
+  }
+  queueCreateInfoList QueueCreationInfos;
+  // Queue Creation Processes
+  for (unsigned int queueFamIndx = 0; queueFamIndx < m_queueFams.size(); queueFamIndx++) {
+    const QUEUEFAM_VK*      queuefam  = m_queueFams.get(queueFamIndx);
+    VkDeviceQueueCreateInfo QueueInfo = {};
+    QueueInfo.flags                   = 0;
+    QueueInfo.pNext                   = nullptr;
+    QueueInfo.sType                   = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    QueueInfo.queueFamilyIndex        = queuefam->vk_queueFamIndex;
+    QueueInfo.pQueuePriorities        = VKCONST_DEFAULT_QUEUE_PRIORITIES;
+    QueueInfo.queueCount = m_gpu->vk_propsQueue[queueFamIndx].queueFamilyProperties.queueCount;
+    QueueCreationInfos.list[queueFamIndx] = QueueInfo;
+  }
+  return QueueCreationInfos;
 }
 
+void manager_vk::get_queue_objects() {
+  for (unsigned int i = 0; i < m_queueFams.size(); i++) {
+    for (unsigned int queueindex = 0; queueindex < m_queueFams[i]->m_queues.size(); queueindex++) {
+      vkGetDeviceQueue(m_gpu->vk_logical, m_queueFams[i]->vk_queueFamIndex, queueindex,
+                       &(m_queueFams[i]->m_queues[queueindex]->vk_queue));
 
-void queuesys_vk::get_queue_objects(GPU_VKOBJ* vkgpu) {
-	rendergpu->AllQueueFamilies = new uint32_t[rendergpu->QUEUEFAMSCOUNT()];
-	for (unsigned int i = 0; i < rendergpu->QUEUEFAMSCOUNT(); i++) {
-		for (unsigned int queueindex = 0; queueindex < rendergpu->queuefams[i]->queuecount; queueindex++) {
-			vkGetDeviceQueue(rendergpu->LOGICALDEVICE(), rendergpu->queuefams[i]->queueFamIndex, queueindex, &(rendergpu->queuefams[i]->queues[queueindex].Queue));
-		}
-		rendergpu->AllQueueFamilies[i] = rendergpu->queuefams[i]->queueFamIndex;
-	}
-	//Create Command Pool for each Queue Family
-	for (unsigned int queuefamindex = 0; queuefamindex < rendergpu->QUEUEFAMSCOUNT(); queuefamindex++) {
-		if (!(rendergpu->QUEUEFAMS()[queuefamindex]->supportflag.is_COMPUTEsupported || rendergpu->QUEUEFAMS()[queuefamindex]->supportflag.is_GRAPHICSsupported ||
-			rendergpu->QUEUEFAMS()[queuefamindex]->supportflag.is_TRANSFERsupported)
-			) {
-			continue;
-		}
-		for (unsigned char i = 0; i < 2; i++) {
-			VkCommandPoolCreateInfo cp_ci_g = {};
-			cp_ci_g.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			cp_ci_g.queueFamilyIndex = rendergpu->QUEUEFAMS()[queuefamindex]->queueFamIndex;
-			cp_ci_g.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			cp_ci_g.pNext = nullptr;
+      // Create synchronizer binary semaphore
+      {
+        VkSemaphoreCreateInfo sem_ci = {};
+        sem_ci.flags                 = 0;
+        sem_ci.pNext                 = nullptr;
+        sem_ci.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        ThrowIfFailed(vkCreateSemaphore(m_gpu->vk_logical, &sem_ci, nullptr,
+                                        &m_queueFams[i]->m_queues[queueindex]->vk_callSynchronizer),
+                      "Queue Synchronizer Binary Semaphore Creation failed!");
+      }
+    }
+  }
 
-			if (vkCreateCommandPool(rendergpu->LOGICALDEVICE(), &cp_ci_g, nullptr, &rendergpu->QUEUEFAMS()[queuefamindex]->CommandPools[i].CPHandle) != VK_SUCCESS) {
-				printer(result_tgfx_FAIL, "VulkanRenderer: Command pool creation for a queue has failed at vkCreateCommandPool()!");
-			}
-		}
-	}
+  // Get internal queue
+  {
+    QUEUEFAM_VK* internalQueueFam = m_queueFams[m_internalQueue->vk_queueFamIndex];
+    vkGetDeviceQueue(m_gpu->vk_logical, m_internalQueue->vk_queueFamIndex,
+                     internalQueueFam->m_queues.size(), &m_internalQueue->vk_queue);
+  }
+
+  // Create cmdPool for each queue family and CPU thread
+  for (unsigned int queuefamindex = 0; queuefamindex < m_queueFams.size(); queuefamindex++) {
+    if (!(m_queueFams[queuefamindex]->m_supportFlag.is_COMPUTEsupported ||
+          m_queueFams[queuefamindex]->m_supportFlag.is_GRAPHICSsupported ||
+          m_queueFams[queuefamindex]->m_supportFlag.is_TRANSFERsupported)) {
+      continue;
+    }
+    m_queueFams[queuefamindex]->m_pools = new (VKGLOBAL_VIRMEM_MANAGER) cmdPool_vk[threadcount];
+    for (unsigned char i = 0; i < threadcount; i++) {
+      VkCommandPoolCreateInfo cp_ci_g = {};
+      cp_ci_g.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+      cp_ci_g.queueFamilyIndex        = queuefamindex;
+      cp_ci_g.flags =
+        VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+      cp_ci_g.pNext = nullptr;
+
+      ThrowIfFailed(vkCreateCommandPool(m_gpu->vk_logical, &cp_ci_g, nullptr,
+                                        &m_queueFams[queuefamindex]->m_pools[i].CPHandle),
+                    "Command pool creation for a queue has failed at vkCreateCommandPool()!");
+    }
+  }
 }
-uint32_t queuesys_vk::get_queuefam_index(GPU_VKOBJ* vkgpu, queuefam_vk* fam) {
+uint32_t manager_vk::get_queuefam_index(QUEUE_VKOBJ* fam) {
+  /*
 #ifdef VULKAN_DEBUGGING
-	bool isfound = false;
-	for (unsigned int i = 0; i < vkgpu->QUEUEFAMSCOUNT(); i++) {
-		if (vkgpu->queuefams[i] == fam) { isfound = true; }
-	}
-	if (!isfound) { printer(result_tgfx_FAIL, "Queue Family Handle is invalid!"); }
+  bool isfound = false;
+  for (unsigned int i = 0; i < m_queueFamiliesCount; i++) {
+    if (m_queueFams[i] == fam) {
+      isfound = true;
+    }
+  }
+  if (!isfound) {
+    printer(result_tgfx_FAIL, "Queue Family Handle is invalid!");
+  }
 #endif
-	return fam->queueFamIndex;
+*/
+  return fam->vk_queueFamIndex;
 }
-queuefam_vk* queuesys_vk::check_windowsupport(GPU_VKOBJ* vkgpu, VkSurfaceKHR WindowSurface) {
-	queuefam_vk* supported_queue = nullptr;
-	for (unsigned int i = 0; i < rendergpu->QUEUEFAMSCOUNT(); i++) {
-		VkBool32 Does_Support = 0;
-		queuefam_vk* queuefam = rendergpu->QUEUEFAMS()[i];
-		vkGetPhysicalDeviceSurfaceSupportKHR(rendergpu->PHYSICALDEVICE(), queuefam->queueFamIndex, WindowSurface, &Does_Support);
-		if (Does_Support) {
-			if (!queuefam->supportflag.is_PRESENTATIONsupported) { queuefam->supportflag.is_PRESENTATIONsupported = true; queuefam->featurescore++; }
-			supported_queue = queuefam;
-		}
-	}
-	return supported_queue;
-}
-commandbuffer_vk* queuesys_vk::get_commandbuffer(GPU_VKOBJ* vkgpu, queuefam_vk* family, unsigned char FrameIndex) {
-	commandpool_vk& CP = family->CommandPools[FrameIndex];
+cmdBuffer_vk* manager_vk::get_commandbuffer(QUEUEFAM_VK* family, bool isSecondary) {
+  cmdPool_vk& CP = family->m_pools[threadingsys->this_thread_index()];
 
-	VkCommandBufferAllocateInfo cb_ai = {};
-	cb_ai.commandBufferCount = 1;
-	cb_ai.commandPool = CP.CPHandle;
-	cb_ai.level = VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	cb_ai.pNext = nullptr;
-	cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  VkCommandBufferAllocateInfo cb_ai = {};
+  cb_ai.commandBufferCount          = 1;
+  cb_ai.commandPool                 = CP.CPHandle;
+  cb_ai.level = isSecondary ? VK_COMMAND_BUFFER_LEVEL_SECONDARY : VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  cb_ai.pNext = nullptr;
+  cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 
-	commandbuffer_vk* VK_CB = new commandbuffer_vk;
-	if (vkAllocateCommandBuffers(rendergpu->LOGICALDEVICE(), &cb_ai, &VK_CB->CB) != VK_SUCCESS) {
-		printer(result_tgfx_FAIL, "vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, report this please!");
-		return nullptr;
-	}
-	VK_CB->is_Used = false;
+  cmdBuffer_vk* VK_CB = CP.CBs.add();
+  if (vkAllocateCommandBuffers(m_gpu->vk_logical, &cb_ai, &VK_CB->CB) != VK_SUCCESS) {
+    printer(result_tgfx_FAIL,
+            "vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, "
+            "report this please!");
+    return nullptr;
+  }
 
-	CP.CBs.push_back(VK_CB);
+  VK_CB->is_Used = false;
+  return VK_CB;
+}
 
-	return VK_CB;
-}
-VkCommandBuffer queuesys_vk::get_commandbufferobj(commandbuffer_vk* id) {
-	return id->CB;
-}
-fence_idtype_vk queuesys_vk::queueSubmit(GPU_VKOBJ* vkgpu, queuefam_vk* family, const std::vector<semaphore_idtype_vk>& WaitSemaphores, const std::vector<semaphore_idtype_vk>& SignalSemaphores, const VkCommandBuffer* commandbuffers, const VkPipelineStageFlags* cb_flags, unsigned int CBCount) {
-	printer(result_tgfx_WARNING, "QueueSystem->queueSubmit() isn't properly implemented. We should keep track of command buffers");
-	fence_vk& fence = fencesys->CreateFence();
-	
-	std::vector<VkSemaphore> waits(WaitSemaphores.size()), signals(SignalSemaphores.size());
-	for (unsigned int wait_i = 0; wait_i < WaitSemaphores.size(); wait_i++) {
-		waits[wait_i] = semaphoresys->GetSemaphore_byID(WaitSemaphores[wait_i]).vksemaphore();
-	}
-	for (unsigned int signal_i = 0; signal_i < SignalSemaphores.size(); signal_i++) {
-		signals[signal_i] = semaphoresys->GetSemaphore_byID(SignalSemaphores[signal_i]).vksemaphore();
-	}
+VkCommandBuffer manager_vk::get_commandbufferobj(cmdBuffer_vk* id) { return id->CB; }
 
-	VkSubmitInfo info = {};
-	info.commandBufferCount = CBCount;
-	info.pCommandBuffers = commandbuffers;
-	info.pNext = nullptr;
-	info.pWaitDstStageMask = cb_flags;
-	info.pWaitSemaphores = waits.data();
-	info.waitSemaphoreCount = waits.size();
-	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	info.signalSemaphoreCount = signals.size();
-	info.pSignalSemaphores = signals.data();
-	if (vkQueueSubmit(family->queues[0].Queue, 1, &info, fence.Fence_o) != VK_SUCCESS) {
-		printer(result_tgfx_FAIL, "Queue Submission has failed!");
-		fence_idtype_vk fenceid = fence.getID();
-		fencesys->DestroyFence(fenceid);
-		return invalid_fenceid;
-	}
-	fence.wait_semaphores = WaitSemaphores;
-	return fence.getID();
+void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
+  switch (queue->activeQueueOp) {
+    case QUEUE_VKOBJ::ERROR_QUEUEOPTYPE:
+    case QUEUE_VKOBJ::CMDBUFFER: {
+      VkSubmitInfo infos[VKCONST_MAXSUBMITCOUNT] = {};
+      for (uint32_t i = 0; i < queue->m_submitInfos.size(); i++) {
+        infos[i] = queue->m_submitInfos[i]->vk_submit;
+      }
+      ThrowIfFailed(
+        vkQueueSubmit(queue->vk_queue, queue->m_submitInfos.size(), infos, VK_NULL_HANDLE),
+        "Queue Submission has failed!");
+    } break;
+    case QUEUE_VKOBJ::PRESENT: {
+      VkSwapchainKHR swpchns[VKCONST_MAXPRESENTCOUNT_PERSUBMIT]       = {};
+      uint32_t       swpchnIndices[VKCONST_MAXPRESENTCOUNT_PERSUBMIT] = {}, swpchnCount = 0;
+
+      for (uint32_t submitIndx = 0; submitIndx < queue->m_submitInfos.size(); submitIndx++) {
+        submit_vk* submit = queue->m_submitInfos[submitIndx];
+
+        // If queue call is present
+        if (submit->vk_present.sType == VK_STRUCTURE_TYPE_PRESENT_INFO_KHR) {
+          if (swpchnCount + submit->vk_present.swapchainCount > VKCONST_MAXPRESENTCOUNT_PERSUBMIT) {
+            printer(result_tgfx_FAIL, "Max swapchain count per submit is exceeded!");
+            break;
+          }
+          for (uint32_t swpchnIndx = 0; swpchnIndx < submit->vk_present.swapchainCount &&
+                                        swpchnCount < VKCONST_MAXPRESENTCOUNT_PERSUBMIT;
+               swpchnIndx++) {
+            swpchnIndices[swpchnCount] = submit->vk_present.pImageIndices[swpchnIndx];
+            swpchns[swpchnCount]       = submit->vk_present.pSwapchains[swpchnIndx];
+
+            swpchnCount++;
+          }
+        } // If queue call is wait/signal
+        else if (submit->vk_submit.sType == VK_STRUCTURE_TYPE_SUBMIT_INFO) {
+          printer(result_tgfx_NOTCODED, "Wait/Signal isn't supported in Present calls for now!");
+        } // Queue call invalid
+        else {
+          printer(result_tgfx_FAIL, "One of the submits is invalid!");
+        }
+      }
+      // Submit for timeline -> binary conversion
+      {
+
+      }
+
+      VkPresentInfoKHR info = {};
+      info.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+      info.pNext            = nullptr;
+      info.pSwapchains      = swpchns;
+      info.swapchainCount   = swpchnCount;
+      info.pImageIndices    = swpchnIndices;
+      // For now, all calls are synchronized after each other
+      // Because we don't have timeline semaphore emulation in binary semaphores
+      info.waitSemaphoreCount = 1;
+      info.pWaitSemaphores    = &queue->vk_callSynchronizer;
+      info.pResults           = nullptr;
+      ThrowIfFailed(vkQueuePresentKHR(queue->vk_queue, &info), "Queue Present has failed!");
+
+      VkSemaphore binAcquireSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
+      for (uint32_t i = 0; i < swpchnCount; i++) {
+        uint32_t swpchnIndx = 0;
+        ThrowIfFailed(vkAcquireNextImageKHR(queue->m_gpu->vk_logical, swpchns[i], UINT64_MAX,
+                                            window->binSemaphore, nullptr, &swpchnIndx),
+                      "Acquiring swapchain texture has failed!");
+      }
+
+      // Send a submit to signal timeline semaphore when all binary semaphore are signaled
+      {
+        VkPipelineStageFlags binWaitDstStageMasks[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {
+          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        VkTimelineSemaphoreSubmitInfo temSignalSemaphoresInfo = {};
+        temSignalSemaphoresInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+        temSignalSemaphoresInfo.pWaitSemaphoreValues      = nullptr;
+        temSignalSemaphoresInfo.waitSemaphoreValueCount   = 0;
+        temSignalSemaphoresInfo.pNext                     = nullptr;
+        temSignalSemaphoresInfo.signalSemaphoreValueCount = ;
+        temSignalSemaphoresInfo.pSignalSemaphoreValues    = ;
+        VkSubmitInfo acquireSubmit                        = {};
+        acquireSubmit.waitSemaphoreCount                  = swpchnCount;
+        acquireSubmit.pWaitSemaphores                     = binAcquireSemaphores;
+        acquireSubmit.signalSemaphoreCount                = ;
+        acquireSubmit.pSignalSemaphores                   = ;
+        acquireSubmit.commandBufferCount                  = 0;
+        acquireSubmit.pNext                               = nullptr;
+        acquireSubmit.pWaitDstStageMask                   = binWaitDstStageMasks;
+        acquireSubmit.sType                               = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        ThrowIfFailed(
+          vkQueueSubmit(m_internalQueue->vk_queue, 1, &acquireSubmit, VK_NULL_HANDLE),
+          "Internal queue submission for binary -> timeline semaphore conversion has failed!");
+      }
+    } break;
+    default:
+      printer(result_tgfx_NOTCODED, "Active queue operation type isn't supported by VK backend!");
+      break;
+  }
+  queue->m_submitInfos.clear();
 }
-bool queuesys_vk::does_queuefamily_support(GPU_VKOBJ* vkgpu, queuefam_vk* family, const queueflag_vk& flag) {
-	printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");
-	return false;
-}
-VkQueue queuesys_vk::get_queue(GPU_VKOBJ* vkgpu, queuefam_vk* queuefam) {
-	return queuefam->queues[0].Queue;
-}
-extern void Create_QueueSys() {
-	queuesys = new queuesys_vk;
-	queuesys->data = new queuesys_data;
+bool manager_vk::does_queuefamily_support(QUEUE_VKOBJ* family, const queueflag_vk& flag) {
+  printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");
+  return false;
 }

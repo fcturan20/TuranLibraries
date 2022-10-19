@@ -1,0 +1,23 @@
+# Format Style Options - Created with Clang Power Tools
+---
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveDeclarations: Consecutive
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Always
+AllowShortLoopsOnASingleLine: true
+BasedOnStyle: Google
+ColumnLimit: 100
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth : 2
+ContinuationIndentWidth: 2
+IndentCaseBlocks: false
+IndentCaseLabels: true
+IndentWidth: 2
+Language: Cpp
+SpacesBeforeTrailingComments: 1
+SpacesInCStyleCastParentheses: true
+TabWidth: 2
+...

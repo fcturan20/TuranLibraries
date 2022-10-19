@@ -161,13 +161,13 @@ public:
 	}
 
 	static void InitializeTGFX_CreateWindow(unsigned int devicelocal_memallocsize, unsigned int fastvisible_memallocsize, uvec2_tgfx window_resolution) {
-		gpu_tgfx_listhandle gpulist;
+		gpu_tgfxlsthnd gpulist;
 		TGFXCORE->getGPUlist(&gpulist);
 		TGFXLISTCOUNT(TGFXCORE, gpulist, gpulist_count);
 		printf("GPU COUNT: %u\n", gpulist_count);
 		const char* gpuname;
 		const tgfx_memory_description* memtypelist; unsigned int memtypelistcount;
-		TGFXHELPER->GetGPUInfo_General(gpulist[0], &gpuname, nullptr, nullptr, nullptr, &memtypelist, &memtypelistcount, nullptr, nullptr, nullptr);
+		TGFXHELPER->getGPUInfo_General(gpulist[0], &gpuname, nullptr, nullptr, nullptr, &memtypelist, &memtypelistcount, nullptr, nullptr, nullptr);
 		std::cout << "Memory Type Count: " << memtypelistcount << " and GPU Name: " << gpuname << "\n";
 		for (unsigned int i = 0; i < memtypelistcount; i++) {
 			if (memtypelist[i].allocationtype == memoryallocationtype_DEVICELOCAL) {
@@ -181,13 +181,13 @@ public:
 		}
 		initSecondStageInfo_tgfxhnd secondinfo = TGFXHELPER->Create_GFXInitializationSecondStageInfo(gpulist[0], 100, 1000, 1000, 1000, 1000, true, (extension_tgfxlsthnd)(&TGFXCORE->INVALIDHANDLE));
 		TGFXCORE->initialize_secondstage(secondinfo);
-		monitor_tgfx_listhandle monitorlist;
+		monitor_tgfxlsthnd monitorlist;
 		TGFXCORE->getmonitorlist(&monitorlist);
 		TGFXLISTCOUNT(TGFXCORE, monitorlist, monitorcount);
 		TURANLIBRARY_LOADER::printf_log_tgfx(result_tgfx_SUCCESS, (std::string("Monitor Count: ") + std::to_string(monitorcount)).c_str());
-		textureUsageFlag_tgfxhnd swapchaintexture_usageflag = TGFXHELPER->CreateTextureUsageFlag(false, true, true, true, false);
-		TGFXCORE->create_window(window_resolution.x, window_resolution.y, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", nullptr, nullptr, &firstwindow);
-		TGFXCORE->create_swapchain(firstwindow, windowpresentation_tgfx_FIFO, windowcomposition_tgfx_OPAQUE, colorspace_tgfx_sRGB_NONLINEAR, texture_channels_tgfx_BGRA8UNORM, swapchaintexture_usageflag, swapchain_textures);
+		textureUsageFlag_tgfxhnd swapchaintexture_usageflag = TGFXHELPER->createUsageFlag_Texture(false, true, true, true, false);
+		TGFXCORE->createWindow(window_resolution.x, window_resolution.y, monitorlist[0], windowmode_tgfx_WINDOWED, "RegistrySys Example", nullptr, nullptr, &firstwindow);
+		TGFXCORE->createSwapchain(firstwindow, windowpresentation_tgfx_FIFO, windowcomposition_tgfx_OPAQUE, colorspace_tgfx_sRGB_NONLINEAR, texture_channels_tgfx_BGRA8UNORM, swapchaintexture_usageflag, swapchain_textures);
 	}
 
 	static void ReconstructRenderGraph_Simple(){
@@ -221,11 +221,11 @@ public:
 			TGFXHELPER->CreateRTSlotDescription_Color(swapchain_textures[0], swapchain_textures[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, true, 0, white),
 			TGFXHELPER->CreateRTSlotDescription_DepthStencil(depthbuffer_handle, depthbuffer_handle, operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, operationtype_tgfx_UNUSED, drawpassload_tgfx_CLEAR, 1.0, 255), (RTSlotDescription_tgfxhnd)TGFXINVALID };
 		RTSlotset_tgfxhnd rtslotset_handle;
-		TGFXCONTENTMANAGER->Create_RTSlotset(rtslot_descs, &rtslotset_handle);
+		TGFXCONTENTMANAGER->createRTSlotset(rtslot_descs, &rtslotset_handle);
 		rtslotusage_tgfx_handle rtslotusages[3] = { TGFXHELPER->CreateRTSlotUsage_Color(rtslot_descs[0], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR),
 			TGFXHELPER->CreateRTSlotUsage_Depth(rtslot_descs[1], operationtype_tgfx_READ_AND_WRITE, drawpassload_tgfx_CLEAR, operationtype_tgfx_UNUSED, drawpassload_tgfx_CLEAR), (rtslotusage_tgfx_handle)TGFXINVALID };
 		inheritedRTSlotset_tgfxhnd irtslotset;
-		TGFXCONTENTMANAGER->Inherite_RTSlotSet(rtslotusages, rtslotset_handle, &irtslotset);
+		TGFXCONTENTMANAGER->inheriteRTSlotset(rtslotusages, rtslotset_handle, &irtslotset);
 		passwaitdescription_tgfx_handle subdp_waits[2] = { TGFXHELPER->CreatePassWait_SubTransferPass(&framebegin_TP, 2, TGFXHELPER->CreateWaitSignal_Transfer(true, true), false), (passwaitdescription_tgfx_handle)TGFXCORE->INVALIDHANDLE };
 		subdrawpassdescription_tgfx_handle subdp_descs[2] = { TGFXHELPER->CreateSubDrawPassDescription(subdp_waits, irtslotset, subdrawpassaccess_tgfx_ALLCOMMANDS, subdrawpassaccess_tgfx_ALLCOMMANDS), (subdrawpassdescription_tgfx_handle)TGFXINVALID };
 		TGFXRENDERER->Create_DrawPass(subdp_descs, rtslotset_handle, &framerendering_subDP, &framerendering_DP);

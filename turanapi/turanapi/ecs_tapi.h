@@ -107,7 +107,7 @@ typedef struct tapi_ecs{
 } ecs_tapi;
 
 //Program that owns the ECS should use these types to convert loaded function pointer
-typedef tapi_ecs* (*load_ecstapi_func)();
+typedef struct tapi_ecs* (*load_ecstapi_func)();
 typedef unsigned char (*unload_ecstapi_func)();
 
 //ECS TAPI MACROS

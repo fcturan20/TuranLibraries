@@ -18,7 +18,7 @@ int main(){
   editorECS = ecsloader();
   if (!editorECS) { printf("ECS initialization failed!"); exit(-1); }
 
-  initialize_pecfManager();
+  //initialize_pecfManager();
   load_systems();
 
   return 1;

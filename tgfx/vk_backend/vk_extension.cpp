@@ -1,195 +1,62 @@
 #include "vk_extension.h"
-#include "vk_resource.h"
+
 #include <tgfx_forwarddeclarations.h>
+
 #include <atomic>
 #include <glm/glm.hpp>
-#include "vk_resource.h"
-#include "vk_includes.h"
+
 #include "vk_core.h"
+#include "vk_includes.h"
+#include "vk_resource.h"
 
-//Seperated Depth Stencil Layouts
-void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, textureChannels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
-void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsigned int index, textureChannels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE);
-void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription& Desc, depthstencilslot_vk* DepthSlot);
-void Fill_DepthAttachmentDescription_NOSeperated(VkAttachmentDescription& Desc, depthstencilslot_vk* DepthSlot);
+// Extensions
+#include "vkext_depthstencil.h"
+#include "vkext_descIndexing.h"
+#include "vkext_timelineSemaphore.h"
+vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_EXTS = nullptr;
 
+vkext_interface::vkext_interface(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct) {
+  m_gpu = gpu;
+  if (propsStruct) {
+    pNext_addToLast(&gpu->vk_propsDev, propsStruct);
+  }
+  if (featuresStruct) {
+    pNext_addToLast(&gpu->vk_featuresDev, featuresStruct);
+  }
+}
 
-extension_manager::extension_manager() {
-	SeperatedDepthStencilLayouts = false;
-	Fill_DepthAttachmentDescription = Fill_DepthAttachmentDescription_NOSeperated;
-	Fill_DepthAttachmentReference = Fill_DepthAttachmentReference_NOSeperated;
-}
-void extension_manager::SUPPORT_VARIABLEDESCCOUNT() { isVariableDescCountSupported = true; }
-void extension_manager::SUPPORT_SWAPCHAINDISPLAY() { SwapchainDisplay = true; }
-void extension_manager::SUPPORT_SEPERATEDDEPTHSTENCILLAYOUTS() {
-	SeperatedDepthStencilLayouts = true;
-	Fill_DepthAttachmentDescription = Fill_DepthAttachmentDescription_SeperatedDSLayouts;
-	Fill_DepthAttachmentReference = Fill_DepthAttachmentReference_SeperatedDSLayouts;
-}
-void extension_manager::SUPPORT_BUFFERDEVICEADDRESS() { isBufferDeviceAddressSupported = true; }
-void extension_manager::CheckDeviceExtensionProperties(GPU_VKOBJ* VKGPU) {
-	VkPhysicalDeviceDescriptorIndexingProperties descindexinglimits = {};
-	VkPhysicalDeviceInlineUniformBlockPropertiesEXT uniformblocklimits = {};
-	VkPhysicalDeviceProperties2 devprops2;
+void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu) {
+  if (!VKGLOBAL_VIRMEM_EXTS) {
+    // 4MB is fine i guess?
+    VKGLOBAL_VIRMEM_EXTS = vk_virmem::allocate_dynamicmem(1 << 20);
+  }
+  gpu->vk_featuresDev.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+  gpu->vk_featuresDev.pNext = nullptr;
+  gpu->vk_propsDev.sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+  gpu->vk_propsDev.pNext    = nullptr;
+  extManager_vkDevice* mngr = new (VKGLOBAL_VIRMEM_EXTS) extManager_vkDevice;
+  mngr->m_exts = new (VKGLOBAL_VIRMEM_EXTS) vkext_interface*[vkext_interface::vkext_count];
+  mngr->m_GPU  = gpu;
 
+  mngr->m_exts[vkext_interface::descIndexing_vkExtEnum] =
+    new (VKGLOBAL_VIRMEM_EXTS) vkext_descIndexing(gpu);
+  mngr->m_exts[vkext_interface::depthStencil_vkExtEnum] =
+    new (VKGLOBAL_VIRMEM_EXTS) vkext_depthStencil(gpu);
+  mngr->m_exts[vkext_interface::timelineSemaphores_vkExtEnum] =
+    new (VKGLOBAL_VIRMEM_EXTS) vkext_timelineSemaphore(gpu);
 
-	devprops2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-	descindexinglimits.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
-	uniformblocklimits.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_PROPERTIES_EXT;
-	devprops2.pNext = &descindexinglimits;
-	descindexinglimits.pNext = &uniformblocklimits;
-	vkGetPhysicalDeviceProperties2(VKGPU->PHYSICALDEVICE(), &devprops2);
-	//Check Descriptor Limits
-	{
-		static_assert(VKCONST_DYNAMICDESCRIPTORTYPESCOUNT == 4, "CheckDeviceExtensionProperties() supports only 4 DynamicDescTypes!");
-		if (ISSUPPORTED_DESCINDEXING()) {
-			MaxDescCounts[VKCONST_DESCSETID_DYNAMICSAMPLER] = descindexinglimits.maxDescriptorSetUpdateAfterBindSamplers;
-			MaxDescCounts[VKCONST_DESCSETID_SAMPLEDTEXTURE] = descindexinglimits.maxDescriptorSetUpdateAfterBindSampledImages;
-			MaxDescCounts[VKCONST_DESCSETID_STORAGEIMAGE] = descindexinglimits.maxDescriptorSetUpdateAfterBindStorageImages;
-			MaxDescCounts[VKCONST_DESCSETID_BUFFER] = descindexinglimits.maxDescriptorSetUpdateAfterBindStorageBuffers;
-			MaxDesc_ALL = descindexinglimits.maxUpdateAfterBindDescriptorsInAllPools;
-			MaxAccessibleDesc_PerStage = descindexinglimits.maxPerStageUpdateAfterBindResources;
-		}
-		else {
-			MaxDescCounts[VKCONST_DESCSETID_DYNAMICSAMPLER] = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorSamplers;
-			MaxDescCounts[VKCONST_DESCSETID_SAMPLEDTEXTURE] = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorSampledImages;
-			MaxDescCounts[VKCONST_DESCSETID_STORAGEIMAGE] = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorStorageImages;
-			MaxDescCounts[VKCONST_DESCSETID_BUFFER] = VKGPU->DEVICEPROPERTIES().limits.maxPerStageDescriptorStorageBuffers;
-			MaxDesc_ALL = UINT32_MAX;
-			MaxAccessibleDesc_PerStage = VKGPU->DEVICEPROPERTIES().limits.maxPerStageResources;
-		}
-		MaxBoundDescSet = VKGPU->DEVICEPROPERTIES().limits.maxBoundDescriptorSets;
-	}
+  gpu->ext() = mngr;
 }
-void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref, unsigned int index, textureChannels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE) {
-	Ref.attachment = index;
-	if (channels == texture_channels_tgfx_D32) {
-		switch (DEPTHOPTYPE) {
-		case operationtype_tgfx_READ_ONLY:
-			Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-		case operationtype_tgfx_READ_AND_WRITE:
-		case operationtype_tgfx_WRITE_ONLY:
-			Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-			break;
-		case operationtype_tgfx_UNUSED:
-			Ref.attachment = VK_ATTACHMENT_UNUSED;
-			Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
-			break;
-		default:
-			printer(result_tgfx_INVALIDARGUMENT, "VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthBuffer!");
-		}
-	}
-	else if (channels == texture_channels_tgfx_D24S8) {
-		switch (STENCILOPTYPE) {
-		case operationtype_tgfx_READ_ONLY:
-			if (DEPTHOPTYPE == operationtype_tgfx_UNUSED || DEPTHOPTYPE == operationtype_tgfx_READ_ONLY) {
-				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-			}
-			else if (DEPTHOPTYPE == operationtype_tgfx_READ_AND_WRITE || DEPTHOPTYPE == operationtype_tgfx_WRITE_ONLY) {
-				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-			}
-			break;
-		case operationtype_tgfx_READ_AND_WRITE:
-		case operationtype_tgfx_WRITE_ONLY:
-			if (DEPTHOPTYPE == operationtype_tgfx_UNUSED || DEPTHOPTYPE == operationtype_tgfx_READ_ONLY) {
-				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
-			}
-			else if (DEPTHOPTYPE == operationtype_tgfx_READ_AND_WRITE || DEPTHOPTYPE == operationtype_tgfx_WRITE_ONLY) {
-				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-			}
-			break;
-		case operationtype_tgfx_UNUSED:
-			if (DEPTHOPTYPE == operationtype_tgfx_UNUSED) {
-				Ref.attachment = VK_ATTACHMENT_UNUSED;
-				Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
-			}
-			else if (DEPTHOPTYPE == operationtype_tgfx_READ_AND_WRITE || DEPTHOPTYPE == operationtype_tgfx_WRITE_ONLY) {
-				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-			}
-			else if (DEPTHOPTYPE == operationtype_tgfx_READ_ONLY) {
-				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-			}
-			break;
-		default:
-			printer(result_tgfx_INVALIDARGUMENT, "VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthSTENCILBuffer!");
-		}
-	}
-}
-void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsigned int index, textureChannels_tgfx channels, operationtype_tgfx DEPTHOPTYPE, operationtype_tgfx STENCILOPTYPE) {
-	Ref.attachment = index;
-	if (DEPTHOPTYPE == operationtype_tgfx_UNUSED) {
-		Ref.attachment = VK_ATTACHMENT_UNUSED;
-		Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
-	}
-	else {
-		Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	}
-}
-void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription& Desc, depthstencilslot_vk* DepthSlot) {
-	Desc = {};
-	Desc.format = Find_VkFormat_byTEXTURECHANNELs(DepthSlot->RT->CHANNELs);
-	Desc.samples = VK_SAMPLE_COUNT_1_BIT;
-	Desc.flags = 0;
-	Desc.loadOp = Find_LoadOp_byGFXLoadOp(DepthSlot->DEPTH_LOAD);
-	Desc.stencilLoadOp = Find_LoadOp_byGFXLoadOp(DepthSlot->STENCIL_LOAD);
-	if (DepthSlot->IS_USED_LATER) {
-		Desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-	}
-	else {
-		Desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	}
-	if (DepthSlot->RT->CHANNELs == texture_channels_tgfx_D32) {
-		if (DepthSlot->DEPTH_OPTYPE == operationtype_tgfx_READ_ONLY) {
-			Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-			Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-		}
-		else {
-			Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-			Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-		}
-	}
-	else if (DepthSlot->RT->CHANNELs == texture_channels_tgfx_D24S8) {
-		if (DepthSlot->DEPTH_OPTYPE == operationtype_tgfx_READ_ONLY) {
-			if (DepthSlot->STENCIL_OPTYPE != operationtype_tgfx_READ_ONLY &&
-				DepthSlot->STENCIL_OPTYPE != operationtype_tgfx_UNUSED) {
-				Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
-				Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
-			}
-			else {
-				Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-				Desc.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-			}
-		}
-		else {
-			if (DepthSlot->STENCIL_OPTYPE != operationtype_tgfx_READ_ONLY &&
-				DepthSlot->STENCIL_OPTYPE != operationtype_tgfx_UNUSED) {
-				Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-				Desc.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-			}
-			else {
-				Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-				Desc.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-			}
-		}
-	}
-}
-void Fill_DepthAttachmentDescription_NOSeperated(VkAttachmentDescription& Desc, depthstencilslot_vk* DepthSlot) {
-	Desc = {};
-	Desc.format = Find_VkFormat_byTEXTURECHANNELs(DepthSlot->RT->CHANNELs);
-	Desc.samples = VK_SAMPLE_COUNT_1_BIT;
-	Desc.flags = 0;
-	Desc.loadOp = Find_LoadOp_byGFXLoadOp(DepthSlot->DEPTH_LOAD);
-	Desc.stencilLoadOp = Find_LoadOp_byGFXLoadOp(DepthSlot->STENCIL_LOAD);
-	if (DepthSlot->IS_USED_LATER) {
-		Desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-	}
-	else {
-		Desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	}
-	Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+void extManager_vkDevice::inspect() {
+  vkGetPhysicalDeviceFeatures2(m_GPU->vk_physical, &m_GPU->vk_featuresDev);
+  vkGetPhysicalDeviceProperties2(m_GPU->vk_physical, &m_GPU->vk_propsDev);
+
+  for (size_t extIndx = 0; extIndx < vkext_interface::vkext_count; extIndx++) {
+    vkext_interface* ext = m_exts[extIndx];
+    if (ext) {
+      ext->inspect();
+    }
+  }
+  m_activeDevExtNames.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 }

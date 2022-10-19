@@ -85,7 +85,7 @@ static constexpr fence_idtype_dx invalid_fenceid = nullptr;
 struct texture_dx;
 struct memorytype_dx;
 struct queuefam_dx;
-struct extension_manager;	//Stores activated extensions and set function pointers according to that
+struct extManager_vkDevice;	//Stores activated extensions and set function pointers according to that
 struct pass_dx;
 struct drawpass_dx;
 struct transferpass_dx;

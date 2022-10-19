@@ -1,319 +1,357 @@
 #pragma once
-#include <glm/glm.hpp>
-#include <atomic>
-#include "vk_predefinitions.h"
 #include <tgfx_structs.h>
+
+#include <atomic>
+#include <glm/glm.hpp>
+
 #include "vk_includes.h"
+#include "vk_predefinitions.h"
 
+// Memory Management
 
-	//Memory Management
-
-struct memoryblock_vk {
-	unsigned int MemAllocIndex = UINT32_MAX;
-	VkDeviceSize Offset;
+// Represents how it's bind to a heap
+struct memoryBlock_vk {
+  heap_tgfxhnd                 m_heap;
+  VkDeviceSize                 vk_offset;
+  static const memoryBlock_vk& GETINVALID() {
+    memoryBlock_vk invalid;
+    invalid.m_heap    = nullptr;
+    invalid.vk_offset = UINT64_MAX;
+    return invalid;
+  }
+};
+//
+struct memoryRequirements_vk {
+  VkMemoryRequirements                vk_memReqs;
+  bool                                prefersDedicatedAlloc : 1, requiresDedicatedAlloc : 1;
+  static const memoryRequirements_vk& GETINVALID() {
+    memoryRequirements_vk invalid;
+    invalid.prefersDedicatedAlloc     = true;
+    invalid.requiresDedicatedAlloc    = true;
+    invalid.vk_memReqs.memoryTypeBits = 0;
+    invalid.vk_memReqs.size           = 0;
+    invalid.vk_memReqs.alignment      = UINT64_MAX;
+    return invalid;
+  }
 };
 
-	//Classic Memory Resources
+// Classic Memory Resources
 
 struct TEXTURE_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::TEXTURE;
-	static uint16_t GET_EXTRAFLAGS(TEXTURE_VKOBJ* obj) { return 0; }
-	void operator = (const TEXTURE_VKOBJ& copyFrom) {
-		isALIVE.store(true);
-		WIDTH = copyFrom.WIDTH; HEIGHT = copyFrom.HEIGHT; DATA_SIZE = copyFrom.DATA_SIZE; MIPCOUNT = copyFrom.MIPCOUNT;
-		CHANNELs = copyFrom.CHANNELs; USAGE = copyFrom.USAGE; DIMENSION = copyFrom.DIMENSION; Block = copyFrom.Block;
-		Image = copyFrom.Image; ImageView = copyFrom.ImageView;
-	}
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::TEXTURE;
+  static uint16_t                GET_EXTRAFLAGS(TEXTURE_VKOBJ* obj) { return 0; }
 
-	unsigned int WIDTH, HEIGHT, DATA_SIZE;
-	unsigned char MIPCOUNT;
-	textureChannels_tgfx CHANNELs;
-	VkImageUsageFlags USAGE;
-	texture_dimensions_tgfx DIMENSION;
-	memoryblock_vk Block;
+  void operator=(const TEXTURE_VKOBJ& src) {
+    isALIVE.store(true);
+    m_width       = src.m_width;
+    m_height      = src.m_height;
+    m_mips        = src.m_mips;
+    m_channels    = src.m_channels;
+    vk_imageUsage = src.vk_imageUsage;
+    m_dim         = src.m_dim;
+    m_memBlock    = src.m_memBlock;
+    vk_image      = src.vk_image;
+    vk_imageView  = src.vk_imageView;
+    m_memReqs     = src.m_memReqs;
+    m_GPU         = src.m_GPU;
+  }
 
-	VkImage Image = {};
-	VkImageView ImageView = {};
+  unsigned int            m_width, m_height;
+  unsigned char           m_mips;
+  textureChannels_tgfx    m_channels;
+  texture_dimensions_tgfx m_dim;
+  memoryBlock_vk          m_memBlock = memoryBlock_vk::GETINVALID();
+  memoryRequirements_vk   m_memReqs  = memoryRequirements_vk::GETINVALID();
+  uint8_t                 m_GPU;
+
+  VkImage           vk_image      = {};
+  VkImageView       vk_imageView  = {};
+  VkImageUsageFlags vk_imageUsage = {};
 };
-struct GLOBALSSBO_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::GLOBALSSBO;
-	
-	static uint16_t GET_EXTRAFLAGS(GLOBALSSBO_VKOBJ* obj) { return 0; }
-	void operator = (const GLOBALSSBO_VKOBJ& copyFrom) {
-		isALIVE.store(true);
-		DATA_SIZE = copyFrom.DATA_SIZE; Block = copyFrom.Block; }
-	VkDeviceSize DATA_SIZE;
-	memoryblock_vk Block;
+struct BUFFER_VKOBJ {
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::BUFFER;
+  static uint16_t                GET_EXTRAFLAGS(BUFFER_VKOBJ* obj) { return 0; }
+
+  void operator=(const BUFFER_VKOBJ& src) {
+    isALIVE.store(true);
+    vk_usage   = src.vk_usage;
+    vk_buffer  = src.vk_buffer;
+    m_memBlock = src.m_memBlock;
+    m_GPU      = src.m_GPU;
+    m_memReqs  = src.m_memReqs;
+  }
+
+  memoryBlock_vk        m_memBlock;
+  memoryRequirements_vk m_memReqs;
+  uint8_t               m_GPU;
+
+  VkBuffer           vk_buffer;
+  VkBufferUsageFlags vk_usage;
 };
 
-	//Framebuffer RT Slot Management
+// Framebuffer RT Slot Management
 
 struct colorslot_vk {
-	TEXTURE_VKOBJ* RT;
-	drawpassload_tgfx LOADSTATE;
-	bool IS_USED_LATER;
-	operationtype_tgfx RT_OPERATIONTYPE;
-	glm::vec4 CLEAR_COLOR;
-	std::atomic_bool IsChanged = false;
+  TEXTURE_VKOBJ*     RT;
+  drawpassload_tgfx  LOADSTATE;
+  bool               IS_USED_LATER;
+  operationtype_tgfx RT_OPERATIONTYPE;
+  glm::vec4          CLEAR_COLOR;
+  std::atomic_bool   IsChanged = false;
 };
 struct depthstencilslot_vk {
-	TEXTURE_VKOBJ* RT;
-	drawpassload_tgfx DEPTH_LOAD, STENCIL_LOAD;
-	bool IS_USED_LATER;
-	operationtype_tgfx DEPTH_OPTYPE, STENCIL_OPTYPE;
-	glm::vec2 CLEAR_COLOR;
-	std::atomic_bool IsChanged = false;
+  TEXTURE_VKOBJ*     RT;
+  drawpassload_tgfx  DEPTH_LOAD, STENCIL_LOAD;
+  bool               IS_USED_LATER;
+  operationtype_tgfx DEPTH_OPTYPE, STENCIL_OPTYPE;
+  glm::vec2          CLEAR_COLOR;
+  std::atomic_bool   IsChanged = false;
 };
 struct rtslots_vk {
-	colorslot_vk* COLOR_SLOTs = nullptr;
-	unsigned char COLORSLOTs_COUNT = 0;
-	depthstencilslot_vk* DEPTHSTENCIL_SLOT = nullptr;	//There is one, but there may not be a Depth Slot. So if there is no, then this is nullptr.
-	//Unused Depth and NoDepth are different. Unused Depth means RenderPass does have one but current Subpass doesn't use, but NoDepth means RenderPass doesn't have one!
-	std::atomic_bool IsChanged = false;
-	void operator =(const rtslots_vk& copyFrom) {
-		IsChanged.store(copyFrom.IsChanged.load()); DEPTHSTENCIL_SLOT = copyFrom.DEPTHSTENCIL_SLOT;
-		COLOR_SLOTs = copyFrom.COLOR_SLOTs; COLORSLOTs_COUNT = copyFrom.COLORSLOTs_COUNT;
-	}
+  colorslot_vk*        COLOR_SLOTs      = nullptr;
+  unsigned char        COLORSLOTs_COUNT = 0;
+  depthstencilslot_vk* DEPTHSTENCIL_SLOT =
+    nullptr; // There is one, but there may not be a Depth Slot. So if there is no, then this is
+             // nullptr.
+  // Unused Depth and NoDepth are different. Unused Depth means RenderPass does have one but current
+  // Subpass doesn't use, but NoDepth means RenderPass doesn't have one!
+  std::atomic_bool IsChanged = false;
+
+  void operator=(const rtslots_vk& copyFrom) {
+    IsChanged.store(copyFrom.IsChanged.load());
+    DEPTHSTENCIL_SLOT = copyFrom.DEPTHSTENCIL_SLOT;
+    COLOR_SLOTs       = copyFrom.COLOR_SLOTs;
+    COLORSLOTs_COUNT  = copyFrom.COLORSLOTs_COUNT;
+  }
 };
 struct RTSLOTSET_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::RTSLOTSET;
-	static uint16_t GET_EXTRAFLAGS(RTSLOTSET_VKOBJ* obj) { return 0; }
-	
-	void operator = (const RTSLOTSET_VKOBJ& copyFrom) {
-		isALIVE.store(true);
-		PERFRAME_SLOTSETs[0] = copyFrom.PERFRAME_SLOTSETs[0]; PERFRAME_SLOTSETs[1] = copyFrom.PERFRAME_SLOTSETs[1];
-		FB_ci[0] = copyFrom.FB_ci[0]; FB_ci[1] = copyFrom.FB_ci[1];
-	}
-	rtslots_vk PERFRAME_SLOTSETs[2];
-	//You should change this struct's vkRenderPass object pointer as your vkRenderPass object
-	VkFramebufferCreateInfo FB_ci[2];
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::RTSLOTSET;
+  static uint16_t                GET_EXTRAFLAGS(RTSLOTSET_VKOBJ* obj) { return 0; }
+
+  void operator=(const RTSLOTSET_VKOBJ& copyFrom) {
+    isALIVE.store(true);
+    PERFRAME_SLOTSETs[0] = copyFrom.PERFRAME_SLOTSETs[0];
+    PERFRAME_SLOTSETs[1] = copyFrom.PERFRAME_SLOTSETs[1];
+    FB_ci[0]             = copyFrom.FB_ci[0];
+    FB_ci[1]             = copyFrom.FB_ci[1];
+  }
+  rtslots_vk PERFRAME_SLOTSETs[2];
+  // You should change this struct's vkRenderPass object pointer as your vkRenderPass object
+  VkFramebufferCreateInfo FB_ci[2];
 };
 struct IRTSLOTSET_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::IRTSLOTSET;
-	static uint16_t GET_EXTRAFLAGS(IRTSLOTSET_VKOBJ* obj) { return 0; }
-	
-	void operator = (const IRTSLOTSET_VKOBJ& copyFrom) {
-		isALIVE.store(true);
-		BASESLOTSET = copyFrom.BASESLOTSET; COLOR_OPTYPEs = copyFrom.COLOR_OPTYPEs; DEPTH_OPTYPE = copyFrom.DEPTH_OPTYPE; STENCIL_OPTYPE = copyFrom.STENCIL_OPTYPE;
-	}
-	uint32_t BASESLOTSET;
-	operationtype_tgfx* COLOR_OPTYPEs;
-	operationtype_tgfx DEPTH_OPTYPE;
-	operationtype_tgfx STENCIL_OPTYPE;
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::IRTSLOTSET;
+  static uint16_t                GET_EXTRAFLAGS(IRTSLOTSET_VKOBJ* obj) { return 0; }
+
+  void operator=(const IRTSLOTSET_VKOBJ& copyFrom) {
+    isALIVE.store(true);
+    BASESLOTSET    = copyFrom.BASESLOTSET;
+    COLOR_OPTYPEs  = copyFrom.COLOR_OPTYPEs;
+    DEPTH_OPTYPE   = copyFrom.DEPTH_OPTYPE;
+    STENCIL_OPTYPE = copyFrom.STENCIL_OPTYPE;
+  }
+  uint32_t            BASESLOTSET;
+  operationtype_tgfx* COLOR_OPTYPEs;
+  operationtype_tgfx  DEPTH_OPTYPE;
+  operationtype_tgfx  STENCIL_OPTYPE;
 };
 struct rtslot_create_description_vk {
-	TEXTURE_VKOBJ* textures[2];
-	operationtype_tgfx optype;
-	drawpassload_tgfx loadtype;
-	bool isUsedLater;
-	vec4_tgfx clear_value;
+  TEXTURE_VKOBJ*     textures[2];
+  operationtype_tgfx optype;
+  drawpassload_tgfx  loadtype;
+  bool               isUsedLater;
+  vec4_tgfx          clear_value;
 };
 struct rtslot_inheritance_descripton_vk {
-	bool IS_DEPTH = false;
-	operationtype_tgfx OPTYPE = operationtype_tgfx_UNUSED, OPTYPESTENCIL = operationtype_tgfx_UNUSED;
-	drawpassload_tgfx LOADTYPE = drawpassload_tgfx_CLEAR, LOADTYPESTENCIL = drawpassload_tgfx_CLEAR;
+  bool               IS_DEPTH = false;
+  operationtype_tgfx OPTYPE = operationtype_tgfx_UNUSED, OPTYPESTENCIL = operationtype_tgfx_UNUSED;
+  drawpassload_tgfx  LOADTYPE = drawpassload_tgfx_CLEAR, LOADTYPESTENCIL = drawpassload_tgfx_CLEAR;
 };
 
+// Binding Model and Table Management
 
+struct BINDINGTABLETYPE_VKOBJ {
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::BINDINGTABLEINST;
 
+  static uint16_t GET_EXTRAFLAGS(BINDINGTABLETYPE_VKOBJ* obj) {
+    return 0;
+    // Find_VKCONST_DESCSETID_byVkDescType(obj->DescType);
+  }
 
-	//Binding Model and Table Management
+  uint8_t               m_gpu;
+  VkDescriptorSetLayout vk_layout;
+  VkShaderStageFlags    vk_stages = 0;
+  uint32_t              m_elementCount;
+  VkDescriptorType      vk_descType;
+};
 
-//These are used to initialize descriptors
-//So backend won't fail because of a NULL descriptor (Although in DEBUG release, it'll complain about it)
-//Texture is a 1x1 texture, buffer is 1 byte buffer, sampler is as default as possible
-extern VkSampler defaultSampler;
-extern VkBuffer defaultBuffer;
+// These are used to initialize descriptors
+// So backend won't fail because of a NULL descriptor
+//     -but in DEBUG release, it'll complain about it-
+// Texture is a 1x1 texture, buffer is 1 byte buffer, sampler is as default as possible
+extern VkSampler      defaultSampler;
+extern VkBuffer       defaultBuffer;
 extern TEXTURE_VKOBJ* defaultTexture;
 
 struct sampler_descVK {
-	VkSampler sampler_obj = defaultSampler;
-	std::atomic_uchar isUpdated = 0;
+  VkSampler         sampler_obj = defaultSampler;
+  std::atomic_uchar isUpdated   = 0;
 };
-struct buffer_descVK {		//Both for BUFFER and EXT_UNIFORMBUFFER
-	VkDescriptorBufferInfo info = {};
-	std::atomic_uchar isUpdated = 0;
+
+struct buffer_descVK { // Both for BUFFER and EXT_UNIFORMBUFFER
+  VkDescriptorBufferInfo info      = {};
+  std::atomic_uchar      isUpdated = 0;
 };
-struct texture_descVK {		//Both for SAMPLEDTEXTURE and STORAGEIMAGE
-	VkDescriptorImageInfo info = {};
-	std::atomic_uchar isUpdated = 0;
+
+struct texture_descVK { // Both for SAMPLEDTEXTURE and STORAGEIMAGE
+  VkDescriptorImageInfo info      = {};
+  std::atomic_uchar     isUpdated = 0;
 };
-struct DESCSET_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::DESCSET;
-	static uint16_t GET_EXTRAFLAGS(DESCSET_VKOBJ* obj) { return Find_VKCONST_DESCSETID_byVkDescType(obj->DESCTYPE); }
-	
-	DESCSET_VKOBJ(VkDescriptorType type, uint32_t elementCount) : isUpdatedCounter(0), Stages(0), isALIVE(true), Layout(VK_NULL_HANDLE)
-		, DESCTYPE(type), bufferDescELEMENTs() {
-		if (DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) { bufferDescELEMENTs.resize(elementCount); }
-		if (DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE || DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE) { textureDescELEMENTs.resize(elementCount); }
-		if (DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLER) { samplerDescELEMENTs.resize(elementCount); }
-	}
-	void operator = (const DESCSET_VKOBJ& copyFrom) { 
-		isALIVE.store(true);
-		for (unsigned int i = 0; i < VKCONST_BUFFERING_IN_FLIGHT; i++) {
-			Sets[i] = copyFrom.Sets[i];
-		}
-		Layout = copyFrom.Layout;
-		isUpdatedCounter.store(copyFrom.isUpdatedCounter.load());
-		Stages = copyFrom.Stages;
-		//All of them are identical anyway
-		DESCTYPE = copyFrom.DESCTYPE;
-		if (DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) { bufferDescELEMENTs = copyFrom.bufferDescELEMENTs; }
-		if (DESCTYPE == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE || DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE) { textureDescELEMENTs = copyFrom.textureDescELEMENTs; }
-		if (DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLER) { samplerDescELEMENTs = copyFrom.samplerDescELEMENTs; }
-		bufferDescELEMENTs = copyFrom.bufferDescELEMENTs;
-	}
-	VkDescriptorSet Sets[VKCONST_BUFFERING_IN_FLIGHT] = {};
-	VkDescriptorSetLayout Layout = VK_NULL_HANDLE;
-	//There is only one descriptor binding per descriptor set
-	VkDescriptorType DESCTYPE = VK_DESCRIPTOR_TYPE_MAX_ENUM;
 
-	union {
-		VK_VECTOR_ADDONLY<texture_descVK, 1 << 20> textureDescELEMENTs;
-		VK_VECTOR_ADDONLY<buffer_descVK, 1 << 20> bufferDescELEMENTs;
-		VK_VECTOR_ADDONLY<sampler_descVK, 1 << 20> samplerDescELEMENTs;
-	};
+struct BINDINGTABLEINST_VKOBJ {
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::BINDINGTABLEINST;
 
+  static uint16_t          GET_EXTRAFLAGS(BINDINGTABLEINST_VKOBJ* obj) { return UINT16_MAX; }
+  VkDescriptorSet          Set = {};
+  bindingTableType_tgfxhnd type;
 
-
-	//This is a atomic counter
-	//It should be set 3, when a desc is updated
-	//Then every frame decrease it by one (assuming there is no change in any desc of the set)
-	//And when it is 0, it means all descriptor sets recieved the changes and there is no need to update
-	std::atomic_uchar isUpdatedCounter = 0;
-	//GLOBAL and MATTYPE/INST ones are all visible to the pipeline but USERDEFINED ones can be custom
-	VkShaderStageFlags Stages = 0;
+  // This is a atomic counter
+  // It should be set 3, when a desc is updated
+  // Then every frame decrease it by one (assuming there is no change in any desc of the set)
+  // And when it is 0, it means all descriptor sets received the changes and there is no update
+  std::atomic_uchar isUpdatedCounter = 0;
 };
+
 struct SAMPLER_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::SAMPLER;
-	static uint16_t GET_EXTRAFLAGS(SAMPLER_VKOBJ* obj) { return obj->FLAGs.load(); }
-	
-	void operator = (const SAMPLER_VKOBJ& copyFrom) { isALIVE.store(true); Sampler = copyFrom.Sampler; FLAGs.store(copyFrom.FLAGs.load()); }
-	VkSampler Sampler = VK_NULL_HANDLE;
-	std::atomic<uint16_t> FLAGs = 0;	//YCbCr conversion only flag for now 
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::SAMPLER;
+  static uint16_t                GET_EXTRAFLAGS(SAMPLER_VKOBJ* obj) { return obj->m_flags.load(); }
+
+  VkSampler            vk_sampler = VK_NULL_HANDLE;
+  std::atomic_uint16_t m_flags    = 0; // YCbCr conversion only flag for now
+  uint8_t              m_gpu;
 };
 
+/////////////////////////////////////////////
+//				PIPELINE RESOURCES
+/////////////////////////////////////////////
 
-//Classic Rasterization Pipeline Resources
+struct RASTERPIPELINE_VKOBJ {
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::RASTERPIPELINE;
+  static uint16_t                GET_EXTRAFLAGS(RASTERPIPELINE_VKOBJ* obj) { return 0; }
 
-struct GRAPHICSPIPELINETYPE_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::GRAPHICSPIPELINETYPE;
-	static uint16_t GET_EXTRAFLAGS(GRAPHICSPIPELINETYPE_VKOBJ* obj) { return 0; }
-	void operator = (const GRAPHICSPIPELINETYPE_VKOBJ& copyFrom) {
-		isALIVE.store(true);
-		GFX_Subpass = copyFrom.GFX_Subpass; PipelineLayout = copyFrom.PipelineLayout; PipelineObject = copyFrom.PipelineObject;
-		for (uint32_t i = 0; i < VKCONST_MAXDESCSET_PERLIST; i++) { TypeSETs[i] = UINT32_MAX; InstSETs_base[i] = UINT32_MAX; }
-	}
-	renderSubPass_tgfxhnd GFX_Subpass;
+  void operator=(const RASTERPIPELINE_VKOBJ& copyFrom) {
+    isALIVE.store(true);
+    GFX_Subpass = copyFrom.GFX_Subpass;
+    vk_layout   = copyFrom.vk_layout;
+    vk_object   = copyFrom.vk_object;
+    for (uint32_t i = 0; i < VKCONST_MAXDESCSET_PERLIST; i++) {
+      m_TypeSETs[i] = UINT32_MAX;
+    }
+  }
+  renderSubPass_tgfxhnd GFX_Subpass;
 
-	VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
-	VkPipeline PipelineObject = VK_NULL_HANDLE;
-	uint32_t TypeSETs[VKCONST_MAXDESCSET_PERLIST], InstSETs_base[VKCONST_MAXDESCSET_PERLIST];
-};
-struct GRAPHICSPIPELINEINST_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::GRAPHICSPIPELINEINST;
-	static uint16_t GET_EXTRAFLAGS(GRAPHICSPIPELINEINST_VKOBJ* obj) { return 0; }
-	void operator = (const GRAPHICSPIPELINEINST_VKOBJ& copyFrom) {
-		isALIVE.store(true);
-		PROGRAM = copyFrom.PROGRAM; 
-		for (unsigned int i = 0; i < VKCONST_MAXDESCSET_PERLIST; i++) { InstSETs[i] = copyFrom.InstSETs[i]; }
-	}
-	GRAPHICSPIPELINEINST_VKOBJ() : PROGRAM(UINT32_MAX), isALIVE(false) {
-		for (unsigned int i = 0; i < VKCONST_MAXDESCSET_PERLIST; i++) { InstSETs[VKCONST_MAXDESCSET_PERLIST] = UINT32_MAX; }
-	}
-	uint32_t PROGRAM;
-	uint32_t InstSETs[VKCONST_MAXDESCSET_PERLIST];
+  uint8_t          m_gpu;
+  VkPipelineLayout vk_layout = VK_NULL_HANDLE;
+  VkPipeline       vk_object = VK_NULL_HANDLE;
+  uint32_t         m_TypeSETs[VKCONST_MAXDESCSET_PERLIST];
 };
 struct depthsettingsdesc_vk {
-	VkBool32 ShouldWrite = VK_FALSE;
-	VkCompareOp DepthCompareOP = VkCompareOp::VK_COMPARE_OP_MAX_ENUM;
-	//DepthBounds Extension
-	VkBool32 DepthBoundsEnable = VK_FALSE; float DepthBoundsMin = FLT_MIN, DepthBoundsMax = FLT_MAX;
+  VkBool32    ShouldWrite    = VK_FALSE;
+  VkCompareOp DepthCompareOP = VkCompareOp::VK_COMPARE_OP_MAX_ENUM;
+  // DepthBounds Extension
+  VkBool32 DepthBoundsEnable = VK_FALSE;
+  float    DepthBoundsMin = FLT_MIN, DepthBoundsMax = FLT_MAX;
 };
 struct stencildesc_vk {
-	VkStencilOpState OPSTATE;
+  VkStencilOpState OPSTATE;
 };
 struct blendinginfo_vk {
-	unsigned char COLORSLOT_INDEX = 255;
-	glm::vec4 BLENDINGCONSTANTs = glm::vec4(FLT_MAX);
-	VkPipelineColorBlendAttachmentState BlendState = {};
+  unsigned char                       COLORSLOT_INDEX   = 255;
+  glm::vec4                           BLENDINGCONSTANTs = glm::vec4(FLT_MAX);
+  VkPipelineColorBlendAttachmentState BlendState        = {};
 };
-/* Vertex Attribute Layout Specification:
-		All vertex attributes should be interleaved because there is no easy way in Vulkan for de-interleaved path.
-		Vertex Attributes are created as seperate objects because this helps debug visualization of the data
-		Vertex Attributes are gonna be ordered by VertexAttributeLayout's std::vector elements order and this also defines attribute's in-shader location
-		That means if position attribute is second element in "Attributes" std::vector, MaterialType that using this layout uses position attribute at location = 1 instead of 0.
-*/
+struct COMPUTEPIPELINE_VKOBJ {
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::COMPUTEPIPELINE;
+  static uint16_t                GET_EXTRAFLAGS(COMPUTEPIPELINE_VKOBJ* obj) { return 0; }
+
+  void operator=(const COMPUTEPIPELINE_VKOBJ& copyFrom) {
+    isALIVE.store(true);
+    vk_object = copyFrom.vk_object;
+    vk_layout = copyFrom.vk_layout;
+    for (unsigned int i = 0; i < VKCONST_MAXDESCSET_PERLIST; i++) {
+      m_typeSets[i] = UINT32_MAX;
+    }
+  }
+  uint8_t          m_gpu;
+  VkPipeline       vk_object = VK_NULL_HANDLE;
+  VkPipelineLayout vk_layout = VK_NULL_HANDLE;
+  uint32_t         m_typeSets[VKCONST_MAXDESCSET_PERLIST];
+};
+
 struct VERTEXATTRIBLAYOUT_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::VERTEXATTRIB;
-	static uint16_t GET_EXTRAFLAGS(VERTEXATTRIBLAYOUT_VKOBJ* obj) { return 0; }
-	
-	void operator = (const VERTEXATTRIBLAYOUT_VKOBJ& copyFrom) {
-		isALIVE.store(true);
-		Attribs = copyFrom.Attribs; AttribCount = copyFrom.AttribCount; size_perVertex = copyFrom.size_perVertex;
-		BindingDesc = copyFrom.BindingDesc; AttribDescs = copyFrom.AttribDescs; AttribDesc_Count = copyFrom.AttribDesc_Count; PrimitiveTopology = copyFrom.PrimitiveTopology;
-	}
-	datatype_tgfx* Attribs;
-	unsigned int AttribCount, size_perVertex;
-	
-	VkVertexInputBindingDescription BindingDesc;	//Currently, only one binding is supported because I didn't understand bindings properly.
-	VkVertexInputAttributeDescription* AttribDescs;
-	VkPrimitiveTopology PrimitiveTopology;
-	unsigned char AttribDesc_Count;
-};
-struct VERTEXBUFFER_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::VERTEXBUFFER;
-	static uint16_t GET_EXTRAFLAGS(VERTEXBUFFER_VKOBJ* obj) { return 0; }
-	
-	void operator = (const VERTEXBUFFER_VKOBJ& copyFrom) { isALIVE.store(true); VERTEX_COUNT = copyFrom.VERTEX_COUNT; Layout = copyFrom.Layout; Block = copyFrom.Block; }
-	unsigned int VERTEX_COUNT;
-	uint32_t Layout;
-	memoryblock_vk Block;
-};
-struct INDEXBUFFER_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::INDEXBUFFER;
-	static uint16_t GET_EXTRAFLAGS(INDEXBUFFER_VKOBJ* obj) { return 0; }
-	void operator = (const INDEXBUFFER_VKOBJ& copyFrom) { isALIVE.store(true); DATATYPE = copyFrom.DATATYPE; IndexCount = copyFrom.IndexCount; Block = copyFrom.Block; }
-	VkIndexType DATATYPE;
-	VkDeviceSize IndexCount = 0;
-	memoryblock_vk Block;
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::VERTEXATTRIB;
+  static uint16_t                GET_EXTRAFLAGS(VERTEXATTRIBLAYOUT_VKOBJ* obj) { return 0; }
+
+  void operator=(const VERTEXATTRIBLAYOUT_VKOBJ& src) {
+    isALIVE.store(true);
+    Attribs          = src.Attribs;
+    AttribCount      = src.AttribCount;
+    size_perVertex   = src.size_perVertex;
+    BindingDesc      = src.BindingDesc;
+    AttribDescs      = src.AttribDescs;
+    AttribDesc_Count = src.AttribDesc_Count;
+  }
+  datatype_tgfx* Attribs;
+  unsigned int   AttribCount, size_perVertex;
+
+  // Currently, only one binding is supported because I didn't understand bindings properly.
+  VkVertexInputBindingDescription    BindingDesc;
+  VkVertexInputAttributeDescription* AttribDescs;
+  unsigned char                      AttribDesc_Count;
 };
 
+struct VIEWPORT_VKOBJ {
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::VIEWPORT;
+  static uint16_t                GET_EXTRAFLAGS(VIEWPORT_VKOBJ* obj) { return 0; }
 
-
-	//Compute Resources
-
-struct COMPUTETYPE_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::COMPUTETYPE;
-	static uint16_t GET_EXTRAFLAGS(COMPUTETYPE_VKOBJ* obj) { return 0; }
-	void operator = (const COMPUTETYPE_VKOBJ& copyFrom) { isALIVE.store(true); 
-	PipelineObject = copyFrom.PipelineObject; PipelineLayout = copyFrom.PipelineLayout; 
-	for (unsigned int i = 0; i < VKCONST_MAXDESCSET_PERLIST; i++) { TypeSETs[i] = UINT32_MAX; InstSETs[i] = UINT32_MAX; }
-	}
-	VkPipeline PipelineObject = VK_NULL_HANDLE;
-	VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
-	uint32_t TypeSETs[VKCONST_MAXDESCSET_PERLIST], InstSETs[VKCONST_MAXDESCSET_PERLIST];
-};
-struct COMPUTEINST_VKOBJ {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::COMPUTEINST;
-	static uint16_t GET_EXTRAFLAGS(COMPUTEINST_VKOBJ* obj) { return 0; }
-	void operator = (const COMPUTEINST_VKOBJ& copyFrom) {
-		isALIVE.store(true);
-		PROGRAM = copyFrom.PROGRAM; for (unsigned int i = 0; i < VKCONST_MAXDESCSET_PERLIST; i++) { InstSETs[i] = UINT32_MAX; }	}
-	uint32_t PROGRAM = UINT32_MAX;
-	uint32_t InstSETs[VKCONST_MAXDESCSET_PERLIST];
+  void operator=(const VIEWPORT_VKOBJ& copyFrom) {
+    isALIVE.store(true);
+    viewport = copyFrom.viewport;
+    scissor  = copyFrom.scissor;
+  }
+  VkViewport viewport;
+  VkRect2D   scissor;
 };
 
+struct HEAP_VKOBJ {
+  std::atomic_bool               isALIVE    = false;
+  vk_handleType HANDLETYPE = VKHANDLETYPEs::HEAP;
+
+  static uint16_t GET_EXTRAFLAGS(HEAP_VKOBJ* obj) {
+    assert(0 && "GPU index & memTypeIndex should be passed as extra flag");
+    return 0;
+  }
+  void operator=(const HEAP_VKOBJ& src) {
+    isALIVE.store(true);
+    vk_memoryHandle    = src.vk_memoryHandle;
+    vk_memoryTypeIndex = src.vk_memoryTypeIndex;
+    m_size             = src.m_size;
+  }
+
+  uint8_t            m_GPU;
+  unsigned long long m_size;
+
+  VkDeviceMemory vk_memoryHandle;
+  unsigned int   vk_memoryTypeIndex;
+};

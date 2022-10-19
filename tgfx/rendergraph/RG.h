@@ -120,7 +120,7 @@ struct RenderGraph {
 	struct DP_VK {
 		//For template definitions
 		static constexpr VK_PASSTYPE STATICPASSTYPE = VK_PASSTYPE::DP;
-		static constexpr VKHANDLETYPEs STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBDP;
+		vk_handleType STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBDP;
 		MainPassCOMMON base;
 
 		
@@ -184,7 +184,7 @@ struct RenderGraph {
 	struct TP_VK {
 		//For template definitions
 		static constexpr VK_PASSTYPE STATICPASSTYPE = VK_PASSTYPE::TP;
-		static constexpr VKHANDLETYPEs STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBTP;
+		vk_handleType STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBTP;
 		MainPassCOMMON base;
 
 		uint32_t SubPassesList_SizeInBytes;
@@ -336,7 +336,7 @@ struct RenderGraph {
 	struct CP_VK {
 		//For template definitions
 		static constexpr VK_PASSTYPE STATICPASSTYPE = VK_PASSTYPE::CP;
-		static constexpr VKHANDLETYPEs STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBCP;
+		vk_handleType STATICWAITDESCTYPE = VKHANDLETYPEs::WAITDESC_SUBCP;
 		MainPassCOMMON base;
 
 
@@ -412,8 +412,8 @@ struct RenderGraph {
 		drawpass_tgfx_handle* passhandle;
 
 		//All temporary WaitDescs should have these below
-		static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBDP;
-		static constexpr VKHANDLETYPEs TARGETPASS_HANDLETYPE = VKHANDLETYPEs::DRAWPASS;
+		vk_handleType HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBDP;
+		vk_handleType TARGETPASS_HANDLETYPE = VKHANDLETYPEs::DRAWPASS;
 		static constexpr VK_PASSTYPE TARGETPASS_TYPE = VK_PASSTYPE::DP;
 		typedef TP_VK TARGETPASS_STRUCT;
 		VKDATAHANDLE getHandle_ofDesc() {
@@ -433,8 +433,8 @@ struct RenderGraph {
 		uint32_t SubPassIndex : 31;
 		computepass_tgfx_handle* passhandle;
 
-		static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBCP;
-		static constexpr VKHANDLETYPEs TARGETPASS_HANDLETYPE = VKHANDLETYPEs::COMPUTEPASS;
+		vk_handleType HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBCP;
+		vk_handleType TARGETPASS_HANDLETYPE = VKHANDLETYPEs::COMPUTEPASS;
 		static constexpr VK_PASSTYPE TARGETPASS_TYPE = VK_PASSTYPE::CP;
 		typedef CP_VK TARGETPASS_STRUCT;
 		VKDATAHANDLE getHandle_ofDesc() {
@@ -454,8 +454,8 @@ struct RenderGraph {
 		uint32_t SubPassIndex : 31;
 		transferpass_tgfx_handle* passhandle;
 
-		static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBTP;
-		static constexpr VKHANDLETYPEs TARGETPASS_HANDLETYPE = VKHANDLETYPEs::TRANSFERPASS;
+		vk_handleType HANDLETYPE = VKHANDLETYPEs::WAITDESC_SUBTP;
+		vk_handleType TARGETPASS_HANDLETYPE = VKHANDLETYPEs::TRANSFERPASS;
 		static constexpr VK_PASSTYPE TARGETPASS_TYPE = VK_PASSTYPE::TP;
 		typedef TP_VK TARGETPASS_STRUCT;
 		VKDATAHANDLE getHandle_ofDesc() {
@@ -499,5 +499,5 @@ extern RenderGraph* VKGLOBAL_RG;
 //Implemented in rendergraph_main.cpp 
 result_tgfx Execute_RenderGraph();
 void WaitForRenderGraphCommandBuffers();
-void take_inputs();
+void vk_takeInputs();
 void Create_FrameGraphs();

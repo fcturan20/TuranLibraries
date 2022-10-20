@@ -63,11 +63,11 @@ struct WINDOW_VKOBJ {
 
   WINDOW_VKOBJ() = default;
   unsigned int              m_lastWidth, m_lastHeight, m_newWidth, m_newHeight;
-  windowmode_tgfx           m_displayMode;
-  MONITOR_VKOBJ*            m_monitor;
-  const char*               m_name;
-  tgfx_windowResizeCallback m_resizeFnc                                                 = nullptr;
-  void*                     m_userData                                                  = nullptr;
+  windowmode_tgfx           m_displayMode = windowmode_tgfx_WINDOWED;
+  MONITOR_VKOBJ*            m_monitor     = {};
+  const char*               m_name        = {};
+  tgfx_windowResizeCallback m_resizeFnc   = nullptr;
+  void*                     m_userData    = nullptr;
   texture_tgfxhnd           m_swapchainTextures[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
   unsigned char             m_swapchainTextureCount = 0, m_swapchainCurrentTextureIndx = 0;
   bool                      m_isResized = false, m_isSwapped = false;
@@ -75,9 +75,13 @@ struct WINDOW_VKOBJ {
   fence_tgfxlsthnd m_presentationFences;
   VkSemaphore      vk_binarySemaphores[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
 
-  VkSurfaceKHR   vk_surface    = {};
-  VkSwapchainKHR vk_swapchain  = {};
-  GLFWwindow*    vk_glfwWindow = {};
+  VkSurfaceKHR    vk_surface    = {};
+  VkSwapchainKHR  vk_swapchain  = {};
+  GLFWwindow*     vk_glfwWindow = {};
+  VkCommandBuffer vk_generalToPresent[VKCONST_MAXQUEUEFAMCOUNT_PERGPU]
+                                     [VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {},
+    vk_presentToGeneral[VKCONST_MAXQUEUEFAMCOUNT_PERGPU][VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] =
+      {};
   struct PresentationModes {
     unsigned char immediate : 1;
     unsigned char mailbox : 1;

@@ -44,5 +44,6 @@ inline VkBufferUsageFlags Get_VkBufferUsageFlag_byTGFX(bufferUsageFlag_tgfxhnd f
 // Supported extension: QueueOwnershipTransfer
 // Use o_ params with uint32_t queueFamList[VKCONST_MAXQUEUEFAMCOUNT] etc.
 void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxlsthnd i_exts,
-                                uint32_t* o_famList, uint32_t* o_famListSize,
+                                uint32_t o_famList[VKCONST_MAXQUEUEFAMCOUNT_PERGPU],
+                                uint32_t* o_famListSize,
                                 VkSharingMode* o_sharingMode);

@@ -54,3 +54,9 @@ enum class VK_PASSTYPE : unsigned char {
 };
 typedef uint16_t                 VK_PASS_ID_TYPE;
 static constexpr VK_PASS_ID_TYPE VK_PASS_INVALID_ID = UINT16_MAX;
+
+#define getGPUfromQueueHnd(i_queue)                               \
+  VKOBJHANDLE  queueHnd = *( VKOBJHANDLE* )&i_queue;              \
+  GPU_VKOBJ*   gpu      = QUEUE_VKOBJ::getGPUfromHandle(i_queue); \
+  QUEUEFAM_VK* fam      = QUEUE_VKOBJ::getFAMfromHandle(i_queue); \
+  QUEUE_VKOBJ* queue    = fam->m_queues.getOBJfromHANDLE(i_queue);

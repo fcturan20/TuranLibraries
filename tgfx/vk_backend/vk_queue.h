@@ -85,7 +85,7 @@ struct QUEUE_VKOBJ {
   VkQueue  vk_queue;
 
   enum vk_queueOpType : uint8_t { ERROR_QUEUEOPTYPE = 0, CMDBUFFER = 1, PRESENT = 2, SPARSE = 3 };
-  vk_queueOpType activeQueueOp = ERROR_QUEUEOPTYPE;
+  vk_queueOpType m_activeQueueOp = ERROR_QUEUEOPTYPE, m_prevQueueOp = ERROR_QUEUEOPTYPE;
   GPU_VKOBJ*     m_gpu         = nullptr;
   // Operations that wait to be sent to GPU
   VK_STATICVECTOR<submit_vk, void*, VKCONST_MAXSUBMITCOUNT> m_submitInfos;

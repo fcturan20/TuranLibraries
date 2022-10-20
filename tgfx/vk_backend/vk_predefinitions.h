@@ -115,6 +115,7 @@ void pNext_addToLast(void* targetStruct, void* attachStruct);
 #define vk_uint32c static constexpr unsigned int
 #define vk_float32c static constexpr float
 #define vk_handleType static constexpr VKHANDLETYPEs
+#define vk_uint8c static constexpr unsigned char
 // Dynamic Descriptor Types supported by Vulkan
 vk_uint32c VKCONST_DYNAMICDESCRIPTORTYPESCOUNT = 4, VKCONST_DESCSETID_DYNAMICSAMPLER = 0,
            VKCONST_DESCSETID_SAMPLEDTEXTURE = 1, VKCONST_DESCSETID_STORAGEIMAGE = 2,
@@ -128,14 +129,14 @@ vk_uint32c VKCONST_MAXRTSLOTCOUNT              = 16;
 vk_uint32c VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT = 16;
 vk_uint32c VKCONST_MAXQUEUEFAMCOUNT_PERGPU = 5, VKCONST_MAXQUEUECOUNT_PERFAM = 16;
 vk_uint32c VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT = 16;
-vk_uint32c VKCONST_MAXPRESENTCOUNT_PERSUBMIT   = 8;
+vk_uint32c VKCONST_MAXSWPCHNCOUNT_PERSUBMIT    = 8; // Max count of swapchain count per submit
 
 // VIRMEM RELATED
 
-static constexpr bool          VKCONST_isPointerContainVKFLAG = (sizeof(void*) >= sizeof(VkFlags));
-vk_uint32c                     VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW = 16;
-static constexpr unsigned char VKCONST_VIRMEM_MANAGERONLYPAGECOUNT =
-  2; // Memory manager reserves some of the first virtual memory pages for its own use
+vk_uint8c  VKCONST_isPointerContainVKFLAG         = (sizeof(void*) >= sizeof(VkFlags));
+vk_uint32c VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW = 4;
+// Memory manager reserves some of the first virtual memory pages for its own use
+vk_uint8c  VKCONST_VIRMEM_MANAGERONLYPAGECOUNT = 2;
 vk_uint32c VKCONST_VIRMEM_PERFRAME_PAGECOUNT =
   1 << 16; // Define how many pages will be allocated per frame for dynamic memory
 extern void*    VKCONST_VIRMEMSPACE_BEGIN;

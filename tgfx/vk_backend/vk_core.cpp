@@ -361,9 +361,8 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
   GPU_VKOBJ*    GPU    = hidden->DEVICE_GPUs.getOBJfromHANDLE(gpu);
 
   // Create VkSwapchainKHR Object
+  VkSwapchainCreateInfoKHR swpchn_ci = {};
   {
-    uint32_t                 queueFamIndexList[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
-    VkSwapchainCreateInfoKHR swpchn_ci                                          = {};
     swpchn_ci.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swpchn_ci.flags            = 0;
     swpchn_ci.pNext            = nullptr;
@@ -392,14 +391,10 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       swpchn_ci.oldSwapchain = nullptr;
     }
 
-    for (uint32_t i = 0; i < VKCONST_MAXQUEUEFAMCOUNT_PERGPU; i++) {
-      queueFamIndexList[i] = i;
-    }
-    /*VK_getQueueAndSharingInfos(desc->permittedQueues, nullptr, queueFamIndexList,
-                               &swpchn_ci.queueFamilyIndexCount, &swpchn_ci.imageSharingMode);*/
-    swpchn_ci.pQueueFamilyIndices   = queueFamIndexList;
-    swpchn_ci.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
-    swpchn_ci.queueFamilyIndexCount = GPU->manager()->m_queueFams.size();
+    uint32_t queueFamIndxLst[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {UINT32_MAX};
+    VK_getQueueAndSharingInfos(desc->permittedQueues, nullptr, queueFamIndxLst,
+                               &swpchn_ci.queueFamilyIndexCount, &swpchn_ci.imageSharingMode);
+    swpchn_ci.pQueueFamilyIndices = queueFamIndxLst;
 
     THROW_RETURN_IF_FAIL(
       vkCreateSwapchainKHR(GPU->vk_logical, &swpchn_ci, nullptr, &window->vk_swapchain),
@@ -407,9 +402,9 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
   }
 
   // Get Swapchain Images & Create Views
+  VkImage     SWPCHN_IMGs[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW]     = {};
+  VkImageView SWPCHN_IMGVIEWs[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
   {
-    VkImage     SWPCHN_IMGs[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW]     = {};
-    VkImageView SWPCHN_IMGVIEWs[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
     {
       uint32_t created_imagecount = 0;
       vkGetSwapchainImagesKHR(GPU->vk_logical, window->vk_swapchain, &created_imagecount, nullptr);
@@ -449,21 +444,195 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
     }
   }
 
-  // Create a semaphore for each swapchain texture
-  for (uint32_t i = window->m_swapchainTextureCount; i < desc->imageCount; i++) {
-    VkSemaphoreCreateInfo ci = {};
-    ci.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    vkCreateSemaphore(GPU->vk_logical, &ci, nullptr, &window->vk_binarySemaphores[i]);
-    uint32_t currentImageIndx = UINT32_MAX;
-    THROW_RETURN_IF_FAIL(vkAcquireNextImageKHR(GPU->vk_logical, window->vk_swapchain, 1,
-                            window->vk_binarySemaphores[i], VK_NULL_HANDLE, &currentImageIndx),
-      "Acquiring newly created swapchain textures has failed!", result_tgfx_FAIL);
-
-    //assert(i == currentImageIndx && "Acquired a non-intended swapchain texture!");
-  }
-
   window->m_swapchainTextureCount       = desc->imageCount;
   window->m_swapchainCurrentTextureIndx = 0;
+
+  uint32_t queueFamListIterIndx = 0;
+  while (swpchn_ci.pQueueFamilyIndices[queueFamListIterIndx] != UINT32_MAX) {
+    QUEUEFAM_VK* queueFam =
+      GPU->manager()->m_queueFams[swpchn_ci.pQueueFamilyIndices[queueFamListIterIndx]];
+    VkCommandPool transitionCmdPool, initializeCmdPool;
+    // Create command pools
+    {
+      VkCommandPoolCreateInfo cp_ci = {};
+      cp_ci.flags                   = 0;
+      cp_ci.queueFamilyIndex        = queueFam->vk_queueFamIndex;
+      cp_ci.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+      THROW_RETURN_IF_FAIL(
+        vkCreateCommandPool(GPU->vk_logical, &cp_ci, nullptr, &transitionCmdPool),
+        "Command Pool creation for swapchain transition has failed!", result_tgfx_FAIL);
+      THROW_RETURN_IF_FAIL(
+        vkCreateCommandPool(GPU->vk_logical, &cp_ci, nullptr, &initializeCmdPool),
+        "Command Pool creation for swapchain transition has failed!", result_tgfx_FAIL);
+    }
+    {
+      VkCommandBufferAllocateInfo cb_ai = {};
+      cb_ai.commandBufferCount          = window->m_swapchainTextureCount;
+      cb_ai.commandPool                 = transitionCmdPool;
+      cb_ai.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+      cb_ai.pNext                       = nullptr;
+      cb_ai.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+      // General -> Present
+      THROW_RETURN_IF_FAIL(
+        vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai,
+                                 window->vk_generalToPresent[queueFam->vk_queueFamIndex]),
+        "General->Present Command Buffer creation for swapchain transition has failed!",
+        result_tgfx_FAIL);
+      // Present -> General
+      THROW_RETURN_IF_FAIL(
+        vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai,
+                                 window->vk_presentToGeneral[queueFam->vk_queueFamIndex]),
+        "Present->General Command Buffer creation for swapchain transition has failed!",
+        result_tgfx_FAIL);
+    }
+    for (uint32_t textureIndx = 0; textureIndx < window->m_swapchainTextureCount; textureIndx++) {
+      VkImageMemoryBarrier imBar = {};
+      // General -> Present CB Recording
+      VkCommandBufferBeginInfo cb_bi = {};
+      cb_bi.flags                    = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+      cb_bi.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+      {
+        VkCommandBuffer cb = window->vk_generalToPresent[queueFam->vk_queueFamIndex][textureIndx];
+        THROW_RETURN_IF_FAIL(vkBeginCommandBuffer(cb, &cb_bi),
+                             "General -> Present CB recording begin failed!", result_tgfx_FAIL);
+        imBar.dstAccessMask               = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+        imBar.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        imBar.image                       = SWPCHN_IMGs[textureIndx];
+        imBar.newLayout                   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        imBar.oldLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+        imBar.pNext                       = nullptr;
+        imBar.srcAccessMask               = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        imBar.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        imBar.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        imBar.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imBar.subresourceRange.baseArrayLayer = 0;
+        imBar.subresourceRange.baseMipLevel   = 0;
+        imBar.subresourceRange.layerCount     = 1;
+        imBar.subresourceRange.levelCount     = 1;
+
+        vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0,
+                             nullptr, 0, nullptr, 1, &imBar);
+        THROW_RETURN_IF_FAIL(vkEndCommandBuffer(cb),
+                             "General -> Present CB recording begin failed!", result_tgfx_FAIL);
+      }
+      // Present -> General CB Recording
+      {
+        VkCommandBuffer cb = window->vk_presentToGeneral[queueFam->vk_queueFamIndex][textureIndx];
+        THROW_RETURN_IF_FAIL(vkBeginCommandBuffer(cb, &cb_bi),
+                             "Present -> General CB recording begin failed!", result_tgfx_FAIL);
+
+        imBar.oldLayout     = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        imBar.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
+        imBar.dstAccessMask = imBar.srcAccessMask;
+        imBar.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+        vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0,
+                             nullptr, 0, nullptr, 1, &imBar);
+        THROW_RETURN_IF_FAIL(vkEndCommandBuffer(cb),
+                             "Present -> General CB recording begin failed!", result_tgfx_FAIL);
+      }
+
+      // Present Texture only once
+      if (queueFamListIterIndx == 0) {
+        VkCommandBuffer initializeCmdBuffers[2] = {};
+        // Allocate CB
+        {
+          VkCommandBufferAllocateInfo cb_ai = {};
+          cb_ai.commandBufferCount          = 2;
+          cb_ai.commandPool                 = transitionCmdPool;
+          cb_ai.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+          cb_ai.pNext                       = nullptr;
+          cb_ai.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+          THROW_RETURN_IF_FAIL(
+            vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai, initializeCmdBuffers),
+            "Presentation CB allocation failed!", result_tgfx_FAIL);
+        }
+        // Record first CB
+        {
+          VkCommandBufferBeginInfo cb_bi = {};
+          cb_bi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+          cb_bi.pNext                    = nullptr;
+          cb_bi.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+          vkBeginCommandBuffer(initializeCmdBuffers[0], &cb_bi);
+
+          imBar.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+          imBar.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+          vkCmdPipelineBarrier(initializeCmdBuffers[0], VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                               VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT,
+                               0, nullptr, 0, nullptr, 1, &imBar);
+
+          vkEndCommandBuffer(initializeCmdBuffers[0]);
+        }
+
+        // Submit to transition
+        {
+          VkSubmitInfo si         = {};
+          si.commandBufferCount   = 1;
+          si.pCommandBuffers      = &initializeCmdBuffers[0];
+          si.pNext                = nullptr;
+          si.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+          si.waitSemaphoreCount   = 0;
+          si.signalSemaphoreCount = 0;
+          ThrowIfFailed(vkQueueSubmit(queueFam->m_queues[0]->vk_queue, 1, &si, VK_NULL_HANDLE),
+                        "Queue submission for layout transition");
+        }
+
+        // Acquire
+        {
+          VkSemaphoreCreateInfo sem_ci = {};
+          sem_ci.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+          ThrowIfFailed(vkCreateSemaphore(GPU->vk_logical, &sem_ci, nullptr,
+                                          &window->vk_binarySemaphores[textureIndx]),
+                        "Creating swapchain's binary semaphore has failed!");
+          uint32_t currentImageIndx = UINT32_MAX;
+          THROW_RETURN_IF_FAIL(vkAcquireNextImageKHR(GPU->vk_logical, window->vk_swapchain, 1,
+                                                     window->vk_binarySemaphores[textureIndx],
+                                                     VK_NULL_HANDLE, &currentImageIndx),
+                               "Acquiring newly created swapchain textures has failed!",
+                               result_tgfx_FAIL);
+          printf("AcquireIndx: %u\n", currentImageIndx);
+        }
+
+        // Present
+        {
+          VkPresentInfoKHR info   = {};
+          info.pImageIndices      = &textureIndx;
+          info.pSwapchains        = &window->vk_swapchain;
+          info.waitSemaphoreCount = 0;
+          info.swapchainCount     = 1;
+          info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+          ThrowIfFailed(vkQueuePresentKHR(queueFam->m_queues[0]->vk_queue, &info),
+                        "Initial queue presentation failed!");
+        }
+
+        // Submit to transition
+        {
+          VkFence           currentTest = nullptr;
+          VkFenceCreateInfo fen_ci      = {};
+          fen_ci.sType                  = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+          ThrowIfFailed(vkCreateFence(GPU->vk_logical, &fen_ci, nullptr, &currentTest),
+                        "Creating initial acquire fence has failed!");
+
+          VkSubmitInfo si         = {};
+          si.commandBufferCount   = 1;
+          si.pCommandBuffers      = &window->vk_presentToGeneral[queueFam->vk_queueFamIndex][textureIndx];
+          si.pNext                = nullptr;
+          si.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+          si.waitSemaphoreCount   = 0;
+          si.signalSemaphoreCount = 0;
+          ThrowIfFailed(vkQueueSubmit(queueFam->m_queues[0]->vk_queue, 1, &si, currentTest),
+                        "Queue submission for layout transition");
+
+          ThrowIfFailed(vkWaitForFences(GPU->vk_logical, 1, &currentTest, VK_TRUE, UINT64_MAX),
+                        "Waiting for initial fence has failed!");
+        }
+      }
+    }
+    vkDestroyCommandPool(GPU->vk_logical, initializeCmdPool, nullptr);
+
+    queueFamListIterIndx++;
+  }
   /*
   // Create TEXTURE_VKOBJs and return handles
   window->vk_swapchainTextureUsage = swpchn_ci.imageUsage;
@@ -651,6 +820,24 @@ result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
   for (uint32_t i = 0; i < PresentationModesCount; i++) {
     info->presentationModes[i] = Find_TGFXPresentMode_byVk(Presentations[i]);
   }
+
+  uint32_t supportedQueueCount = 0;
+  for (uint32_t queueFamIndx = 0; queueFamIndx < GPU->manager()->m_queueFams.size();
+       queueFamIndx++) {
+    VkBool32 isSupported = false;
+    ThrowIfFailed(vkGetPhysicalDeviceSurfaceSupportKHR(GPU->vk_physical, queueFamIndx,
+                                                       window->vk_surface, &isSupported),
+                  "Querying queue family's swapchain support has failed!");
+    QUEUEFAM_VK* queueFam = GPU->manager()->m_queueFams[queueFamIndx];
+    if (isSupported) {
+      for (uint32_t queueIndx = 0; queueIndx < queueFam->m_queues.size(); queueIndx++) {
+        info->queues[supportedQueueCount++] =
+          queueFam->m_queues.returnHANDLEfromOBJ(queueFam->m_queues[queueIndx]);
+      }
+    }
+  }
+  info->queues[supportedQueueCount] = ( gpuQueue_tgfxhnd )core_tgfx_main->INVALIDHANDLE;
+
   return result_tgfx_SUCCESS;
 }
 

@@ -119,30 +119,47 @@ void load_systems() {
     printf("\n\nGPU Name: %s\n Queue Fam Count: %u\n", gpuDesc.NAME, gpuDesc.queueFamilyCount);
     tgfx->initGPU(gpu);
 
-    monitor_tgfxlsthnd monitors;
-    tgfx->getmonitorlist(&monitors);
-    TGFXLISTCOUNT(tgfx, monitors, monitorCount);
-    printf("Monitor Count: %u\n", monitorCount);
-    tgfx_window_description windowDesc = {};
-    windowDesc.size                    = {1280, 720};
-    windowDesc.Mode                    = windowmode_tgfx_WINDOWED;
-    windowDesc.monitor                 = monitors[0];
-    windowDesc.NAME                    = gpuDesc.NAME;
-    windowDesc.ResizeCB                = nullptr;
+
+    // Create window and the swapchain
     window_tgfxhnd window;
-    tgfx->createWindow(&windowDesc, nullptr, &window);
-    tgfx_swapchain_description swpchn_desc;
-    swpchn_desc.channels    = texture_channels_tgfx_BGRA8UNORM;
-    swpchn_desc.colorSpace  = colorspace_tgfx_sRGB_NONLINEAR;
-    swpchn_desc.composition = windowcomposition_tgfx_OPAQUE;
-    swpchn_desc.imageCount  = 2;
-    swpchn_desc.swapchainUsage =
-      tgfx->helpers->createUsageFlag_Texture(true, true, true, true, true);
-    swpchn_desc.presentationMode = windowpresentation_tgfx_FIFO;
-    swpchn_desc.window           = window;
-    tgfx_window_gpu_support swapchainSupport;
-    tgfx->helpers->getWindow_GPUSupport(window, gpu, &swapchainSupport);
-    tgfx->createSwapchain(gpu, &swpchn_desc, nullptr);
+    {
+      // Get monitor list
+      monitor_tgfxlsthnd monitors;
+      tgfx->getmonitorlist(&monitors);
+      TGFXLISTCOUNT(tgfx, monitors, monitorCount);
+      printf("Monitor Count: %u\n", monitorCount);
+
+      // Create window (OS operation)
+      tgfx_window_description windowDesc = {};
+      windowDesc.size                    = {1280, 720};
+      windowDesc.Mode                    = windowmode_tgfx_WINDOWED;
+      windowDesc.monitor                 = monitors[0];
+      windowDesc.NAME                    = gpuDesc.NAME;
+      windowDesc.ResizeCB                = nullptr;
+      tgfx->createWindow(&windowDesc, nullptr, &window);
+
+      // Create swapchain (GPU operation)
+      tgfx_swapchain_description swpchn_desc;
+      swpchn_desc.channels    = texture_channels_tgfx_BGRA8UNORM;
+      swpchn_desc.colorSpace  = colorspace_tgfx_sRGB_NONLINEAR;
+      swpchn_desc.composition = windowcomposition_tgfx_OPAQUE;
+      swpchn_desc.imageCount  = 2;
+      swpchn_desc.swapchainUsage =
+        tgfx->helpers->createUsageFlag_Texture(true, true, true, true, true);
+      swpchn_desc.presentationMode             = windowpresentation_tgfx_FIFO;
+      swpchn_desc.window                      = window;
+
+      // Get all supported queues of the first GPU
+      gpuQueue_tgfxhnd        allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
+      tgfx_window_gpu_support swapchainSupport                               = {};
+      tgfx->helpers->getWindow_GPUSupport(window, gpu, &swapchainSupport);
+      for (uint32_t i = 0; i < TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT; i++) {
+        allQueues[i] =  swapchainSupport.queues[i];
+      }
+      swpchn_desc.permittedQueues = allQueues;
+      tgfx->createSwapchain(gpu, &swpchn_desc, nullptr);
+    }
+
     fence_tgfxhnd fence;
     renderer->createFences(gpu, 1, 15u, &fence);
     for (uint32_t queueFamIndx = 0; queueFamIndx < 1; queueFamIndx++) {

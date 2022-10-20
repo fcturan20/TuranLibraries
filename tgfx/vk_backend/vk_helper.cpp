@@ -16,6 +16,7 @@
 #include "vk_predefinitions.h"
 #include "vk_renderer.h"
 #include "vk_resource.h"
+#include "vk_queue.h"
 
 // Hardware Capability Helpers
 static unsigned char GetTextureTypeLimits(texture_dimensions_tgfx dims, textureOrder_tgfx dataorder,
@@ -257,10 +258,36 @@ static blendinginfo_tgfx_handle CreateBlendingConfiguration(
 }
 
 void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxlsthnd i_exts,
-                                uint32_t* o_famList, uint32_t* o_famListSize,
-                                VkSharingMode* o_sharingMode) {
+                                uint32_t  o_famList[VKCONST_MAXQUEUEFAMCOUNT_PERGPU],
+                                uint32_t* o_famListSize, VkSharingMode* o_sharingMode) {
   TGFXLISTCOUNT(core_tgfx_main, i_queueList, i_listSize);
-  for (uint32_t i = 0; i < i_listSize; i++) {
+  uint32_t   validQueueFamCount = 0;
+  GPU_VKOBJ* theGPU             = nullptr;
+  for (uint32_t listIndx = 0; listIndx < i_listSize; listIndx++) {
+    getGPUfromQueueHnd(i_queueList[listIndx]);
+    if (!theGPU) {
+      theGPU = gpu;
+    }
+    assert(theGPU == gpu && "Queues from different devices!");
+    bool isPreviouslyAdded = false;
+    for (uint32_t validQueueIndx = 0; validQueueIndx < validQueueFamCount; validQueueIndx++) {
+      if (o_famList[validQueueIndx] == queue->vk_queueFamIndex) {
+        isPreviouslyAdded = true;
+        break;
+      }
+    }
+    if (!isPreviouslyAdded) {
+      o_famList[validQueueFamCount++] = queue->vk_queueFamIndex;
+    }
+  }
+  if (validQueueFamCount > 1) {
+    *o_sharingMode = VK_SHARING_MODE_CONCURRENT;
+  } else {
+    *o_sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  }
+  *o_famListSize = validQueueFamCount;
+  for (uint32_t i = *o_famListSize; i < VKCONST_MAXQUEUEFAMCOUNT_PERGPU; i++) {
+    o_famList[i] = UINT32_MAX;
   }
 }
 

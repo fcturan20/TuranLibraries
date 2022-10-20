@@ -24,11 +24,6 @@ void vk_next_rendersubpass(commandbuffer_tgfx_handle commandBuffer,
                            renderSubPass_tgfxhnd     renderSubPass) {}
 void vk_end_renderpass(commandbuffer_tgfx_handle commandBuffer) {}
 
-#define getGPUfromQueueHnd(i_queue)                               \
-  VKOBJHANDLE  queueHnd = *( VKOBJHANDLE* )&i_queue;              \
-  GPU_VKOBJ*   gpu      = QUEUE_VKOBJ::getGPUfromHandle(i_queue); \
-  QUEUEFAM_VK* fam      = QUEUE_VKOBJ::getFAMfromHandle(i_queue); \
-  QUEUE_VKOBJ* queue    = fam->m_queues.getOBJfromHANDLE(i_queue);
 
 void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandbuffer_tgfxlsthnd i_cmdBuffersList,
                                extension_tgfxlsthnd exts) {
@@ -110,15 +105,15 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
                      const uint32_t* imageIndices) {
   getGPUfromQueueHnd(i_queue);
 
-  if (queue->activeQueueOp != QUEUE_VKOBJ::ERROR_QUEUEOPTYPE &&
-      queue->activeQueueOp != QUEUE_VKOBJ::PRESENT) {
+  if (queue->m_activeQueueOp != QUEUE_VKOBJ::ERROR_QUEUEOPTYPE &&
+      queue->m_activeQueueOp != QUEUE_VKOBJ::PRESENT) {
     printer(result_tgfx_FAIL,
             "You can't call present while queue's active operation type is different (cmdbuffer or "
             "sparse)");
     return;
   }
 
-  queue->activeQueueOp = QUEUE_VKOBJ::PRESENT;
+  queue->m_activeQueueOp = QUEUE_VKOBJ::PRESENT;
   submit_vk* submit    = queue->m_submitInfos.add();
 
   

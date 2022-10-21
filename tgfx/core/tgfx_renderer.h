@@ -47,8 +47,7 @@ typedef struct tgfx_renderer {
   void (*queueExecuteCmdBuffers)(gpuQueue_tgfxhnd         queue,
                                  commandbuffer_tgfxlsthnd commandBuffersList,
                                  extension_tgfxlsthnd     exts);
-  void (*queuePresent)(gpuQueue_tgfxhnd queue, const window_tgfxlsthnd windowlist,
-                       const uint32_t* imageIndices);
+  void (*queuePresent)(gpuQueue_tgfxhnd queue, const window_tgfxlsthnd windowlist);
   // Submit queue operations to GPU.
   // You should call this right before changing Queue Operation type.
   // Queue Operation Types: ExecuteCmdBuffers, Present, BindSparse (optional, in future)

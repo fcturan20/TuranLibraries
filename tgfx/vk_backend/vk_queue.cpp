@@ -355,14 +355,9 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
         }
       }
 
-      VkSemaphore binAcquireSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
+      VkSemaphore binAcquireSemaphores[VKCONST_MAXSWPCHNCOUNT_PERSUBMIT] = {};
       for (uint32_t i = 0; i < swpchnCount; i++) {
-        uint32_t swpchnIndx = 0;
-        ThrowIfFailed(vkAcquireNextImageKHR(queue->m_gpu->vk_logical, swpchns[i], UINT64_MAX,
-                                            windows[i]->vk_binarySemaphores[swpchnIndices[i]],
-                                            nullptr, &swpchnIndx),
-                      "Acquiring swapchain texture has failed!");
-        binAcquireSemaphores[i] = windows[i]->vk_binarySemaphores[swpchnIndices[i]];
+        binAcquireSemaphores[i] = windows[i]->vk_acquireSemaphore;
       }
 
       VkSemaphore binarySignalSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
@@ -389,15 +384,15 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
         si.pCommandBuffers                    = generalToPresent;
         si.pWaitDstStageMask                  = VKCONST_PRESENTWAITSTAGEs;
         if (queue->m_prevQueueOp == QUEUE_VKOBJ::CMDBUFFER) {
-          si.waitSemaphoreCount      = waitSemCount + 1;
+          si.waitSemaphoreCount = waitSemCount + 1;
           timInfo.waitSemaphoreValueCount++;
           waitValues[waitSemCount]     = 0;
           waitSemaphores[waitSemCount] = queue->vk_callSynchronizer;
         }
-        si.waitSemaphoreCount                 = waitSemCount;
-        si.pWaitSemaphores                    = waitSemaphores;
-        si.signalSemaphoreCount               = waitSemCount;
-        si.pSignalSemaphores                  = binarySignalSemaphores;
+        si.waitSemaphoreCount   = waitSemCount;
+        si.pWaitSemaphores      = waitSemaphores;
+        si.signalSemaphoreCount = waitSemCount;
+        si.pSignalSemaphores    = binarySignalSemaphores;
         ThrowIfFailed(vkQueueSubmit(queue->vk_queue, 1, &si, VK_NULL_HANDLE),
                       "Present's Timeline->Binary converter failed at queue submission!");
       }
@@ -412,9 +407,8 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
       // Because we don't have timeline semaphore emulation in binary semaphores
       info.waitSemaphoreCount = waitSemCount;
       info.pWaitSemaphores    = binarySignalSemaphores;
-      info.pResults = nullptr;
+      info.pResults           = nullptr;
       ThrowIfFailed(vkQueuePresentKHR(queue->vk_queue, &info), "Queue Present has failed!");
-
 
       // Send a submit to signal timeline semaphore when all binary semaphore are signaled
       {

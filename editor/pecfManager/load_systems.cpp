@@ -119,9 +119,9 @@ void load_systems() {
     printf("\n\nGPU Name: %s\n Queue Fam Count: %u\n", gpuDesc.NAME, gpuDesc.queueFamilyCount);
     tgfx->initGPU(gpu);
 
-
     // Create window and the swapchain
-    window_tgfxhnd window;
+    window_tgfxhnd             window;
+    tgfx_swapchain_description swpchn_desc;
     {
       // Get monitor list
       monitor_tgfxlsthnd monitors;
@@ -139,22 +139,21 @@ void load_systems() {
       tgfx->createWindow(&windowDesc, nullptr, &window);
 
       // Create swapchain (GPU operation)
-      tgfx_swapchain_description swpchn_desc;
       swpchn_desc.channels    = texture_channels_tgfx_BGRA8UNORM;
       swpchn_desc.colorSpace  = colorspace_tgfx_sRGB_NONLINEAR;
       swpchn_desc.composition = windowcomposition_tgfx_OPAQUE;
       swpchn_desc.imageCount  = 2;
       swpchn_desc.swapchainUsage =
         tgfx->helpers->createUsageFlag_Texture(true, true, true, true, true);
-      swpchn_desc.presentationMode             = windowpresentation_tgfx_FIFO;
-      swpchn_desc.window                      = window;
+      swpchn_desc.presentationMode = windowpresentation_tgfx_IMMEDIATE;
+      swpchn_desc.window           = window;
 
       // Get all supported queues of the first GPU
       gpuQueue_tgfxhnd        allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
       tgfx_window_gpu_support swapchainSupport                               = {};
       tgfx->helpers->getWindow_GPUSupport(window, gpu, &swapchainSupport);
       for (uint32_t i = 0; i < TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT; i++) {
-        allQueues[i] =  swapchainSupport.queues[i];
+        allQueues[i] = swapchainSupport.queues[i];
       }
       swpchn_desc.permittedQueues = allQueues;
       tgfx->createSwapchain(gpu, &swpchn_desc, nullptr);
@@ -174,10 +173,6 @@ void load_systems() {
         fence_tgfxhnd   waitFences[2] = {fence, ( fence_tgfxhnd )tgfx->INVALIDHANDLE};
         renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
         renderer->queueSubmit(queue);
-        window_tgfxhnd windowlst[2]     = {window, ( window_tgfxhnd )tgfx->INVALIDHANDLE};
-        uint32_t       swpchnIndices[2] = {0};
-        renderer->queuePresent(queue, windowlst, swpchnIndices);
-        renderer->queueSubmit(queue);
 
         for (uint32_t i = 0; i < 3; i++) {
           _sleep(1 << 4);
@@ -186,13 +181,20 @@ void load_systems() {
           printf("Fence Values: %u\n", value);
         }
 
-        swpchnIndices[0]++;
-        renderer->queuePresent(queue, windowlst, swpchnIndices);
-        renderer->queueSubmit(queue);
-
         STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);
         waitValue++;
         signalValue++;
+
+        window_tgfxhnd windowlst[2] = {window, ( window_tgfxhnd )tgfx->INVALIDHANDLE};
+        uint32_t       swpchnIndx   = UINT32_MAX;
+        while (true) {
+          TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "presentation", &duration);
+          tgfx->getCurrentSwapchainTextureIndex(window, &swpchnIndx);
+          renderer->queuePresent(queue, windowlst);
+          renderer->queueSubmit(queue);
+          STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);
+          printf("Finished and index: %u\n", swpchnIndx);
+        }
       }
       printf("Queue Count: %u\n\n", queueCount_perFam);
     }

@@ -64,8 +64,9 @@ struct WINDOW_VKOBJ {
   WINDOW_VKOBJ() = default;
   unsigned int              m_lastWidth, m_lastHeight, m_newWidth, m_newHeight;
   windowmode_tgfx           m_displayMode = windowmode_tgfx_WINDOWED;
-  MONITOR_VKOBJ*            m_monitor     = {};
-  const char*               m_name        = {};
+  MONITOR_VKOBJ*            m_monitor     = nullptr;
+  GPU_VKOBJ*                m_gpu         = nullptr;
+  const char*               m_name        = nullptr;
   tgfx_windowResizeCallback m_resizeFnc   = nullptr;
   void*                     m_userData    = nullptr;
   texture_tgfxhnd           m_swapchainTextures[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
@@ -73,7 +74,7 @@ struct WINDOW_VKOBJ {
   bool                      m_isResized = false, m_isSwapped = false;
   // Presentation Fences should only be used for CPU to wait
   fence_tgfxlsthnd m_presentationFences;
-  VkSemaphore      vk_binarySemaphores[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
+  VkSemaphore      vk_acquireSemaphore = {};
 
   VkSurfaceKHR    vk_surface    = {};
   VkSwapchainKHR  vk_swapchain  = {};

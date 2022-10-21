@@ -24,7 +24,6 @@ void vk_next_rendersubpass(commandbuffer_tgfx_handle commandBuffer,
                            renderSubPass_tgfxhnd     renderSubPass) {}
 void vk_end_renderpass(commandbuffer_tgfx_handle commandBuffer) {}
 
-
 void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandbuffer_tgfxlsthnd i_cmdBuffersList,
                                extension_tgfxlsthnd exts) {
   getGPUfromQueueHnd(i_queue);
@@ -101,8 +100,7 @@ void vk_queueSubmit(gpuQueue_tgfxhnd i_queue) {
   getGPUfromQueueHnd(i_queue);
   gpu->manager()->queueSubmit(queue);
 }
-void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlist,
-                     const uint32_t* imageIndices) {
+void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlist) {
   getGPUfromQueueHnd(i_queue);
 
   if (queue->m_activeQueueOp != QUEUE_VKOBJ::ERROR_QUEUEOPTYPE &&
@@ -114,9 +112,8 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
   }
 
   queue->m_activeQueueOp = QUEUE_VKOBJ::PRESENT;
-  submit_vk* submit    = queue->m_submitInfos.add();
+  submit_vk* submit      = queue->m_submitInfos.add();
 
-  
   uint32_t windowCount = 0;
   {
     TGFXLISTCOUNT(core_tgfx_main, windowlist, windowListSize);
@@ -126,7 +123,6 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
         continue;
       }
       submit->m_windows[windowCount] = window;
-      window->m_swapchainCurrentTextureIndx = imageIndices[i];
       windowCount++;
     }
   }

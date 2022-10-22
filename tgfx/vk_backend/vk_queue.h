@@ -4,7 +4,7 @@
 #include "vk_core.h"
 #include "vk_predefinitions.h"
 
-vk_uint32c                    VKCONST_MAXSUBMITCOUNT = 32;
+vk_uint32c                    VKCONST_MAXSUBMITCOUNT = 32, VKCONST_MAXQUEUEFENCECOUNT = 32;
 extern vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER;
 // Initializes as everything is false (same as CreateInvalidNullFlag)
 struct queueflag_vk {
@@ -61,6 +61,9 @@ struct submit_vk {
   VkPresentInfoKHR              vk_present       = {};
   VkBindSparseInfo              vk_bindSparse    = {};
 
+  cmdBuffer_vk* cmdBuffers[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
+  uint32_t      cmdBufferCount                                  = 0;
+
   VkSemaphore vk_signalSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {},
               vk_waitSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]   = {};
 
@@ -68,6 +71,15 @@ struct submit_vk {
            vk_waitSemaphoreValues[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]   = {};
 
   WINDOW_VKOBJ* m_windows[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
+};
+
+struct submission_vk {
+  bool            isALIVE    = false;
+  vk_handleType   HANDLETYPE = VKHANDLETYPEs::INTERNAL;
+  static uint16_t GET_EXTRAFLAGS(submit_vk* obj) { return 0; }
+
+  VkFence       vk_fence                                                             = {};
+  cmdBuffer_vk* vk_cbs[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT * VKCONST_MAXSUBMITCOUNT] = {};
 };
 
 // Handle both has GPU's ID & QueueFamily's ID
@@ -86,12 +98,14 @@ struct QUEUE_VKOBJ {
 
   enum vk_queueOpType : uint8_t { ERROR_QUEUEOPTYPE = 0, CMDBUFFER = 1, PRESENT = 2, SPARSE = 3 };
   vk_queueOpType m_activeQueueOp = ERROR_QUEUEOPTYPE, m_prevQueueOp = ERROR_QUEUEOPTYPE;
-  GPU_VKOBJ*     m_gpu         = nullptr;
+  GPU_VKOBJ*     m_gpu = nullptr;
   // Operations that wait to be sent to GPU
   VK_STATICVECTOR<submit_vk, void*, VKCONST_MAXSUBMITCOUNT> m_submitInfos;
   // This is a binary semaphore to sync sequential executeCmdBufferList calls in the same queue
   // (DX12 way)
-  VkSemaphore  vk_callSynchronizer = {};
+  VkSemaphore                                                       vk_callSynchronizer = {};
+  VK_STATICVECTOR<submission_vk, void*, VKCONST_MAXQUEUEFENCECOUNT> vk_submitTracker;
+
   QUEUE_VKOBJ& operator=(const QUEUE_VKOBJ& src) {
     vk_queue         = src.vk_queue;
     vk_queueFamIndex = src.vk_queueFamIndex;
@@ -120,23 +134,23 @@ struct QUEUEFAM_VK {
     return *this;
   }
 };
-
+static constexpr uint32_t sizeosdf = sizeof(QUEUEFAM_VK);
 /*
-    This class manages queues, command buffer and descriptor set allocations per GPU
-      This is important in multi-threaded cases because;
-    1) You can't use the same command pool from different threads at the same time
-    2) You can't allocate-free descriptor sets from the same descPool at the same time
-        But you can write to them, so no issue except descriptor count is limited by hardware
-    3) Command buffers should be tracked as if their execution has done, free command buffer
-    4) Execution tracking is achieved by tracking queues, fences etc. So queues should be managed
-        here too
-   NOTE: User-side command buffers are different because they're not actual calls (sorting
-   is needed) So after sorting, thread calls poolManager to get command buffer. poolManager find
-   available command pool, if there isn't then creates. Then attaches command pool to queue, so if
-   queue finishes executing then command pool is freed. *POSSIBILITY: Maybe no need to bind command
-   pools, just bind command buffers to queue.
-      *  While creating cmdbuffers, search all previous pools and select the one with
-          no actively recorded-executed cmdbuffer. Because pool creation-destruction is costly.
+  This class manages queues, command buffer and descriptor set allocations per GPU
+    This is important in multi-threaded cases because;
+  1) You can't use the same command pool from different threads at the same time
+  2) You can't allocate-free descriptor sets from the same descPool at the same time
+      But you can write to them, so no issue except descriptor count is limited by hardware
+  3) Command buffers should be tracked as if their execution has done, free command buffer
+  4) Execution tracking is achieved by tracking queues, fences etc. So queues should be managed
+      here too
+ NOTE: User-side command buffers are different because they're not actual calls (sorting
+ is needed) So after sorting, thread calls poolManager to get command buffer. poolManager find
+ available command pool, if there isn't then creates. Then attaches command pool to queue, so if
+ queue finishes executing then command pool is freed. *POSSIBILITY: Maybe no need to bind command
+ pools, just bind command buffers to queue.
+    *  While creating cmdbuffers, search all previous pools and select the one with
+        no actively recorded-executed cmdbuffer. Because pool creation-destruction is costly.
 */
 struct manager_vk {
  public:
@@ -170,3 +184,4 @@ struct manager_vk {
 
   VK_STATICVECTOR<QUEUEFAM_VK, gpuQueue_tgfxhnd, VKCONST_MAXQUEUEFAMCOUNT_PERGPU> m_queueFams;
 };
+static constexpr uint32_t sdf = sizeof(manager_vk);

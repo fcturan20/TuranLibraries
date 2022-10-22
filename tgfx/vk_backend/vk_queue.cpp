@@ -20,23 +20,21 @@ queueflag_vk::operator uint8_t() const {
   return 0;
 };
 struct cmdBuffer_vk {
-  bool            isALIVE = true;
-  VkCommandBuffer CB;
-  bool            is_Used = false;
-  // Pointer to allocated space for storing render calls below
-  unsigned int             DATAPTR = 0;
-  tgfx_rendererKeySortFunc sortFunc;
+  bool                 isALIVE  = false;
+  VkCommandBuffer      vk_cb    = nullptr;
+  VkCommandBufferLevel vk_level = VK_COMMAND_BUFFER_LEVEL_MAX_ENUM;
+  bool                 m_isFree = false;
 };
 
 struct cmdPool_vk {
   cmdPool_vk() = default;
-  cmdPool_vk(const cmdPool_vk& RefCP) { CPHandle = RefCP.CPHandle; }
-  void          operator=(const cmdPool_vk& RefCP) { CPHandle = RefCP.CPHandle; }
-  cmdBuffer_vk& createCmdBuffer();
+  cmdPool_vk(const cmdPool_vk& RefCP) { vk_cp = RefCP.vk_cp; }
+  void          operator=(const cmdPool_vk& RefCP) { vk_cp = RefCP.vk_cp; }
+  cmdBuffer_vk  createCmdBuffer();
   void          destroyCmdBuffer();
-  VkCommandPool CPHandle = VK_NULL_HANDLE;
-  // First cmdBuffer is the empty CB
-  VK_STATICVECTOR<cmdBuffer_vk, void*, 1 << 8> CBs;
+  VkCommandPool vk_cp = VK_NULL_HANDLE;
+
+  VK_STATICVECTOR<cmdBuffer_vk, void*, 1 << 8> m_cbs;
 
  private:
   std::mutex Sync;
@@ -56,7 +54,7 @@ QUEUEFAM_VK* QUEUE_VKOBJ::getFAMfromHandle(gpuQueue_tgfxhnd hnd) {
 manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
   if (!VKGLOBAL_VIRMEM_MANAGER) {
     // 16MB is enough I guess?
-    VKGLOBAL_VIRMEM_MANAGER = vk_virmem::allocate_dynamicmem(1 << 24);
+    VKGLOBAL_VIRMEM_MANAGER = vk_virmem::allocate_dynamicmem(1 << 25);
   }
   manager_vk* mngr = new (VKGLOBAL_VIRMEM_MANAGER) manager_vk;
   mngr->m_gpu      = gpu;
@@ -227,7 +225,7 @@ void manager_vk::get_queue_objects() {
       cp_ci_g.pNext = nullptr;
 
       ThrowIfFailed(vkCreateCommandPool(m_gpu->vk_logical, &cp_ci_g, nullptr,
-                                        &m_queueFams[queuefamindex]->m_pools[i].CPHandle),
+                                        &m_queueFams[queuefamindex]->m_pools[i].vk_cp),
                     "Command pool creation for a queue has failed at vkCreateCommandPool()!");
     }
   }
@@ -253,49 +251,97 @@ cmdBuffer_vk* manager_vk::get_commandbuffer(QUEUEFAM_VK* family, bool isSecondar
 
   VkCommandBufferAllocateInfo cb_ai = {};
   cb_ai.commandBufferCount          = 1;
-  cb_ai.commandPool                 = CP.CPHandle;
+  cb_ai.commandPool                 = CP.vk_cp;
   cb_ai.level = isSecondary ? VK_COMMAND_BUFFER_LEVEL_SECONDARY : VK_COMMAND_BUFFER_LEVEL_PRIMARY;
   cb_ai.pNext = nullptr;
   cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 
-  cmdBuffer_vk* VK_CB = CP.CBs.add();
-  if (vkAllocateCommandBuffers(m_gpu->vk_logical, &cb_ai, &VK_CB->CB) != VK_SUCCESS) {
+  cmdBuffer_vk* VK_CB = CP.m_cbs.add();
+  if (vkAllocateCommandBuffers(m_gpu->vk_logical, &cb_ai, &VK_CB->vk_cb) != VK_SUCCESS) {
     printer(result_tgfx_FAIL,
             "vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, "
             "report this please!");
     return nullptr;
   }
-
-  VK_CB->is_Used = false;
+  VK_CB->vk_level = cb_ai.level;
+  VK_CB->m_isFree = false;
   return VK_CB;
 }
 
-VkCommandBuffer manager_vk::get_commandbufferobj(cmdBuffer_vk* id) { return id->CB; }
+VkCommandBuffer manager_vk::get_commandbufferobj(cmdBuffer_vk* id) { return id->vk_cb; }
 
 static constexpr VkPipelineStageFlags
   VKCONST_PRESENTWAITSTAGEs[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {
     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
 void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
+  // Check previously sent submission to detect if they're still executing
+  for (int32_t i = 0; i < queue->vk_submitTracker.size(); i++) {
+    submission_vk* submission = queue->vk_submitTracker[i];
+    if (!submission->isALIVE) {
+      continue;
+    }
+    if (vkGetFenceStatus(queue->m_gpu->vk_logical, submission->vk_fence) == VK_SUCCESS) {
+      for (uint32_t cbIndx = 0;
+           cbIndx < VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT * VKCONST_MAXSUBMITCOUNT; cbIndx++) {
+        if (submission->vk_cbs[cbIndx] == nullptr) {
+          break;
+        }
+        submission->vk_cbs[cbIndx]->m_isFree = true;
+      }
+      vkDestroyFence(queue->m_gpu->vk_logical, submission->vk_fence, nullptr);
+      // Index is int, so this works fine
+      queue->vk_submitTracker.erase(i--);
+    }
+  }
   switch (queue->m_activeQueueOp) {
-    case QUEUE_VKOBJ::ERROR_QUEUEOPTYPE:
+    case QUEUE_VKOBJ::ERROR_QUEUEOPTYPE: queue->m_activeQueueOp = QUEUE_VKOBJ::CMDBUFFER;
     case QUEUE_VKOBJ::CMDBUFFER: {
-      VkSubmitInfo infos[VKCONST_MAXSUBMITCOUNT] = {};
-      for (uint32_t i = 0; i < queue->m_submitInfos.size(); i++) {
-        submit_vk* submit = queue->m_submitInfos[i];
-        if (i == queue->m_submitInfos.size() - 1) {
+      VkSubmitInfo    infos[VKCONST_MAXSUBMITCOUNT]                                           = {};
+      VkCommandBuffer cmdBuffers[VKCONST_MAXSUBMITCOUNT][VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
+      VkFence         submitFence                                                             = {};
+      {
+        VkFenceCreateInfo f_ci = {};
+        f_ci.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        ThrowIfFailed(vkCreateFence(m_gpu->vk_logical, &f_ci, nullptr, &submitFence),
+                      "Submission tracker fence creation failed!");
+      }
+      for (uint32_t submitIndx = 0; submitIndx < queue->m_submitInfos.size(); submitIndx++) {
+        submit_vk* submit = queue->m_submitInfos[submitIndx];
+        // Add queue call synchronizer semaphore as wait to sync sequential executeCmdLists calls
+        if (submitIndx == 0 && queue->m_prevQueueOp == QUEUE_VKOBJ::CMDBUFFER) {
+          submit->vk_waitSemaphores[submit->vk_submit.waitSemaphoreCount++] =
+            queue->vk_callSynchronizer;
+          submit->vk_waitSemaphoreValues[submit->vk_semaphoreInfo.waitSemaphoreValueCount++] = 0;
+        }
+        // Add queue call synchronizer semaphore as signal to the last submit
+        if (submitIndx == queue->m_submitInfos.size() - 1) {
           submit->vk_signalSemaphores[submit->vk_submit.signalSemaphoreCount++] =
             queue->vk_callSynchronizer;
           submit->vk_signalSemaphoreValues[submit->vk_semaphoreInfo.signalSemaphoreValueCount++] =
             0;
         }
-        infos[i] = submit->vk_submit;
+        for (uint32_t cmdBufferIndx = 0; cmdBufferIndx < submit->vk_submit.commandBufferCount;
+             cmdBufferIndx++) {
+          cmdBuffers[submitIndx][cmdBufferIndx] = submit->cmdBuffers[cmdBufferIndx]->vk_cb;
+        }
+        // submit->vk_submit.pCommandBuffers = cmdBuffers[submitIndx];
+        infos[submitIndx] = submit->vk_submit;
       }
-      ThrowIfFailed(
-        vkQueueSubmit(queue->vk_queue, queue->m_submitInfos.size(), infos, VK_NULL_HANDLE),
-        "Queue Submission has failed!");
-      queue->m_prevQueueOp   = queue->m_activeQueueOp;
-      queue->m_activeQueueOp = QUEUE_VKOBJ::ERROR_QUEUEOPTYPE;
+      ThrowIfFailed(vkQueueSubmit(queue->vk_queue, queue->m_submitInfos.size(), infos, submitFence),
+                    "Queue Submission has failed!");
+
+      // Add this submit call to tracker
+      submission_vk* tracker  = queue->vk_submitTracker.add();
+      tracker->vk_fence       = submitFence;
+      uint32_t cmdBufferCount = 0;
+      for (uint32_t submitIndx = 0; submitIndx < queue->m_submitInfos.size(); submitIndx++) {
+        submit_vk* submit = queue->m_submitInfos[submitIndx];
+        for (uint32_t cmdBufferIndx = 0; cmdBufferIndx < submit->vk_submit.commandBufferCount;
+             cmdBufferIndx++) {
+          tracker->vk_cbs[cmdBufferCount++] = submit->cmdBuffers[cmdBufferIndx];
+        }
+      }
     } break;
     case QUEUE_VKOBJ::PRESENT: {
       VkSwapchainKHR swpchns[VKCONST_MAXSWPCHNCOUNT_PERSUBMIT]       = {};
@@ -363,6 +409,8 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
       VkSemaphore binarySignalSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
       // Submit for timeline -> binary conversion
       {
+        // TODO: Use vk_synchronization.h to get unsignaled semaphores, because of semaphore leak
+        // (these semaphores aren't destroyed)
         for (uint32_t i = 0; i < waitSemCount; i++) {
           VkSemaphoreCreateInfo ci = {};
           ci.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
@@ -382,15 +430,15 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
         si.pNext                              = nullptr;
         si.commandBufferCount                 = swpchnCount;
         si.pCommandBuffers                    = generalToPresent;
+        si.waitSemaphoreCount                 = waitSemCount;
         si.pWaitDstStageMask                  = VKCONST_PRESENTWAITSTAGEs;
+        si.pWaitSemaphores                    = waitSemaphores;
         if (queue->m_prevQueueOp == QUEUE_VKOBJ::CMDBUFFER) {
           si.waitSemaphoreCount = waitSemCount + 1;
           timInfo.waitSemaphoreValueCount++;
           waitValues[waitSemCount]     = 0;
           waitSemaphores[waitSemCount] = queue->vk_callSynchronizer;
         }
-        si.waitSemaphoreCount   = waitSemCount;
-        si.pWaitSemaphores      = waitSemaphores;
         si.signalSemaphoreCount = waitSemCount;
         si.pSignalSemaphores    = binarySignalSemaphores;
         ThrowIfFailed(vkQueueSubmit(queue->vk_queue, 1, &si, VK_NULL_HANDLE),
@@ -408,6 +456,9 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
       info.waitSemaphoreCount = waitSemCount;
       info.pWaitSemaphores    = binarySignalSemaphores;
       info.pResults           = nullptr;
+      if (info.swapchainCount == 0) {
+        assert(0);
+      }
       ThrowIfFailed(vkQueuePresentKHR(queue->vk_queue, &info), "Queue Present has failed!");
 
       // Send a submit to signal timeline semaphore when all binary semaphore are signaled
@@ -439,6 +490,8 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
       break;
   }
   queue->m_submitInfos.clear();
+  queue->m_prevQueueOp   = queue->m_activeQueueOp;
+  queue->m_activeQueueOp = QUEUE_VKOBJ::ERROR_QUEUEOPTYPE;
 }
 bool manager_vk::does_queuefamily_support(QUEUE_VKOBJ* family, const queueflag_vk& flag) {
   printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");

@@ -14,9 +14,9 @@
 #include "vk_extension.h"
 #include "vk_includes.h"
 #include "vk_predefinitions.h"
+#include "vk_queue.h"
 #include "vk_renderer.h"
 #include "vk_resource.h"
-#include "vk_queue.h"
 
 // Hardware Capability Helpers
 static unsigned char GetTextureTypeLimits(texture_dimensions_tgfx dims, textureOrder_tgfx dataorder,
@@ -258,8 +258,8 @@ static blendinginfo_tgfx_handle CreateBlendingConfiguration(
 }
 
 void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxlsthnd i_exts,
-                                uint32_t  o_famList[VKCONST_MAXQUEUEFAMCOUNT_PERGPU],
-                                uint32_t* o_famListSize, VkSharingMode* o_sharingMode) {
+                                uint32_t* o_famList, uint32_t* o_famListSize,
+                                VkSharingMode* o_sharingMode) {
   TGFXLISTCOUNT(core_tgfx_main, i_queueList, i_listSize);
   uint32_t   validQueueFamCount = 0;
   GPU_VKOBJ* theGPU             = nullptr;

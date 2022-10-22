@@ -261,9 +261,12 @@ inline void vk_checkComputerSpecs() {
   // CHECK GPUs
   uint32_t GPU_NUMBER = 0;
   vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &GPU_NUMBER, nullptr);
-  VkPhysicalDevice* Physical_GPU_LIST = ( VkPhysicalDevice* )VK_ALLOCATE_AND_GETPTR(
-    VKGLOBAL_VIRMEM_CURRENTFRAME, sizeof(VkPhysicalDevice) * GPU_NUMBER);
-  vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &GPU_NUMBER, Physical_GPU_LIST);
+  if (GPU_NUMBER > VKCONST_MAXGPUCOUNT) {
+    printer(result_tgfx_FAIL, "Your device has more GPUs than supported!");
+    return;
+  }
+  VkPhysicalDevice PhysicalGPUs[VKCONST_MAXGPUCOUNT] = {};
+  vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &GPU_NUMBER, PhysicalGPUs);
 
   if (GPU_NUMBER == 0) {
     printer(result_tgfx_FAIL,
@@ -275,7 +278,7 @@ inline void vk_checkComputerSpecs() {
   for (unsigned int i = 0; i < GPU_NUMBER; i++) {
     // GPU initializer handles everything else
     GPU_VKOBJ* vkgpu   = hidden->DEVICE_GPUs.add();
-    vkgpu->vk_physical = Physical_GPU_LIST[i];
+    vkgpu->vk_physical = PhysicalGPUs[i];
 
     // Analize GPU memory & extensions
     vk_analizeGPUmemory(vkgpu);

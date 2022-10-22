@@ -181,15 +181,26 @@ void load_systems() {
           printf("Fence Values: %u\n", value);
         }
 
+        window_tgfxhnd windowlst[2] = {window, ( window_tgfxhnd )tgfx->INVALIDHANDLE};
+        uint32_t       swpchnIndx   = UINT32_MAX;
+        tgfx->getCurrentSwapchainTextureIndex(window, &swpchnIndx);
+        renderer->queuePresent(queue, windowlst);
+        renderer->queueSubmit(queue);
+
         STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);
         waitValue++;
         signalValue++;
 
-        window_tgfxhnd windowlst[2] = {window, ( window_tgfxhnd )tgfx->INVALIDHANDLE};
-        uint32_t       swpchnIndx   = UINT32_MAX;
-        while (true) {
+        int i = 0;
+        while (++i) {
           TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "presentation", &duration);
           tgfx->getCurrentSwapchainTextureIndex(window, &swpchnIndx);
+          if (i % 2) {
+            renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
+            renderer->queueSubmit(queue);
+          }
+          waitValue++;
+          signalValue++;
           renderer->queuePresent(queue, windowlst);
           renderer->queueSubmit(queue);
           STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);

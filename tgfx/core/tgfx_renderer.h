@@ -2,7 +2,7 @@
 #include "tgfx_forwarddeclarations.h"
 #include "tgfx_structs.h"
 
-typedef void (*tgfx_rendererKeySortFunc)(unsigned long long* keyList);
+typedef void (*tgfx_rendererKeySortFunc)(unsigned long long* keyList, void* userData);
 typedef tgfx_rendererKeySortFunc rendererKeySortFunc_tgfx;
 typedef struct tgfx_renderer {
   // Command Buffer Functions
@@ -10,18 +10,20 @@ typedef struct tgfx_renderer {
 
   // Command buffers are one-time only buffers
   //  so when you submit for execution, they'll be freed after their execution
-  commandbuffer_tgfx_handle (*beginCommandBuffer)(gpuQueue_tgfxhnd     queue,
+  // Extensions: Storage command buffers
+  commandBuffer_tgfx_handle (*beginCommandBuffer)(gpuQueue_tgfxhnd     queue,
                                                   extension_tgfxlsthnd exts);
   // In a Rendersubpass: All bundles should be created with the rendersubpass' handle
   // Outside: All bundles should be created with rendersubpass as NULL.
   // All bundles should be from the compatible queue with the cmdBuffer's queue
-  void (*executeBundles)(commandbuffer_tgfx_handle commandBuffer, commandBundle_tgfxhnd* bundles,
-                         const unsigned long long* bundleSortKeys, tgfx_rendererKeySortFunc sortFnc,
-                         extension_tgfxlsthnd exts);
-  void (*startRenderpass)(commandbuffer_tgfx_handle commandBuffer, renderPass_tgfxhnd renderPass);
-  void (*nextRendersubpass)(commandbuffer_tgfx_handle cmdBuffer,
+  void (*executeBundles)(commandBuffer_tgfx_handle commandBuffer, commandBundle_tgfxlsthnd bundles,
+                         tgfx_rendererKeySortFunc sortFnc, const unsigned long long* bundleSortKeys,
+                         void* userData, extension_tgfxlsthnd exts);
+  void (*startRenderpass)(commandBuffer_tgfx_handle commandBuffer, renderPass_tgfxhnd renderPass);
+  void (*nextRendersubpass)(commandBuffer_tgfx_handle cmdBuffer,
                             renderSubPass_tgfxhnd     renderSubPass);
-  void (*endRenderpass)(commandbuffer_tgfx_handle commandBuffer);
+  void (*endRenderpass)(commandBuffer_tgfx_handle commandBuffer);
+  void (*endCommandBuffer)(commandBuffer_tgfx_handle commandBuffer);
 
   // Synchronization Functions
 
@@ -29,7 +31,7 @@ typedef struct tgfx_renderer {
   // @param initValue: Set initial value of all fences
   // @param fenceList: User should create the array of fence_tgfx_handles.
   //    So array isn't created by backend
-  void (*createFences)(gpu_tgfxhnd gpu, unsigned int count, uint32_t initValue,
+  void (*createFences)(gpu_tgfxhnd gpu, unsigned int count, unsigned int initValue,
                        fence_tgfxlsthnd fenceList);
   void (*destroyFence)(fence_tgfxhnd fence);
   // CPU side fence value change
@@ -45,7 +47,7 @@ typedef struct tgfx_renderer {
                                const unsigned long long* waitValues, fence_tgfxlsthnd signalFences,
                                const unsigned long long* signalValues);
   void (*queueExecuteCmdBuffers)(gpuQueue_tgfxhnd         queue,
-                                 commandbuffer_tgfxlsthnd commandBuffersList,
+                                 commandBuffer_tgfxlsthnd commandBuffersList,
                                  extension_tgfxlsthnd     exts);
   void (*queuePresent)(gpuQueue_tgfxhnd queue, const window_tgfxlsthnd windowlist);
   // Submit queue operations to GPU.

@@ -24,7 +24,7 @@ typedef struct tgfx_core {
   // @param textures: Should point to an array of swapchainImageCount elements!
   result_tgfx (*createSwapchain)(gpu_tgfxhnd gpu, const tgfx_swapchain_description* desc,
                                  texture_tgfxhnd* textures);
-  result_tgfx (*getCurrentSwapchainTextureIndex)(window_tgfxhnd window, uint32_t* index);
+  result_tgfx (*getCurrentSwapchainTextureIndex)(window_tgfxhnd window, unsigned int* index);
   void (*change_window_resolution)(window_tgfxhnd WindowHandle, unsigned int width,
                                    unsigned int height);
   void (*getmonitorlist)(monitor_tgfxlsthnd* MonitorList);

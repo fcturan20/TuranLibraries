@@ -55,7 +55,7 @@ typedef struct tgfx_bindingtypeinfo_data*   bindingtypeinfo_tgfx_handle;
 typedef struct tgfx_blendinginfo_data*      blendinginfo_tgfx_handle;
 typedef struct tgfx_buffereddrawcall*       buffereddrawcall_tgfx_handle;
 typedef struct tgfx_buffereddispatchcall*   buffereddispatchcall_tgfx_handle;
-typedef struct tgfx_commandbuffer_data*     commandbuffer_tgfx_handle;
+typedef struct tgfx_commandbuffer_data*     commandBuffer_tgfx_handle;
 typedef struct tgfx_buffer_usage_flag_data* bufferUsageFlag_tgfxhnd;
 
 // LISTS
@@ -72,11 +72,12 @@ typedef blendinginfo_tgfx_handle*  blendingInfo_tgfxlsthnd;
 typedef sampler_tgfxhnd*           sampler_tgfxlsthnd;
 typedef bindingTableType_tgfxhnd*  bindingTableType_tgfxlsthnd;
 typedef bindingTable_tgfxhnd*      bindingTable_tgfxlsthnd;
-typedef commandbuffer_tgfx_handle* commandbuffer_tgfxlsthnd;
+typedef commandBuffer_tgfx_handle* commandBuffer_tgfxlsthnd;
 typedef fence_tgfxhnd*             fence_tgfxlsthnd;
 typedef viewport_tgfxhnd*          viewport_tgfxlsthnd;
 typedef gpuQueue_tgfxhnd*          gpuQueue_tgfxlsthnd;
 typedef window_tgfxhnd*            window_tgfxlsthnd;
+typedef commandBundle_tgfxhnd*     commandBundle_tgfxlsthnd;
 
 // STRUCTS
 /////////////////////////////////////

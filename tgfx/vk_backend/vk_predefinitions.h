@@ -392,13 +392,10 @@ class VK_STATICVECTOR {
 
  public:
   // Returns the index of the object
-  unsigned int push_back(T obj) {
-    uint16_t current_i = currentelement_i.fetch_add(1);
-    if (current_i == maxelementcount) {
-      printer(result_tgfx_FAIL, "VK_VECTOR's max_elementcount is reached, you can't exceed it!");
-    }
-    datas[current_i] = obj;
-    return current_i;
+  unsigned int push_back(const T& obj) {
+    T* newObj = add();
+    *newObj   = obj;
+    return getINDEX_byOBJ(newObj);
   }
   T* operator[](unsigned int i) {
 #ifdef VULKAN_DEBUGGING
@@ -424,7 +421,7 @@ class VK_STATICVECTOR {
       printer(result_tgfx_FAIL, "There is no such element in the VK_VECTOR!");
     }
 #endif
-    memmove(&datas[i], &datas[i + 1], sizeof(T) * (currentelement_i.load() - 1 - i));
+    memmove(&datas[i], &datas[i + 1], sizeof(T) * (currentelement_i.fetch_sub(1) - 1 - i));
   }
   void clear() {
     currentelement_i.store(0);
@@ -477,12 +474,15 @@ class VK_STATICVECTOR {
     return *( TGFXHND* )&handle;
   }
   uint32_t getINDEX_byOBJ(T* obj) { return uintptr_t(obj - datas) / sizeof(T); }
-  T*       add() {
-          assert(size() != maxelementcount && "Static vector is exceeded!");
-          push_back(T());
-          T* added       = (*this)[size() - 1];
-          added->isALIVE = true;
-          return added;
+
+  T* add() {
+    uint32_t indx = currentelement_i.fetch_add(1);
+    assert(indx != maxelementcount && "Static vector is exceeded!");
+    T* added = (*this)[indx];
+    if constexpr (!std::is_pointer_v<T>) {
+      added->isALIVE = true;
+    }
+    return added;
   }
   TGFXHND* returnHANDLELIST() {
     uint32_t listSize = size();

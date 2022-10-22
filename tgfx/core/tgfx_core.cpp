@@ -1,3 +1,5 @@
+// Make sure that all tgfx headers are in C
+extern "C" {
 #define T_INCLUDE_PLATFORM_LIBS
 #include "tgfx_core.h"
 
@@ -5,12 +7,14 @@
 #include <ecs_tapi.h>
 #include <predefinitions_tapi.h>
 
-#include <string>
-
 #include "tgfx_gpucontentmanager.h"
 #include "tgfx_helper.h"
 #include "tgfx_imgui.h"
 #include "tgfx_renderer.h"
+#include "tgfx_structs.h"
+}
+
+#include <string>
 
 static core_tgfx_type* core_type_ptr;
 static ecs_tapi*       core_regsys;

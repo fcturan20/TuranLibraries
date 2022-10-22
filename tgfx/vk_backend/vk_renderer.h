@@ -25,35 +25,11 @@ other systems
 
 #include "vk_includes.h"
 
-enum class RGReconstructionStatus : unsigned char {
-  Invalid                  = 0,
-  StartedConstruction      = 1,
-  FinishConstructionCalled = 2,
-  HalfConstructed          = 3,
-  Valid                    = 4
-};
-
 // Renderer data that other parts of the backend can access
 struct renderer_funcs;
 struct renderer_public {
  public:
-  void                   RendererResource_Finalizations();
-  RGReconstructionStatus RGSTATUS();
 };
-
-// RENDER NODEs
-enum class VK_PASSTYPE : unsigned char {
-  INVALID = 0,
-  DP      = 1,
-  TP,
-  CP,
-  WP,
-  // for subpasses
-  SUBTP_BARRIER,
-  SUBTP_COPY
-};
-typedef uint16_t                 VK_PASS_ID_TYPE;
-static constexpr VK_PASS_ID_TYPE VK_PASS_INVALID_ID = UINT16_MAX;
 
 #define getGPUfromQueueHnd(i_queue)                               \
   VKOBJHANDLE  queueHnd = *( VKOBJHANDLE* )&i_queue;              \

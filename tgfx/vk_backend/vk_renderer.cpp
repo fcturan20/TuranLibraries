@@ -9,16 +9,16 @@
 
 struct vk_renderer_private {};
 
-commandBuffer_tgfx_handle vk_beginCommandBuffer(gpuQueue_tgfxhnd queue, extension_tgfxlsthnd exts) {
+commandBuffer_tgfxhnd vk_beginCommandBuffer(gpuQueue_tgfxhnd queue, extension_tgfxlsthnd exts) {
   return nullptr;
 }
-void vk_executeBundles(commandBuffer_tgfx_handle commandBuffer, commandBundle_tgfxlsthnd bundles,
+void vk_executeBundles(commandBuffer_tgfxhnd commandBuffer, commandBundle_tgfxlsthnd bundles,
                        tgfx_rendererKeySortFunc sortFnc, const unsigned long long* bundleSortKeys,
                        void* userData, extension_tgfxlsthnd exts) {}
-void vk_start_renderpass(commandBuffer_tgfx_handle commandBuffer, renderPass_tgfxhnd renderPass) {}
-void vk_next_rendersubpass(commandBuffer_tgfx_handle commandBuffer,
+void vk_start_renderpass(commandBuffer_tgfxhnd commandBuffer, renderPass_tgfxhnd renderPass) {}
+void vk_next_rendersubpass(commandBuffer_tgfxhnd commandBuffer,
                            renderSubPass_tgfxhnd     renderSubPass) {}
-void vk_end_renderpass(commandBuffer_tgfx_handle commandBuffer) {}
+void vk_end_renderpass(commandBuffer_tgfxhnd commandBuffer) {}
 
 void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandBuffer_tgfxlsthnd i_cmdBuffersList,
                                extension_tgfxlsthnd exts) {

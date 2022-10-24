@@ -214,7 +214,9 @@ enum class VKHANDLETYPEs : unsigned short {
   VIEWPORT,
   HEAP,
   GPUQUEUE,
-  FENCE
+  FENCE,
+  CMDBUFFER,
+  CMDBUNDLE
 };
 
 struct VKOBJHANDLE {
@@ -429,9 +431,11 @@ class VK_STATICVECTOR {
       datas[i] = T();
     }
   }
-  unsigned int size() const { return currentelement_i.load(); }
-  T*           getOBJfromHANDLE(TGFXHND hnd) {
-              VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
+  unsigned int        size() const { return currentelement_i.load(); }
+  static constexpr unsigned int max() { return maxelementcount; }
+
+  T* getOBJfromHANDLE(TGFXHND hnd) {
+    VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
 #ifdef VULKAN_DEBUGGING
     if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX) {
       printer(result_tgfx_FAIL,

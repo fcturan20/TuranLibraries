@@ -48,7 +48,7 @@ struct queueflag_vk {
 
   operator uint8_t() const;
 };
-struct cmdBuffer_vk;
+struct cmdBufferPrim_vk;
 struct cmdPool_vk;
 
 struct submit_vk {
@@ -61,8 +61,8 @@ struct submit_vk {
   VkPresentInfoKHR              vk_present       = {};
   VkBindSparseInfo              vk_bindSparse    = {};
 
-  cmdBuffer_vk* cmdBuffers[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
-  uint32_t      cmdBufferCount                                  = 0;
+  cmdBufferPrim_vk* cmdBuffers[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
+  uint32_t          cmdBufferCount                                  = 0;
 
   VkSemaphore vk_signalSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {},
               vk_waitSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]   = {};
@@ -78,8 +78,8 @@ struct submission_vk {
   vk_handleType   HANDLETYPE = VKHANDLETYPEs::INTERNAL;
   static uint16_t GET_EXTRAFLAGS(submit_vk* obj) { return 0; }
 
-  VkFence       vk_fence                                                             = {};
-  cmdBuffer_vk* vk_cbs[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT * VKCONST_MAXSUBMITCOUNT] = {};
+  VkFence           vk_fence                                                             = {};
+  cmdBufferPrim_vk* vk_cbs[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT * VKCONST_MAXSUBMITCOUNT] = {};
 };
 
 // Handle both has GPU's ID & QueueFamily's ID
@@ -134,7 +134,6 @@ struct QUEUEFAM_VK {
     return *this;
   }
 };
-static constexpr uint32_t sizeosdf = sizeof(QUEUEFAM_VK);
 /*
   This class manages queues, command buffer and descriptor set allocations per GPU
     This is important in multi-threaded cases because;
@@ -162,8 +161,7 @@ struct manager_vk {
   // Get VkQueue objects from logical device
   void get_queue_objects();
   // Searches for an available command buffer; if not found -> create one
-  cmdBuffer_vk*   get_commandbuffer(QUEUEFAM_VK* family, bool isSecondary);
-  VkCommandBuffer get_commandbufferobj(cmdBuffer_vk* id);
+  VkCommandBuffer getPrimaryCmdBuffer(QUEUEFAM_VK* family);
   // Submit queue operations to GPU
   // Adds the queue's binary semaphore to the first&last submit to synchronize queue submissions.
   // This is because some queue operations are not synchronized by Vulkan (present and sparse).
@@ -184,4 +182,5 @@ struct manager_vk {
 
   VK_STATICVECTOR<QUEUEFAM_VK, gpuQueue_tgfxhnd, VKCONST_MAXQUEUEFAMCOUNT_PERGPU> m_queueFams;
 };
-static constexpr uint32_t sdf = sizeof(manager_vk);
+
+void createCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, VkCommandBuffer* cbs, uint32_t count);

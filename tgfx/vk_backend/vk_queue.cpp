@@ -8,8 +8,8 @@
 #include "vk_core.h"
 #include "vkext_timelineSemaphore.h"
 
-vk_uint32c VKCONST_MAXFENCECOUNT_PERSUBMIT = 8, VKCONST_MAXCOMMANDBUFFERCOUNT_PERSUBMIT = 256;
-vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER = nullptr;
+vk_uint32c VKCONST_MAXFENCECOUNT_PERSUBMIT = 8, VKCONST_MAXCMDBUFFER_PRIMARY_COUNT = 32;
+vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER  = nullptr;
 
 queueflag_vk::operator uint8_t() const {
   if constexpr (sizeof(queueflag_vk) == 1) {
@@ -19,22 +19,22 @@ queueflag_vk::operator uint8_t() const {
   }
   return 0;
 };
-struct cmdBuffer_vk {
-  bool                 isALIVE  = false;
-  VkCommandBuffer      vk_cb    = nullptr;
-  VkCommandBufferLevel vk_level = VK_COMMAND_BUFFER_LEVEL_MAX_ENUM;
-  bool                 m_isFree = false;
+struct cmdBufferPrim_vk {
+  bool            isALIVE    = false;
+  vk_handleType   HANDLETYPE = VKHANDLETYPEs::CMDBUFFER;
+  VkCommandBuffer vk_cb      = nullptr;
 };
 
 struct cmdPool_vk {
   cmdPool_vk() = default;
-  cmdPool_vk(const cmdPool_vk& RefCP) { vk_cp = RefCP.vk_cp; }
-  void          operator=(const cmdPool_vk& RefCP) { vk_cp = RefCP.vk_cp; }
-  cmdBuffer_vk  createCmdBuffer();
-  void          destroyCmdBuffer();
-  VkCommandPool vk_cp = VK_NULL_HANDLE;
+  void operator=(const cmdPool_vk& RefCP) {
+    vk_primaryCP   = RefCP.vk_primaryCP;
+    vk_secondaryCP = RefCP.vk_secondaryCP;
+  }
+  VkCommandPool vk_primaryCP = VK_NULL_HANDLE, vk_secondaryCP = VK_NULL_HANDLE;
 
-  VK_STATICVECTOR<cmdBuffer_vk, void*, 1 << 8> m_cbs;
+  VK_STATICVECTOR<cmdBufferPrim_vk, commandBuffer_tgfxhnd, VKCONST_MAXCMDBUFFER_PRIMARY_COUNT>
+    m_cbsPrimary;
 
  private:
   std::mutex Sync;
@@ -182,6 +182,22 @@ manager_vk::queueCreateInfoList manager_vk::get_queue_cis() const {
   return QueueCreationInfos;
 }
 
+void vk_allocateCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, VkCommandBuffer* cbs,
+                          uint32_t count) {
+  VkCommandBufferAllocateInfo cb_ai = {};
+  cb_ai.pNext                       = nullptr;
+  cb_ai.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  cb_ai.commandBufferCount          = count;
+  cb_ai.level                       = level;
+  if (level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    cb_ai.commandPool = queueFam->m_pools[threadingsys->this_thread_index()].vk_primaryCP;
+  } else {
+    cb_ai.commandPool = queueFam->m_pools[threadingsys->this_thread_index()].vk_secondaryCP;
+  }
+  ThrowIfFailed(vkAllocateCommandBuffers(queueFam->m_gpu->vk_logical, &cb_ai, cbs),
+                "vkAllocateCommandBuffers() failed while creating a command buffer, "
+                "report this please!");
+}
 void manager_vk::get_queue_objects() {
   for (unsigned int i = 0; i < m_queueFams.size(); i++) {
     for (unsigned int queueindex = 0; queueindex < m_queueFams[i]->m_queues.size(); queueindex++) {
@@ -209,66 +225,63 @@ void manager_vk::get_queue_objects() {
   }
 
   // Create cmdPool for each queue family and CPU thread
-  for (unsigned int queuefamindex = 0; queuefamindex < m_queueFams.size(); queuefamindex++) {
-    if (!(m_queueFams[queuefamindex]->m_supportFlag.is_COMPUTEsupported ||
-          m_queueFams[queuefamindex]->m_supportFlag.is_GRAPHICSsupported ||
-          m_queueFams[queuefamindex]->m_supportFlag.is_TRANSFERsupported)) {
+  for (unsigned int queueFamIndx = 0; queueFamIndx < m_queueFams.size(); queueFamIndx++) {
+    QUEUEFAM_VK* queueFam = m_queueFams[queueFamIndx];
+    if (!(queueFam->m_supportFlag.is_COMPUTEsupported ||
+          queueFam->m_supportFlag.is_GRAPHICSsupported ||
+          queueFam->m_supportFlag.is_TRANSFERsupported)) {
       continue;
     }
-    m_queueFams[queuefamindex]->m_pools = new (VKGLOBAL_VIRMEM_MANAGER) cmdPool_vk[threadcount];
-    for (unsigned char i = 0; i < threadcount; i++) {
+    queueFam->m_pools = new (VKGLOBAL_VIRMEM_MANAGER) cmdPool_vk[threadcount];
+    for (unsigned char threadIndx = 0; threadIndx < threadcount; threadIndx++) {
+      cmdPool_vk&             CP      = queueFam->m_pools[threadIndx];
       VkCommandPoolCreateInfo cp_ci_g = {};
       cp_ci_g.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-      cp_ci_g.queueFamilyIndex        = queuefamindex;
-      cp_ci_g.flags =
-        VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-      cp_ci_g.pNext = nullptr;
+      cp_ci_g.queueFamilyIndex        = queueFamIndx;
+      cp_ci_g.pNext                   = nullptr;
 
-      ThrowIfFailed(vkCreateCommandPool(m_gpu->vk_logical, &cp_ci_g, nullptr,
-                                        &m_queueFams[queuefamindex]->m_pools[i].vk_cp),
-                    "Command pool creation for a queue has failed at vkCreateCommandPool()!");
+      // Create primary Command Pool
+      {
+        cp_ci_g.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        ThrowIfFailed(vkCreateCommandPool(m_gpu->vk_logical, &cp_ci_g, nullptr, &CP.vk_primaryCP),
+                      "Primary command pool creation for a queue has failed!");
+      }
+
+      {
+        cp_ci_g.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        ThrowIfFailed(vkCreateCommandPool(m_gpu->vk_logical, &cp_ci_g, nullptr, &CP.vk_secondaryCP),
+                      "Secondary command pool creation for a queue has failed!");
+      }
+
+      // Allocate Primary Command Buffers
+      {
+        VkCommandBuffer primaryCBs[VKCONST_MAXCMDBUFFER_PRIMARY_COUNT];
+        vk_allocateCmdBuffer(queueFam, VK_COMMAND_BUFFER_LEVEL_PRIMARY, primaryCBs,
+                             VKCONST_MAXCMDBUFFER_PRIMARY_COUNT);
+
+        for (uint32_t cmdBufferIndx = 0; cmdBufferIndx < VKCONST_MAXCMDBUFFER_PRIMARY_COUNT;
+             cmdBufferIndx++) {
+          cmdBufferPrim_vk* cb = CP.m_cbsPrimary.add();
+          cb->isALIVE          = false;
+          cb->vk_cb            = primaryCBs[cmdBufferIndx];
+        }
+      }
     }
   }
 }
 uint32_t manager_vk::get_queuefam_index(QUEUE_VKOBJ* fam) {
-  /*
-#ifdef VULKAN_DEBUGGING
-  bool isfound = false;
-  for (unsigned int i = 0; i < m_queueFamiliesCount; i++) {
-    if (m_queueFams[i] == fam) {
-      isfound = true;
-    }
-  }
-  if (!isfound) {
-    printer(result_tgfx_FAIL, "Queue Family Handle is invalid!");
-  }
-#endif
-*/
   return fam->vk_queueFamIndex;
 }
-cmdBuffer_vk* manager_vk::get_commandbuffer(QUEUEFAM_VK* family, bool isSecondary) {
+VkCommandBuffer manager_vk::getPrimaryCmdBuffer(QUEUEFAM_VK* family) {
   cmdPool_vk& CP = family->m_pools[threadingsys->this_thread_index()];
-
-  VkCommandBufferAllocateInfo cb_ai = {};
-  cb_ai.commandBufferCount          = 1;
-  cb_ai.commandPool                 = CP.vk_cp;
-  cb_ai.level = isSecondary ? VK_COMMAND_BUFFER_LEVEL_SECONDARY : VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  cb_ai.pNext = nullptr;
-  cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-
-  cmdBuffer_vk* VK_CB = CP.m_cbs.add();
-  if (vkAllocateCommandBuffers(m_gpu->vk_logical, &cb_ai, &VK_CB->vk_cb) != VK_SUCCESS) {
-    printer(result_tgfx_FAIL,
-            "vkAllocateCommandBuffers() failed while creating command buffers for RGBranches, "
-            "report this please!");
-    return nullptr;
+  for (uint32_t i = 0; i < CP.m_cbsPrimary.size(); i++) {
+    if (CP.m_cbsPrimary[i]->isALIVE) {
+      continue;
+    }
+    return CP.m_cbsPrimary[i]->vk_cb;
   }
-  VK_CB->vk_level = cb_ai.level;
-  VK_CB->m_isFree = false;
-  return VK_CB;
+  assert(0 && "Command Buffer Count is exceeded!");
 }
-
-VkCommandBuffer manager_vk::get_commandbufferobj(cmdBuffer_vk* id) { return id->vk_cb; }
 
 static constexpr VkPipelineStageFlags
   VKCONST_PRESENTWAITSTAGEs[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {
@@ -287,7 +300,7 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
         if (submission->vk_cbs[cbIndx] == nullptr) {
           break;
         }
-        submission->vk_cbs[cbIndx]->m_isFree = true;
+        submission->vk_cbs[cbIndx]->isALIVE = false;
       }
       vkDestroyFence(queue->m_gpu->vk_logical, submission->vk_fence, nullptr);
       // Index is int, so this works fine
@@ -456,9 +469,6 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
       info.waitSemaphoreCount = waitSemCount;
       info.pWaitSemaphores    = binarySignalSemaphores;
       info.pResults           = nullptr;
-      if (info.swapchainCount == 0) {
-        assert(0);
-      }
       ThrowIfFailed(vkQueuePresentKHR(queue->vk_queue, &info), "Queue Present has failed!");
 
       // Send a submit to signal timeline semaphore when all binary semaphore are signaled

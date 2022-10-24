@@ -68,7 +68,7 @@ static error_structs errors[]{
                 "Converting waits has failed because there is merged pass conflicts!"),
   error_structs(result_tgfx_INVALIDARGUMENT,
                 "CreateSubTransferPassDescription() has invalid transfer type argument!")};
-static constexpr uint32_t errors_count = sizeof(errors) / sizeof(error_structs);
+vk_uint32c errors_count = sizeof(errors) / sizeof(error_structs);
 
 result_tgfx printer(unsigned int error_code) {
   printer_cb(errors[error_code].result, errors[error_code].output);

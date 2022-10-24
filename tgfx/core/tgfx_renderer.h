@@ -11,19 +11,17 @@ typedef struct tgfx_renderer {
   // Command buffers are one-time only buffers
   //  so when you submit for execution, they'll be freed after their execution
   // Extensions: Storage command buffers
-  commandBuffer_tgfx_handle (*beginCommandBuffer)(gpuQueue_tgfxhnd     queue,
-                                                  extension_tgfxlsthnd exts);
+  commandBuffer_tgfxhnd (*beginCommandBuffer)(gpuQueue_tgfxhnd queue, extension_tgfxlsthnd exts);
+  void (*endCommandBuffer)(commandBuffer_tgfxhnd commandBuffer);
   // In a Rendersubpass: All bundles should be created with the rendersubpass' handle
   // Outside: All bundles should be created with rendersubpass as NULL.
   // All bundles should be from the compatible queue with the cmdBuffer's queue
-  void (*executeBundles)(commandBuffer_tgfx_handle commandBuffer, commandBundle_tgfxlsthnd bundles,
+  void (*executeBundles)(commandBuffer_tgfxhnd commandBuffer, commandBundle_tgfxlsthnd bundles,
                          tgfx_rendererKeySortFunc sortFnc, const unsigned long long* bundleSortKeys,
                          void* userData, extension_tgfxlsthnd exts);
-  void (*startRenderpass)(commandBuffer_tgfx_handle commandBuffer, renderPass_tgfxhnd renderPass);
-  void (*nextRendersubpass)(commandBuffer_tgfx_handle cmdBuffer,
-                            renderSubPass_tgfxhnd     renderSubPass);
-  void (*endRenderpass)(commandBuffer_tgfx_handle commandBuffer);
-  void (*endCommandBuffer)(commandBuffer_tgfx_handle commandBuffer);
+  void (*startRenderpass)(commandBuffer_tgfxhnd commandBuffer, renderPass_tgfxhnd renderPass);
+  void (*nextRendersubpass)(commandBuffer_tgfxhnd cmdBuffer, renderSubPass_tgfxhnd renderSubPass);
+  void (*endRenderpass)(commandBuffer_tgfxhnd commandBuffer);
 
   // Synchronization Functions
 

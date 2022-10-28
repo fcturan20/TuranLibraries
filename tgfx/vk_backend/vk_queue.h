@@ -48,7 +48,7 @@ struct queueflag_vk {
 
   operator uint8_t() const;
 };
-struct cmdBufferPrim_vk;
+struct CMDBUFFER_VKOBJ;
 struct cmdPool_vk;
 
 struct submit_vk {
@@ -61,8 +61,8 @@ struct submit_vk {
   VkPresentInfoKHR              vk_present       = {};
   VkBindSparseInfo              vk_bindSparse    = {};
 
-  cmdBufferPrim_vk* cmdBuffers[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
-  uint32_t          cmdBufferCount                                  = 0;
+  CMDBUFFER_VKOBJ* cmdBuffers[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
+  uint32_t         cmdBufferCount                                  = 0;
 
   VkSemaphore vk_signalSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {},
               vk_waitSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]   = {};
@@ -78,8 +78,8 @@ struct submission_vk {
   vk_handleType   HANDLETYPE = VKHANDLETYPEs::INTERNAL;
   static uint16_t GET_EXTRAFLAGS(submit_vk* obj) { return 0; }
 
-  VkFence           vk_fence                                                             = {};
-  cmdBufferPrim_vk* vk_cbs[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT * VKCONST_MAXSUBMITCOUNT] = {};
+  VkFence          vk_fence                                                             = {};
+  CMDBUFFER_VKOBJ* vk_cbs[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT * VKCONST_MAXSUBMITCOUNT] = {};
 };
 
 // Handle both has GPU's ID & QueueFamily's ID
@@ -183,4 +183,5 @@ struct manager_vk {
   VK_STATICVECTOR<QUEUEFAM_VK, gpuQueue_tgfxhnd, VKCONST_MAXQUEUEFAMCOUNT_PERGPU> m_queueFams;
 };
 
-void createCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, VkCommandBuffer* cbs, uint32_t count);
+void vk_allocateCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, VkCommandBuffer* cbs,
+                          uint32_t count);

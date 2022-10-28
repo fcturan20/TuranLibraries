@@ -1,4 +1,12 @@
+/*
+  This file is responsible for managing TGFX Command Bundle.
+  TGFX Command Bundle = Secondary Command Buffers.
+*/
 #include "vk_renderer.h"
+
+#include <algorithm>
+#include <numeric>
+#include <utility>
 
 #include "tgfx_renderer.h"
 #include "vk_contentmanager.h"
@@ -9,130 +17,67 @@
 
 struct vk_renderer_private {};
 
-commandBuffer_tgfxhnd vk_beginCommandBuffer(gpuQueue_tgfxhnd queue, extension_tgfxlsthnd exts) {
-  return nullptr;
+#define vkEnumType_cmdType() uint32_t
+enum class vk_cmdType : vkEnumType_cmdType(){
+  error = VK_PRIM_MIN(vkEnumType_cmdType()), // cmdType neither should be 0 nor 255
+  bindBindingTable,
+  bindVertexBuffer,
+  bindIndexBuffer,
+  bindViewport,
+  drawNonIndexedDirect,
+  drawIndexedDirect,
+  drawNonIndexedIndirect,
+  drawIndexedIndirect,
+  barrierTexture,
+  barrierBuffer,
+  error_2 = VK_PRIM_MAX(vkEnumType_cmdType())};
+// Template struct for new cmd structs
+// Then specify the struct in vkCmdStructsLists
+struct vkCmdStruct_example {
+  static constexpr vk_cmdType type = vk_cmdType::error;
+  vkCmdStruct_example()            = default;
+};
+
+struct vkCmdStruct_barrierTexture {
+  static constexpr vk_cmdType type = vk_cmdType::barrierTexture;
+
+  VkImageMemoryBarrier im_bar = {};
+};
+
+struct vk_cmd {
+  vk_cmdType type = vk_cmdType::error_2;
+  uint64_t   key  = UINT64_MAX;
+
+  // From https://stackoverflow.com/a/46408751
+  template <typename... T>
+  static constexpr size_t max_sizeof() {
+    return std::max({sizeof(T)...});
+  }
+
+#define vkCmdStructsLists vkCmdStruct_example, vkCmdStruct_barrierTexture
+  static constexpr uint32_t maxCmdStructSize = max_sizeof<vkCmdStructsLists>();
+  uint8_t                   data[maxCmdStructSize];
+  vk_cmd() : key(0), type(vk_cmdType::error) {}
+};
+static constexpr uint32_t sdf = sizeof(vk_cmd);
+
+template <typename T>
+T* vk_createCmdStruct(vk_cmd* cmd) {
+  static_assert(T::type != vk_cmdType::error,
+                "You forgot to specify command type as \"type\" variable in command struct");
+  cmd->type = T::type;
+  static_assert(vk_cmd::maxCmdStructSize >= sizeof(T),
+                "You forgot to specify the struct in vk_cmd::maxCmdStructSize!");
+  *( T* )cmd->data = T();
+  return ( T* )cmd->data;
 }
-void vk_executeBundles(commandBuffer_tgfxhnd commandBuffer, commandBundle_tgfxlsthnd bundles,
-                       tgfx_rendererKeySortFunc sortFnc, const unsigned long long* bundleSortKeys,
-                       void* userData, extension_tgfxlsthnd exts) {}
-void vk_start_renderpass(commandBuffer_tgfxhnd commandBuffer, renderPass_tgfxhnd renderPass) {}
-void vk_next_rendersubpass(commandBuffer_tgfxhnd commandBuffer,
-                           renderSubPass_tgfxhnd     renderSubPass) {}
-void vk_end_renderpass(commandBuffer_tgfxhnd commandBuffer) {}
 
-void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandBuffer_tgfxlsthnd i_cmdBuffersList,
-                               extension_tgfxlsthnd exts) {
-  getGPUfromQueueHnd(i_queue);
-  getTimelineSemaphoreEXT(gpu, semSys);
-
-  uint32_t cmdBufferCount = 0;
-  {
-    TGFXLISTCOUNT(core_tgfx_main, i_cmdBuffersList, listSize);
-    if (listSize > VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT) {
-      printer(result_tgfx_FAIL,
-              "Vulkan backend only supports limited cmdBuffers to be executed in the same call! "
-              "Please report this");
-    }
-    for (uint32_t i = 0; i < listSize; i++) {
-      if (i_cmdBuffersList[i]) {
-        // cmdBuffers[cmdBufferCount++] = findAndSetCmdBufferObj(i_cmdBuffersList[i]);
-      }
-    }
-  }
-  if (!cmdBufferCount) {
-    return;
-  }
-
-  submit_vk* submit                      = queue->m_submitInfos.add();
-  submit->vk_submit.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submit->vk_submit.pNext                = nullptr;
-  submit->vk_submit.signalSemaphoreCount = 1;
-  submit->vk_submit.waitSemaphoreCount   = 1;
-  submit->vk_submit.pWaitSemaphores      = &queue->vk_callSynchronizer;
-  submit->vk_submit.pSignalSemaphores    = &queue->vk_callSynchronizer;
-  submit->vk_submit.commandBufferCount   = cmdBufferCount;
-}
-void vk_queueFenceWaitSignal(gpuQueue_tgfxhnd i_queue, fence_tgfxlsthnd waitFences,
-                             const unsigned long long* waitValues, fence_tgfxlsthnd signalFences,
-                             const unsigned long long* signalValues) {
-  getGPUfromQueueHnd(i_queue);
-  getTimelineSemaphoreEXT(gpu, semSys);
-  const FENCE_VKOBJ* waits[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
-  {
-    uint32_t waitCount = 0;
-    TGFXLISTCOUNT(core_tgfx_main, waitFences, waitListSize);
-    if (waitListSize > VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT) {
-      printer(result_tgfx_FAIL, "Max semaphore count per submit is exceeded!");
-      return;
-    }
-    for (uint32_t i = 0; i < waitListSize; i++) {
-      FENCE_VKOBJ* wait = semSys->fences.getOBJfromHANDLE(waitFences[i]);
-      if (!wait) {
-        continue;
-      }
-      waits[waitCount++] = wait;
-      wait->m_curValue.store(waitValues[i]);
-    }
-  }
-  const FENCE_VKOBJ* signals[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
-  {
-    uint32_t signalCount = 0;
-    TGFXLISTCOUNT(core_tgfx_main, signalFences, signalListSize);
-    if (signalListSize > VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT) {
-      printer(result_tgfx_FAIL, "Max semaphore count per submit is exceeded!");
-      return;
-    }
-    for (uint32_t i = 0; i < signalListSize; i++) {
-      FENCE_VKOBJ* signal = semSys->fences.getOBJfromHANDLE(signalFences[i]);
-      if (!signal) {
-        continue;
-      }
-      signals[signalCount++] = signal;
-      signal->m_nextValue.store(signalValues[i]);
-    }
-  }
-  vk_createSubmit_FenceWaitSignals(queue, waits, signals);
-}
-void vk_queueSubmit(gpuQueue_tgfxhnd i_queue) {
-  getGPUfromQueueHnd(i_queue);
-  gpu->manager()->queueSubmit(queue);
-}
-void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlist) {
-  getGPUfromQueueHnd(i_queue);
-
-  if (queue->m_activeQueueOp != QUEUE_VKOBJ::ERROR_QUEUEOPTYPE &&
-      queue->m_activeQueueOp != QUEUE_VKOBJ::PRESENT) {
-    printer(result_tgfx_FAIL,
-            "You can't call present while queue's active operation type is different (cmdbuffer or "
-            "sparse)");
-    return;
-  }
-
-  queue->m_activeQueueOp = QUEUE_VKOBJ::PRESENT;
-  submit_vk* submit      = queue->m_submitInfos.add();
-
-  uint32_t windowCount = 0;
-  {
-    TGFXLISTCOUNT(core_tgfx_main, windowlist, windowListSize);
-    for (uint32_t i = 0; i < windowListSize; i++) {
-      WINDOW_VKOBJ* window = core_vk->GETWINDOWs().getOBJfromHANDLE(windowlist[i]);
-      if (!window) {
-        continue;
-      }
-      submit->m_windows[windowCount] = window;
-      windowCount++;
-    }
-  }
-
-  submit->vk_present.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-  submit->vk_present.pNext              = nullptr;
-  submit->vk_present.pWaitSemaphores    = nullptr;
-  submit->vk_present.waitSemaphoreCount = 0;
-  submit->vk_present.pResults           = nullptr;
-  submit->vk_present.pImageIndices      = nullptr;
-  submit->vk_present.pSwapchains        = nullptr;
-  submit->vk_present.swapchainCount     = windowCount;
-}
+struct CMDBUNDLE_VKOBJ {
+  bool            isALIVE    = false;
+  vk_handleType   HANDLETYPE = VKHANDLETYPEs::CMDBUNDLE;
+  VkCommandBuffer vk_cb      = nullptr;
+  QUEUEFAM_VK*    queueFam   = nullptr;
+};
 
 // Synchronization Functions
 
@@ -147,9 +92,16 @@ void vk_createFences(gpu_tgfxhnd gpu, unsigned int fenceCount, uint32_t isSignal
 // Command Bundle Functions
 ////////////////////////////
 
-commandBundle_tgfxhnd vk_beginCommandBundle(gpuQueue_tgfxhnd      queue,
+commandBundle_tgfxhnd vk_beginCommandBundle(gpuQueue_tgfxhnd      i_queue,
                                             renderSubPass_tgfxhnd subpassHandle,
                                             extension_tgfxlsthnd  exts) {
+  getGPUfromQueueHnd(i_queue);
+
+  VkCommandBuffer vk_cmdBuffer = VK_NULL_HANDLE;
+  vk_allocateCmdBuffer(fam, VK_COMMAND_BUFFER_LEVEL_SECONDARY, &vk_cmdBuffer, 1);
+  vk_cmd c;
+  auto*  tpr = vk_createCmdStruct<vkCmdStruct_barrierTexture>(&c);
+
   return nullptr;
 }
 void vk_finishCommandBundle(commandBundle_tgfxhnd bundle, rendererKeySortFunc_tgfx sortFunc,
@@ -196,17 +148,47 @@ void set_VkRenderer_funcPtrs() {
   core_tgfx_main->renderer->finishCommandBundle       = vk_finishCommandBundle;
   core_tgfx_main->renderer->createFences              = vk_createFences;
   core_tgfx_main->renderer->destroyCommandBundle      = vk_destroyCommandBundle;
-  core_tgfx_main->renderer->endRenderpass             = vk_end_renderpass;
-  core_tgfx_main->renderer->executeBundles            = vk_executeBundles;
-  core_tgfx_main->renderer->beginCommandBuffer        = vk_beginCommandBuffer;
-  core_tgfx_main->renderer->nextRendersubpass         = vk_next_rendersubpass;
-  core_tgfx_main->renderer->startRenderpass           = vk_start_renderpass;
-  core_tgfx_main->renderer->queueExecuteCmdBuffers    = vk_queueExecuteCmdBuffers;
-  core_tgfx_main->renderer->queueFenceSignalWait      = vk_queueFenceWaitSignal;
   core_tgfx_main->renderer->getFenceValue             = vk_getFenceValue;
   core_tgfx_main->renderer->setFence                  = vk_setFenceValue;
-  core_tgfx_main->renderer->queueSubmit               = vk_queueSubmit;
-  core_tgfx_main->renderer->queuePresent              = vk_queuePresent;
 }
 
 void vk_initRenderer() { set_VkRenderer_funcPtrs(); }
+
+// Helper functions
+
+void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxlsthnd i_exts,
+                                uint32_t* o_famList, uint32_t* o_famListSize,
+                                VkSharingMode* o_sharingMode) {
+  TGFXLISTCOUNT(core_tgfx_main, i_queueList, i_listSize);
+  uint32_t   validQueueFamCount = 0;
+  GPU_VKOBJ* theGPU             = nullptr;
+  for (uint32_t listIndx = 0; listIndx < i_listSize; listIndx++) {
+    getGPUfromQueueHnd(i_queueList[listIndx]);
+    if (!theGPU) {
+      theGPU = gpu;
+    }
+    assert(theGPU == gpu && "Queues from different devices!");
+    bool isPreviouslyAdded = false;
+    for (uint32_t validQueueIndx = 0; validQueueIndx < validQueueFamCount; validQueueIndx++) {
+      if (o_famList[validQueueIndx] == queue->vk_queueFamIndex) {
+        isPreviouslyAdded = true;
+        break;
+      }
+    }
+    if (!isPreviouslyAdded) {
+      o_famList[validQueueFamCount++] = queue->vk_queueFamIndex;
+    }
+  }
+  if (validQueueFamCount > 1) {
+    *o_sharingMode = VK_SHARING_MODE_CONCURRENT;
+  } else {
+    *o_sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  }
+  *o_famListSize = validQueueFamCount;
+  for (uint32_t i = *o_famListSize; i < VKCONST_MAXQUEUEFAMCOUNT_PERGPU; i++) {
+    o_famList[i] = UINT32_MAX;
+  }
+}
+
+void vk_GetSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
+                               VkCommandBuffer* secondaryCmdBuffers, uint32_t* cmdBufferCount) {}

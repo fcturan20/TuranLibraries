@@ -13,14 +13,11 @@
 #include <string>
 #include <vector>
 
-//#include "vk_contentmanager.h"
 #include "vk_extension.h"
 #include "vk_helper.h"
-#include "vk_includes.h"
 #include "vk_predefinitions.h"
 #include "vk_queue.h"
-#include "vk_resource.h"
-//#include "vk_synchronization.h"
+#include "vk_renderer.h"
 
 struct device_features_chainedstructs;
 
@@ -842,11 +839,12 @@ void vk_printfLog(result_tgfx result, const char* text) {
 extern void vk_createBackendAllocator();
 // extern void vk_createContentManager();
 // extern void Create_SyncSystems();
-void vk_setupDebugging();
-void vk_initRenderer();
-void vk_setHelperFuncPtrs();
-void vk_errorCallback(int error_code, const char* description) {
-  printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
+void        vk_setupDebugging();
+void        vk_initRenderer();
+void        vk_setHelperFuncPtrs();
+extern void vk_setQueueFuncPtrs();
+void        vk_errorCallback(int error_code, const char* description) {
+         printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
 }
 result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallback printcallback) {
   if (!regsys->getSystem(TGFX_PLUGIN_NAME)) return result_tgfx_FAIL;
@@ -916,6 +914,7 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallbac
   vk_checkComputerSpecs();
 
   // Init systems
+  vk_setQueueFuncPtrs();
   vk_initRenderer();
   vk_setHelperFuncPtrs();
   return result_tgfx_SUCCESS;

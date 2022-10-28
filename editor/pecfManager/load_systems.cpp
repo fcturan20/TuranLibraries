@@ -51,6 +51,10 @@ struct pluginElement {
   }*/
 };
 
+tgfx_rendererKeySortFunc simpleSort{
+
+};
+
 void load_systems() {
   pluginHnd_ecstapi threadingPlugin = editorECS->loadPlugin("tapi_threadedjobsys.dll");
   auto              threadingSys =
@@ -174,6 +178,8 @@ void load_systems() {
         renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
         renderer->queueSubmit(queue);
 
+        commandBuffer_tgfxhnd cmdBuffer = renderer->beginCommandBuffer(queue, nullptr);
+        renderer->endCommandBuffer(cmdBuffer);
         for (uint32_t i = 0; i < 3; i++) {
           _sleep(1 << 4);
           uint64_t value = 0;

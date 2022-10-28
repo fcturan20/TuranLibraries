@@ -3,14 +3,14 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <assert.h>
-#include <stdio.h>
-#include <string.h>
+#include <stdint.h>
 #include <tgfx_core.h>
 #include <tgfx_forwarddeclarations.h>
 #include <virtualmemorysys_tapi.h>
 
 #include <atomic>
 #include <functional>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 
@@ -92,6 +92,9 @@ inline bool ThrowIfFailed(VkResult func, const char* errorstring,
 
 void pNext_addToLast(void* targetStruct, void* attachStruct);
 
+#define VK_PRIM_MIN(primType) std::numeric_limits<primType>::min()
+#define VK_PRIM_MAX(primType) std::numeric_limits<primType>::max()
+
 // Use this pre-processor in .cpp files to load extension functions
 // Backend is maintainly on Vulkan 1.0 because most of the extensions can be used in it
 // Search "Requires support for Vulkan 1.*" in VK Specification to learn minimum API Version
@@ -112,10 +115,10 @@ void pNext_addToLast(void* targetStruct, void* attachStruct);
 // Note: For name convenience, all constant should start with VKCONST_
 // <------------------------------------------------------------------------------------>
 
-#define vk_uint32c static constexpr unsigned int
-#define vk_float32c static constexpr float
+#define vk_uint32c static constexpr uint32_t
+#define vk_float32c static constexpr float32_t
 #define vk_handleType static constexpr VKHANDLETYPEs
-#define vk_uint8c static constexpr unsigned char
+#define vk_uint8c static constexpr uint8_t
 // Dynamic Descriptor Types supported by Vulkan
 vk_uint32c VKCONST_DYNAMICDESCRIPTORTYPESCOUNT = 4, VKCONST_DESCSETID_DYNAMICSAMPLER = 0,
            VKCONST_DESCSETID_SAMPLEDTEXTURE = 1, VKCONST_DESCSETID_STORAGEIMAGE = 2,
@@ -431,7 +434,7 @@ class VK_STATICVECTOR {
       datas[i] = T();
     }
   }
-  unsigned int        size() const { return currentelement_i.load(); }
+  unsigned int                  size() const { return currentelement_i.load(); }
   static constexpr unsigned int max() { return maxelementcount; }
 
   T* getOBJfromHANDLE(TGFXHND hnd) {

@@ -1,3 +1,10 @@
+/*
+  This file is responsible for managing TGFX Command Buffer sending queue operations to GPU and.
+  TGFX Command Buffer = Primary Command Buffer.
+  TGFX GPU QUEUE = VkQueue
+
+*/
+
 #include "vk_queue.h"
 
 #include <threadingsys_tapi.h>
@@ -6,10 +13,11 @@
 
 #include "tgfx_renderer.h"
 #include "vk_core.h"
+#include "vk_renderer.h"
 #include "vkext_timelineSemaphore.h"
 
-vk_uint32c VKCONST_MAXFENCECOUNT_PERSUBMIT = 8, VKCONST_MAXCMDBUFFER_PRIMARY_COUNT = 32;
-vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER  = nullptr;
+vk_uint32c             VKCONST_MAXFENCECOUNT_PERSUBMIT = 8, VKCONST_MAXCMDBUFFER_PRIMARY_COUNT = 32;
+vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER = nullptr;
 
 queueflag_vk::operator uint8_t() const {
   if constexpr (sizeof(queueflag_vk) == 1) {
@@ -19,10 +27,22 @@ queueflag_vk::operator uint8_t() const {
   }
   return 0;
 };
-struct cmdBufferPrim_vk {
+struct CMDBUFFER_VKOBJ {
   bool            isALIVE    = false;
   vk_handleType   HANDLETYPE = VKHANDLETYPEs::CMDBUFFER;
-  VkCommandBuffer vk_cb      = nullptr;
+  static uint16_t GET_EXTRAFLAGS(CMDBUFFER_VKOBJ* obj) {
+    return (uint16_t(obj->m_gpuIndx) << 8) | (uint16_t(obj->m_cmdPoolIndx));
+  }
+  static GPU_VKOBJ* getGPUfromHandle(commandBuffer_tgfxhnd hnd) {
+    VKOBJHANDLE handle  = *( VKOBJHANDLE* )&hnd;
+    uint32_t    gpuIndx = handle.EXTRA_FLAGs >> 8;
+  }
+  static uint32_t getCmdPoolIndxFromHandle(commandBuffer_tgfxhnd hnd) {
+    VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
+    return (uint32_t(handle.EXTRA_FLAGs) << 24) >> 24;
+  }
+  VkCommandBuffer vk_cb     = nullptr;
+  uint8_t         m_gpuIndx = 0, m_queueFamIndx = 0, m_cmdPoolIndx = 0;
 };
 
 struct cmdPool_vk {
@@ -33,7 +53,7 @@ struct cmdPool_vk {
   }
   VkCommandPool vk_primaryCP = VK_NULL_HANDLE, vk_secondaryCP = VK_NULL_HANDLE;
 
-  VK_STATICVECTOR<cmdBufferPrim_vk, commandBuffer_tgfxhnd, VKCONST_MAXCMDBUFFER_PRIMARY_COUNT>
+  VK_STATICVECTOR<CMDBUFFER_VKOBJ, commandBuffer_tgfxhnd, VKCONST_MAXCMDBUFFER_PRIMARY_COUNT>
     m_cbsPrimary;
 
  private:
@@ -47,7 +67,7 @@ GPU_VKOBJ* QUEUE_VKOBJ::getGPUfromHandle(gpuQueue_tgfxhnd hnd) {
 QUEUEFAM_VK* QUEUE_VKOBJ::getFAMfromHandle(gpuQueue_tgfxhnd hnd) {
   GPU_VKOBJ*  gpu          = getGPUfromHandle(hnd);
   VKOBJHANDLE handle       = *( VKOBJHANDLE* )&hnd;
-  uint32_t    queueFamIndx = (handle.EXTRA_FLAGs << 24) >> 24;
+  uint32_t    queueFamIndx = (uint32_t(handle.EXTRA_FLAGs) << 24) >> 24;
   return gpu->manager()->m_queueFams[queueFamIndx];
 }
 
@@ -261,17 +281,18 @@ void manager_vk::get_queue_objects() {
 
         for (uint32_t cmdBufferIndx = 0; cmdBufferIndx < VKCONST_MAXCMDBUFFER_PRIMARY_COUNT;
              cmdBufferIndx++) {
-          cmdBufferPrim_vk* cb = CP.m_cbsPrimary.add();
-          cb->isALIVE          = false;
-          cb->vk_cb            = primaryCBs[cmdBufferIndx];
+          CMDBUFFER_VKOBJ* cb = CP.m_cbsPrimary.add();
+          cb->isALIVE         = false;
+          cb->vk_cb           = primaryCBs[cmdBufferIndx];
+          cb->m_gpuIndx       = m_gpu->gpuIndx();
+          cb->m_cmdPoolIndx   = threadIndx;
+          cb->m_queueFamIndx  = queueFamIndx;
         }
       }
     }
   }
 }
-uint32_t manager_vk::get_queuefam_index(QUEUE_VKOBJ* fam) {
-  return fam->vk_queueFamIndex;
-}
+uint32_t        manager_vk::get_queuefam_index(QUEUE_VKOBJ* fam) { return fam->vk_queueFamIndex; }
 VkCommandBuffer manager_vk::getPrimaryCmdBuffer(QUEUEFAM_VK* family) {
   cmdPool_vk& CP = family->m_pools[threadingsys->this_thread_index()];
   for (uint32_t i = 0; i < CP.m_cbsPrimary.size(); i++) {
@@ -506,4 +527,200 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
 bool manager_vk::does_queuefamily_support(QUEUE_VKOBJ* family, const queueflag_vk& flag) {
   printer(result_tgfx_NOTCODED, "does_queuefamily_support() isn't coded");
   return false;
+}
+
+// Renderer Command Buffer Functionality
+
+commandBuffer_tgfxhnd vk_beginCommandBuffer(gpuQueue_tgfxhnd i_queue, extension_tgfxlsthnd exts) {
+  getGPUfromQueueHnd(i_queue);
+  QUEUEFAM_VK* queueFam = gpu->manager()->m_queueFams[queue->vk_queueFamIndex];
+  cmdPool_vk&  cmdPool  = queueFam->m_pools[threadingsys->this_thread_index()];
+  for (uint32_t cmdBufferIndx = 0; cmdBufferIndx < cmdPool.m_cbsPrimary.max(); cmdBufferIndx++) {
+    CMDBUFFER_VKOBJ* cmdBuffer = cmdPool.m_cbsPrimary[cmdBufferIndx];
+    if (!cmdBuffer->isALIVE) {
+      cmdBuffer->isALIVE = true;
+
+      VkCommandBufferBeginInfo bi = {};
+      bi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+      bi.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+      if (ThrowIfFailed(vkBeginCommandBuffer(cmdBuffer->vk_cb, &bi),
+                        "VkBeginCommandBuffer() failed!")) {
+        return nullptr;
+      }
+
+      return cmdPool.m_cbsPrimary.returnHANDLEfromOBJ(cmdBuffer);
+    }
+  }
+  printer(result_tgfx_FAIL,
+          "No empty command buffer found! Increase the primary cb count in VK backend!");
+  return nullptr;
+}
+
+#define getCmdBufferfromHnd(cmdBufferHnd)                      \
+  VKOBJHANDLE      hnd       = *( VKOBJHANDLE* )&cmdBufferHnd; \
+  CMDBUFFER_VKOBJ* cmdBuffer = ( CMDBUFFER_VKOBJ* )VK_MEMOFFSET_TO_POINTER(hnd.OBJ_memoffset);
+
+#define checkCmdBufferHnd()                                                                       \
+  GPU_VKOBJ* gpu = core_vk->getGPUs()[cmdBuffer->m_gpuIndx];                                      \
+  assert(gpu && "GPU isn't found, wrong commandBuffer_tgfxhnd in vk_endCommandBuffer");           \
+  QUEUEFAM_VK* queueFam = gpu->manager()->m_queueFams[cmdBuffer->m_queueFamIndx];                 \
+  assert(queueFam && "QueueFam isn't found, wrong commandBuffer_tgfxhnd in vk_endCommandBuffer"); \
+  cmdPool_vk& cmdPool = queueFam->m_pools[cmdBuffer->m_cmdPoolIndx];                              \
+  assert(cmdPool.m_cbsPrimary.returnHANDLEfromOBJ(cmdBuffer) &&                                   \
+         "CmdPool failed to find, wrong commandBuffer_tgfxhnd in vk_endCommandBuffer");
+
+void vk_endCommandBuffer(commandBuffer_tgfxhnd cb) {
+  getCmdBufferfromHnd(cb);
+#ifdef VULKAN_DEBUGGING
+  checkCmdBufferHnd();
+#endif
+  ThrowIfFailed(vkEndCommandBuffer(cmdBuffer->vk_cb), "VkEndCommandBuffer() failed!");
+}
+void vk_executeBundles(commandBuffer_tgfxhnd cb, commandBundle_tgfxlsthnd bundles,
+                       tgfx_rendererKeySortFunc sortFnc, const unsigned long long* bundleSortKeys,
+                       void* userData, extension_tgfxlsthnd exts) {
+  getCmdBufferfromHnd(cb);
+#ifdef VULKAN_DEBUGGING
+  checkCmdBufferHnd();
+#endif
+
+  uint32_t        cmdBundleCount                              = 0;
+  VkCommandBuffer secCmdBuffers[VKCONST_MAXCMDBUNDLE_PERCALL] = {};
+  vk_GetSecondaryCmdBuffers(bundles, secCmdBuffers, &cmdBundleCount);
+  assert(cmdBundleCount <= VKCONST_MAXCMDBUNDLE_PERCALL &&
+         "vk_GetSecondaryCmdBuffers() can't exceed VKCONST_MAXCMDBUNDLE_PERCALL!");
+  if (!cmdBundleCount) {
+    return;
+  }
+  vkCmdExecuteCommands(cmdBuffer->vk_cb, cmdBundleCount, secCmdBuffers);
+}
+void vk_startRenderpass(commandBuffer_tgfxhnd commandBuffer, renderPass_tgfxhnd renderPass) {}
+void vk_nextRendersubpass(commandBuffer_tgfxhnd commandBuffer,
+                          renderSubPass_tgfxhnd renderSubPass) {}
+void vk_endRenderpass(commandBuffer_tgfxhnd commandBuffer) {}
+
+void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandBuffer_tgfxlsthnd i_cmdBuffersList,
+                               extension_tgfxlsthnd exts) {
+  getGPUfromQueueHnd(i_queue);
+  getTimelineSemaphoreEXT(gpu, semSys);
+
+  uint32_t cmdBufferCount = 0;
+  {
+    TGFXLISTCOUNT(core_tgfx_main, i_cmdBuffersList, listSize);
+    if (listSize > VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT) {
+      printer(result_tgfx_FAIL,
+              "Vulkan backend only supports limited cmdBuffers to be executed in the same call! "
+              "Please report this");
+    }
+    for (uint32_t i = 0; i < listSize; i++) {
+      if (i_cmdBuffersList[i]) {
+        // cmdBuffers[cmdBufferCount++] = findAndSetCmdBufferObj(i_cmdBuffersList[i]);
+      }
+    }
+  }
+  if (!cmdBufferCount) {
+    return;
+  }
+
+  submit_vk* submit                      = queue->m_submitInfos.add();
+  submit->vk_submit.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit->vk_submit.pNext                = nullptr;
+  submit->vk_submit.signalSemaphoreCount = 1;
+  submit->vk_submit.waitSemaphoreCount   = 1;
+  submit->vk_submit.pWaitSemaphores      = &queue->vk_callSynchronizer;
+  submit->vk_submit.pSignalSemaphores    = &queue->vk_callSynchronizer;
+  submit->vk_submit.commandBufferCount   = cmdBufferCount;
+}
+void vk_queueFenceWaitSignal(gpuQueue_tgfxhnd i_queue, fence_tgfxlsthnd waitFences,
+                             const unsigned long long* waitValues, fence_tgfxlsthnd signalFences,
+                             const unsigned long long* signalValues) {
+  getGPUfromQueueHnd(i_queue);
+  getTimelineSemaphoreEXT(gpu, semSys);
+  const FENCE_VKOBJ* waits[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
+  {
+    uint32_t waitCount = 0;
+    TGFXLISTCOUNT(core_tgfx_main, waitFences, waitListSize);
+    if (waitListSize > VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT) {
+      printer(result_tgfx_FAIL, "Max semaphore count per submit is exceeded!");
+      return;
+    }
+    for (uint32_t i = 0; i < waitListSize; i++) {
+      FENCE_VKOBJ* wait = semSys->fences.getOBJfromHANDLE(waitFences[i]);
+      if (!wait) {
+        continue;
+      }
+      waits[waitCount++] = wait;
+      wait->m_curValue.store(waitValues[i]);
+    }
+  }
+  const FENCE_VKOBJ* signals[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
+  {
+    uint32_t signalCount = 0;
+    TGFXLISTCOUNT(core_tgfx_main, signalFences, signalListSize);
+    if (signalListSize > VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT) {
+      printer(result_tgfx_FAIL, "Max semaphore count per submit is exceeded!");
+      return;
+    }
+    for (uint32_t i = 0; i < signalListSize; i++) {
+      FENCE_VKOBJ* signal = semSys->fences.getOBJfromHANDLE(signalFences[i]);
+      if (!signal) {
+        continue;
+      }
+      signals[signalCount++] = signal;
+      signal->m_nextValue.store(signalValues[i]);
+    }
+  }
+  vk_createSubmit_FenceWaitSignals(queue, waits, signals);
+}
+void vk_queueSubmit(gpuQueue_tgfxhnd i_queue) {
+  getGPUfromQueueHnd(i_queue);
+  gpu->manager()->queueSubmit(queue);
+}
+void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlist) {
+  getGPUfromQueueHnd(i_queue);
+
+  if (queue->m_activeQueueOp != QUEUE_VKOBJ::ERROR_QUEUEOPTYPE &&
+      queue->m_activeQueueOp != QUEUE_VKOBJ::PRESENT) {
+    printer(result_tgfx_FAIL,
+            "You can't call present while queue's active operation type is different (cmdbuffer or "
+            "sparse)");
+    return;
+  }
+
+  queue->m_activeQueueOp = QUEUE_VKOBJ::PRESENT;
+  submit_vk* submit      = queue->m_submitInfos.add();
+
+  uint32_t windowCount = 0;
+  {
+    TGFXLISTCOUNT(core_tgfx_main, windowlist, windowListSize);
+    for (uint32_t i = 0; i < windowListSize; i++) {
+      WINDOW_VKOBJ* window = core_vk->GETWINDOWs().getOBJfromHANDLE(windowlist[i]);
+      if (!window) {
+        continue;
+      }
+      submit->m_windows[windowCount] = window;
+      windowCount++;
+    }
+  }
+
+  submit->vk_present.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  submit->vk_present.pNext              = nullptr;
+  submit->vk_present.pWaitSemaphores    = nullptr;
+  submit->vk_present.waitSemaphoreCount = 0;
+  submit->vk_present.pResults           = nullptr;
+  submit->vk_present.pImageIndices      = nullptr;
+  submit->vk_present.pSwapchains        = nullptr;
+  submit->vk_present.swapchainCount     = windowCount;
+}
+
+void vk_setQueueFuncPtrs() {
+  core_tgfx_main->renderer->beginCommandBuffer     = vk_beginCommandBuffer;
+  core_tgfx_main->renderer->endCommandBuffer       = vk_endCommandBuffer;
+  core_tgfx_main->renderer->executeBundles         = vk_executeBundles;
+  core_tgfx_main->renderer->startRenderpass        = vk_startRenderpass;
+  core_tgfx_main->renderer->nextRendersubpass      = vk_nextRendersubpass;
+  core_tgfx_main->renderer->queueExecuteCmdBuffers = vk_queueExecuteCmdBuffers;
+  core_tgfx_main->renderer->queueFenceSignalWait   = vk_queueFenceWaitSignal;
+  core_tgfx_main->renderer->queueSubmit            = vk_queueSubmit;
+  core_tgfx_main->renderer->queuePresent           = vk_queuePresent;
 }

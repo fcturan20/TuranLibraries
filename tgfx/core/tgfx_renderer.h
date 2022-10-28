@@ -108,5 +108,5 @@ typedef struct tgfx_renderer {
                                  buffer_tgfxhnd dataBffr, unsigned long long drawCountBufferOffset,
                                  extension_tgfxlsthnd exts);
   // Extensions: TransferQueueOwnership
-  void (*cmdTextureBarrier)(texture_tgfxhnd texture, extension_tgfxlsthnd exts);
+  void (*cmdBarrierTexture)(texture_tgfxhnd texture, extension_tgfxlsthnd exts);
 } renderer_tgfx;

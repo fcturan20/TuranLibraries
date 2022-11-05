@@ -294,7 +294,7 @@ class VK_LINEAR_OBJARRAY {
         ? (max_object_count + ELEMENTCOUNT_PERPAGE - (max_object_count % ELEMENTCOUNT_PERPAGE))
         : (max_object_count);
     data = ( T* )VK_MEMOFFSET_TO_POINTER(
-      vk_virmem::allocate_page((OBJCOUNT * sizeof(T) / VKCONST_VIRMEMPAGESIZE) + 1));
+      vk_virmem::allocatePage((OBJCOUNT * sizeof(T) / VKCONST_VIRMEMPAGESIZE) + 1));
     virmemsys->virtual_commit(data, VKCONST_VIRMEMPAGESIZE);
     REMAINING_OBJ_COUNT.store(OBJCOUNT);
   }
@@ -435,7 +435,7 @@ class VK_STATICVECTOR {
     }
   }
   unsigned int                  size() const { return currentelement_i.load(); }
-  static constexpr unsigned int max() { return maxelementcount; }
+  static constexpr unsigned int capacity() { return maxelementcount; }
 
   T* getOBJfromHANDLE(TGFXHND hnd) {
     VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;

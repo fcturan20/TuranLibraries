@@ -5,7 +5,7 @@ cmake_minimum_required (VERSION 3.8)
 #add_library(TGFXVulkan SHARED ${VKbackendfiles})
 add_library(TGFXVulkan SHARED "vk_core.h" "vk_core.cpp" "vk_predefinitions.h" "vk_predefinitions.cpp" "vk_extension.h" "vk_extension.cpp"
  "vkext_timelineSemaphore.h" "vkext_timelineSemaphore.cpp" "vk_queue.h" "vk_queue.cpp" "vk_helper.cpp" "vk_helper.h" "vkext_descIndexing.h" "vkext_descIndexing.cpp"
- "vkext_depthstencil.h" "vkext_depthstencil.cpp" "vk_includes.h" "vk_renderer.h" "vk_renderer.cpp")
+ "vkext_depthstencil.h" "vkext_depthstencil.cpp" "vk_includes.h" "vk_renderer.h" "vk_renderer.cpp" "vk_contentmanager.cpp" "vk_contentmanager.h")
 target_include_directories(TGFXVulkan PUBLIC ${CMAKE_SOURCE_DIR}/turanapi/turanapi ${CMAKE_SOURCE_DIR}/tgfx/core)
 set_target_properties(TGFXVulkan PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 set_target_properties(TGFXVulkan PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
@@ -40,3 +40,10 @@ endif()
 
 find_package(glslang CONFIG REQUIRED)
 target_link_libraries(TGFXVulkan PUBLIC HLSL SPIRV glslang OGLCompiler)
+
+add_library(TGFXVulkanGlslang SHARED "vk_glslang.cpp")
+target_include_directories(TGFXVulkanGlslang PUBLIC ${CMAKE_SOURCE_DIR}/turanapi/turanapi)
+target_link_libraries(TGFXVulkanGlslang PUBLIC glslang)
+
+set_target_properties(TGFXVulkanGlslang PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
+set_target_properties(TGFXVulkanGlslang PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")

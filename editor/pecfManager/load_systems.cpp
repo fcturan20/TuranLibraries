@@ -51,10 +51,6 @@ struct pluginElement {
   }*/
 };
 
-tgfx_rendererKeySortFunc simpleSort{
-
-};
-
 void load_systems() {
   pluginHnd_ecstapi threadingPlugin = editorECS->loadPlugin("tapi_threadedjobsys.dll");
   auto              threadingSys =
@@ -126,14 +122,16 @@ void load_systems() {
     // Create window and the swapchain
     window_tgfxhnd             window;
     tgfx_swapchain_description swpchn_desc;
+    monitor_tgfxlsthnd         monitors;
     {
       // Get monitor list
-      monitor_tgfxlsthnd monitors;
       tgfx->getmonitorlist(&monitors);
       TGFXLISTCOUNT(tgfx, monitors, monitorCount);
       printf("Monitor Count: %u\n", monitorCount);
+    }
 
-      // Create window (OS operation)
+    // Create window (OS operation) on first monitor
+    {
       tgfx_window_description windowDesc = {};
       windowDesc.size                    = {1280, 720};
       windowDesc.Mode                    = windowmode_tgfx_WINDOWED;
@@ -141,17 +139,20 @@ void load_systems() {
       windowDesc.NAME                    = gpuDesc.NAME;
       windowDesc.ResizeCB                = nullptr;
       tgfx->createWindow(&windowDesc, nullptr, &window);
+    }
 
-      // Create swapchain (GPU operation)
+    // Create swapchain (GPU operation) on the window
+    static constexpr uint32_t swapchainTextureCount                 = 2;
+    texture_tgfxhnd           swpchnTextures[swapchainTextureCount] = {};
+    {
       swpchn_desc.channels    = texture_channels_tgfx_BGRA8UNORM;
       swpchn_desc.colorSpace  = colorspace_tgfx_sRGB_NONLINEAR;
       swpchn_desc.composition = windowcomposition_tgfx_OPAQUE;
-      swpchn_desc.imageCount  = 2;
+      swpchn_desc.imageCount  = swapchainTextureCount;
       swpchn_desc.swapchainUsage =
         tgfx->helpers->createUsageFlag_Texture(true, true, true, true, true);
       swpchn_desc.presentationMode = windowpresentation_tgfx_IMMEDIATE;
       swpchn_desc.window           = window;
-
       // Get all supported queues of the first GPU
       gpuQueue_tgfxhnd        allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
       tgfx_window_gpu_support swapchainSupport                               = {};
@@ -160,7 +161,8 @@ void load_systems() {
         allQueues[i] = swapchainSupport.queues[i];
       }
       swpchn_desc.permittedQueues = allQueues;
-      tgfx->createSwapchain(gpu, &swpchn_desc, nullptr);
+      // Create swapchain
+      tgfx->createSwapchain(gpu, &swpchn_desc, swpchnTextures);
     }
 
     fence_tgfxhnd fence;
@@ -178,8 +180,26 @@ void load_systems() {
         renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
         renderer->queueSubmit(queue);
 
-        commandBuffer_tgfxhnd cmdBuffer = renderer->beginCommandBuffer(queue, nullptr);
-        renderer->endCommandBuffer(cmdBuffer);
+        commandBundle_tgfxhnd firstCmdBundles[3] = {
+          renderer->beginCommandBundle(queue, nullptr, 1, nullptr),
+          renderer->beginCommandBundle(queue, nullptr, 1, nullptr),
+          ( commandBundle_tgfxhnd )tgfx->INVALIDHANDLE};
+        for (uint32_t i = 0; i < 1; i++) {
+          renderer->cmdBarrierTexture(
+            firstCmdBundles[0], i, swpchnTextures[i], image_access_tgfx_SHADER_SAMPLEWRITE,
+            image_access_tgfx_RTCOLOR_READWRITE, nullptr, nullptr, nullptr);
+
+          renderer->cmdBarrierTexture(
+            firstCmdBundles[1], i, swpchnTextures[i], image_access_tgfx_RTCOLOR_READWRITE,
+            image_access_tgfx_SHADER_SAMPLEWRITE,
+            nullptr, nullptr, nullptr);
+        }
+        renderer->finishCommandBundle(firstCmdBundles[0], nullptr);
+        renderer->finishCommandBundle(firstCmdBundles[1], nullptr);
+        commandBuffer_tgfxhnd firstCmdBuffers[2] = {renderer->beginCommandBuffer(queue, nullptr),
+                                                    (commandBuffer_tgfxhnd)tgfx->INVALIDHANDLE};
+        renderer->executeBundles(firstCmdBuffers[0], firstCmdBundles, nullptr);
+        renderer->endCommandBuffer(firstCmdBuffers[0]);
         for (uint32_t i = 0; i < 3; i++) {
           _sleep(1 << 4);
           uint64_t value = 0;
@@ -190,6 +210,8 @@ void load_systems() {
         window_tgfxhnd windowlst[2] = {window, ( window_tgfxhnd )tgfx->INVALIDHANDLE};
         uint32_t       swpchnIndx   = UINT32_MAX;
         tgfx->getCurrentSwapchainTextureIndex(window, &swpchnIndx);
+        renderer->queueExecuteCmdBuffers(queue, firstCmdBuffers, nullptr);
+        renderer->queueSubmit(queue);
         renderer->queuePresent(queue, windowlst);
         renderer->queueSubmit(queue);
 

@@ -18,6 +18,7 @@
 #include "vk_predefinitions.h"
 #include "vk_queue.h"
 #include "vk_renderer.h"
+#include "vk_contentmanager.h"
 
 struct device_features_chainedstructs;
 
@@ -593,7 +594,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
 
     queueFamListIterIndx++;
   }
-  /*
+  
   // Create TEXTURE_VKOBJs and return handles
   window->vk_swapchainTextureUsage = swpchn_ci.imageUsage;
   for (uint32_t vkim_index = 0; vkim_index < desc->imageCount; vkim_index++) {
@@ -614,7 +615,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
     textures[vkim_index] =
       contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(SWAPCHAINTEXTURE);
     window->m_swapchainTextures[vkim_index] = textures[vkim_index];
-  }*/
+  }
   return result_tgfx_SUCCESS;
 }
 result_tgfx vk_getCurrentSwapchainTextureIndex(window_tgfxhnd i_window, uint32_t* index) {
@@ -837,7 +838,7 @@ void vk_printfLog(result_tgfx result, const char* text) {
 #endif // !NO_IMGUI
 
 extern void vk_createBackendAllocator();
-// extern void vk_createContentManager();
+extern void vk_createContentManager();
 // extern void Create_SyncSystems();
 void        vk_setupDebugging();
 void        vk_initRenderer();
@@ -915,6 +916,7 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallbac
 
   // Init systems
   vk_setQueueFuncPtrs();
+  vk_createContentManager();
   vk_initRenderer();
   vk_setHelperFuncPtrs();
   return result_tgfx_SUCCESS;

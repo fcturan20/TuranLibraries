@@ -304,7 +304,7 @@ VkCommandBuffer manager_vk::getPrimaryCmdBuffer(QUEUEFAM_VK* family) {
   assert(0 && "Command Buffer Count is exceeded!");
 }
 
-static constexpr VkPipelineStageFlags
+static VkPipelineStageFlags
   VKCONST_PRESENTWAITSTAGEs[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {
     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
@@ -342,6 +342,7 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
       }
       for (uint32_t submitIndx = 0; submitIndx < queue->m_submitInfos.size(); submitIndx++) {
         submit_vk* submit = queue->m_submitInfos[submitIndx];
+        submit->vk_submit.pWaitDstStageMask = VKCONST_PRESENTWAITSTAGEs;
         // Add queue call synchronizer semaphore as wait to sync sequential executeCmdLists calls
         if (submitIndx == 0 && queue->m_prevQueueOp == QUEUE_VKOBJ::CMDBUFFER) {
           submit->vk_waitSemaphores[submit->vk_submit.waitSemaphoreCount++] =
@@ -359,7 +360,7 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
              cmdBufferIndx++) {
           cmdBuffers[submitIndx][cmdBufferIndx] = submit->cmdBuffers[cmdBufferIndx]->vk_cb;
         }
-        // submit->vk_submit.pCommandBuffers = cmdBuffers[submitIndx];
+        submit->vk_submit.pCommandBuffers = cmdBuffers[submitIndx];
         infos[submitIndx] = submit->vk_submit;
       }
       ThrowIfFailed(vkQueueSubmit(queue->vk_queue, queue->m_submitInfos.size(), infos, submitFence),
@@ -535,7 +536,8 @@ commandBuffer_tgfxhnd vk_beginCommandBuffer(gpuQueue_tgfxhnd i_queue, extension_
   getGPUfromQueueHnd(i_queue);
   QUEUEFAM_VK* queueFam = gpu->manager()->m_queueFams[queue->vk_queueFamIndex];
   cmdPool_vk&  cmdPool  = queueFam->m_pools[threadingsys->this_thread_index()];
-  for (uint32_t cmdBufferIndx = 0; cmdBufferIndx < cmdPool.m_cbsPrimary.max(); cmdBufferIndx++) {
+  for (uint32_t cmdBufferIndx = 0; cmdBufferIndx < cmdPool.m_cbsPrimary.capacity();
+       cmdBufferIndx++) {
     CMDBUFFER_VKOBJ* cmdBuffer = cmdPool.m_cbsPrimary[cmdBufferIndx];
     if (!cmdBuffer->isALIVE) {
       cmdBuffer->isALIVE = true;
@@ -577,8 +579,7 @@ void vk_endCommandBuffer(commandBuffer_tgfxhnd cb) {
   ThrowIfFailed(vkEndCommandBuffer(cmdBuffer->vk_cb), "VkEndCommandBuffer() failed!");
 }
 void vk_executeBundles(commandBuffer_tgfxhnd cb, commandBundle_tgfxlsthnd bundles,
-                       tgfx_rendererKeySortFunc sortFnc, const unsigned long long* bundleSortKeys,
-                       void* userData, extension_tgfxlsthnd exts) {
+                       extension_tgfxlsthnd exts) {
   getCmdBufferfromHnd(cb);
 #ifdef VULKAN_DEBUGGING
   checkCmdBufferHnd();
@@ -586,7 +587,7 @@ void vk_executeBundles(commandBuffer_tgfxhnd cb, commandBundle_tgfxlsthnd bundle
 
   uint32_t        cmdBundleCount                              = 0;
   VkCommandBuffer secCmdBuffers[VKCONST_MAXCMDBUNDLE_PERCALL] = {};
-  vk_GetSecondaryCmdBuffers(bundles, secCmdBuffers, &cmdBundleCount);
+  vk_getSecondaryCmdBuffers(bundles, secCmdBuffers, &cmdBundleCount);
   assert(cmdBundleCount <= VKCONST_MAXCMDBUNDLE_PERCALL &&
          "vk_GetSecondaryCmdBuffers() can't exceed VKCONST_MAXCMDBUNDLE_PERCALL!");
   if (!cmdBundleCount) {
@@ -604,7 +605,17 @@ void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandBuffer_tgfxlsthn
   getGPUfromQueueHnd(i_queue);
   getTimelineSemaphoreEXT(gpu, semSys);
 
+  if (queue->m_activeQueueOp != QUEUE_VKOBJ::ERROR_QUEUEOPTYPE &&
+      queue->m_activeQueueOp != QUEUE_VKOBJ::CMDBUFFER) {
+    printer(result_tgfx_FAIL,
+            "You can't call executeCmdBuffers while queue's active operation type is different "
+            "(present or sparse)");
+    return;
+  }
+  queue->m_activeQueueOp = QUEUE_VKOBJ::CMDBUFFER;
+
   uint32_t cmdBufferCount = 0;
+  CMDBUFFER_VKOBJ* cmdBuffers[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
   {
     TGFXLISTCOUNT(core_tgfx_main, i_cmdBuffersList, listSize);
     if (listSize > VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT) {
@@ -614,7 +625,8 @@ void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandBuffer_tgfxlsthn
     }
     for (uint32_t i = 0; i < listSize; i++) {
       if (i_cmdBuffersList[i]) {
-        // cmdBuffers[cmdBufferCount++] = findAndSetCmdBufferObj(i_cmdBuffersList[i]);
+        getCmdBufferfromHnd(i_cmdBuffersList[i]);
+        cmdBuffers[cmdBufferCount++] = cmdBuffer;
       }
     }
   }
@@ -625,11 +637,13 @@ void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandBuffer_tgfxlsthn
   submit_vk* submit                      = queue->m_submitInfos.add();
   submit->vk_submit.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   submit->vk_submit.pNext                = nullptr;
-  submit->vk_submit.signalSemaphoreCount = 1;
-  submit->vk_submit.waitSemaphoreCount   = 1;
-  submit->vk_submit.pWaitSemaphores      = &queue->vk_callSynchronizer;
-  submit->vk_submit.pSignalSemaphores    = &queue->vk_callSynchronizer;
+  submit->vk_submit.signalSemaphoreCount = 0;
+  submit->vk_submit.waitSemaphoreCount   = 0;
+  submit->vk_submit.pWaitSemaphores      = submit->vk_waitSemaphores;
+  submit->vk_submit.pSignalSemaphores    = submit->vk_signalSemaphores;
   submit->vk_submit.commandBufferCount   = cmdBufferCount;
+  submit->vk_submit.pCommandBuffers      = nullptr;
+  memcpy(submit->cmdBuffers, cmdBuffers, sizeof(cmdBuffers));
 }
 void vk_queueFenceWaitSignal(gpuQueue_tgfxhnd i_queue, fence_tgfxlsthnd waitFences,
                              const unsigned long long* waitValues, fence_tgfxlsthnd signalFences,
@@ -713,6 +727,13 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
   submit->vk_present.swapchainCount     = windowCount;
 }
 
+VkCommandPool vk_getSecondaryCmdPool(QUEUEFAM_VK* queueFam, unsigned int poolIndx) {
+  cmdPool_vk& cmdPool = queueFam->m_pools[poolIndx];
+  assert(!(cmdPool.m_cbsPrimary.size() > VKCONST_MAXCMDBUFFER_PRIMARY_COUNT ||
+           !cmdPool.vk_primaryCP || !cmdPool.vk_secondaryCP) &&
+         "vk_getSecondaryCmdPool failed because cmdpool is invalid!");
+  return cmdPool.vk_secondaryCP;
+}
 void vk_setQueueFuncPtrs() {
   core_tgfx_main->renderer->beginCommandBuffer     = vk_beginCommandBuffer;
   core_tgfx_main->renderer->endCommandBuffer       = vk_endCommandBuffer;
@@ -723,4 +744,8 @@ void vk_setQueueFuncPtrs() {
   core_tgfx_main->renderer->queueFenceSignalWait   = vk_queueFenceWaitSignal;
   core_tgfx_main->renderer->queueSubmit            = vk_queueSubmit;
   core_tgfx_main->renderer->queuePresent           = vk_queuePresent;
+
+  for (uint32_t i = 0; i < VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT; i++) {
+    VKCONST_PRESENTWAITSTAGEs[i] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+  }
 }

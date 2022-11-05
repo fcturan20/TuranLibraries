@@ -185,3 +185,4 @@ struct manager_vk {
 
 void vk_allocateCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, VkCommandBuffer* cbs,
                           uint32_t count);
+VkCommandPool vk_getSecondaryCmdPool(QUEUEFAM_VK* queueFam, unsigned int poolIndx);

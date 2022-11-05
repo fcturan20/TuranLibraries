@@ -39,7 +39,7 @@ void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxl
                                 uint32_t* o_famList, uint32_t* o_famListSize,
                                 VkSharingMode* o_sharingMode);
 
-void vk_GetSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
+void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
                                VkCommandBuffer* secondaryCmdBuffers, uint32_t* cmdBufferCount);
 
 #define getGPUfromQueueHnd(i_queue)                            \

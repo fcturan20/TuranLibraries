@@ -1,3 +1,4 @@
+#define T_INCLUDE_PLATFORM_LIBS
 #include "vk_contentmanager.h"
 
 #include <glslang/SPIRV/GlslangToSpv.h>
@@ -15,8 +16,8 @@
 #include "vk_renderer.h"
 #include "vk_resource.h"
 
-TBuiltInResource glsl_to_spirv_limitationtable;
-
+vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_CONTENTMANAGER = nullptr;
+TBuiltInResource       glslToSpirvLimitTable;
 struct descpool_vk {
   // Each pool stores a descset of the same descsetlayout (So for each desccsetlayout, there are
   // B.I.F. + 1 descsets across all pools) B.I.F. + 1 pools TGFX handles descriptors before waiting
@@ -71,7 +72,7 @@ struct gpudatamanager_private {
   gpudatamanager_private() {}
 };
 static gpudatamanager_private* hidden = nullptr;
-
+/*
 void Update_DescSet(BINDINGTABLEINST_VKOBJ& set) {
   BINDINGTABLETYPE_VKOBJ* descSetType = hidden->bindingtabletypes.getOBJfromHANDLE(set.type);
   // If the desc set type is not known or set isn't created
@@ -135,6 +136,7 @@ void Update_DescSet(BINDINGTABLEINST_VKOBJ& set) {
     set.isUpdatedCounter.fetch_sub(1);
   }
 }
+*/
 /*
 void gpudatamanager_public::Apply_ResourceChanges() {
         for (uint32_t i = 0; i < hidden->descsets.size(); i++) {
@@ -223,7 +225,7 @@ multi-threading!");
 */
 
 void vk_destroyAllResources() {}
-
+/*
 result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* desc,
                              sampler_tgfxhnd* hnd) {
   GPU_VKOBJ*          GPU      = core_vk->getGPUs().getOBJfromHANDLE(gpu);
@@ -253,6 +255,7 @@ result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* des
   *hnd                   = hidden->samplers.returnHANDLEfromOBJ(SAMPLER);
   return result_tgfx_SUCCESS;
 }
+*/
 
 /*Attributes are ordered as the same order of input vector
  * For example: Same attribute ID may have different location/order in another attribute layout
@@ -300,7 +303,7 @@ result_tgfx vk_createVertexAttribLayout(const datatype_tgfx*           Attribute
   return result_tgfx_SUCCESS;
 }
 void Delete_VertexAttributeLayout(vertexAttributeLayout_tgfxhnd VertexAttributeLayoutHandle) {}
-
+/*
 result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* desc,
                              texture_tgfxhnd* TextureHandle) {
   GPU_VKOBJ*        gpu       = core_vk->getGPUs().getOBJfromHANDLE(i_gpu);
@@ -449,6 +452,7 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
   return result_tgfx_SUCCESS;
 }
 
+
 result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescription_tgfx* desc,
                                       bindingTableType_tgfxhnd* bindingTableHandle) {
 #ifdef VULKAN_DEBUGGING
@@ -553,6 +557,7 @@ result_tgfx vk_instantiateBindingTable(bindingTableType_tgfxhnd tableType,
   *table = hidden->bindingtableinsts.returnHANDLEfromOBJ(finalobj);
   return result_tgfx_SUCCESS;
 }
+*/
 bool VKPipelineLayoutCreation(GPU_VKOBJ*               GPU,
                               bindingTableType_tgfxhnd TypeDescs[VKCONST_MAXDESCSET_PERLIST],
                               bool isCallBufferSupported, VkPipelineLayout* layout) {
@@ -609,7 +614,7 @@ static EShLanguage Find_EShShaderStage_byTGFXShaderStage(shaderstage_tgfx stage)
       return EShLangVertex;
   }
 }
-static void* compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, void* i_DATA,
+static void*             compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, void* i_DATA,
                                               unsigned int  i_DATA_SIZE,
                                               unsigned int* compiledbinary_datasize) {
   EShLanguage       stage = Find_EShShaderStage_byTGFXShaderStage(tgfxstage);
@@ -622,7 +627,7 @@ static void* compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, void* 
   const char* strings[1] = {( const char* )i_DATA};
   shader.setStrings(strings, 1);
 
-  if (!shader.parse(&glsl_to_spirv_limitationtable, 100, false, messages)) {
+  if (!shader.parse(&glslToSpirvLimitTable, 100, false, messages)) {
     puts(shader.getInfoLog());
     puts(shader.getInfoDebugLog());
     return false; // something didn't work
@@ -651,6 +656,7 @@ static void* compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, void* 
   printer(result_tgfx_FAIL, "glslang couldn't compile the shader!");
   return nullptr;
 }
+
 result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx language,
                                    shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE,
                                    shaderSource_tgfxhnd* ShaderSourceHandle) {
@@ -761,6 +767,7 @@ bool Get_SlotSets_fromSubDP(renderSubPass_tgfxhnd subdp_handle, RTSLOTSET_VKOBJ*
   */
   return true;
 }
+/*
 result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSourcesList,
                                     const bindingTableType_tgfxlsthnd   i_bindingTables,
                                     const vertexAttributeLayout_tgfxhnd i_AttribLayout,
@@ -1119,11 +1126,12 @@ result_tgfx vk_createComputePipeline(shaderSource_tgfxhnd        Source,
   *ComputeTypeHandle         = hidden->computetypes.returnHANDLEfromOBJ(obj);
   return result_tgfx_SUCCESS;
 }
+*/
 result_tgfx vk_copyComputePipeline(computePipeline_tgfxhnd src, extension_tgfxlsthnd exts,
                                    computePipeline_tgfxhnd* dst) {
   return result_tgfx_NOTCODED;
 }
-
+/*
 // Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
 void vk_setDescriptor_Sampler(bindingTable_tgfxhnd bindingtable, unsigned int elementIndex,
                               sampler_tgfxhnd samplerHandle) {
@@ -1238,7 +1246,7 @@ void SetDescriptor_StorageImage(bindingTable_tgfxhnd bindingtable, unsigned int 
 
   set->isUpdatedCounter.store(3);
 }
-
+*/
 result_tgfx Create_RTSlotset(RTSlotDescription_tgfxlsthnd Descriptions,
                              RTSlotset_tgfxhnd*           RTSlotSetHandle) {
   TGFXLISTCOUNT(core_tgfx_main, Descriptions, DescriptionsCount);
@@ -1478,8 +1486,9 @@ result_tgfx vk_createHeap(gpu_tgfxhnd gpu, unsigned char memoryRegionID,
   heap->vk_memoryHandle    = vkDevMem;
   heap->vk_memoryTypeIndex = memoryRegionID;
   heap->m_size             = heapSize;
-  heap->m_GPU              = gpu;
+  heap->m_GPU              = vkGPU->gpuIndx();
   *heapHnd                 = hidden->heaps.returnHANDLEfromOBJ(heap);
+  return result_tgfx_SUCCESS;
 }
 result_tgfx vk_getHeapRequirement_Texture(texture_tgfxhnd i_texture, extension_tgfxlsthnd exts,
                                           heapRequirementsInfo_tgfx* reqs) {
@@ -1520,6 +1529,7 @@ result_tgfx vk_getRemainingMemory(gpu_tgfxhnd GPU, unsigned char memoryRegionID,
                                   extension_tgfxlsthnd exts, unsigned long long* size) {
   return result_tgfx_NOTCODED;
 }
+/*
 result_tgfx vk_bindToHeap_Buffer(heap_tgfxhnd i_heap, unsigned long long offset,
                                  buffer_tgfxhnd i_buffer, extension_tgfxlsthnd exts) {
   BUFFER_VKOBJ* buffer = hidden->buffers.getOBJfromHANDLE(i_buffer);
@@ -1552,7 +1562,7 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
     return result_tgfx_FAIL;
   }
 }
-
+*/
 /////////////////////////////////////////////////////
 ///				INITIALIZATION PROCEDURE
 /////////////////////////////////////////////////////
@@ -1591,151 +1601,156 @@ gpudatamanager_public::GETVIEWPORT_ARRAY() {
 inline void set_functionpointers() {
   core_tgfx_main->contentmanager->changeRTSlot_Texture       = Change_RTSlotTexture;
   core_tgfx_main->contentmanager->compileShaderSource        = vk_compileShaderSource;
-  core_tgfx_main->contentmanager->createBindingTableType     = vk_createBindingTableType;
-  core_tgfx_main->contentmanager->instantiateBindingTable    = vk_instantiateBindingTable;
+  //core_tgfx_main->contentmanager->createBindingTableType     = vk_createBindingTableType;
+  //core_tgfx_main->contentmanager->instantiateBindingTable    = vk_instantiateBindingTable;
   core_tgfx_main->contentmanager->copyComputePipeline        = vk_copyComputePipeline;
-  core_tgfx_main->contentmanager->createComputePipeline      = vk_createComputePipeline;
-  core_tgfx_main->contentmanager->createBuffer               = vk_createBuffer;
-  core_tgfx_main->contentmanager->copyRasterPipeline         = vk_copyRasterPipeline;
+  //core_tgfx_main->contentmanager->createComputePipeline      = vk_createComputePipeline;
+  //core_tgfx_main->contentmanager->createBuffer               = vk_createBuffer;
+  //core_tgfx_main->contentmanager->copyRasterPipeline         = vk_copyRasterPipeline;
   core_tgfx_main->contentmanager->createRTSlotset            = Create_RTSlotset;
-  core_tgfx_main->contentmanager->createSampler              = vk_createSampler;
-  core_tgfx_main->contentmanager->createTexture              = vk_createTexture;
+  //core_tgfx_main->contentmanager->createSampler              = vk_createSampler;
+  //core_tgfx_main->contentmanager->createTexture              = vk_createTexture;
   core_tgfx_main->contentmanager->createVertexAttribLayout   = vk_createVertexAttribLayout;
   core_tgfx_main->contentmanager->deleteInheritedRTSlotset   = Delete_InheritedRTSlotSet;
-  core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
+  //core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
   core_tgfx_main->contentmanager->Delete_RTSlotSet           = Delete_RTSlotSet;
   core_tgfx_main->contentmanager->deleteShaderSource         = vk_destroyShaderSource;
   core_tgfx_main->contentmanager->destroyVertexAttribLayout  = Delete_VertexAttributeLayout;
   core_tgfx_main->contentmanager->destroyAllResources        = vk_destroyAllResources;
   core_tgfx_main->contentmanager->inheriteRTSlotset          = Inherite_RTSlotSet;
-  core_tgfx_main->contentmanager->createRasterPipeline       = vk_createRasterPipeline;
-  core_tgfx_main->contentmanager->setBindingTable_Buffer     = SetDescriptor_Buffer;
+  //core_tgfx_main->contentmanager->createRasterPipeline       = vk_createRasterPipeline;
+  //core_tgfx_main->contentmanager->setBindingTable_Buffer     = SetDescriptor_Buffer;
   core_tgfx_main->contentmanager->createHeap                 = vk_createHeap;
   core_tgfx_main->contentmanager->getHeapRequirement_Buffer  = vk_getHeapRequirement_Buffer;
   core_tgfx_main->contentmanager->getHeapRequirement_Texture = vk_getHeapRequirement_Texture;
   core_tgfx_main->contentmanager->getRemainingMemory         = vk_getRemainingMemory;
-  core_tgfx_main->contentmanager->bindToHeap_Buffer          = vk_bindToHeap_Buffer;
-  core_tgfx_main->contentmanager->bindToHeap_Texture         = vk_bindToHeap_Texture;
+  //core_tgfx_main->contentmanager->bindToHeap_Buffer          = vk_bindToHeap_Buffer;
+  //core_tgfx_main->contentmanager->bindToHeap_Texture         = vk_bindToHeap_Texture;
+}
+
+void startGlslang() {
+  auto* dllHandle = DLIB_LOAD_TAPI("TGFXVulkanGlslang.dll");
+  void (*startGlslangFnc)() = ( void (*)() )DLIB_FUNC_LOAD_TAPI(dllHandle, "startGlslang");
+  startGlslangFnc();
+
+  // Initialize limitation table
+  // from Eric's Blog "Translate GLSL to SPIRV for Vulkan at Runtime" post:
+  // https://lxjk.github.io/2020/03/10/Translate-GLSL-to-SPIRV-for-Vulkan-at-Runtime.html
+  glslToSpirvLimitTable.maxLights                                   = 32;
+  glslToSpirvLimitTable.maxClipPlanes                               = 6;
+  glslToSpirvLimitTable.maxTextureUnits                             = 32;
+  glslToSpirvLimitTable.maxTextureCoords                            = 32;
+  glslToSpirvLimitTable.maxVertexAttribs                            = 64;
+  glslToSpirvLimitTable.maxVertexUniformComponents                  = 4096;
+  glslToSpirvLimitTable.maxVaryingFloats                            = 64;
+  glslToSpirvLimitTable.maxVertexTextureImageUnits                  = 32;
+  glslToSpirvLimitTable.maxCombinedTextureImageUnits                = 80;
+  glslToSpirvLimitTable.maxTextureImageUnits                        = 32;
+  glslToSpirvLimitTable.maxFragmentUniformComponents                = 4096;
+  glslToSpirvLimitTable.maxDrawBuffers                              = 32;
+  glslToSpirvLimitTable.maxVertexUniformVectors                     = 128;
+  glslToSpirvLimitTable.maxVaryingVectors                           = 8;
+  glslToSpirvLimitTable.maxFragmentUniformVectors                   = 16;
+  glslToSpirvLimitTable.maxVertexOutputVectors                      = 16;
+  glslToSpirvLimitTable.maxFragmentInputVectors                     = 15;
+  glslToSpirvLimitTable.minProgramTexelOffset                       = -8;
+  glslToSpirvLimitTable.maxProgramTexelOffset                       = 7;
+  glslToSpirvLimitTable.maxClipDistances                            = 8;
+  glslToSpirvLimitTable.maxComputeWorkGroupCountX                   = 65535;
+  glslToSpirvLimitTable.maxComputeWorkGroupCountY                   = 65535;
+  glslToSpirvLimitTable.maxComputeWorkGroupCountZ                   = 65535;
+  glslToSpirvLimitTable.maxComputeWorkGroupSizeX                    = 1024;
+  glslToSpirvLimitTable.maxComputeWorkGroupSizeY                    = 1024;
+  glslToSpirvLimitTable.maxComputeWorkGroupSizeZ                    = 64;
+  glslToSpirvLimitTable.maxComputeUniformComponents                 = 1024;
+  glslToSpirvLimitTable.maxComputeTextureImageUnits                 = 16;
+  glslToSpirvLimitTable.maxComputeImageUniforms                     = 8;
+  glslToSpirvLimitTable.maxComputeAtomicCounters                    = 8;
+  glslToSpirvLimitTable.maxComputeAtomicCounterBuffers              = 1;
+  glslToSpirvLimitTable.maxVaryingComponents                        = 60;
+  glslToSpirvLimitTable.maxVertexOutputComponents                   = 64;
+  glslToSpirvLimitTable.maxGeometryInputComponents                  = 64;
+  glslToSpirvLimitTable.maxGeometryOutputComponents                 = 128;
+  glslToSpirvLimitTable.maxFragmentInputComponents                  = 128;
+  glslToSpirvLimitTable.maxImageUnits                               = 8;
+  glslToSpirvLimitTable.maxCombinedImageUnitsAndFragmentOutputs     = 8;
+  glslToSpirvLimitTable.maxCombinedShaderOutputResources            = 8;
+  glslToSpirvLimitTable.maxImageSamples                             = 0;
+  glslToSpirvLimitTable.maxVertexImageUniforms                      = 0;
+  glslToSpirvLimitTable.maxTessControlImageUniforms                 = 0;
+  glslToSpirvLimitTable.maxTessEvaluationImageUniforms              = 0;
+  glslToSpirvLimitTable.maxGeometryImageUniforms                    = 0;
+  glslToSpirvLimitTable.maxFragmentImageUniforms                    = 8;
+  glslToSpirvLimitTable.maxCombinedImageUniforms                    = 8;
+  glslToSpirvLimitTable.maxGeometryTextureImageUnits                = 16;
+  glslToSpirvLimitTable.maxGeometryOutputVertices                   = 256;
+  glslToSpirvLimitTable.maxGeometryTotalOutputComponents            = 1024;
+  glslToSpirvLimitTable.maxGeometryUniformComponents                = 1024;
+  glslToSpirvLimitTable.maxGeometryVaryingComponents                = 64;
+  glslToSpirvLimitTable.maxTessControlInputComponents               = 128;
+  glslToSpirvLimitTable.maxTessControlOutputComponents              = 128;
+  glslToSpirvLimitTable.maxTessControlTextureImageUnits             = 16;
+  glslToSpirvLimitTable.maxTessControlUniformComponents             = 1024;
+  glslToSpirvLimitTable.maxTessControlTotalOutputComponents         = 4096;
+  glslToSpirvLimitTable.maxTessEvaluationInputComponents            = 128;
+  glslToSpirvLimitTable.maxTessEvaluationOutputComponents           = 128;
+  glslToSpirvLimitTable.maxTessEvaluationTextureImageUnits          = 16;
+  glslToSpirvLimitTable.maxTessEvaluationUniformComponents          = 1024;
+  glslToSpirvLimitTable.maxTessPatchComponents                      = 120;
+  glslToSpirvLimitTable.maxPatchVertices                            = 32;
+  glslToSpirvLimitTable.maxTessGenLevel                             = 64;
+  glslToSpirvLimitTable.maxViewports                                = 16;
+  glslToSpirvLimitTable.maxVertexAtomicCounters                     = 0;
+  glslToSpirvLimitTable.maxTessControlAtomicCounters                = 0;
+  glslToSpirvLimitTable.maxTessEvaluationAtomicCounters             = 0;
+  glslToSpirvLimitTable.maxGeometryAtomicCounters                   = 0;
+  glslToSpirvLimitTable.maxFragmentAtomicCounters                   = 8;
+  glslToSpirvLimitTable.maxCombinedAtomicCounters                   = 8;
+  glslToSpirvLimitTable.maxAtomicCounterBindings                    = 1;
+  glslToSpirvLimitTable.maxVertexAtomicCounterBuffers               = 0;
+  glslToSpirvLimitTable.maxTessControlAtomicCounterBuffers          = 0;
+  glslToSpirvLimitTable.maxTessEvaluationAtomicCounterBuffers       = 0;
+  glslToSpirvLimitTable.maxGeometryAtomicCounterBuffers             = 0;
+  glslToSpirvLimitTable.maxFragmentAtomicCounterBuffers             = 1;
+  glslToSpirvLimitTable.maxCombinedAtomicCounterBuffers             = 1;
+  glslToSpirvLimitTable.maxAtomicCounterBufferSize                  = 16384;
+  glslToSpirvLimitTable.maxTransformFeedbackBuffers                 = 4;
+  glslToSpirvLimitTable.maxTransformFeedbackInterleavedComponents   = 64;
+  glslToSpirvLimitTable.maxCullDistances                            = 8;
+  glslToSpirvLimitTable.maxCombinedClipAndCullDistances             = 8;
+  glslToSpirvLimitTable.maxSamples                                  = 4;
+  glslToSpirvLimitTable.maxMeshOutputVerticesNV                     = 256;
+  glslToSpirvLimitTable.maxMeshOutputPrimitivesNV                   = 512;
+  glslToSpirvLimitTable.maxMeshWorkGroupSizeX_NV                    = 32;
+  glslToSpirvLimitTable.maxMeshWorkGroupSizeY_NV                    = 1;
+  glslToSpirvLimitTable.maxMeshWorkGroupSizeZ_NV                    = 1;
+  glslToSpirvLimitTable.maxTaskWorkGroupSizeX_NV                    = 32;
+  glslToSpirvLimitTable.maxTaskWorkGroupSizeY_NV                    = 1;
+  glslToSpirvLimitTable.maxTaskWorkGroupSizeZ_NV                    = 1;
+  glslToSpirvLimitTable.maxMeshViewCountNV                          = 4;
+  glslToSpirvLimitTable.limits.nonInductiveForLoops                 = 1;
+  glslToSpirvLimitTable.limits.whileLoops                           = 1;
+  glslToSpirvLimitTable.limits.doWhileLoops                         = 1;
+  glslToSpirvLimitTable.limits.generalUniformIndexing               = 1;
+  glslToSpirvLimitTable.limits.generalAttributeMatrixVectorIndexing = 1;
+  glslToSpirvLimitTable.limits.generalVaryingIndexing               = 1;
+  glslToSpirvLimitTable.limits.generalSamplerIndexing               = 1;
+  glslToSpirvLimitTable.limits.generalVariableIndexing              = 1;
+  glslToSpirvLimitTable.limits.generalConstantMatrixVectorIndexing  = 1;
 }
 void vk_createContentManager() {
-  contentmanager         = new gpudatamanager_public;
-  contentmanager->hidden = new gpudatamanager_private;
+  VKGLOBAL_VIRMEM_CONTENTMANAGER =
+    vk_virmem::allocate_dynamicmem(sizeof(gpudatamanager_public) + sizeof(gpudatamanager_private));
+  contentmanager         = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) gpudatamanager_public;
+  contentmanager->hidden = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) gpudatamanager_private;
   hidden                 = contentmanager->hidden;
 
   set_functionpointers();
 
-  // Start glslang
-  {
-    glslang::InitializeProcess();
-
-    // Initialize limitation table
-    // from Eric's Blog "Translate GLSL to SPIRV for Vulkan at Runtime" post:
-    // https://lxjk.github.io/2020/03/10/Translate-GLSL-to-SPIRV-for-Vulkan-at-Runtime.html
-    glsl_to_spirv_limitationtable.maxLights                                   = 32;
-    glsl_to_spirv_limitationtable.maxClipPlanes                               = 6;
-    glsl_to_spirv_limitationtable.maxTextureUnits                             = 32;
-    glsl_to_spirv_limitationtable.maxTextureCoords                            = 32;
-    glsl_to_spirv_limitationtable.maxVertexAttribs                            = 64;
-    glsl_to_spirv_limitationtable.maxVertexUniformComponents                  = 4096;
-    glsl_to_spirv_limitationtable.maxVaryingFloats                            = 64;
-    glsl_to_spirv_limitationtable.maxVertexTextureImageUnits                  = 32;
-    glsl_to_spirv_limitationtable.maxCombinedTextureImageUnits                = 80;
-    glsl_to_spirv_limitationtable.maxTextureImageUnits                        = 32;
-    glsl_to_spirv_limitationtable.maxFragmentUniformComponents                = 4096;
-    glsl_to_spirv_limitationtable.maxDrawBuffers                              = 32;
-    glsl_to_spirv_limitationtable.maxVertexUniformVectors                     = 128;
-    glsl_to_spirv_limitationtable.maxVaryingVectors                           = 8;
-    glsl_to_spirv_limitationtable.maxFragmentUniformVectors                   = 16;
-    glsl_to_spirv_limitationtable.maxVertexOutputVectors                      = 16;
-    glsl_to_spirv_limitationtable.maxFragmentInputVectors                     = 15;
-    glsl_to_spirv_limitationtable.minProgramTexelOffset                       = -8;
-    glsl_to_spirv_limitationtable.maxProgramTexelOffset                       = 7;
-    glsl_to_spirv_limitationtable.maxClipDistances                            = 8;
-    glsl_to_spirv_limitationtable.maxComputeWorkGroupCountX                   = 65535;
-    glsl_to_spirv_limitationtable.maxComputeWorkGroupCountY                   = 65535;
-    glsl_to_spirv_limitationtable.maxComputeWorkGroupCountZ                   = 65535;
-    glsl_to_spirv_limitationtable.maxComputeWorkGroupSizeX                    = 1024;
-    glsl_to_spirv_limitationtable.maxComputeWorkGroupSizeY                    = 1024;
-    glsl_to_spirv_limitationtable.maxComputeWorkGroupSizeZ                    = 64;
-    glsl_to_spirv_limitationtable.maxComputeUniformComponents                 = 1024;
-    glsl_to_spirv_limitationtable.maxComputeTextureImageUnits                 = 16;
-    glsl_to_spirv_limitationtable.maxComputeImageUniforms                     = 8;
-    glsl_to_spirv_limitationtable.maxComputeAtomicCounters                    = 8;
-    glsl_to_spirv_limitationtable.maxComputeAtomicCounterBuffers              = 1;
-    glsl_to_spirv_limitationtable.maxVaryingComponents                        = 60;
-    glsl_to_spirv_limitationtable.maxVertexOutputComponents                   = 64;
-    glsl_to_spirv_limitationtable.maxGeometryInputComponents                  = 64;
-    glsl_to_spirv_limitationtable.maxGeometryOutputComponents                 = 128;
-    glsl_to_spirv_limitationtable.maxFragmentInputComponents                  = 128;
-    glsl_to_spirv_limitationtable.maxImageUnits                               = 8;
-    glsl_to_spirv_limitationtable.maxCombinedImageUnitsAndFragmentOutputs     = 8;
-    glsl_to_spirv_limitationtable.maxCombinedShaderOutputResources            = 8;
-    glsl_to_spirv_limitationtable.maxImageSamples                             = 0;
-    glsl_to_spirv_limitationtable.maxVertexImageUniforms                      = 0;
-    glsl_to_spirv_limitationtable.maxTessControlImageUniforms                 = 0;
-    glsl_to_spirv_limitationtable.maxTessEvaluationImageUniforms              = 0;
-    glsl_to_spirv_limitationtable.maxGeometryImageUniforms                    = 0;
-    glsl_to_spirv_limitationtable.maxFragmentImageUniforms                    = 8;
-    glsl_to_spirv_limitationtable.maxCombinedImageUniforms                    = 8;
-    glsl_to_spirv_limitationtable.maxGeometryTextureImageUnits                = 16;
-    glsl_to_spirv_limitationtable.maxGeometryOutputVertices                   = 256;
-    glsl_to_spirv_limitationtable.maxGeometryTotalOutputComponents            = 1024;
-    glsl_to_spirv_limitationtable.maxGeometryUniformComponents                = 1024;
-    glsl_to_spirv_limitationtable.maxGeometryVaryingComponents                = 64;
-    glsl_to_spirv_limitationtable.maxTessControlInputComponents               = 128;
-    glsl_to_spirv_limitationtable.maxTessControlOutputComponents              = 128;
-    glsl_to_spirv_limitationtable.maxTessControlTextureImageUnits             = 16;
-    glsl_to_spirv_limitationtable.maxTessControlUniformComponents             = 1024;
-    glsl_to_spirv_limitationtable.maxTessControlTotalOutputComponents         = 4096;
-    glsl_to_spirv_limitationtable.maxTessEvaluationInputComponents            = 128;
-    glsl_to_spirv_limitationtable.maxTessEvaluationOutputComponents           = 128;
-    glsl_to_spirv_limitationtable.maxTessEvaluationTextureImageUnits          = 16;
-    glsl_to_spirv_limitationtable.maxTessEvaluationUniformComponents          = 1024;
-    glsl_to_spirv_limitationtable.maxTessPatchComponents                      = 120;
-    glsl_to_spirv_limitationtable.maxPatchVertices                            = 32;
-    glsl_to_spirv_limitationtable.maxTessGenLevel                             = 64;
-    glsl_to_spirv_limitationtable.maxViewports                                = 16;
-    glsl_to_spirv_limitationtable.maxVertexAtomicCounters                     = 0;
-    glsl_to_spirv_limitationtable.maxTessControlAtomicCounters                = 0;
-    glsl_to_spirv_limitationtable.maxTessEvaluationAtomicCounters             = 0;
-    glsl_to_spirv_limitationtable.maxGeometryAtomicCounters                   = 0;
-    glsl_to_spirv_limitationtable.maxFragmentAtomicCounters                   = 8;
-    glsl_to_spirv_limitationtable.maxCombinedAtomicCounters                   = 8;
-    glsl_to_spirv_limitationtable.maxAtomicCounterBindings                    = 1;
-    glsl_to_spirv_limitationtable.maxVertexAtomicCounterBuffers               = 0;
-    glsl_to_spirv_limitationtable.maxTessControlAtomicCounterBuffers          = 0;
-    glsl_to_spirv_limitationtable.maxTessEvaluationAtomicCounterBuffers       = 0;
-    glsl_to_spirv_limitationtable.maxGeometryAtomicCounterBuffers             = 0;
-    glsl_to_spirv_limitationtable.maxFragmentAtomicCounterBuffers             = 1;
-    glsl_to_spirv_limitationtable.maxCombinedAtomicCounterBuffers             = 1;
-    glsl_to_spirv_limitationtable.maxAtomicCounterBufferSize                  = 16384;
-    glsl_to_spirv_limitationtable.maxTransformFeedbackBuffers                 = 4;
-    glsl_to_spirv_limitationtable.maxTransformFeedbackInterleavedComponents   = 64;
-    glsl_to_spirv_limitationtable.maxCullDistances                            = 8;
-    glsl_to_spirv_limitationtable.maxCombinedClipAndCullDistances             = 8;
-    glsl_to_spirv_limitationtable.maxSamples                                  = 4;
-    glsl_to_spirv_limitationtable.maxMeshOutputVerticesNV                     = 256;
-    glsl_to_spirv_limitationtable.maxMeshOutputPrimitivesNV                   = 512;
-    glsl_to_spirv_limitationtable.maxMeshWorkGroupSizeX_NV                    = 32;
-    glsl_to_spirv_limitationtable.maxMeshWorkGroupSizeY_NV                    = 1;
-    glsl_to_spirv_limitationtable.maxMeshWorkGroupSizeZ_NV                    = 1;
-    glsl_to_spirv_limitationtable.maxTaskWorkGroupSizeX_NV                    = 32;
-    glsl_to_spirv_limitationtable.maxTaskWorkGroupSizeY_NV                    = 1;
-    glsl_to_spirv_limitationtable.maxTaskWorkGroupSizeZ_NV                    = 1;
-    glsl_to_spirv_limitationtable.maxMeshViewCountNV                          = 4;
-    glsl_to_spirv_limitationtable.limits.nonInductiveForLoops                 = 1;
-    glsl_to_spirv_limitationtable.limits.whileLoops                           = 1;
-    glsl_to_spirv_limitationtable.limits.doWhileLoops                         = 1;
-    glsl_to_spirv_limitationtable.limits.generalUniformIndexing               = 1;
-    glsl_to_spirv_limitationtable.limits.generalAttributeMatrixVectorIndexing = 1;
-    glsl_to_spirv_limitationtable.limits.generalVaryingIndexing               = 1;
-    glsl_to_spirv_limitationtable.limits.generalSamplerIndexing               = 1;
-    glsl_to_spirv_limitationtable.limits.generalVariableIndexing              = 1;
-    glsl_to_spirv_limitationtable.limits.generalConstantMatrixVectorIndexing  = 1;
-  }
+  startGlslang();
 
   // Create Descriptor Pools
-  assert(0 && "Create Descriptor Pools dynamically");
+  //assert(0 && "Create Descriptor Pools dynamically");
   /*
   for
   (
@@ -1780,3 +1795,5 @@ void vk_createContentManager() {
           hidden->ALL_DESCPOOLS[DescTypeID].REMAINING_SETs.store(info->MAXDESCSETCOUNT);
   }*/
 }
+
+

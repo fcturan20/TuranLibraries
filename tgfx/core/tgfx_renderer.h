@@ -2,8 +2,6 @@
 #include "tgfx_forwarddeclarations.h"
 #include "tgfx_structs.h"
 
-typedef void (*tgfx_rendererKeySortFunc)(unsigned long long* keyList, void* userData);
-typedef tgfx_rendererKeySortFunc rendererKeySortFunc_tgfx;
 typedef struct tgfx_renderer {
   // Command Buffer Functions
   ////////////////////////////
@@ -17,8 +15,7 @@ typedef struct tgfx_renderer {
   // Outside: All bundles should be created with rendersubpass as NULL.
   // All bundles should be from the compatible queue with the cmdBuffer's queue
   void (*executeBundles)(commandBuffer_tgfxhnd commandBuffer, commandBundle_tgfxlsthnd bundles,
-                         tgfx_rendererKeySortFunc sortFnc, const unsigned long long* bundleSortKeys,
-                         void* userData, extension_tgfxlsthnd exts);
+                         extension_tgfxlsthnd exts);
   void (*startRenderpass)(commandBuffer_tgfxhnd commandBuffer, renderPass_tgfxhnd renderPass);
   void (*nextRendersubpass)(commandBuffer_tgfxhnd cmdBuffer, renderSubPass_tgfxhnd renderSubPass);
   void (*endRenderpass)(commandBuffer_tgfxhnd commandBuffer);
@@ -61,13 +58,13 @@ typedef struct tgfx_renderer {
 
   // @param subpassHandle: Used to check if calls are called correctly + does
   //    bundle matches with the active rendersubpass
-  // @param sortFunc: When executed, calls are sorted according to this function
-  //    NULL: calls sorted in incremental order
+  // @param maxCmdCount: Backend allocates a command buffer to store commands
+  // Every cmdXXX call's "key" argument should be [0,maxCmdCount-1].
   commandBundle_tgfxhnd (*beginCommandBundle)(gpuQueue_tgfxhnd      queue,
                                               renderSubPass_tgfxhnd subpassHandle,
+                                              unsigned long long    maxCmdCount,
                                               extension_tgfxlsthnd  exts);
-  void (*finishCommandBundle)(commandBundle_tgfxhnd bundle, rendererKeySortFunc_tgfx sortFunc,
-                              extension_tgfxlsthnd exts);
+  void (*finishCommandBundle)(commandBundle_tgfxhnd bundle, extension_tgfxlsthnd exts);
   // If you won't execute same bundle later, destroy to allow backend
   //   implementation to optimize memory usage
   void (*destroyCommandBundle)(commandBundle_tgfxhnd hnd);
@@ -108,5 +105,8 @@ typedef struct tgfx_renderer {
                                  buffer_tgfxhnd dataBffr, unsigned long long drawCountBufferOffset,
                                  extension_tgfxlsthnd exts);
   // Extensions: TransferQueueOwnership
-  void (*cmdBarrierTexture)(texture_tgfxhnd texture, extension_tgfxlsthnd exts);
+  void (*cmdBarrierTexture)(commandBundle_tgfxhnd bndl, unsigned long long key,
+                            texture_tgfxhnd texture, image_access_tgfx lastAccess,
+                            image_access_tgfx nextAccess, textureUsageFlag_tgfxhnd lastUsage,
+                            textureUsageFlag_tgfxhnd nextUsage, extension_tgfxlsthnd exts);
 } renderer_tgfx;

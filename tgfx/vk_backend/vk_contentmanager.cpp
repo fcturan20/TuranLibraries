@@ -17,15 +17,32 @@
 #include "vk_resource.h"
 
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_CONTENTMANAGER = nullptr;
-TBuiltInResource       glslToSpirvLimitTable;
-struct descpool_vk {
-  // Each pool stores a descset of the same descsetlayout (So for each desccsetlayout, there are
-  // B.I.F. + 1 descsets across all pools) B.I.F. + 1 pools TGFX handles descriptors before waiting
-  // for N-2th frame So we can handle descriptor updates while waiting for N-2th frame's command
-  // buffers to end
-  VkDescriptorPool      pool            = {};
-  std::atomic<uint32_t> remaining_descs = 0, remaining_sets = 0;
+
+// Binding Model and Table Management
+
+// These are used to initialize descriptors
+// So backend won't fail because of a NULL descriptor
+//     -but in DEBUG release, it'll complain about it-
+// Texture is a 1x1 texture, buffer is 1 byte buffer, sampler is as default as possible
+VkSampler      defaultSampler;
+VkBuffer       defaultBuffer;
+TEXTURE_VKOBJ* defaultTexture;
+
+struct sampler_descVK {
+  VkSampler         sampler_obj = defaultSampler;
+  std::atomic_uchar isUpdated   = 0;
 };
+
+struct buffer_descVK { // Both for BUFFER and EXT_UNIFORMBUFFER
+  VkDescriptorBufferInfo info      = {};
+  std::atomic_uchar      isUpdated = 0;
+};
+
+struct texture_descVK { // Both for SAMPLEDTEXTURE and STORAGEIMAGE
+  VkDescriptorImageInfo info      = {};
+  std::atomic_uchar     isUpdated = 0;
+};
+
 struct SHADERSOURCE_VKOBJ {
   std::atomic_bool               isALIVE    = false;
   static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::SHADERSOURCE;
@@ -50,19 +67,16 @@ struct gpudatamanager_private {
   VK_LINEAR_OBJARRAY<RTSLOTSET_VKOBJ, RTSlotset_tgfxhnd, 1 << 10>           rtslotsets;
   VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>               textures;
   VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, inheritedRTSlotset_tgfxhnd, 1 << 10> irtslotsets;
-  VK_LINEAR_OBJARRAY<RASTERPIPELINE_VKOBJ, rasterPipeline_tgfxhnd, 1 << 24> pipelines;
+  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>       pipelines;
   VK_LINEAR_OBJARRAY<VERTEXATTRIBLAYOUT_VKOBJ, vertexAttributeLayout_tgfxhnd, 1 << 10>
                                                                         vertexattributelayouts;
   VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, shaderSource_tgfxhnd, 1 << 24> shadersources;
   VK_LINEAR_OBJARRAY<SAMPLER_VKOBJ, sampler_tgfxhnd, 1 << 16>           samplers;
-  VK_LINEAR_OBJARRAY<COMPUTEPIPELINE_VKOBJ, computePipeline_tgfxhnd>    computetypes;
   VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>                      buffers;
   VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10> bindingtabletypes;
   VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>     bindingtableinsts;
   VK_LINEAR_OBJARRAY<VIEWPORT_VKOBJ, viewport_tgfxhnd, 1 << 16>                 viewports;
   VK_LINEAR_OBJARRAY<HEAP_VKOBJ, heap_tgfxhnd, 1 << 10>                         heaps;
-
-  descpool_vk ALL_DESCPOOLS[VKCONST_DYNAMICDESCRIPTORTYPESCOUNT];
 
   // These are the textures that will be deleted after waiting for 2 frames ago's command buffer
   VK_VECTOR_ADDONLY<TEXTURE_VKOBJ*, 1 << 16> DeleteTextureList;
@@ -302,7 +316,7 @@ result_tgfx vk_createVertexAttribLayout(const datatype_tgfx*           Attribute
   *hnd = hidden->vertexattributelayouts.returnHANDLEfromOBJ(lay);
   return result_tgfx_SUCCESS;
 }
-void Delete_VertexAttributeLayout(vertexAttributeLayout_tgfxhnd VertexAttributeLayoutHandle) {}
+void vk_destroyVertexAttribLayout(vertexAttributeLayout_tgfxhnd VertexAttributeLayoutHandle) {}
 /*
 result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* desc,
                              texture_tgfxhnd* TextureHandle) {
@@ -452,7 +466,7 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
   return result_tgfx_SUCCESS;
 }
 
-
+*/
 result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescription_tgfx* desc,
                                       bindingTableType_tgfxhnd* bindingTableHandle) {
 #ifdef VULKAN_DEBUGGING
@@ -463,14 +477,6 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
     return result_tgfx_FAIL;
   }
   unsigned int descsetid = Find_VKCONST_DESCSETID_byTGFXDescType(desc->DescriptorType);
-  if (hidden->ALL_DESCPOOLS[descsetid].REMAINING_DESCs.fetch_sub(desc->ElementCount) <
-        desc->ElementCount ||
-      !hidden->ALL_DESCPOOLS[descsetid].REMAINING_DESCs.fetch_sub(1)) {
-    printer(result_tgfx_FAIL,
-            "Create_DescSets() has failed because descriptor pool doesn't have enough space! You "
-            "probably exceeded one of the limits you've set before");
-    return result_tgfx_FAIL;
-  }
   if (desc->SttcSmplrs) {
     unsigned int i = 0;
     while (desc->SttcSmplrs[i] != core_tgfx_main->INVALIDHANDLE) {
@@ -493,13 +499,14 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
   ci.bindingCount                         = 1;
   ci.pBindings                            = bindngs;
 
-  unsigned int           dynamicbinding_i = 0;
+  unsigned int dynamicbinding_i = 0;
+  /*
   std::vector<VkSampler> staticSamplers;
   if (desc->DescriptorType == shaderdescriptortype_tgfx_SAMPLER && desc->SttcSmplrs) {
     TGFXLISTCOUNT(core_tgfx_main, desc->SttcSmplrs, staticsamplerscount);
     staticSamplers.resize(staticsamplerscount);
     for (unsigned int i = 0; i < staticsamplerscount; i++) {
-      staticSamplers[i] = hidden->samplers.getOBJfromHANDLE(desc->SttcSmplrs[i])->Sampler;
+      staticSamplers[i] = hidden->samplers.getOBJfromHANDLE(desc->SttcSmplrs[i])->vk_sampler;
     }
     bindngs[0].binding            = 0;
     bindngs[0].descriptorCount    = staticsamplerscount;
@@ -510,7 +517,7 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
     ci.bindingCount++;
     dynamicbinding_i++;
   }
-
+  */
   bindngs[dynamicbinding_i].binding            = dynamicbinding_i;
   bindngs[dynamicbinding_i].descriptorCount    = desc->ElementCount;
   bindngs[dynamicbinding_i].descriptorType     = Find_VkDescType_byVKCONST_DESCSETID(descsetid);
@@ -525,64 +532,96 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
                 "Descriptor Set Layout creation has failed!");
 
   BINDINGTABLETYPE_VKOBJ* finalobj = hidden->bindingtabletypes.create_OBJ();
-  finalobj->DescType               = bindngs[dynamicbinding_i].descriptorType;
-  finalobj->ElementCount           = bindngs[dynamicbinding_i].descriptorCount;
-  finalobj->gpu                    = gpu;
-  finalobj->layout                 = DSL;
-  finalobj->Stages                 = bindngs[dynamicbinding_i].stageFlags;
+  finalobj->vk_descType            = bindngs[dynamicbinding_i].descriptorType;
+  finalobj->m_elementCount         = bindngs[dynamicbinding_i].descriptorCount;
+  finalobj->m_gpu                  = GPU->gpuIndx();
+  finalobj->vk_layout              = DSL;
+  finalobj->vk_stages              = bindngs[dynamicbinding_i].stageFlags;
   *bindingTableHandle              = hidden->bindingtabletypes.returnHANDLEfromOBJ(finalobj);
 }
 
-VkDescriptorSet vk_allocateDescriptorSetFromType(GPU_VKOBJ* GPU, VkDescriptorSetLayout descLayout) {
-  VkDescriptorSet             set = VK_NULL_HANDLE;
-  VkDescriptorSetAllocateInfo ai  = {};
-  ai.descriptorPool               = GPU->manager()->(GPU->DescriptorPoolManager);
-  ai.descriptorSetCount           = 1;
-  ai.pNext                        = nullptr;
-  ai.pSetLayouts                  = &descLayout;
-  ai.sType                        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  ThrowIfFailed(vkAllocateDescriptorSets(GPU->vk_logical, &ai, &set),
-                "Allocation of descriptor set failed!");
-  return set;
-}
-
-result_tgfx vk_instantiateBindingTable(bindingTableType_tgfxhnd tableType,
-                                       bindingTable_tgfxhnd*    table) {
+result_tgfx vk_instantiateBindingTable(bindingTableType_tgfxhnd tableType, unsigned char isStatic,
+                                       bindingTable_tgfxhnd* table) {
   BINDINGTABLETYPE_VKOBJ* vkTableType = hidden->bindingtabletypes.getOBJfromHANDLE(tableType);
-  BINDINGTABLEINST_VKOBJ* finalobj    = hidden->bindingtableinsts.create_OBJ();
-  finalobj->isUpdatedCounter.store(3);
 
-  vk_allocateDescriptorSetFromType(core_vk->getGPUs()[vkTableType->m_gpu], vkTableType->vk_layout);
+  GPU_VKOBJ* gpu = core_vk->getGPUs()[vkTableType->m_gpu];
 
+  // Create Descriptor Pool
+  VkDescriptorPool pool;
+  {
+    VkDescriptorPoolCreateInfo ci = {};
+    ci.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    ci.maxSets                    = 1;
+    ci.pNext                      = nullptr;
+    ci.poolSizeCount              = 1;
+    VkDescriptorPoolSize size     = {};
+    size.descriptorCount          = vkTableType->m_elementCount;
+    size.type                     = vkTableType->vk_descType;
+    ci.pPoolSizes                 = &size;
+    ci.flags                      = isStatic ? 0 : VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+    THROW_RETURN_IF_FAIL(vkCreateDescriptorPool(gpu->vk_logical, &ci, nullptr, &pool),
+                         "VkCreateDescriptorPool failed!", result_tgfx_FAIL);
+  }
+
+  VkDescriptorSet set;
+  // Allocate Descriptor Set
+  {
+    VkDescriptorSetAllocateInfo ai = {};
+    ai.descriptorPool              = pool;
+    ai.descriptorSetCount          = 1;
+    ai.pNext                       = nullptr;
+    ai.pSetLayouts                 = &vkTableType->vk_layout;
+    ai.sType                       = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    if (ThrowIfFailed(vkAllocateDescriptorSets(gpu->vk_logical, &ai, &set),
+                      "vkAllocateDescriptorSets() failed!")) {
+      vkDestroyDescriptorPool(gpu->vk_logical, pool, nullptr);
+      return result_tgfx_FAIL;
+    }
+  }
+
+  BINDINGTABLEINST_VKOBJ* finalobj = hidden->bindingtableinsts.create_OBJ();
+  finalobj->vk_pool                = pool;
+  finalobj->vk_set                 = set;
+  finalobj->m_isStatic             = isStatic;
+  finalobj->m_type                 = tableType;
+  switch (vkTableType->vk_descType) {
+    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+      finalobj->m_descs =
+        new (VKGLOBAL_VIRMEM_CONTENTMANAGER) texture_descVK[vkTableType->m_elementCount];
+      break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+      finalobj->m_descs =
+        new (VKGLOBAL_VIRMEM_CONTENTMANAGER) buffer_descVK[vkTableType->m_elementCount];
+    case VK_DESCRIPTOR_TYPE_SAMPLER:
+      finalobj->m_descs =
+        new (VKGLOBAL_VIRMEM_CONTENTMANAGER) sampler_descVK[vkTableType->m_elementCount];
+      break;
+  }
   *table = hidden->bindingtableinsts.returnHANDLEfromOBJ(finalobj);
   return result_tgfx_SUCCESS;
 }
-*/
-bool VKPipelineLayoutCreation(GPU_VKOBJ*               GPU,
-                              bindingTableType_tgfxhnd TypeDescs[VKCONST_MAXDESCSET_PERLIST],
-                              bool isCallBufferSupported, VkPipelineLayout* layout) {
+
+// Don't call this if there is no binding table & call buffer!
+bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, bindingTableType_tgfxhnd* descs,
+                              unsigned int descsCount, bool isCallBufferSupported,
+                              VkPipelineLayout* layout) {
   VkPipelineLayoutCreateInfo pl_ci = {};
   pl_ci.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
   pl_ci.pNext                      = nullptr;
   pl_ci.flags                      = 0;
 
-  uint32_t TypeDescsCount = 0, InstDescsCount = 0;
-  for (TypeDescsCount; TypeDescsCount < VKCONST_MAXDESCSET_PERLIST; TypeDescsCount++) {
-    if (TypeDescs[TypeDescsCount] == nullptr) {
-      break;
-    }
-  }
-
-  if (TypeDescsCount == 0) {
-    return true;
-  }
   VkDescriptorSetLayout DESCLAYOUTs[VKCONST_MAXDESCSET_PERLIST];
-  for (unsigned int typeSets_i = 0; typeSets_i < TypeDescsCount; typeSets_i++) {
-    BINDINGTABLETYPE_VKOBJ* type =
-      hidden->bindingtabletypes.getOBJfromHANDLE(TypeDescs[typeSets_i]);
-    if (type->m_gpu != GPU_VKOBJ::GET_EXTRAFLAGS(GPU)) DESCLAYOUTs[typeSets_i] = type->vk_layout;
+  for (unsigned int typeSets_i = 0; typeSets_i < descsCount; typeSets_i++) {
+    BINDINGTABLETYPE_VKOBJ* type = hidden->bindingtabletypes.getOBJfromHANDLE(descs[typeSets_i]);
+    if (type->m_gpu != GPU->gpuIndx()) {
+      printer(result_tgfx_FAIL, "Binding table doesn't match with the GPU!");
+      return false;
+    }
+    DESCLAYOUTs[typeSets_i] = type->vk_layout;
   }
-  pl_ci.setLayoutCount      = TypeDescsCount + InstDescsCount;
+  pl_ci.setLayoutCount      = descsCount;
   pl_ci.pSetLayouts         = DESCLAYOUTs;
   VkPushConstantRange range = {};
   // Don't support for now!
@@ -603,65 +642,16 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ*               GPU,
   return true;
 }
 
-static EShLanguage Find_EShShaderStage_byTGFXShaderStage(shaderstage_tgfx stage) {
-  switch (stage) {
-    case shaderstage_tgfx_VERTEXSHADER: return EShLangVertex;
-    case shaderstage_tgfx_FRAGMENTSHADER: return EShLangFragment;
-    case shaderstage_tgfx_COMPUTESHADER: return EShLangCompute;
-    default:
-      printer(result_tgfx_NOTCODED,
-              "Find_EShShaderStage_byTGFXShaderStage() doesn't support this type of stage!");
-      return EShLangVertex;
-  }
-}
-static void*             compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, void* i_DATA,
-                                              unsigned int  i_DATA_SIZE,
-                                              unsigned int* compiledbinary_datasize) {
-  EShLanguage       stage = Find_EShShaderStage_byTGFXShaderStage(tgfxstage);
-  glslang::TShader  shader(stage);
-  glslang::TProgram program;
-
-  // Enable SPIR-V and Vulkan rules when parsing GLSL
-  EShMessages messages = ( EShMessages )(EShMsgSpvRules | EShMsgVulkanRules);
-
-  const char* strings[1] = {( const char* )i_DATA};
-  shader.setStrings(strings, 1);
-
-  if (!shader.parse(&glslToSpirvLimitTable, 100, false, messages)) {
-    puts(shader.getInfoLog());
-    puts(shader.getInfoDebugLog());
-    return false; // something didn't work
-  }
-
-  program.addShader(&shader);
-
-  //
-  // Program-level processing...
-  //
-
-  if (!program.link(messages)) {
-    std::string log = std::string("Shader compilation failed!") + shader.getInfoLog() +
-                      std::string(shader.getInfoDebugLog());
-    printer(result_tgfx_FAIL, log.c_str());
-    return false;
-  }
-  std::vector<unsigned int> binarydata;
-  glslang::GlslangToSpv(*program.getIntermediate(stage), binarydata);
-  if (binarydata.size()) {
-    unsigned int* outbinary  = new unsigned int[binarydata.size()];
-    *compiledbinary_datasize = binarydata.size() * 4;
-    memcpy(outbinary, binarydata.data(), binarydata.size() * 4);
-    return outbinary;
-  }
-  printer(result_tgfx_FAIL, "glslang couldn't compile the shader!");
-  return nullptr;
-}
+typedef const void* (*vk_glslangCompileFnc)(shaderstage_tgfx tgfxstage, void* i_DATA,
+                                            unsigned int  i_DATA_SIZE,
+                                            unsigned int* compiledbinary_datasize);
+vk_glslangCompileFnc VKCONST_GLSLANG_COMPILE_FNC;
 
 result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx language,
                                    shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE,
                                    shaderSource_tgfxhnd* ShaderSourceHandle) {
   GPU_VKOBJ*   GPU                   = core_vk->getGPUs().getOBJfromHANDLE(gpu);
-  void*        binary_spirv_data     = nullptr;
+  const void*  binary_spirv_data     = nullptr;
   unsigned int binary_spirv_datasize = 0;
   switch (language) {
     case shaderlanguages_tgfx_SPIRV:
@@ -670,7 +660,12 @@ result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx languag
       break;
     case shaderlanguages_tgfx_GLSL:
       binary_spirv_data =
-        compile_shadersource_withglslang(shaderstage, DATA, DATA_SIZE, &binary_spirv_datasize);
+        VKCONST_GLSLANG_COMPILE_FNC(shaderstage, DATA, DATA_SIZE, &binary_spirv_datasize);
+      if (!binary_spirv_datasize) {
+        printer(result_tgfx_FAIL, ( const char* )binary_spirv_data);
+        delete binary_spirv_data;
+        return result_tgfx_FAIL;
+      }
       break;
     default: printer(result_tgfx_NOTCODED, "Vulkan backend doesn't support this shading language");
   }
@@ -749,9 +744,6 @@ inline void CountDescSets(bindingTableType_tgfxlsthnd descset, unsigned int* fin
       printer(11);
     }
     finaldescs[valid_descset_i++] = hidden->bindingtabletypes.getINDEXbyOBJ(descset);
-  }
-  if (valid_descset_i == 0) {
-    printer(12);
   }
   *finaldesccount = valid_descset_i;
 }
@@ -1078,32 +1070,32 @@ result_tgfx vk_copyRasterPipeline(rasterPipeline_tgfxhnd src, extension_tgfxlsth
 void vk_destroyRasterPipeline(rasterPipeline_tgfxhnd hnd) {
   printer(result_tgfx_NOTCODED, "Delete_MaterialType() isn't implemented!");
 }
-
+*/
 result_tgfx vk_createComputePipeline(shaderSource_tgfxhnd        Source,
                                      bindingTableType_tgfxlsthnd TypeBindingTables,
                                      unsigned char               isCallBufferSupported,
-                                     computePipeline_tgfxhnd*    ComputeTypeHandle) {
-  VkComputePipelineCreateInfo cp_ci         = {};
-  SHADERSOURCE_VKOBJ*         SHADER        = hidden->shadersources.getOBJfromHANDLE(Source);
-  VkShaderModule              shader_module = SHADER->Module;
-  GPU_VKOBJ*                  GPU           = core_vk->getGPUs().getOBJfromHANDLE(SHADER->m_gpu);
+                                     pipeline_tgfxhnd*           ComputeTypeHandle) {
+  VkComputePipelineCreateInfo cp_ci  = {};
+  SHADERSOURCE_VKOBJ*         SHADER = hidden->shadersources.getOBJfromHANDLE(Source);
+  GPU_VKOBJ*                  GPU    = core_vk->getGPUs().getOBJfromHANDLE(SHADER->m_gpu);
 
-  COMPUTEPIPELINE_VKOBJ VKPipeline;
+  unsigned int typeSets[VKCONST_MAXDESCSET_PERLIST] = {};
+  uint32_t     typesetscount                        = 0;
+  CountDescSets(TypeBindingTables, &typesetscount, typeSets);
 
-  uint32_t typesetscount = 0, instsetscount = 0;
-  CountDescSets(TypeBindingTables, &typesetscount, VKPipeline.TypeSETs);
-
-  if (!VKPipelineLayoutCreation(TypeBindingTables, isCallBufferSupported,
-                                &VKPipeline.PipelineLayout)) {
+  VkPipelineLayout layout = {};
+  if (!VKPipelineLayoutCreation(GPU, TypeBindingTables, typesetscount, isCallBufferSupported,
+                                &layout)) {
     printer(result_tgfx_FAIL,
             "Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
     return result_tgfx_FAIL;
   }
 
   // VkPipeline creation
+  VkPipeline pipelineObj = {};
   {
     cp_ci.stage.flags               = 0;
-    cp_ci.stage.module              = shader_module;
+    cp_ci.stage.module              = SHADER->Module;
     cp_ci.stage.pName               = "main";
     cp_ci.stage.pNext               = nullptr;
     cp_ci.stage.pSpecializationInfo = nullptr;
@@ -1112,23 +1104,27 @@ result_tgfx vk_createComputePipeline(shaderSource_tgfxhnd        Source,
     cp_ci.basePipelineHandle        = VK_NULL_HANDLE;
     cp_ci.basePipelineIndex         = -1;
     cp_ci.flags                     = 0;
-    cp_ci.layout                    = VKPipeline.PipelineLayout;
+    cp_ci.layout                    = layout;
     cp_ci.pNext                     = nullptr;
     cp_ci.sType                     = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    ThrowIfFailed(vkCreateComputePipelines(GPU->vk_logical, VK_NULL_HANDLE, 1, &cp_ci, nullptr,
-                                           &VKPipeline.PipelineObject),
-                  "Compile_ComputeShader() has failed at vkCreateComputePipelines!");
+    ThrowIfFailed(
+      vkCreateComputePipelines(GPU->vk_logical, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &pipelineObj),
+      "Compile_ComputeShader() has failed at vkCreateComputePipelines!");
   }
-  vkDestroyShaderModule(GPU->vk_logical, shader_module, nullptr);
 
-  COMPUTEPIPELINE_VKOBJ* obj = hidden->computetypes.create_OBJ();
-  *obj                       = VKPipeline;
-  *ComputeTypeHandle         = hidden->computetypes.returnHANDLEfromOBJ(obj);
+  PIPELINE_VKOBJ* obj = hidden->pipelines.create_OBJ();
+  obj->m_gfxSubpass   = nullptr;
+  obj->m_gpu          = GPU->gpuIndx();
+  memcpy(obj->m_typeSETs, typeSets, sizeof(obj->m_typeSETs));
+  obj->vk_layout     = layout;
+  obj->vk_object     = pipelineObj;
+  obj->vk_type       = VK_PIPELINE_BIND_POINT_COMPUTE;
+  *ComputeTypeHandle = hidden->pipelines.returnHANDLEfromOBJ(obj);
   return result_tgfx_SUCCESS;
 }
-*/
-result_tgfx vk_copyComputePipeline(computePipeline_tgfxhnd src, extension_tgfxlsthnd exts,
-                                   computePipeline_tgfxhnd* dst) {
+
+result_tgfx vk_copyComputePipeline(pipeline_tgfxhnd src, extension_tgfxlsthnd exts,
+                                   pipeline_tgfxhnd* dst) {
   return result_tgfx_NOTCODED;
 }
 /*
@@ -1187,66 +1183,68 @@ result_tgfx SetDescriptor_Buffer(bindingTable_tgfxhnd bindingtable, unsigned int
   set->isUpdatedCounter.store(3);
   return result_tgfx_SUCCESS;
 }
-
-// Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLEDTEXTURE
-void SetDescriptor_SampledTexture(bindingTable_tgfxhnd bindingtable, unsigned int elementIndex,
-                                  texture_tgfxhnd textureHandle) {
-  BINDINGTABLEINST_VKOBJ* set = hidden->bindingtableinsts.getOBJfromHANDLE(bindingtable);
-
-  TEXTURE_VKOBJ* texture = ( TEXTURE_VKOBJ* )textureHandle;
-#ifdef VULKAN_DEBUGGING
-  if (!set || !textureHandle || elementIndex >= set->textureDescELEMENTs.size() ||
-      set->DESCTYPE != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE) {
-    printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_SampledTexture() has invalid input!");
-    return;
-  }
-  texture_descVK& textureDESC         = set->textureDescELEMENTs[elementIndex];
-  unsigned char   elementUpdateStatus = 0;
-  if (!textureDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
-    printer(result_tgfx_FAIL,
-            "SetDescriptor_SampledTexture() failed because you already changed the descriptor in "
-            "the same frame!");
-  }
-#else
-  texture_descVK& textureDESC = (( texture_descVK* )set->DescElements)[elementIndex];
-  textureDESC.isUpdated.store(1);
-#endif
-  textureDESC.info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  textureDESC.info.imageView   = texture->vk_imageView;
-  textureDESC.info.sampler     = VK_NULL_HANDLE;
-
-  set->isUpdatedCounter.store(3);
-}
-// Set a descriptor of the binding table created with shaderdescriptortype_tgfx_STORAGEIMAGE
-void SetDescriptor_StorageImage(bindingTable_tgfxhnd bindingtable, unsigned int elementIndex,
-                                texture_tgfxhnd textureHandle) {
-  BINDINGTABLEINST_VKOBJ* set = hidden->bindingtableinsts.getOBJfromHANDLE(bindingtable);
-
-  TEXTURE_VKOBJ* texture = ( TEXTURE_VKOBJ* )textureHandle;
-#ifdef VULKAN_DEBUGGING
-  if (!set || !textureHandle || elementIndex >= set->textureDescELEMENTs.size() ||
-      set->DESCTYPE != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
-    printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_StorageImage() has invalid input!");
-    return;
-  }
-  texture_descVK& textureDESC         = set->textureDescELEMENTs[elementIndex];
-  unsigned char   elementUpdateStatus = 0;
-  if (!textureDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
-    printer(result_tgfx_FAIL,
-            "SetDescriptor_StorageImage() failed because you already changed the descriptor in the "
-            "same frame!");
-  }
-#else
-  texture_descVK& textureDESC = (( texture_descVK* )set->DescElements)[elementIndex];
-  textureDESC.isUpdated.store(1);
-#endif
-  textureDESC.info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-  textureDESC.info.imageView   = texture->vk_imageView;
-  textureDESC.info.sampler     = VK_NULL_HANDLE;
-
-  set->isUpdatedCounter.store(3);
-}
 */
+static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
+result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int bindingCount,
+                                       const unsigned int*      bindingIndices,
+                                       const texture_tgfxlsthnd textures) {
+  BINDINGTABLEINST_VKOBJ* set = hidden->bindingtableinsts.getOBJfromHANDLE(table);
+  if (!set) {
+    printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable!");
+    return result_tgfx_INVALIDARGUMENT;
+  }
+  BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
+  if (setType->vk_descType != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE &&
+      setType->vk_descType != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
+    printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable type!");
+    return result_tgfx_INVALIDARGUMENT;
+  }
+  if (bindingCount > VKCONST_MAXDESCCHANGE_PERCALL) {
+    printer(result_tgfx_FAIL, "You exceeded VKCONST_MAXDESCCHANGE_PERCALL");
+    return result_tgfx_FAIL;
+  }
+  VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
+  for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
+    TEXTURE_VKOBJ* texture     = hidden->textures.getOBJfromHANDLE(textures[bindingIter]);
+    uint32_t       elementIndx = bindingIndices[bindingIter];
+#ifdef VULKAN_DEBUGGING
+    if (!texture || elementIndx >= setType->m_elementCount) {
+      printer(result_tgfx_INVALIDARGUMENT,
+              "setBindingTable_Texture() has invalid input! Either texture is invalid or index");
+      return result_tgfx_INVALIDARGUMENT;
+    }
+    texture_descVK& textureDESC         = (( texture_descVK* )set->m_descs)[elementIndx];
+    unsigned char   elementUpdateStatus = 0;
+    if (!textureDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
+      printer(
+        result_tgfx_FAIL,
+        "vk_setBindingTable_Texture() failed because you already changed the descriptor in the "
+        "same frame!");
+      return result_tgfx_FAIL;
+    }
+#else
+    texture_descVK& textureDESC = (( texture_descVK* )set->DescElements)[elementIndx];
+    textureDESC.isUpdated.store(1);
+#endif
+    textureDESC.info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    textureDESC.info.imageView   = texture->vk_imageView;
+    textureDESC.info.sampler     = VK_NULL_HANDLE;
+
+    writeInfos[bindingIter].descriptorCount  = 1;
+    writeInfos[bindingIter].descriptorType   = setType->vk_descType;
+    writeInfos[bindingIter].dstArrayElement  = elementIndx;
+    writeInfos[bindingIter].dstBinding       = 0;
+    writeInfos[bindingIter].pTexelBufferView = nullptr;
+    writeInfos[bindingIter].pNext            = nullptr;
+    writeInfos[bindingIter].dstSet           = set->vk_set;
+    writeInfos[bindingIter].pImageInfo       = &textureDESC.info;
+    writeInfos[bindingIter].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  }
+  vkUpdateDescriptorSets(core_vk->getGPUs()[setType->m_gpu]->vk_logical, bindingCount, writeInfos,
+                         0, nullptr);
+  return result_tgfx_SUCCESS;
+}
+/*
 result_tgfx Create_RTSlotset(RTSlotDescription_tgfxlsthnd Descriptions,
                              RTSlotset_tgfxhnd*           RTSlotSetHandle) {
   TGFXLISTCOUNT(core_tgfx_main, Descriptions, DescriptionsCount);
@@ -1379,19 +1377,19 @@ result_tgfx Create_RTSlotset(RTSlotDescription_tgfxlsthnd Descriptions,
   *RTSlotSetHandle = hidden->rtslotsets.returnHANDLEfromOBJ(VKSLOTSET);
   return result_tgfx_SUCCESS;
 }
-void Delete_RTSlotSet(RTSlotset_tgfxhnd RTSlotSetHandle) {}
+void Delete_RTSlotSet(RTSlotset_tgfxhnd RTSlotSetHandle) {} */
 // Changes on RTSlots only happens at the frame slot is gonna be used
 // For example; if you change next frame's slot, necessary API calls are gonna be called next frame
 // For example; if you change slot but related slotset isn't used by drawpass, it doesn't happen
 // until it is used
-result_tgfx Change_RTSlotTexture(RTSlotset_tgfxhnd RTSlotHandle, unsigned char isColorRT,
-                                 unsigned char SlotIndex, unsigned char FrameIndex,
-                                 texture_tgfxhnd TextureHandle) {
+result_tgfx vk_changeRTSlotTexture(RTSlotset_tgfxhnd RTSlotHandle, unsigned char isColorRT,
+                                   unsigned char SlotIndex, unsigned char FrameIndex,
+                                   texture_tgfxhnd TextureHandle) {
   return result_tgfx_FAIL;
 }
-result_tgfx Inherite_RTSlotSet(RTSlotUsage_tgfxlsthnd      DescriptionsGFX,
-                               RTSlotset_tgfxhnd           RTSlotSetHandle,
-                               inheritedRTSlotset_tgfxhnd* InheritedSlotSetHandle) {
+result_tgfx vk_inheriteRTSlotset(RTSlotUsage_tgfxlsthnd      DescriptionsGFX,
+                                 RTSlotset_tgfxhnd           RTSlotSetHandle,
+                                 inheritedRTSlotset_tgfxhnd* InheritedSlotSetHandle) {
   if (!RTSlotSetHandle) {
     printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because Handle is invalid!");
     return result_tgfx_INVALIDARGUMENT;
@@ -1460,7 +1458,7 @@ result_tgfx Inherite_RTSlotSet(RTSlotUsage_tgfxlsthnd      DescriptionsGFX,
   *InheritedSlotSetHandle    = hidden->irtslotsets.returnHANDLEfromOBJ(finalobj);
   return result_tgfx_SUCCESS;
 }
-void Delete_InheritedRTSlotSet(inheritedRTSlotset_tgfxhnd InheritedRTSlotSetHandle) {}
+void vk_deleteInheritedRTSlotset(inheritedRTSlotset_tgfxhnd InheritedRTSlotSetHandle) {}
 
 /////////////////////////////////////////////////////
 //								MEMORY
@@ -1529,12 +1527,12 @@ result_tgfx vk_getRemainingMemory(gpu_tgfxhnd GPU, unsigned char memoryRegionID,
                                   extension_tgfxlsthnd exts, unsigned long long* size) {
   return result_tgfx_NOTCODED;
 }
-/*
+
 result_tgfx vk_bindToHeap_Buffer(heap_tgfxhnd i_heap, unsigned long long offset,
                                  buffer_tgfxhnd i_buffer, extension_tgfxlsthnd exts) {
   BUFFER_VKOBJ* buffer = hidden->buffers.getOBJfromHANDLE(i_buffer);
   HEAP_VKOBJ*   heap   = hidden->heaps.getOBJfromHANDLE(i_heap);
-  GPU_VKOBJ*    gpu    = core_vk->getGPUs().getOBJfromHANDLE(buffer->m_GPU);
+  GPU_VKOBJ*    gpu    = core_vk->getGPUs()[buffer->m_GPU];
   if (offset % buffer->m_memReqs.vk_memReqs.alignment) {
     printer(result_tgfx_FAIL,
             "Offset should be multiple of the resource's alignment in BindToHeap");
@@ -1550,7 +1548,7 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
                                   texture_tgfxhnd i_texture, extension_tgfxlsthnd exts) {
   TEXTURE_VKOBJ* texture = hidden->textures.getOBJfromHANDLE(i_texture);
   HEAP_VKOBJ*    heap    = hidden->heaps.getOBJfromHANDLE(i_heap);
-  GPU_VKOBJ*     gpu     = core_vk->getGPUs().getOBJfromHANDLE(texture->m_GPU);
+  GPU_VKOBJ*     gpu     = core_vk->getGPUs()[texture->m_GPU];
   if (offset % texture->m_memReqs.vk_memReqs.alignment) {
     printer(result_tgfx_FAIL,
             "Offset should be multiple of the resource's alignment in BindToHeap");
@@ -1562,7 +1560,7 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
     return result_tgfx_FAIL;
   }
 }
-*/
+
 /////////////////////////////////////////////////////
 ///				INITIALIZATION PROCEDURE
 /////////////////////////////////////////////////////
@@ -1575,168 +1573,66 @@ VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, inheritedRTSlotset_tgfxhnd, 1024>&
 gpudatamanager_public::GETIRTSLOTSET_ARRAY() {
   return hidden->irtslotsets;
 }
-VK_LINEAR_OBJARRAY<COMPUTEPIPELINE_VKOBJ, computePipeline_tgfxhnd>&
-gpudatamanager_public::GETCOMPUTETYPE_ARRAY() {
-  return hidden->computetypes;
-}
 VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>&
 gpudatamanager_public::GETTEXTURES_ARRAY() {
   return hidden->textures;
 }
-VK_LINEAR_OBJARRAY<RASTERPIPELINE_VKOBJ, rasterPipeline_tgfxhnd, 1 << 24>&
-gpudatamanager_public::GETGRAPHICSPIPETYPE_ARRAY() {
+VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>&
+gpudatamanager_public::GETPIPELINE_ARRAY() {
   return hidden->pipelines;
 }
 VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>& gpudatamanager_public::GETBUFFER_ARRAY() {
   return hidden->buffers;
 }
-VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
-gpudatamanager_public::GETDESCSET_ARRAY() {
-  return hidden->bindingtableinsts;
-}
 VK_LINEAR_OBJARRAY<VIEWPORT_VKOBJ, viewport_tgfxhnd, 1 << 16>&
 gpudatamanager_public::GETVIEWPORT_ARRAY() {
   return hidden->viewports;
 }
+VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
+gpudatamanager_public::GETBINDINGTABLE_ARRAY() {
+  return hidden->bindingtableinsts;
+}
+VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10>&
+gpudatamanager_public::GETBINDINGTABLETYPE_ARRAY() {
+  return hidden->bindingtabletypes;
+}
 inline void set_functionpointers() {
-  core_tgfx_main->contentmanager->changeRTSlot_Texture       = Change_RTSlotTexture;
-  core_tgfx_main->contentmanager->compileShaderSource        = vk_compileShaderSource;
-  //core_tgfx_main->contentmanager->createBindingTableType     = vk_createBindingTableType;
-  //core_tgfx_main->contentmanager->instantiateBindingTable    = vk_instantiateBindingTable;
-  core_tgfx_main->contentmanager->copyComputePipeline        = vk_copyComputePipeline;
-  //core_tgfx_main->contentmanager->createComputePipeline      = vk_createComputePipeline;
-  //core_tgfx_main->contentmanager->createBuffer               = vk_createBuffer;
-  //core_tgfx_main->contentmanager->copyRasterPipeline         = vk_copyRasterPipeline;
-  core_tgfx_main->contentmanager->createRTSlotset            = Create_RTSlotset;
-  //core_tgfx_main->contentmanager->createSampler              = vk_createSampler;
-  //core_tgfx_main->contentmanager->createTexture              = vk_createTexture;
-  core_tgfx_main->contentmanager->createVertexAttribLayout   = vk_createVertexAttribLayout;
-  core_tgfx_main->contentmanager->deleteInheritedRTSlotset   = Delete_InheritedRTSlotSet;
-  //core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
-  core_tgfx_main->contentmanager->Delete_RTSlotSet           = Delete_RTSlotSet;
-  core_tgfx_main->contentmanager->deleteShaderSource         = vk_destroyShaderSource;
-  core_tgfx_main->contentmanager->destroyVertexAttribLayout  = Delete_VertexAttributeLayout;
-  core_tgfx_main->contentmanager->destroyAllResources        = vk_destroyAllResources;
-  core_tgfx_main->contentmanager->inheriteRTSlotset          = Inherite_RTSlotSet;
-  //core_tgfx_main->contentmanager->createRasterPipeline       = vk_createRasterPipeline;
-  //core_tgfx_main->contentmanager->setBindingTable_Buffer     = SetDescriptor_Buffer;
+  core_tgfx_main->contentmanager->changeRTSlot_Texture    = vk_changeRTSlotTexture;
+  core_tgfx_main->contentmanager->compileShaderSource     = vk_compileShaderSource;
+  core_tgfx_main->contentmanager->createBindingTableType  = vk_createBindingTableType;
+  core_tgfx_main->contentmanager->instantiateBindingTable = vk_instantiateBindingTable;
+  core_tgfx_main->contentmanager->copyComputePipeline     = vk_copyComputePipeline;
+  core_tgfx_main->contentmanager->createComputePipeline   = vk_createComputePipeline;
+  //  core_tgfx_main->contentmanager->createBuffer               = vk_createBuffer;
+  //  core_tgfx_main->contentmanager->copyRasterPipeline         = vk_copyRasterPipeline;
+  //  core_tgfx_main->contentmanager->createRTSlotset = Create_RTSlotset;
+  //  core_tgfx_main->contentmanager->createSampler              = vk_createSampler;
+  //  core_tgfx_main->contentmanager->createTexture              = vk_createTexture;
+  core_tgfx_main->contentmanager->createVertexAttribLayout = vk_createVertexAttribLayout;
+  core_tgfx_main->contentmanager->deleteInheritedRTSlotset = vk_deleteInheritedRTSlotset;
+  // core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
+  // core_tgfx_main->contentmanager->Delete_RTSlotSet          = Delete_RTSlotSet;
+  core_tgfx_main->contentmanager->deleteShaderSource        = vk_destroyShaderSource;
+  core_tgfx_main->contentmanager->destroyVertexAttribLayout = vk_destroyVertexAttribLayout;
+  core_tgfx_main->contentmanager->destroyAllResources       = vk_destroyAllResources;
+  core_tgfx_main->contentmanager->inheriteRTSlotset         = vk_inheriteRTSlotset;
+  // core_tgfx_main->contentmanager->createRasterPipeline       = vk_createRasterPipeline;
+  // core_tgfx_main->contentmanager->setBindingTable_Buffer     = SetDescriptor_Buffer;
+  core_tgfx_main->contentmanager->setBindingTable_Texture    = vk_setBindingTable_Texture;
   core_tgfx_main->contentmanager->createHeap                 = vk_createHeap;
   core_tgfx_main->contentmanager->getHeapRequirement_Buffer  = vk_getHeapRequirement_Buffer;
   core_tgfx_main->contentmanager->getHeapRequirement_Texture = vk_getHeapRequirement_Texture;
   core_tgfx_main->contentmanager->getRemainingMemory         = vk_getRemainingMemory;
-  //core_tgfx_main->contentmanager->bindToHeap_Buffer          = vk_bindToHeap_Buffer;
-  //core_tgfx_main->contentmanager->bindToHeap_Texture         = vk_bindToHeap_Texture;
+  core_tgfx_main->contentmanager->bindToHeap_Buffer          = vk_bindToHeap_Buffer;
+  core_tgfx_main->contentmanager->bindToHeap_Texture         = vk_bindToHeap_Texture;
 }
 
 void startGlslang() {
-  auto* dllHandle = DLIB_LOAD_TAPI("TGFXVulkanGlslang.dll");
+  auto* dllHandle           = DLIB_LOAD_TAPI("TGFXVulkanGlslang.dll");
   void (*startGlslangFnc)() = ( void (*)() )DLIB_FUNC_LOAD_TAPI(dllHandle, "startGlslang");
+  VKCONST_GLSLANG_COMPILE_FNC =
+    ( vk_glslangCompileFnc )DLIB_FUNC_LOAD_TAPI(dllHandle, "glslangCompile");
   startGlslangFnc();
-
-  // Initialize limitation table
-  // from Eric's Blog "Translate GLSL to SPIRV for Vulkan at Runtime" post:
-  // https://lxjk.github.io/2020/03/10/Translate-GLSL-to-SPIRV-for-Vulkan-at-Runtime.html
-  glslToSpirvLimitTable.maxLights                                   = 32;
-  glslToSpirvLimitTable.maxClipPlanes                               = 6;
-  glslToSpirvLimitTable.maxTextureUnits                             = 32;
-  glslToSpirvLimitTable.maxTextureCoords                            = 32;
-  glslToSpirvLimitTable.maxVertexAttribs                            = 64;
-  glslToSpirvLimitTable.maxVertexUniformComponents                  = 4096;
-  glslToSpirvLimitTable.maxVaryingFloats                            = 64;
-  glslToSpirvLimitTable.maxVertexTextureImageUnits                  = 32;
-  glslToSpirvLimitTable.maxCombinedTextureImageUnits                = 80;
-  glslToSpirvLimitTable.maxTextureImageUnits                        = 32;
-  glslToSpirvLimitTable.maxFragmentUniformComponents                = 4096;
-  glslToSpirvLimitTable.maxDrawBuffers                              = 32;
-  glslToSpirvLimitTable.maxVertexUniformVectors                     = 128;
-  glslToSpirvLimitTable.maxVaryingVectors                           = 8;
-  glslToSpirvLimitTable.maxFragmentUniformVectors                   = 16;
-  glslToSpirvLimitTable.maxVertexOutputVectors                      = 16;
-  glslToSpirvLimitTable.maxFragmentInputVectors                     = 15;
-  glslToSpirvLimitTable.minProgramTexelOffset                       = -8;
-  glslToSpirvLimitTable.maxProgramTexelOffset                       = 7;
-  glslToSpirvLimitTable.maxClipDistances                            = 8;
-  glslToSpirvLimitTable.maxComputeWorkGroupCountX                   = 65535;
-  glslToSpirvLimitTable.maxComputeWorkGroupCountY                   = 65535;
-  glslToSpirvLimitTable.maxComputeWorkGroupCountZ                   = 65535;
-  glslToSpirvLimitTable.maxComputeWorkGroupSizeX                    = 1024;
-  glslToSpirvLimitTable.maxComputeWorkGroupSizeY                    = 1024;
-  glslToSpirvLimitTable.maxComputeWorkGroupSizeZ                    = 64;
-  glslToSpirvLimitTable.maxComputeUniformComponents                 = 1024;
-  glslToSpirvLimitTable.maxComputeTextureImageUnits                 = 16;
-  glslToSpirvLimitTable.maxComputeImageUniforms                     = 8;
-  glslToSpirvLimitTable.maxComputeAtomicCounters                    = 8;
-  glslToSpirvLimitTable.maxComputeAtomicCounterBuffers              = 1;
-  glslToSpirvLimitTable.maxVaryingComponents                        = 60;
-  glslToSpirvLimitTable.maxVertexOutputComponents                   = 64;
-  glslToSpirvLimitTable.maxGeometryInputComponents                  = 64;
-  glslToSpirvLimitTable.maxGeometryOutputComponents                 = 128;
-  glslToSpirvLimitTable.maxFragmentInputComponents                  = 128;
-  glslToSpirvLimitTable.maxImageUnits                               = 8;
-  glslToSpirvLimitTable.maxCombinedImageUnitsAndFragmentOutputs     = 8;
-  glslToSpirvLimitTable.maxCombinedShaderOutputResources            = 8;
-  glslToSpirvLimitTable.maxImageSamples                             = 0;
-  glslToSpirvLimitTable.maxVertexImageUniforms                      = 0;
-  glslToSpirvLimitTable.maxTessControlImageUniforms                 = 0;
-  glslToSpirvLimitTable.maxTessEvaluationImageUniforms              = 0;
-  glslToSpirvLimitTable.maxGeometryImageUniforms                    = 0;
-  glslToSpirvLimitTable.maxFragmentImageUniforms                    = 8;
-  glslToSpirvLimitTable.maxCombinedImageUniforms                    = 8;
-  glslToSpirvLimitTable.maxGeometryTextureImageUnits                = 16;
-  glslToSpirvLimitTable.maxGeometryOutputVertices                   = 256;
-  glslToSpirvLimitTable.maxGeometryTotalOutputComponents            = 1024;
-  glslToSpirvLimitTable.maxGeometryUniformComponents                = 1024;
-  glslToSpirvLimitTable.maxGeometryVaryingComponents                = 64;
-  glslToSpirvLimitTable.maxTessControlInputComponents               = 128;
-  glslToSpirvLimitTable.maxTessControlOutputComponents              = 128;
-  glslToSpirvLimitTable.maxTessControlTextureImageUnits             = 16;
-  glslToSpirvLimitTable.maxTessControlUniformComponents             = 1024;
-  glslToSpirvLimitTable.maxTessControlTotalOutputComponents         = 4096;
-  glslToSpirvLimitTable.maxTessEvaluationInputComponents            = 128;
-  glslToSpirvLimitTable.maxTessEvaluationOutputComponents           = 128;
-  glslToSpirvLimitTable.maxTessEvaluationTextureImageUnits          = 16;
-  glslToSpirvLimitTable.maxTessEvaluationUniformComponents          = 1024;
-  glslToSpirvLimitTable.maxTessPatchComponents                      = 120;
-  glslToSpirvLimitTable.maxPatchVertices                            = 32;
-  glslToSpirvLimitTable.maxTessGenLevel                             = 64;
-  glslToSpirvLimitTable.maxViewports                                = 16;
-  glslToSpirvLimitTable.maxVertexAtomicCounters                     = 0;
-  glslToSpirvLimitTable.maxTessControlAtomicCounters                = 0;
-  glslToSpirvLimitTable.maxTessEvaluationAtomicCounters             = 0;
-  glslToSpirvLimitTable.maxGeometryAtomicCounters                   = 0;
-  glslToSpirvLimitTable.maxFragmentAtomicCounters                   = 8;
-  glslToSpirvLimitTable.maxCombinedAtomicCounters                   = 8;
-  glslToSpirvLimitTable.maxAtomicCounterBindings                    = 1;
-  glslToSpirvLimitTable.maxVertexAtomicCounterBuffers               = 0;
-  glslToSpirvLimitTable.maxTessControlAtomicCounterBuffers          = 0;
-  glslToSpirvLimitTable.maxTessEvaluationAtomicCounterBuffers       = 0;
-  glslToSpirvLimitTable.maxGeometryAtomicCounterBuffers             = 0;
-  glslToSpirvLimitTable.maxFragmentAtomicCounterBuffers             = 1;
-  glslToSpirvLimitTable.maxCombinedAtomicCounterBuffers             = 1;
-  glslToSpirvLimitTable.maxAtomicCounterBufferSize                  = 16384;
-  glslToSpirvLimitTable.maxTransformFeedbackBuffers                 = 4;
-  glslToSpirvLimitTable.maxTransformFeedbackInterleavedComponents   = 64;
-  glslToSpirvLimitTable.maxCullDistances                            = 8;
-  glslToSpirvLimitTable.maxCombinedClipAndCullDistances             = 8;
-  glslToSpirvLimitTable.maxSamples                                  = 4;
-  glslToSpirvLimitTable.maxMeshOutputVerticesNV                     = 256;
-  glslToSpirvLimitTable.maxMeshOutputPrimitivesNV                   = 512;
-  glslToSpirvLimitTable.maxMeshWorkGroupSizeX_NV                    = 32;
-  glslToSpirvLimitTable.maxMeshWorkGroupSizeY_NV                    = 1;
-  glslToSpirvLimitTable.maxMeshWorkGroupSizeZ_NV                    = 1;
-  glslToSpirvLimitTable.maxTaskWorkGroupSizeX_NV                    = 32;
-  glslToSpirvLimitTable.maxTaskWorkGroupSizeY_NV                    = 1;
-  glslToSpirvLimitTable.maxTaskWorkGroupSizeZ_NV                    = 1;
-  glslToSpirvLimitTable.maxMeshViewCountNV                          = 4;
-  glslToSpirvLimitTable.limits.nonInductiveForLoops                 = 1;
-  glslToSpirvLimitTable.limits.whileLoops                           = 1;
-  glslToSpirvLimitTable.limits.doWhileLoops                         = 1;
-  glslToSpirvLimitTable.limits.generalUniformIndexing               = 1;
-  glslToSpirvLimitTable.limits.generalAttributeMatrixVectorIndexing = 1;
-  glslToSpirvLimitTable.limits.generalVaryingIndexing               = 1;
-  glslToSpirvLimitTable.limits.generalSamplerIndexing               = 1;
-  glslToSpirvLimitTable.limits.generalVariableIndexing              = 1;
-  glslToSpirvLimitTable.limits.generalConstantMatrixVectorIndexing  = 1;
 }
 void vk_createContentManager() {
   VKGLOBAL_VIRMEM_CONTENTMANAGER =
@@ -1748,52 +1644,4 @@ void vk_createContentManager() {
   set_functionpointers();
 
   startGlslang();
-
-  // Create Descriptor Pools
-  //assert(0 && "Create Descriptor Pools dynamically");
-  /*
-  for
-  (
-          uint32_t DescTypeID = 0;
-          DescTypeID < VKCONST_DYNAMICDESCRIPTORTYPESCOUNT;
-          DescTypeID++
-  ) {
-          VkDescriptorPoolSize size;
-          size.descriptorCount = info->MAXDESCCOUNTs[DescTypeID];
-          size.type = Find_VkDescType_byVKCONST_DESCSETID(DescTypeID);
-
-          if (!size.descriptorCount) { break; }
-
-          VkDescriptorPoolCreateInfo descpool_ci = {};
-          descpool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-          descpool_ci.maxSets = info->MAXDESCSETCOUNT;
-          descpool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-          descpool_ci.pPoolSizes = &size;
-          descpool_ci.poolSizeCount = 1;
-          descpool_ci.pNext = nullptr;
-
-          for
-          (
-                  uint32_t PoolID = 0;
-                  PoolID < VKCONST_DESCPOOLCOUNT_PERDESCTYPE;
-                  PoolID++
-          ) {
-                  ThrowIfFailed
-                  (
-                          vkCreateDescriptorPool
-                          (
-                                  rendergpu->devLogical,
-                                  &descpool_ci,
-                                  nullptr,
-                                  &hidden->ALL_DESCPOOLS[DescTypeID].POOLs[PoolID]
-                          ),
-                          "Vulkan Global Descriptor Pool creation has failed! You possibly exceeded
-  GPU limits."
-                  );
-          }
-          hidden->ALL_DESCPOOLS[DescTypeID].REMAINING_DESCs.store(info->MAXDESCCOUNTs[DescTypeID]);
-          hidden->ALL_DESCPOOLS[DescTypeID].REMAINING_SETs.store(info->MAXDESCSETCOUNT);
-  }*/
 }
-
-

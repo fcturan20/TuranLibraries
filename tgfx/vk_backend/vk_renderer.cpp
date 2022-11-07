@@ -13,15 +13,38 @@
 #include "vk_core.h"
 #include "vk_predefinitions.h"
 #include "vk_queue.h"
-#include "vkext_timelineSemaphore.h"
 #include "vk_resource.h"
+#include "vkext_timelineSemaphore.h"
 
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_RENDERER = nullptr;
+
+struct vk_cmd;
+struct CMDBUNDLE_VKOBJ {
+  bool            isALIVE    = false;
+  vk_handleType   HANDLETYPE = VKHANDLETYPEs::CMDBUNDLE;
+  static uint16_t GET_EXTRAFLAGS(CMDBUNDLE_VKOBJ* obj) { return 0; }
+
+  VkCommandBuffer vk_cb = nullptr;
+  // Render States
+  VkPipeline vk_activePipeline = {};
+  // To check pipeline compatibility
+  VkPipelineLayout      vk_activePipelineLayout                       = {};
+  VkDescriptorSetLayout vk_activeDescSets[VKCONST_MAXDESCSET_PERLIST] = {};
+  uint8_t               vk_callBuffer[128] = {}; // CallBuffer = Push Constants = 128 byte
+
+  QUEUEFAM_VK* m_queueFam = nullptr;
+  GPU_VKOBJ*   m_gpu      = nullptr;
+  uint32_t     m_poolIndx = UINT32_MAX;
+  vk_cmd*      m_cmds     = nullptr;
+  uint64_t     m_cmdCount = 0;
+
+  void createCmdBuffer(uint64_t cmdCount);
+};
 
 #define vkEnumType_cmdType() uint32_t
 enum class vk_cmdType : vkEnumType_cmdType(){
   error = VK_PRIM_MIN(vkEnumType_cmdType()), // cmdType neither should be 0 nor 255
-  bindBindingTable,
+  bindBindingTables,
   bindVertexBuffer,
   bindIndexBuffer,
   bindViewport,
@@ -31,6 +54,7 @@ enum class vk_cmdType : vkEnumType_cmdType(){
   drawIndexedIndirect,
   barrierTexture,
   barrierBuffer,
+  bindPipeline,
   error_2 = VK_PRIM_MAX(vkEnumType_cmdType())};
 // Template struct for new cmd structs
 // Then specify the struct in vkCmdStructsLists
@@ -38,18 +62,49 @@ struct vkCmdStruct_example {
   // Necessary template variables & functions should have "cmd_" prefix
   static constexpr vk_cmdType type = vk_cmdType::error;
   vkCmdStruct_example()            = default;
+  void cmd_execute(CMDBUNDLE_VKOBJ* cmdBundle) {}
 };
 
 struct vkCmdStruct_barrierTexture {
   static constexpr vk_cmdType cmd_type = vk_cmdType::barrierTexture;
 
-  void cmd_execute(VkCommandBuffer cmdbuffer) {
-    vkCmdPipelineBarrier(cmdbuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &m_imBar);
+  void cmd_execute(CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdPipelineBarrier(cmdBundle->vk_cb, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0,
+                         nullptr, 0, nullptr, 1, &m_imBar);
   }
 
   // Command specific variables should have "m_" prefix
   VkImageMemoryBarrier m_imBar = {};
+};
+
+struct vkCmdStruct_bindBindingTables {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::bindBindingTables;
+
+  void cmd_execute(CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdBindDescriptorSets(cmdBundle->vk_cb, vk_bindPoint, cmdBundle->vk_activePipelineLayout,
+                            m_firstSetIndx, m_setCount, vk_sets, 0, nullptr);
+    for (uint32_t i = m_firstSetIndx; i < VKCONST_MAXDESCSET_PERLIST; i++) {
+      cmdBundle->vk_activeDescSets[i] = vk_setLayouts[i - m_firstSetIndx];
+    }
+  }
+  VkPipelineBindPoint   vk_bindPoint                              = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+  VkDescriptorSet       vk_sets[VKCONST_MAXDESCSET_PERLIST]       = {};
+  VkDescriptorSetLayout vk_setLayouts[VKCONST_MAXDESCSET_PERLIST] = {};
+  uint32_t              m_setCount = 0, m_firstSetIndx = 0;
+};
+
+struct vkCmdStruct_bindPipeline {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::bindPipeline;
+
+  void cmd_execute(CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdBindPipeline(cmdBundle->vk_cb, vk_bindPoint, vk_pipeline);
+    cmdBundle->vk_activePipeline       = vk_pipeline;
+    cmdBundle->vk_activePipelineLayout = vk_pipelineLayout;
+  }
+  VkPipelineBindPoint vk_bindPoint      = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+  VkPipeline          vk_pipeline       = {};
+  VkPipelineLayout    vk_pipelineLayout = {};
 };
 
 struct vk_cmd {
@@ -61,7 +116,9 @@ struct vk_cmd {
     return std::max({sizeof(T)...});
   }
 
-#define vkCmdStructsLists vkCmdStruct_example, vkCmdStruct_barrierTexture
+#define vkCmdStructsLists                                                         \
+  vkCmdStruct_example, vkCmdStruct_barrierTexture, vkCmdStruct_bindBindingTables, \
+    vkCmdStruct_bindPipeline
   static constexpr uint32_t maxCmdStructSize = max_sizeof<vkCmdStructsLists>();
   uint8_t                   cmd_data[maxCmdStructSize];
   vk_cmd() : cmd_type(vk_cmdType::error) {}
@@ -79,10 +136,16 @@ T* vk_createCmdStruct(vk_cmd* cmd) {
   return ( T* )cmd->cmd_data;
 }
 
-void vk_executeCmd(VkCommandBuffer cmdBuffer, const vk_cmd& cmd) {
+void vk_executeCmd(CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cmd) {
   switch (cmd.cmd_type) {
     case vk_cmdType::barrierTexture:
-      (( vkCmdStruct_barrierTexture* )cmd.cmd_data)->cmd_execute(cmdBuffer);
+      (( vkCmdStruct_barrierTexture* )cmd.cmd_data)->cmd_execute(bundle);
+      break;
+    case vk_cmdType::bindBindingTables:
+      (( vkCmdStruct_bindBindingTables* )cmd.cmd_data)->cmd_execute(bundle);
+      break;
+    case vk_cmdType::bindPipeline:
+      (( vkCmdStruct_bindPipeline* )cmd.cmd_data)->cmd_execute(bundle);
       break;
     case vk_cmdType::error:
     case vk_cmdType::error_2:
@@ -90,25 +153,12 @@ void vk_executeCmd(VkCommandBuffer cmdBuffer, const vk_cmd& cmd) {
   }
 }
 
-struct CMDBUNDLE_VKOBJ {
-  bool            isALIVE    = false;
-  vk_handleType   HANDLETYPE = VKHANDLETYPEs::CMDBUNDLE;
-  static uint16_t GET_EXTRAFLAGS(CMDBUNDLE_VKOBJ* obj) { return 0; }
-
-  VkCommandBuffer vk_cb      = nullptr;
-  QUEUEFAM_VK*    m_queueFam = nullptr;
-  GPU_VKOBJ*      m_gpu      = nullptr;
-  uint32_t        m_poolIndx = UINT32_MAX;
-  vk_cmd*         m_cmds     = nullptr;
-  uint64_t        m_cmdCount = 0;
-
-  void createCmdBuffer(uint64_t cmdCount) {
-    vk_virmem::dynamicmem* cmdVirMem = vk_virmem::allocate_dynamicmem(sizeof(vk_cmd) * cmdCount);
-    // I don't want to bother with commit operations for now, commit all cmds
-    m_cmds     = new (cmdVirMem) vk_cmd[cmdCount];
-    m_cmdCount = cmdCount;
-  }
-};
+void CMDBUNDLE_VKOBJ::createCmdBuffer(uint64_t cmdCount) {
+  vk_virmem::dynamicmem* cmdVirMem = vk_virmem::allocate_dynamicmem(sizeof(vk_cmd) * cmdCount);
+  // I don't want to bother with commit operations for now, commit all cmds
+  m_cmds     = new (cmdVirMem) vk_cmd[cmdCount];
+  m_cmdCount = cmdCount;
+}
 
 struct vk_renderer_private {
   VK_STATICVECTOR<CMDBUNDLE_VKOBJ, commandBundle_tgfxhnd, UINT16_MAX> m_cmdBundles;
@@ -148,18 +198,18 @@ commandBundle_tgfxhnd vk_beginCommandBundle(gpuQueue_tgfxhnd      i_queue,
   return hiddenRenderer->m_cmdBundles.returnHANDLEfromOBJ(cmdBundle);
 }
 void vk_finishCommandBundle(commandBundle_tgfxhnd i_bundle, extension_tgfxlsthnd exts) {
-  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
-  VkCommandBufferBeginInfo bi     = {};
-  bi.flags                        = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-  bi.pNext                        = nullptr;
-  bi.sType                        = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  CMDBUNDLE_VKOBJ*         bundle        = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
+  VkCommandBufferBeginInfo bi            = {};
+  bi.flags                               = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+  bi.pNext                               = nullptr;
+  bi.sType                               = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   VkCommandBufferInheritanceInfo secInfo = {};
   secInfo.sType                          = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-  bi.pInheritanceInfo             = &secInfo;
+  bi.pInheritanceInfo                    = &secInfo;
   assert(!ThrowIfFailed(vkBeginCommandBuffer(bundle->vk_cb, &bi),
                         "vkBeginCommandBuffer() shouldn't fail!"));
   for (uint64_t cmdIndx = 0; cmdIndx < bundle->m_cmdCount; cmdIndx++) {
-    vk_executeCmd(bundle->vk_cb, bundle->m_cmds[cmdIndx]);
+    vk_executeCmd(bundle, bundle->m_cmds[cmdIndx]);
   }
   assert(!ThrowIfFailed(vkEndCommandBuffer(bundle->vk_cb), "vkEndCommandBuffer() shouldn't fail!"));
 }
@@ -171,8 +221,39 @@ void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
   hiddenRenderer->m_cmdBundles.erase(hiddenRenderer->m_cmdBundles.getINDEX_byOBJ(bundle));
 }
 
-void vk_cmdBindBindingTable(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
-                            bindingTable_tgfxhnd bindingtable) {}
+void vk_cmdBindBindingTables(commandBundle_tgfxhnd i_bundle, unsigned long long sortKey,
+                             bindingTable_tgfxlsthnd bindingTables, unsigned int firstSetIndx,
+                             pipelineType_tgfx pipelineType) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
+  auto* cmd = vk_createCmdStruct<vkCmdStruct_bindBindingTables>(&bundle->m_cmds[sortKey]);
+
+  {
+    TGFXLISTCOUNT(core_tgfx_main, bindingTables, bindingTableListSize);
+    for (uint32_t i = 0; i < bindingTableListSize; i++) {
+      BINDINGTABLEINST_VKOBJ* bindingTable =
+        contentmanager->GETBINDINGTABLE_ARRAY().getOBJfromHANDLE(bindingTables[i]);
+      if (bindingTable) {
+        cmd->vk_sets[cmd->m_setCount] = bindingTable->vk_set;
+        BINDINGTABLETYPE_VKOBJ* type =
+          contentmanager->GETBINDINGTABLETYPE_ARRAY().getOBJfromHANDLE(bindingTable->m_type);
+        cmd->vk_setLayouts[cmd->m_setCount++] = type->vk_layout;
+      }
+    }
+  }
+
+  cmd->vk_bindPoint   = vk_findPipelineBindPoint(pipelineType);
+  cmd->m_firstSetIndx = firstSetIndx;
+}
+void vk_cmdBindPipeline(commandBundle_tgfxhnd i_bundle, unsigned long long sortKey,
+  pipeline_tgfxhnd pipeline) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
+  auto* cmd = vk_createCmdStruct<vkCmdStruct_bindPipeline>(&bundle->m_cmds[sortKey]);
+
+  PIPELINE_VKOBJ* pipe = contentmanager->GETPIPELINE_ARRAY().getOBJfromHANDLE(pipeline);
+  cmd->vk_bindPoint = pipe->vk_type;
+  cmd->vk_pipeline     = pipe->vk_object;
+  cmd->vk_pipelineLayout = pipe->vk_layout;
+}
 void vk_cmdBindVertexBuffer(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
                             buffer_tgfxhnd buffer, unsigned long long offset,
                             unsigned long long dataSize) {
@@ -223,7 +304,7 @@ void vk_cmdBarrierTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
 }
 
 void set_VkRenderer_funcPtrs() {
-  core_tgfx_main->renderer->cmdBindBindingTable       = vk_cmdBindBindingTable;
+  core_tgfx_main->renderer->cmdBindBindingTables      = vk_cmdBindBindingTables;
   core_tgfx_main->renderer->cmdBindIndexBuffers       = vk_cmdBindIndexBuffers;
   core_tgfx_main->renderer->cmdBindVertexBuffer       = vk_cmdBindVertexBuffer;
   core_tgfx_main->renderer->cmdDrawIndexedDirect      = vk_cmdDrawIndexedDirect;
@@ -231,6 +312,7 @@ void set_VkRenderer_funcPtrs() {
   core_tgfx_main->renderer->cmdDrawNonIndexedDirect   = vk_cmdDrawNonIndexedDirect;
   core_tgfx_main->renderer->cmdDrawNonIndexedIndirect = vk_cmdDrawNonIndexedIndirect;
   core_tgfx_main->renderer->cmdBarrierTexture         = vk_cmdBarrierTexture;
+  core_tgfx_main->renderer->cmdBindPipeline           = vk_cmdBindPipeline;
 
   core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
   core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;

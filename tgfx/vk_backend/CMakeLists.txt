@@ -38,12 +38,12 @@ else()
     message("dear Imgui (by Ocornut) isn't installed on your system!")
 endif()
 
-find_package(glslang CONFIG REQUIRED)
-target_link_libraries(TGFXVulkan PUBLIC HLSL SPIRV glslang OGLCompiler)
+# GLSLANG
 
+find_package(glslang CONFIG REQUIRED)
 add_library(TGFXVulkanGlslang SHARED "vk_glslang.cpp")
-target_include_directories(TGFXVulkanGlslang PUBLIC ${CMAKE_SOURCE_DIR}/turanapi/turanapi)
-target_link_libraries(TGFXVulkanGlslang PUBLIC glslang)
+target_include_directories(TGFXVulkanGlslang PUBLIC ${CMAKE_SOURCE_DIR}/turanapi/turanapi ${CMAKE_SOURCE_DIR}/tgfx/core)
+target_link_libraries(TGFXVulkanGlslang PUBLIC HLSL SPIRV glslang OGLCompiler)
 
 set_target_properties(TGFXVulkanGlslang PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 set_target_properties(TGFXVulkanGlslang PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")

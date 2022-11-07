@@ -36,15 +36,21 @@ typedef struct tgfx_gpudatamanager {
   // If your GPU supports VariableDescCount, you set ElementCount to UINT32_MAX
   result_tgfx (*createBindingTableType)(gpu_tgfxhnd gpu, const bindingTableDescription_tgfx* desc,
                                         bindingTableType_tgfxhnd* bindingTableHandle);
-  result_tgfx (*instantiateBindingTable)(bindingTableType_tgfxhnd type,
-                                         bindingTable_tgfxhnd*    table);
-  result_tgfx (*setBindingTable_Texture)(bindingTable_tgfxhnd table, unsigned int BINDINDEX,
-                                         texture_tgfxhnd texture);
-  result_tgfx (*setBindingTable_Buffer)(bindingTable_tgfxhnd table, unsigned int BINDINDEX,
-                                        buffer_tgfxhnd buffer, unsigned int offset,
-                                        unsigned int size, extension_tgfxlsthnd exts);
-  result_tgfx (*setBindingTable_Sampler)(bindingTable_tgfxhnd table, unsigned int BINDINDEX,
-                                         sampler_tgfxhnd sampler);
+  result_tgfx (*instantiateBindingTable)(bindingTableType_tgfxhnd type, unsigned char isStatic,
+                                         bindingTable_tgfxhnd* table);
+  result_tgfx (*setBindingTable_Texture)(bindingTable_tgfxhnd table, unsigned int bindingCount,
+                                         const unsigned int*      bindingIndices,
+                                         const texture_tgfxlsthnd textures);
+  // If offsets is nullptr, then all offsets are 0
+  // If sizes is nullptr, then all sizes are whole buffer
+  result_tgfx (*setBindingTable_Buffer)(bindingTable_tgfxhnd table, unsigned int bindingCount,
+                                        const unsigned int*     bindingIndices,
+                                        const buffer_tgfxlsthnd buffers,
+                                        const unsigned int* offsets, const unsigned int* sizes,
+                                        extension_tgfxlsthnd exts);
+  result_tgfx (*setBindingTable_Sampler)(bindingTable_tgfxhnd table, unsigned int bindingCount,
+                                         unsigned int*            bindingIndices,
+                                         const sampler_tgfxlsthnd samplers);
 
   // SHADER & PIPELINE COMPILATION
   /////////////////////////////////////
@@ -63,20 +69,19 @@ typedef struct tgfx_gpudatamanager {
                                       const viewport_tgfxlsthnd           ViewportList,
                                       const renderSubPass_tgfxhnd         subpass,
                                       const rasterStateDescription_tgfx*  mainStates,
-                                      rasterPipeline_tgfxhnd*             MaterialHandle);
+                                      pipeline_tgfxhnd*                   MaterialHandle);
   // Extensions: Dynamic States, CallBufferInfo, Specialization Constants
-  result_tgfx (*copyRasterPipeline)(rasterPipeline_tgfxhnd basePipeline, extension_tgfxlsthnd exts,
-                                    rasterPipeline_tgfxhnd* derivedPipeline);
-  void (*destroyRasterPipeline)(rasterPipeline_tgfxhnd hnd);
+  result_tgfx (*copyRasterPipeline)(pipeline_tgfxhnd basePipeline, extension_tgfxlsthnd exts,
+                                    pipeline_tgfxhnd* derivedPipeline);
+  void (*destroyRasterPipeline)(pipeline_tgfxhnd hnd);
 
   result_tgfx (*createComputePipeline)(shaderSource_tgfxhnd        Source,
                                        bindingTableType_tgfxlsthnd TypeBindingTables,
-                                       unsigned char               isCallBufferSupported,
-                                       computePipeline_tgfxhnd*    hnd);
+                                       unsigned char isCallBufferSupported, pipeline_tgfxhnd* hnd);
   // Extensions: CallBufferInfo, Specialization Constants
-  result_tgfx (*copyComputePipeline)(computePipeline_tgfxhnd src, extension_tgfxlsthnd exts,
-                                     computePipeline_tgfxhnd* dst);
-  void (*destroyComputePipeline)(computePipeline_tgfxhnd hnd);
+  result_tgfx (*copyComputePipeline)(pipeline_tgfxhnd src, extension_tgfxlsthnd exts,
+                                     pipeline_tgfxhnd* dst);
+  void (*destroyPipeline)(pipeline_tgfxhnd pipeline);
 
   //////////////////////////////
   // RT SLOTSET

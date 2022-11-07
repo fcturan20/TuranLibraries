@@ -57,7 +57,7 @@ int main() {
                                          ( extension_tgfxlsthnd )&TGFXCORE->INVALIDHANDLE,
                                          &shaderuniformsbuffer);
   shaderStageFlag_tgfxhnd onlycompute_shaderstage =
-    TGFXHELPER->CreateShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER);
+    TGFXHELPER->createShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER);
   bindingTable_tgfxhnd firstbindingtable = nullptr;
   TGFXCONTENTMANAGER->instantiateBindingTable(shaderdescriptortype_tgfx_BUFFER, 1,
                                               onlycompute_shaderstage, nullptr, &firstbindingtable);

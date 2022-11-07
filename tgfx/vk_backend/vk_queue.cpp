@@ -127,6 +127,7 @@ manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
             "GPU: Compute, Transfer, Graphics");
     return nullptr;
   }
+
   // Select internal queue, then create other queue backend objects
   QUEUEFAM_VK* bestQueueFam = nullptr;
   for (uint32_t queueFamIndx = 0; queueFamIndx < queueFamiliesCount; queueFamIndx++) {
@@ -262,7 +263,7 @@ void manager_vk::get_queue_objects() {
 
       // Create primary Command Pool
       {
-        cp_ci_g.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        cp_ci_g.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         ThrowIfFailed(vkCreateCommandPool(m_gpu->vk_logical, &cp_ci_g, nullptr, &CP.vk_primaryCP),
                       "Primary command pool creation for a queue has failed!");
       }
@@ -304,9 +305,8 @@ VkCommandBuffer manager_vk::getPrimaryCmdBuffer(QUEUEFAM_VK* family) {
   assert(0 && "Command Buffer Count is exceeded!");
 }
 
-static VkPipelineStageFlags
-  VKCONST_PRESENTWAITSTAGEs[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+static VkPipelineStageFlags VKCONST_PRESENTWAITSTAGEs[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {
+  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
 void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
   // Check previously sent submission to detect if they're still executing
@@ -341,7 +341,7 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
                       "Submission tracker fence creation failed!");
       }
       for (uint32_t submitIndx = 0; submitIndx < queue->m_submitInfos.size(); submitIndx++) {
-        submit_vk* submit = queue->m_submitInfos[submitIndx];
+        submit_vk* submit                   = queue->m_submitInfos[submitIndx];
         submit->vk_submit.pWaitDstStageMask = VKCONST_PRESENTWAITSTAGEs;
         // Add queue call synchronizer semaphore as wait to sync sequential executeCmdLists calls
         if (submitIndx == 0 && queue->m_prevQueueOp == QUEUE_VKOBJ::CMDBUFFER) {
@@ -361,7 +361,7 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
           cmdBuffers[submitIndx][cmdBufferIndx] = submit->cmdBuffers[cmdBufferIndx]->vk_cb;
         }
         submit->vk_submit.pCommandBuffers = cmdBuffers[submitIndx];
-        infos[submitIndx] = submit->vk_submit;
+        infos[submitIndx]                 = submit->vk_submit;
       }
       ThrowIfFailed(vkQueueSubmit(queue->vk_queue, queue->m_submitInfos.size(), infos, submitFence),
                     "Queue Submission has failed!");
@@ -614,7 +614,7 @@ void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandBuffer_tgfxlsthn
   }
   queue->m_activeQueueOp = QUEUE_VKOBJ::CMDBUFFER;
 
-  uint32_t cmdBufferCount = 0;
+  uint32_t         cmdBufferCount                                  = 0;
   CMDBUFFER_VKOBJ* cmdBuffers[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
   {
     TGFXLISTCOUNT(core_tgfx_main, i_cmdBuffersList, listSize);

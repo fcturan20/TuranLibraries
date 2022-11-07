@@ -205,8 +205,6 @@ enum class VKHANDLETYPEs : unsigned short {
   BUFFER,
   RTSLOTSET,
   IRTSLOTSET,
-  RASTERPIPELINE,
-  COMPUTEPIPELINE,
   TEXTURE,
   WINDOW,
   GPU,
@@ -219,7 +217,8 @@ enum class VKHANDLETYPEs : unsigned short {
   GPUQUEUE,
   FENCE,
   CMDBUFFER,
-  CMDBUNDLE
+  CMDBUNDLE,
+  PIPELINE
 };
 
 struct VKOBJHANDLE {

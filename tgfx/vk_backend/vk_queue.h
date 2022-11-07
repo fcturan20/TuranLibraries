@@ -134,14 +134,12 @@ struct QUEUEFAM_VK {
     return *this;
   }
 };
-/*
-  This class manages queues, command buffer and descriptor set allocations per GPU
+  /*
+  This class manages queues and command buffer allocations per GPU
     This is important in multi-threaded cases because;
   1) You can't use the same command pool from different threads at the same time
-  2) You can't allocate-free descriptor sets from the same descPool at the same time
-      But you can write to them, so no issue except descriptor count is limited by hardware
-  3) Command buffers should be tracked as if their execution has done, free command buffer
-  4) Execution tracking is achieved by tracking queues, fences etc. So queues should be managed
+  2) Command buffers should be tracked as if their execution has done, free command buffer
+  3) Execution tracking is achieved by tracking queues, fences etc. So queues should be managed
       here too
  NOTE: User-side command buffers are different because they're not actual calls (sorting
  is needed) So after sorting, thread calls poolManager to get command buffer. poolManager find

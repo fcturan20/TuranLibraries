@@ -12,6 +12,7 @@
 #include "pecfManager/pecfManager.h"
 #include "profiler_tapi.h"
 #include "tgfx_core.h"
+#include "tgfx_gpucontentmanager.h"
 #include "tgfx_helper.h"
 #include "tgfx_renderer.h"
 #include "tgfx_structs.h"
@@ -98,14 +99,16 @@ void load_systems() {
     loggerSys->funcs->log_status(("Loading systems took: " + std::to_string(duration)).c_str());
   }
 
-  tgfx_core*     tgfx     = nullptr;
-  tgfx_renderer* renderer = nullptr;
+  tgfx_core*           tgfx           = nullptr;
+  tgfx_renderer*       renderer       = nullptr;
+  tgfx_gpudatamanager* contentManager = nullptr;
   {
     pluginHnd_ecstapi tgfxPlugin = editorECS->loadPlugin("tgfx_core.dll");
     auto              tgfxSys    = ( TGFX_PLUGIN_LOAD_TYPE )editorECS->getSystem(TGFX_PLUGIN_NAME);
     if (tgfxSys) {
-      tgfx     = tgfxSys->api;
-      renderer = tgfx->renderer;
+      tgfx           = tgfxSys->api;
+      renderer       = tgfx->renderer;
+      contentManager = tgfx->contentmanager;
     }
   }
   gpu_tgfxlsthnd gpus;
@@ -151,7 +154,7 @@ void load_systems() {
       swpchn_desc.imageCount  = swapchainTextureCount;
       swpchn_desc.swapchainUsage =
         tgfx->helpers->createUsageFlag_Texture(true, true, true, true, true);
-      swpchn_desc.presentationMode = windowpresentation_tgfx_IMMEDIATE;
+      swpchn_desc.presentationMode = windowpresentation_tgfx_FIFO;
       swpchn_desc.window           = window;
       // Get all supported queues of the first GPU
       gpuQueue_tgfxhnd        allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
@@ -163,6 +166,34 @@ void load_systems() {
       swpchn_desc.permittedQueues = allQueues;
       // Create swapchain
       tgfx->createSwapchain(gpu, &swpchn_desc, swpchnTextures);
+    }
+
+    // Compile compute shader, create binding table type & compute pipeline
+    bindingTableType_tgfxhnd bindingType          = {};
+    pipeline_tgfxhnd  firstComputePipeline = {};
+    {
+      const char*          shaderText = filesys->funcs->read_textfile("../firstComputeShader.comp");
+      shaderSource_tgfxhnd firstComputeShader = nullptr;
+      contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
+                                          shaderstage_tgfx_COMPUTESHADER, ( void* )shaderText,
+                                          strlen(shaderText), &firstComputeShader);
+
+      // Create binding table type
+      {
+        tgfx_binding_table_description desc = {};
+        desc.DescriptorType                 = shaderdescriptortype_tgfx_STORAGEIMAGE;
+        desc.ElementCount                   = 1;
+        desc.SttcSmplrs                     = nullptr;
+        desc.VisibleStages =
+          tgfx->helpers->createShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER);
+
+        contentManager->createBindingTableType(gpu, &desc, &bindingType);
+      }
+
+      bindingTableType_tgfxhnd bindingTypes[2] = {bindingType,
+                                                  ( bindingTableType_tgfxhnd )tgfx->INVALIDHANDLE};
+      contentManager->createComputePipeline(firstComputeShader, bindingTypes, false,
+                                            &firstComputePipeline);
     }
 
     fence_tgfxhnd fence;
@@ -180,24 +211,23 @@ void load_systems() {
         renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
         renderer->queueSubmit(queue);
 
-        commandBundle_tgfxhnd firstCmdBundles[3] = {
-          renderer->beginCommandBundle(queue, nullptr, 1, nullptr),
-          renderer->beginCommandBundle(queue, nullptr, 1, nullptr),
+        commandBundle_tgfxhnd firstCmdBundles[2] = {
+          renderer->beginCommandBundle(queue, nullptr, 2, nullptr),
           ( commandBundle_tgfxhnd )tgfx->INVALIDHANDLE};
-        for (uint32_t i = 0; i < 1; i++) {
-          renderer->cmdBarrierTexture(
-            firstCmdBundles[0], i, swpchnTextures[i], image_access_tgfx_SHADER_SAMPLEWRITE,
-            image_access_tgfx_RTCOLOR_READWRITE, nullptr, nullptr, nullptr);
-
-          renderer->cmdBarrierTexture(
-            firstCmdBundles[1], i, swpchnTextures[i], image_access_tgfx_RTCOLOR_READWRITE,
-            image_access_tgfx_SHADER_SAMPLEWRITE,
-            nullptr, nullptr, nullptr);
+        bindingTable_tgfxhnd bindingTable = {};
+        contentManager->instantiateBindingTable(bindingType, true, &bindingTable);
+        uint32_t bindingIndex = 0;
+        contentManager->setBindingTable_Texture(bindingTable, 1, &bindingIndex, &swpchnTextures[0]);
+        // Record command bundle
+        { 
+          bindingTable_tgfxhnd bindingTables[2] = {bindingTable,
+                                                   ( bindingTable_tgfxhnd )tgfx->INVALIDHANDLE};
+          renderer->cmdBindPipeline(firstCmdBundles[0], 0, firstComputePipeline);
+          renderer->cmdBindBindingTables(firstCmdBundles[0], 1, bindingTables, 0, pipelineType_tgfx_COMPUTE); 
         }
         renderer->finishCommandBundle(firstCmdBundles[0], nullptr);
-        renderer->finishCommandBundle(firstCmdBundles[1], nullptr);
         commandBuffer_tgfxhnd firstCmdBuffers[2] = {renderer->beginCommandBuffer(queue, nullptr),
-                                                    (commandBuffer_tgfxhnd)tgfx->INVALIDHANDLE};
+                                                    ( commandBuffer_tgfxhnd )tgfx->INVALIDHANDLE};
         renderer->executeBundles(firstCmdBuffers[0], firstCmdBundles, nullptr);
         renderer->endCommandBuffer(firstCmdBuffers[0]);
         for (uint32_t i = 0; i < 3; i++) {
@@ -223,6 +253,11 @@ void load_systems() {
         while (++i) {
           TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "presentation", &duration);
           tgfx->getCurrentSwapchainTextureIndex(window, &swpchnIndx);
+          firstCmdBuffers[0] = renderer->beginCommandBuffer(queue, nullptr);
+          renderer->executeBundles(firstCmdBuffers[0], firstCmdBundles, nullptr);
+          renderer->endCommandBuffer(firstCmdBuffers[0]);
+          renderer->queueExecuteCmdBuffers(queue, firstCmdBuffers, nullptr);
+          renderer->queueSubmit(queue);
           if (i % 2) {
             renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
             renderer->queueSubmit(queue);

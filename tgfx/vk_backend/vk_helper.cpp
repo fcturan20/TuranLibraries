@@ -112,7 +112,7 @@ static bufferUsageFlag_tgfxhnd vk_createUsageFlag_Buffer(
 extern result_tgfx SetMemoryTypeInfo(unsigned int MemoryType_id, unsigned long long AllocationSize,
                                      extension_tgfxlsthnd Extensions);
 
-static shaderStageFlag_tgfxhnd CreateShaderStageFlag(unsigned char count, ...) {
+static shaderStageFlag_tgfxhnd vk_createShaderStageFlag(unsigned char count, ...) {
   // If size of a pointer isn't bigger than or equal to a VkShaderStageFlag, we should return a
   // pointer to the flag otherwise data is lost
   VkShaderStageFlags* flag   = nullptr;
@@ -272,4 +272,5 @@ static extension_tgfx_handle EXT_DepthBoundsInfo(float BoundMin, float BoundMax)
 void vk_setHelperFuncPtrs() {
   core_tgfx_main->helpers->createUsageFlag_Texture = vk_createUsageFlag_Texture;
   core_tgfx_main->helpers->createUsageFlag_Buffer  = vk_createUsageFlag_Buffer;
+  core_tgfx_main->helpers->createShaderStageFlag   = vk_createShaderStageFlag;
 }

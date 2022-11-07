@@ -27,8 +27,6 @@ typedef struct tgfx_samplingtype_obj*          sampler_tgfxhnd;
 typedef struct tgfx_vertexattributelayout_obj* vertexAttributeLayout_tgfxhnd;
 typedef struct tgfx_viewport_obj*              viewport_tgfxhnd;
 typedef struct tgfx_shadersource_obj*          shaderSource_tgfxhnd;
-typedef struct tgfx_computepipeline_obj*       computePipeline_tgfxhnd;
-typedef struct tgfx_rasterpipeline_obj*        rasterPipeline_tgfxhnd;
 typedef struct tgfx_inheritedrtslotset_obj*    inheritedRTSlotset_tgfxhnd;
 typedef struct tgfx_bindingtabletype_obj*      bindingTableType_tgfxhnd;
 typedef struct tgfx_bindingtable_obj*          bindingTable_tgfxhnd;
@@ -39,6 +37,7 @@ typedef struct tgfx_renderpass_obj*            renderPass_tgfxhnd;
 typedef struct tgfx_rendersubpass_obj*         renderSubPass_tgfxhnd;
 typedef struct tgfx_fence_obj*                 fence_tgfxhnd;
 typedef struct tgfx_heap_obj*                  heap_tgfxhnd;
+typedef struct tgfx_pipeline_obj*              pipeline_tgfxhnd;
 
 // DATA HANDLES
 //////////////////////////////////////
@@ -78,6 +77,8 @@ typedef viewport_tgfxhnd*          viewport_tgfxlsthnd;
 typedef gpuQueue_tgfxhnd*          gpuQueue_tgfxlsthnd;
 typedef window_tgfxhnd*            window_tgfxlsthnd;
 typedef commandBundle_tgfxhnd*     commandBundle_tgfxlsthnd;
+typedef buffer_tgfxhnd*            buffer_tgfxlsthnd;
+typedef texture_tgfxhnd*           texture_tgfxlsthnd;
 
 // STRUCTS
 /////////////////////////////////////
@@ -329,8 +330,7 @@ typedef enum {
 typedef enum {
   shaderlanguages_tgfx_GLSL  = 0,
   shaderlanguages_tgfx_HLSL  = 1,
-  shaderlanguages_tgfx_SPIRV = 2,
-  shaderlanguages_tgfx_TSL   = 3
+  shaderlanguages_tgfx_SPIRV = 2
 } shaderlanguages_tgfx;
 
 typedef enum {
@@ -338,6 +338,12 @@ typedef enum {
   shaderstage_tgfx_FRAGMENTSHADER = 1,
   shaderstage_tgfx_COMPUTESHADER  = 2
 } shaderstage_tgfx;
+
+typedef enum {
+  pipelineType_tgfx_RASTER = 0,
+  pipelineType_tgfx_COMPUTE = 1,
+  pipelineType_tgfx_RAYTRACING = 2
+} pipelineType_tgfx;
 
 typedef enum {
   // Barrier is used only at the start of the pass

@@ -34,7 +34,7 @@ typedef struct tgfx_helper {
   result_tgfx (*SetMemoryTypeInfo)(unsigned int ID, unsigned long long allocSize,
                                    extension_tgfxlsthnd exts);
 
-  shaderStageFlag_tgfxhnd (*CreateShaderStageFlag)(unsigned char count, ...);
+  shaderStageFlag_tgfxhnd (*createShaderStageFlag)(unsigned char count, ...);
   RTSlotDescription_tgfxhnd (*CreateRTSlotDescription_Color)(
     texture_tgfxhnd text0, texture_tgfxhnd text1, operationtype_tgfx OPTYPE,
     drawpassload_tgfx LOADTYPE, unsigned char useLater, unsigned char slotIndx,

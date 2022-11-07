@@ -791,3 +791,14 @@ inline gpu_type_tgfx Find_TGFXGPUTYPE_byVk(VkPhysicalDeviceType t) {
     default: return ( gpu_type_tgfx )UINT32_MAX;
   }
 }
+
+inline VkPipelineBindPoint vk_findPipelineBindPoint(pipelineType_tgfx type) {
+  switch (type) {
+    case pipelineType_tgfx_COMPUTE: return VK_PIPELINE_BIND_POINT_COMPUTE;
+    case pipelineType_tgfx_RASTER: return VK_PIPELINE_BIND_POINT_GRAPHICS;
+    case pipelineType_tgfx_RAYTRACING: return VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR;
+    default:
+      printer(result_tgfx_FAIL, "vk_findPipelineBindPoint() doesn't support this pipeline!");
+      return VK_PIPELINE_BIND_POINT_MAX_ENUM;
+  }
+}

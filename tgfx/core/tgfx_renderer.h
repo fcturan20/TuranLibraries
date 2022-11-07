@@ -68,8 +68,11 @@ typedef struct tgfx_renderer {
   // If you won't execute same bundle later, destroy to allow backend
   //   implementation to optimize memory usage
   void (*destroyCommandBundle)(commandBundle_tgfxhnd hnd);
-  void (*cmdBindBindingTable)(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
-                              bindingTable_tgfxhnd bindingtable);
+  void (*cmdBindBindingTables)(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
+                               bindingTable_tgfxlsthnd bindingtables, unsigned int firstSetIndx,
+                               pipelineType_tgfx pipelineType);
+  void (*cmdBindPipeline)(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
+                                 pipeline_tgfxhnd pipeline);
   // For devices that doesn't allow storage buffers to store vertex buffers,
   //   this function is needed
   void (*cmdBindVertexBuffer)(commandBundle_tgfxhnd bundle, unsigned long long key,

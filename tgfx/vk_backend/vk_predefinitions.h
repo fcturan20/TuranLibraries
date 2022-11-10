@@ -187,7 +187,7 @@ void* operator new[](size_t size);
 void* operator new(size_t size, vk_virmem::dynamicmem* mem);
 void* operator new[](size_t size, vk_virmem::dynamicmem* mem);
 
-#define VK_MEMOFFSET_TO_POINTER(offset) (( void* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + offset))
+#define VK_MEMOFFSET_TO_POINTER(offset) (( void* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + (size_t)offset))
 #define VK_POINTER_TO_MEMOFFSET(ptr) \
   (uint32_t)(uintptr_t(ptr) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN))
 #define VK_ALLOCATE_AND_GETPTR(dynamicmem, size) \
@@ -315,6 +315,7 @@ class VK_LINEAR_OBJARRAY {
       return &data[i];
     }
     printer(result_tgfx_FAIL, "Reaching the VK_LINEAR_OBJARRAY limit isn't supported for now!");
+    return nullptr;
   }
   void destroyOBJfromHANDLE(VKOBJHANDLE handle) {
 #ifdef VULKAN_DEBUGGING

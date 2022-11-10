@@ -740,7 +740,7 @@ inline unsigned int get_uniformtypes_sizeinbytes(datatype_tgfx data) {
       return 0;
   }
 }
-inline VkPresentModeKHR Find_VkPresentMode_byTGFXPresent(windowpresentation_tgfx p) {
+inline VkPresentModeKHR vk_findPresentModeVk(windowpresentation_tgfx p) {
   switch (p) {
     case windowpresentation_tgfx_FIFO: return VK_PRESENT_MODE_FIFO_KHR;
     case windowpresentation_tgfx_FIFO_RELAXED: return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
@@ -751,8 +751,7 @@ inline VkPresentModeKHR Find_VkPresentMode_byTGFXPresent(windowpresentation_tgfx
       return VK_PRESENT_MODE_MAX_ENUM_KHR;
   }
 }
-
-inline windowpresentation_tgfx Find_TGFXPresentMode_byVk(VkPresentModeKHR p) {
+inline windowpresentation_tgfx vk_findPresentModeTgfx(VkPresentModeKHR p) {
   switch (p) {
     case VK_PRESENT_MODE_FIFO_KHR: return windowpresentation_tgfx_FIFO;
     case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return windowpresentation_tgfx_FIFO_RELAXED;
@@ -763,8 +762,7 @@ inline windowpresentation_tgfx Find_TGFXPresentMode_byVk(VkPresentModeKHR p) {
       return windowpresentation_tgfx_FIFO;
   }
 }
-
-inline VkColorSpaceKHR Find_VkColorSpace_byTGFX(colorspace_tgfx cs) {
+inline VkColorSpaceKHR vk_findColorSpaceVk(colorspace_tgfx cs) {
   switch (cs) {
     case colorspace_tgfx_sRGB_NONLINEAR: return VK_COLORSPACE_SRGB_NONLINEAR_KHR;
     case colorspace_tgfx_HDR10_ST2084: return VK_COLOR_SPACE_HDR10_ST2084_EXT;
@@ -774,24 +772,23 @@ inline VkColorSpaceKHR Find_VkColorSpace_byTGFX(colorspace_tgfx cs) {
   }
   return VK_COLOR_SPACE_MAX_ENUM_KHR;
 }
-
-inline colorspace_tgfx Find_TGFXColorSpace_byVk(VkColorSpaceKHR cs) {
+inline colorspace_tgfx vk_findColorSpaceTgfx(VkColorSpaceKHR cs) {
   switch (cs) {
     case VK_COLORSPACE_SRGB_NONLINEAR_KHR: return colorspace_tgfx_sRGB_NONLINEAR;
     case VK_COLOR_SPACE_HDR10_ST2084_EXT: return colorspace_tgfx_HDR10_ST2084;
     case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT: return colorspace_tgfx_EXTENDED_sRGB_LINEAR;
     default:
       printer(result_tgfx_NOTCODED, "ColorSpace isn't supported by Find_TGFXColorSpace_byVk");
+      return (colorspace_tgfx)UINT32_MAX;
   }
 }
-inline gpu_type_tgfx Find_TGFXGPUTYPE_byVk(VkPhysicalDeviceType t) {
+inline gpu_type_tgfx vk_findGPUTypeTgfx(VkPhysicalDeviceType t) {
   switch (t) {
     case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return gpu_type_tgfx_DISCRETE_GPU;
     case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return gpu_type_tgfx_INTEGRATED_GPU;
     default: return ( gpu_type_tgfx )UINT32_MAX;
   }
 }
-
 inline VkPipelineBindPoint vk_findPipelineBindPoint(pipelineType_tgfx type) {
   switch (type) {
     case pipelineType_tgfx_COMPUTE: return VK_PIPELINE_BIND_POINT_COMPUTE;

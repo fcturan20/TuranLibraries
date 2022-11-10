@@ -212,7 +212,7 @@ void load_systems() {
         renderer->queueSubmit(queue);
 
         commandBundle_tgfxhnd firstCmdBundles[2] = {
-          renderer->beginCommandBundle(queue, nullptr, 2, nullptr),
+          renderer->beginCommandBundle(queue, nullptr, 3, nullptr),
           ( commandBundle_tgfxhnd )tgfx->INVALIDHANDLE};
         bindingTable_tgfxhnd bindingTable = {};
         contentManager->instantiateBindingTable(bindingType, true, &bindingTable);
@@ -224,6 +224,7 @@ void load_systems() {
                                                    ( bindingTable_tgfxhnd )tgfx->INVALIDHANDLE};
           renderer->cmdBindPipeline(firstCmdBundles[0], 0, firstComputePipeline);
           renderer->cmdBindBindingTables(firstCmdBundles[0], 1, bindingTables, 0, pipelineType_tgfx_COMPUTE); 
+          renderer->cmdDispatch(firstCmdBundles[0], 2, {100, 100, 100});
         }
         renderer->finishCommandBundle(firstCmdBundles[0], nullptr);
         commandBuffer_tgfxhnd firstCmdBuffers[2] = {renderer->beginCommandBuffer(queue, nullptr),

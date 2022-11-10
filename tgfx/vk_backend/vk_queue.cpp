@@ -303,6 +303,7 @@ VkCommandBuffer manager_vk::getPrimaryCmdBuffer(QUEUEFAM_VK* family) {
     return CP.m_cbsPrimary[i]->vk_cb;
   }
   assert(0 && "Command Buffer Count is exceeded!");
+  return VK_NULL_HANDLE;
 }
 
 static VkPipelineStageFlags VKCONST_PRESENTWAITSTAGEs[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {

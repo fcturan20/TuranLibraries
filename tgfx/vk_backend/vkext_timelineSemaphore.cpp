@@ -107,6 +107,7 @@ result_tgfx vk_setFenceValue(fence_tgfxhnd i_fence, unsigned long long value) {
   info.pNext                    = nullptr;
   THROW_RETURN_IF_FAIL(vkSignalSemaphoreKHR_loaded(gpu->vk_logical, &info),
                        "Failed to signal fence on CPU!", result_tgfx_FAIL);
+  return result_tgfx_SUCCESS;
 }
 
 void vkext_timelineSemaphore::inspect() {

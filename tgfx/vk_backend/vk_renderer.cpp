@@ -55,6 +55,7 @@ enum class vk_cmdType : vkEnumType_cmdType(){
   barrierTexture,
   barrierBuffer,
   bindPipeline,
+  dispatch,
   error_2 = VK_PRIM_MAX(vkEnumType_cmdType())};
 // Template struct for new cmd structs
 // Then specify the struct in vkCmdStructsLists
@@ -107,6 +108,15 @@ struct vkCmdStruct_bindPipeline {
   VkPipelineLayout    vk_pipelineLayout = {};
 };
 
+struct vkCmdStruct_dispatch {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::dispatch;
+
+  void cmd_execute(CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdDispatch(cmdBundle->vk_cb, m_dispatchSize.x, m_dispatchSize.y, m_dispatchSize.z);
+  };
+  uvec3_tgfx m_dispatchSize;
+};
+
 struct vk_cmd {
   vk_cmdType cmd_type = vk_cmdType::error_2;
 
@@ -118,7 +128,7 @@ struct vk_cmd {
 
 #define vkCmdStructsLists                                                         \
   vkCmdStruct_example, vkCmdStruct_barrierTexture, vkCmdStruct_bindBindingTables, \
-    vkCmdStruct_bindPipeline
+    vkCmdStruct_bindPipeline, vkCmdStruct_dispatch
   static constexpr uint32_t maxCmdStructSize = max_sizeof<vkCmdStructsLists>();
   uint8_t                   cmd_data[maxCmdStructSize];
   vk_cmd() : cmd_type(vk_cmdType::error) {}
@@ -147,6 +157,7 @@ void vk_executeCmd(CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cmd) {
     case vk_cmdType::bindPipeline:
       (( vkCmdStruct_bindPipeline* )cmd.cmd_data)->cmd_execute(bundle);
       break;
+    case vk_cmdType::dispatch: (( vkCmdStruct_dispatch* )cmd.cmd_data)->cmd_execute(bundle); break;
     case vk_cmdType::error:
     case vk_cmdType::error_2:
     default: printer(result_tgfx_WARNING, "One of the cmds is not used!");
@@ -245,13 +256,13 @@ void vk_cmdBindBindingTables(commandBundle_tgfxhnd i_bundle, unsigned long long 
   cmd->m_firstSetIndx = firstSetIndx;
 }
 void vk_cmdBindPipeline(commandBundle_tgfxhnd i_bundle, unsigned long long sortKey,
-  pipeline_tgfxhnd pipeline) {
+                        pipeline_tgfxhnd pipeline) {
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
-  auto* cmd = vk_createCmdStruct<vkCmdStruct_bindPipeline>(&bundle->m_cmds[sortKey]);
+  auto*            cmd    = vk_createCmdStruct<vkCmdStruct_bindPipeline>(&bundle->m_cmds[sortKey]);
 
-  PIPELINE_VKOBJ* pipe = contentmanager->GETPIPELINE_ARRAY().getOBJfromHANDLE(pipeline);
-  cmd->vk_bindPoint = pipe->vk_type;
-  cmd->vk_pipeline     = pipe->vk_object;
+  PIPELINE_VKOBJ* pipe   = contentmanager->GETPIPELINE_ARRAY().getOBJfromHANDLE(pipeline);
+  cmd->vk_bindPoint      = pipe->vk_type;
+  cmd->vk_pipeline       = pipe->vk_object;
   cmd->vk_pipelineLayout = pipe->vk_layout;
 }
 void vk_cmdBindVertexBuffer(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
@@ -302,6 +313,12 @@ void vk_cmdBarrierTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
                                    cmdBar->m_imBar.newLayout);
   cmdBar->m_imBar.pNext = nullptr;
 }
+void vk_cmdDispatch(commandBundle_tgfxhnd bndl, unsigned long long key, uvec3_tgfx dispatchSize) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(bndl);
+  auto*            cmd = vk_createCmdStruct<vkCmdStruct_dispatch>(&bundle->m_cmds[key]);
+
+  cmd->m_dispatchSize = dispatchSize;
+}
 
 void set_VkRenderer_funcPtrs() {
   core_tgfx_main->renderer->cmdBindBindingTables      = vk_cmdBindBindingTables;
@@ -313,6 +330,7 @@ void set_VkRenderer_funcPtrs() {
   core_tgfx_main->renderer->cmdDrawNonIndexedIndirect = vk_cmdDrawNonIndexedIndirect;
   core_tgfx_main->renderer->cmdBarrierTexture         = vk_cmdBarrierTexture;
   core_tgfx_main->renderer->cmdBindPipeline           = vk_cmdBindPipeline;
+  core_tgfx_main->renderer->cmdDispatch               = vk_cmdDispatch;
 
   core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
   core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;

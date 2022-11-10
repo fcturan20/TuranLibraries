@@ -291,7 +291,7 @@ inline void vk_checkComputerSpecs() {
     vkgpu->desc.DRIVER_VERSION = vkgpu->vk_propsDev.properties.driverVersion;
     vkgpu->desc.API_VERSION    = vkgpu->vk_propsDev.properties.apiVersion;
     vkgpu->desc.DRIVER_VERSION = vkgpu->vk_propsDev.properties.driverVersion;
-    vkgpu->desc.GPU_TYPE       = Find_TGFXGPUTYPE_byVk(vkgpu->vk_propsDev.properties.deviceType);
+    vkgpu->desc.GPU_TYPE       = vk_findGPUTypeTgfx(vkgpu->vk_propsDev.properties.deviceType);
 
     vkgpu->ext()->inspect();
   }
@@ -367,11 +367,11 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
     swpchn_ci.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swpchn_ci.flags            = 0;
     swpchn_ci.pNext            = nullptr;
-    swpchn_ci.presentMode      = Find_VkPresentMode_byTGFXPresent(desc->presentationMode);
+    swpchn_ci.presentMode      = vk_findPresentModeVk(desc->presentationMode);
     swpchn_ci.surface          = window->vk_surface;
     swpchn_ci.minImageCount    = desc->imageCount;
     swpchn_ci.imageFormat      = Find_VkFormat_byTEXTURECHANNELs(desc->channels);
-    swpchn_ci.imageColorSpace  = Find_VkColorSpace_byTGFX(desc->colorSpace);
+    swpchn_ci.imageColorSpace  = vk_findColorSpaceVk(desc->colorSpace);
     swpchn_ci.imageExtent      = {window->m_newWidth, window->m_newHeight};
     swpchn_ci.imageArrayLayers = 1;
     // swpchn_ci.imageUsage       = Get_VkTextureUsageFlag_byTGFX(desc->SwapchainUsage);
@@ -767,7 +767,7 @@ result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
             "which backend supports only VKCONST_MAXSURFACEFORMATCOUNT. Report this issue!");
   }
   for (uint32_t i = 0; i < formatCount; i++) {
-    info->colorSpace[i] = Find_TGFXColorSpace_byVk(formats[i].colorSpace);
+    info->colorSpace[i] = vk_findColorSpaceTgfx(formats[i].colorSpace);
     info->channels[i]   = Find_TEXTURECHANNELs_byVkFormat(formats[i].format);
   }
 
@@ -800,7 +800,7 @@ result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
             "More presentation modes than predefined, possible memory corruption");
   }
   for (uint32_t i = 0; i < PresentationModesCount; i++) {
-    info->presentationModes[i] = Find_TGFXPresentMode_byVk(Presentations[i]);
+    info->presentationModes[i] = vk_findPresentModeTgfx(Presentations[i]);
   }
 
   uint32_t supportedQueueCount = 0;

@@ -67,7 +67,7 @@ struct gpudatamanager_private {
   VK_LINEAR_OBJARRAY<RTSLOTSET_VKOBJ, RTSlotset_tgfxhnd, 1 << 10>           rtslotsets;
   VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>               textures;
   VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, inheritedRTSlotset_tgfxhnd, 1 << 10> irtslotsets;
-  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>       pipelines;
+  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>             pipelines;
   VK_LINEAR_OBJARRAY<VERTEXATTRIBLAYOUT_VKOBJ, vertexAttributeLayout_tgfxhnd, 1 << 10>
                                                                         vertexattributelayouts;
   VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, shaderSource_tgfxhnd, 1 << 24> shadersources;
@@ -86,157 +86,6 @@ struct gpudatamanager_private {
   gpudatamanager_private() {}
 };
 static gpudatamanager_private* hidden = nullptr;
-/*
-void Update_DescSet(BINDINGTABLEINST_VKOBJ& set) {
-  BINDINGTABLETYPE_VKOBJ* descSetType = hidden->bindingtabletypes.getOBJfromHANDLE(set.type);
-  // If the desc set type is not known or set isn't created
-  if (descSetType == nullptr || set.Set == VK_NULL_HANDLE) {
-    return;
-  }
-  // Swap places of DescSets. Moving 0th to 1st, 1st to 2nd, last one to 0th
-  VkDescriptorSet last_DescSet = set.Sets[VKCONST_BUFFERING_IN_FLIGHT];
-  for (unsigned int i = 0; i < VKCONST_BUFFERING_IN_FLIGHT - 1; i++) {
-    set.Sets[i + 1] = set.Sets[i];
-  }
-  set.Sets[0] = last_DescSet;
-
-  // Update 0th descriptor set
-  if (set.isUpdatedCounter.load()) {
-    std::vector<VkWriteDescriptorSet> UpdateInfos;
-
-    if (set.DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
-        set.DESCTYPE == set.DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
-        set.DESCTYPE == VK_DESCRIPTOR_TYPE_SAMPLER) {
-      for (unsigned int elementIndx = 0; elementIndx < set.textureDescELEMENTs.size();
-           elementIndx++) {
-        texture_descVK& im = set.textureDescELEMENTs[elementIndx];
-        if (im.isUpdated.load()) {
-          im.isUpdated.store(0);
-
-          VkWriteDescriptorSet UpdateInfo = {};
-          UpdateInfo.descriptorCount      = 1;
-          UpdateInfo.descriptorType       = set.DESCTYPE;
-          UpdateInfo.dstArrayElement      = elementIndx;
-          UpdateInfo.dstBinding           = 0;
-          UpdateInfo.dstSet               = set.Sets[0];
-          UpdateInfo.pImageInfo           = &im.info;
-          UpdateInfo.pNext                = nullptr;
-          UpdateInfo.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-          UpdateInfos.push_back(UpdateInfo);
-        }
-      }
-    } else {
-      for (unsigned int DescElementIndex = 0; DescElementIndex < set.bufferDescELEMENTs.size();
-           DescElementIndex++) {
-        buffer_descVK& buf = set.bufferDescELEMENTs[DescElementIndex];
-        if (buf.isUpdated.load()) {
-          buf.isUpdated.store(0);
-
-          VkWriteDescriptorSet UpdateInfo = {};
-          UpdateInfo.descriptorCount      = 1;
-          UpdateInfo.descriptorType       = set.DESCTYPE;
-          UpdateInfo.dstArrayElement      = DescElementIndex;
-          UpdateInfo.dstBinding           = 0;
-          UpdateInfo.dstSet               = set.Sets[0];
-          UpdateInfo.pBufferInfo          = &buf.info;
-          UpdateInfo.pNext                = nullptr;
-          UpdateInfo.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-          UpdateInfos.push_back(UpdateInfo);
-        }
-      }
-    }
-
-    vkUpdateDescriptorSets(set.LOGICALDEVICE(), UpdateInfos.size(), UpdateInfos.data(), 0, nullptr);
-    set.isUpdatedCounter.fetch_sub(1);
-  }
-}
-*/
-/*
-void gpudatamanager_public::Apply_ResourceChanges() {
-        for (uint32_t i = 0; i < hidden->descsets.size(); i++) {
-                Update_DescSet(*hidden->descsets.getOBJbyINDEX(i));
-        }
-        //Create Desc Sets for binding tables that are created this frame
-        for (uint32_t id = 0; id < VKCONST_DYNAMICDESCRIPTORTYPESCOUNT; id++) {
-                // TODO JOBSYS: This loop is enough to divide into multiple jobs (so 3 threads will
-create all necessary descsets)
-                for						// Allocate same desc set in each
-different desc pool
-                (
-                        uint32_t pool_i = 0;
-                        pool_i < VKCONST_DESCPOOLCOUNT_PERDESCTYPE;
-                        pool_i++
-                ) {
-                        std::vector<VkDescriptorSet> Sets;
-                        std::vector<VkDescriptorSet*> SetPTRs;
-                        std::vector<VkDescriptorSetLayout> SetLayouts;
-
-
-                        VkDescriptorSetAllocateInfo info = {};
-                        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-                        info.descriptorPool = hidden->ALL_DESCPOOLS[id].POOLs[pool_i];
-                        info.pNext = nullptr;
-
-                        // Put desc set to a vector to batch all allocations to same descpool in one
-call for (unsigned int set_i = 0; set_i < hidden->descsets.size(); set_i++) {
-                                BINDINGTABLEINST_VKOBJ* currentSet =
-hidden->descsets.getOBJbyINDEX(set_i); if (BINDINGTABLEINST_VKOBJ::GET_EXTRAFLAGS(currentSet) != id)
-{ continue; } Sets.push_back(VkDescriptorSet()); SetLayouts.push_back(currentSet->Layout);
-                                SetPTRs.push_back(&currentSet->Sets[pool_i]);
-                        }
-
-                        info.descriptorSetCount = Sets.size();
-                        info.pSetLayouts = SetLayouts.data();
-                        if (!Sets.size()) { break; }
-
-                        vkAllocateDescriptorSets(rendergpu->devLogical, &info, Sets.data());
-                        for (unsigned int SetIndex = 0; SetIndex < Sets.size(); SetIndex++) {
-                                *SetPTRs[SetIndex] = Sets[SetIndex];
-                        }
-                }
-        }
-
-
-        //Re-create VkFramebuffers etc.
-        renderer->RendererResource_Finalizations();
-
-        //Delete textures
-        for (unsigned int i = 0; i < hidden->DeleteTextureList.size(); i++) {
-                TEXTURE_VKOBJ* Texture = hidden->DeleteTextureList[i];
-                if (Texture->Image) {
-                        vkDestroyImageView
-                        (
-                                rendergpu->devLogical,
-                                Texture->ImageView,
-                                nullptr
-                        );
-                        vkDestroyImage(rendergpu->devLogical, Texture->Image, nullptr);
-                }
-                if (Texture->Block.MemAllocIndex != UINT32_MAX) {
-                        gpu_allocator->free_memoryblock
-                        (
-                                rendergpu->MEMORYTYPE_IDS()[Texture->Block.MemAllocIndex],
-                                Texture->Block.Offset
-                        );
-                }
-                hidden->textures.destroyOBJfromHANDLE
-                (
-                        hidden->textures.returnHANDLEfromOBJ(Texture)
-                );
-        }
-        hidden->DeleteTextureList.clear();
-        //Push next frame delete texture list to the delete textures list
-        for (uint32_t i = 0; i < hidden->NextFrameDeleteTextureCalls.size(); i++) {
-                hidden->DeleteTextureList.push_back(hidden->NextFrameDeleteTextureCalls[i]);
-        }
-        hidden->NextFrameDeleteTextureCalls.clear();
-
-        if(threadcount > 1){
-                assert(false && "gpudatamanager_public::Apply_ResourceChanges() should support
-multi-threading!");
-        }
-}
-*/
 
 void vk_destroyAllResources() {}
 /*
@@ -276,45 +125,38 @@ result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* des
  * So you should gather your vertex buffer data according to that
  */
 
-inline unsigned int Calculate_sizeofVertexLayout(const datatype_tgfx* ATTRIBUTEs,
-                                                 unsigned int         count) {
-  unsigned int size = 0;
-  for (unsigned int i = 0; i < count; i++) {
-    size += get_uniformtypes_sizeinbytes(ATTRIBUTEs[i]);
+unsigned int vk_calculateSizeOfVertexLayout(const datatype_tgfx* ATTRIBUTEs, unsigned int count);
+result_tgfx  vk_createVertexAttribLayout(const datatype_tgfx*           Attributes,
+                                         vertexAttributeLayout_tgfxhnd* hnd) {
+   VERTEXATTRIBLAYOUT_VKOBJ* lay             = hidden->vertexattributelayouts.create_OBJ();
+   unsigned int              AttributesCount = 0;
+   while (Attributes[AttributesCount] != datatype_tgfx_UNDEFINED) {
+     AttributesCount++;
   }
-  return size;
-}
-result_tgfx vk_createVertexAttribLayout(const datatype_tgfx*           Attributes,
-                                        vertexAttributeLayout_tgfxhnd* hnd) {
-  VERTEXATTRIBLAYOUT_VKOBJ* lay             = hidden->vertexattributelayouts.create_OBJ();
-  unsigned int              AttributesCount = 0;
-  while (Attributes[AttributesCount] != datatype_tgfx_UNDEFINED) {
-    AttributesCount++;
+   lay->AttribCount = AttributesCount;
+   lay->Attribs     = new datatype_tgfx[lay->AttribCount];
+   for (unsigned int i = 0; i < lay->AttribCount; i++) {
+     lay->Attribs[i] = Attributes[i];
   }
-  lay->AttribCount = AttributesCount;
-  lay->Attribs     = new datatype_tgfx[lay->AttribCount];
-  for (unsigned int i = 0; i < lay->AttribCount; i++) {
-    lay->Attribs[i] = Attributes[i];
-  }
-  unsigned int size_pervertex = Calculate_sizeofVertexLayout(lay->Attribs, lay->AttribCount);
-  lay->size_perVertex         = size_pervertex;
-  lay->BindingDesc.binding    = 0;
-  lay->BindingDesc.stride     = size_pervertex;
-  lay->BindingDesc.inputRate  = VK_VERTEX_INPUT_RATE_VERTEX;
+   unsigned int size_pervertex = vk_calculateSizeOfVertexLayout(lay->Attribs, lay->AttribCount);
+   lay->size_perVertex         = size_pervertex;
+   lay->BindingDesc.binding    = 0;
+   lay->BindingDesc.stride     = size_pervertex;
+   lay->BindingDesc.inputRate  = VK_VERTEX_INPUT_RATE_VERTEX;
 
-  lay->AttribDescs                       = new VkVertexInputAttributeDescription[lay->AttribCount];
-  lay->AttribDesc_Count                  = lay->AttribCount;
-  unsigned int stride_ofcurrentattribute = 0;
-  for (unsigned int i = 0; i < lay->AttribCount; i++) {
-    lay->AttribDescs[i].binding  = 0;
-    lay->AttribDescs[i].location = i;
-    lay->AttribDescs[i].offset   = stride_ofcurrentattribute;
-    lay->AttribDescs[i].format   = Find_VkFormat_byDataType(lay->Attribs[i]);
-    stride_ofcurrentattribute += get_uniformtypes_sizeinbytes(lay->Attribs[i]);
+   lay->AttribDescs                       = new VkVertexInputAttributeDescription[lay->AttribCount];
+   lay->AttribDesc_Count                  = lay->AttribCount;
+   unsigned int stride_ofcurrentattribute = 0;
+   for (unsigned int i = 0; i < lay->AttribCount; i++) {
+     lay->AttribDescs[i].binding  = 0;
+     lay->AttribDescs[i].location = i;
+     lay->AttribDescs[i].offset   = stride_ofcurrentattribute;
+     lay->AttribDescs[i].format   = Find_VkFormat_byDataType(lay->Attribs[i]);
+     stride_ofcurrentattribute += get_uniformtypes_sizeinbytes(lay->Attribs[i]);
   }
 
-  *hnd = hidden->vertexattributelayouts.returnHANDLEfromOBJ(lay);
-  return result_tgfx_SUCCESS;
+   *hnd = hidden->vertexattributelayouts.returnHANDLEfromOBJ(lay);
+   return result_tgfx_SUCCESS;
 }
 void vk_destroyVertexAttribLayout(vertexAttributeLayout_tgfxhnd VertexAttributeLayoutHandle) {}
 /*
@@ -538,6 +380,7 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
   finalobj->vk_layout              = DSL;
   finalobj->vk_stages              = bindngs[dynamicbinding_i].stageFlags;
   *bindingTableHandle              = hidden->bindingtabletypes.returnHANDLEfromOBJ(finalobj);
+  return result_tgfx_SUCCESS;
 }
 
 result_tgfx vk_instantiateBindingTable(bindingTableType_tgfxhnd tableType, unsigned char isStatic,
@@ -691,41 +534,7 @@ result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx languag
   return result_tgfx_SUCCESS;
 }
 void                  vk_destroyShaderSource(shaderSource_tgfxhnd ShaderSourceHandle) {}
-VkColorComponentFlags Find_ColorWriteMask_byChannels(textureChannels_tgfx chnnls) {
-  switch (chnnls) {
-    case texture_channels_tgfx_BGRA8UB:
-    case texture_channels_tgfx_BGRA8UNORM:
-    case texture_channels_tgfx_RGBA32F:
-    case texture_channels_tgfx_RGBA32UI:
-    case texture_channels_tgfx_RGBA32I:
-    case texture_channels_tgfx_RGBA8UB:
-    case texture_channels_tgfx_RGBA8B:
-      return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-             VK_COLOR_COMPONENT_A_BIT;
-    case texture_channels_tgfx_RGB32F:
-    case texture_channels_tgfx_RGB32UI:
-    case texture_channels_tgfx_RGB32I:
-    case texture_channels_tgfx_RGB8UB:
-    case texture_channels_tgfx_RGB8B:
-      return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
-    case texture_channels_tgfx_RA32F:
-    case texture_channels_tgfx_RA32UI:
-    case texture_channels_tgfx_RA32I:
-    case texture_channels_tgfx_RA8UB:
-    case texture_channels_tgfx_RA8B: return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT;
-    case texture_channels_tgfx_R32F:
-    case texture_channels_tgfx_R32UI:
-    case texture_channels_tgfx_R32I: return VK_COLOR_COMPONENT_R_BIT;
-    case texture_channels_tgfx_R8UB:
-    case texture_channels_tgfx_R8B: return VK_COLOR_COMPONENT_R_BIT;
-    case texture_channels_tgfx_D32:
-    case texture_channels_tgfx_D24S8:
-    default:
-      printer(result_tgfx_NOTCODED,
-              "Find_ColorWriteMask_byChannels() doesn't support this type of RTSlot channel!");
-      return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
-  }
-}
+VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls);
 
 inline void CountDescSets(bindingTableType_tgfxlsthnd descset, unsigned int* finaldesccount,
                           unsigned int finaldescs[VKCONST_MAXDESCSET_PERLIST]) {
@@ -1543,6 +1352,7 @@ result_tgfx vk_bindToHeap_Buffer(heap_tgfxhnd i_heap, unsigned long long offset,
         "bindToHeap_Buffer() has failed at vkBindBufferMemory!")) {
     return result_tgfx_FAIL;
   }
+  return result_tgfx_SUCCESS;
 }
 result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset,
                                   texture_tgfxhnd i_texture, extension_tgfxlsthnd exts) {
@@ -1559,43 +1369,13 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
         "bindToHeap_Buffer() has failed at vkBindBufferMemory!")) {
     return result_tgfx_FAIL;
   }
+  return result_tgfx_SUCCESS;
 }
 
 /////////////////////////////////////////////////////
 ///				INITIALIZATION PROCEDURE
 /////////////////////////////////////////////////////
 
-VK_LINEAR_OBJARRAY<RTSLOTSET_VKOBJ, RTSlotset_tgfxhnd, 1024>&
-gpudatamanager_public::GETRTSLOTSET_ARRAY() {
-  return hidden->rtslotsets;
-}
-VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, inheritedRTSlotset_tgfxhnd, 1024>&
-gpudatamanager_public::GETIRTSLOTSET_ARRAY() {
-  return hidden->irtslotsets;
-}
-VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>&
-gpudatamanager_public::GETTEXTURES_ARRAY() {
-  return hidden->textures;
-}
-VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>&
-gpudatamanager_public::GETPIPELINE_ARRAY() {
-  return hidden->pipelines;
-}
-VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>& gpudatamanager_public::GETBUFFER_ARRAY() {
-  return hidden->buffers;
-}
-VK_LINEAR_OBJARRAY<VIEWPORT_VKOBJ, viewport_tgfxhnd, 1 << 16>&
-gpudatamanager_public::GETVIEWPORT_ARRAY() {
-  return hidden->viewports;
-}
-VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
-gpudatamanager_public::GETBINDINGTABLE_ARRAY() {
-  return hidden->bindingtableinsts;
-}
-VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10>&
-gpudatamanager_public::GETBINDINGTABLETYPE_ARRAY() {
-  return hidden->bindingtabletypes;
-}
 inline void set_functionpointers() {
   core_tgfx_main->contentmanager->changeRTSlot_Texture    = vk_changeRTSlotTexture;
   core_tgfx_main->contentmanager->compileShaderSource     = vk_compileShaderSource;
@@ -1644,4 +1424,82 @@ void vk_createContentManager() {
   set_functionpointers();
 
   startGlslang();
+}
+
+// Helper funcs
+
+VK_LINEAR_OBJARRAY<RTSLOTSET_VKOBJ, RTSlotset_tgfxhnd, 1024>&
+gpudatamanager_public::GETRTSLOTSET_ARRAY() {
+  return hidden->rtslotsets;
+}
+VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, inheritedRTSlotset_tgfxhnd, 1024>&
+gpudatamanager_public::GETIRTSLOTSET_ARRAY() {
+  return hidden->irtslotsets;
+}
+VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>&
+gpudatamanager_public::GETTEXTURES_ARRAY() {
+  return hidden->textures;
+}
+VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>&
+gpudatamanager_public::GETPIPELINE_ARRAY() {
+  return hidden->pipelines;
+}
+VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>& gpudatamanager_public::GETBUFFER_ARRAY() {
+  return hidden->buffers;
+}
+VK_LINEAR_OBJARRAY<VIEWPORT_VKOBJ, viewport_tgfxhnd, 1 << 16>&
+gpudatamanager_public::GETVIEWPORT_ARRAY() {
+  return hidden->viewports;
+}
+VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
+gpudatamanager_public::GETBINDINGTABLE_ARRAY() {
+  return hidden->bindingtableinsts;
+}
+VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10>&
+gpudatamanager_public::GETBINDINGTABLETYPE_ARRAY() {
+  return hidden->bindingtabletypes;
+}
+
+VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls) {
+  switch (chnnls) {
+    case texture_channels_tgfx_BGRA8UB:
+    case texture_channels_tgfx_BGRA8UNORM:
+    case texture_channels_tgfx_RGBA32F:
+    case texture_channels_tgfx_RGBA32UI:
+    case texture_channels_tgfx_RGBA32I:
+    case texture_channels_tgfx_RGBA8UB:
+    case texture_channels_tgfx_RGBA8B:
+      return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+             VK_COLOR_COMPONENT_A_BIT;
+    case texture_channels_tgfx_RGB32F:
+    case texture_channels_tgfx_RGB32UI:
+    case texture_channels_tgfx_RGB32I:
+    case texture_channels_tgfx_RGB8UB:
+    case texture_channels_tgfx_RGB8B:
+      return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+    case texture_channels_tgfx_RA32F:
+    case texture_channels_tgfx_RA32UI:
+    case texture_channels_tgfx_RA32I:
+    case texture_channels_tgfx_RA8UB:
+    case texture_channels_tgfx_RA8B: return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT;
+    case texture_channels_tgfx_R32F:
+    case texture_channels_tgfx_R32UI:
+    case texture_channels_tgfx_R32I: return VK_COLOR_COMPONENT_R_BIT;
+    case texture_channels_tgfx_R8UB:
+    case texture_channels_tgfx_R8B: return VK_COLOR_COMPONENT_R_BIT;
+    case texture_channels_tgfx_D32:
+    case texture_channels_tgfx_D24S8:
+    default:
+      printer(result_tgfx_NOTCODED,
+              "Find_ColorWriteMask_byChannels() doesn't support this type of RTSlot channel!");
+      return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
+  }
+}
+
+unsigned int vk_calculateSizeOfVertexLayout(const datatype_tgfx* ATTRIBUTEs, unsigned int count) {
+  unsigned int size = 0;
+  for (unsigned int i = 0; i < count; i++) {
+    size += get_uniformtypes_sizeinbytes(ATTRIBUTEs[i]);
+  }
+  return size;
 }

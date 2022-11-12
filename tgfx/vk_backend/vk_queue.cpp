@@ -103,15 +103,15 @@ manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
 
     queueFam->vk_queueFamIndex = queueFamIndx;
     if (props->queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-      gpu->desc.is_GraphicOperations_Supported     = true;
+      gpu->desc.operationSupport_raster     = true;
       queueFam->m_supportFlag.is_GRAPHICSsupported = true;
     }
     if (props->queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) {
-      gpu->desc.is_ComputeOperations_Supported    = true;
+      gpu->desc.operationSupport_compute    = true;
       queueFam->m_supportFlag.is_COMPUTEsupported = true;
     }
     if (props->queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) {
-      gpu->desc.is_TransferOperations_Supported    = true;
+      gpu->desc.operationSupport_transfer    = true;
       queueFam->m_supportFlag.is_TRANSFERsupported = true;
     }
     if (props->queueFamilyProperties.queueCount > VKCONST_MAXQUEUECOUNT_PERFAM) {
@@ -120,8 +120,8 @@ manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
     }
     queueFam->m_gpu = gpu;
   }
-  if (!gpu->desc.is_GraphicOperations_Supported || !gpu->desc.is_TransferOperations_Supported ||
-      !gpu->desc.is_ComputeOperations_Supported) {
+  if (!gpu->desc.operationSupport_raster || !gpu->desc.operationSupport_transfer ||
+      !gpu->desc.operationSupport_compute) {
     printer(result_tgfx_FAIL,
             "The GPU doesn't support one of the following operations, so we can't let you use this "
             "GPU: Compute, Transfer, Graphics");

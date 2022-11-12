@@ -251,8 +251,8 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
     }
   }
 
-  VKGPU->desc.memTypes      = VKGPU->m_memoryDescTGFX;
-  VKGPU->desc.memTypesCount = props.memoryProperties.memoryTypeCount;
+  VKGPU->desc.memRegions      = VKGPU->m_memoryDescTGFX;
+  VKGPU->desc.memRegionsCount = props.memoryProperties.memoryTypeCount;
 }
 
 inline void vk_checkComputerSpecs() {
@@ -287,11 +287,11 @@ inline void vk_checkComputerSpecs() {
     extManager_vkDevice::createExtManager(vkgpu);
 
     // SAVE BASIC INFOs TO THE GPU DESC
-    vkgpu->desc.NAME           = vkgpu->vk_propsDev.properties.deviceName;
-    vkgpu->desc.DRIVER_VERSION = vkgpu->vk_propsDev.properties.driverVersion;
-    vkgpu->desc.API_VERSION    = vkgpu->vk_propsDev.properties.apiVersion;
-    vkgpu->desc.DRIVER_VERSION = vkgpu->vk_propsDev.properties.driverVersion;
-    vkgpu->desc.GPU_TYPE       = vk_findGPUTypeTgfx(vkgpu->vk_propsDev.properties.deviceType);
+    vkgpu->desc.name           = vkgpu->vk_propsDev.properties.deviceName;
+    vkgpu->desc.driverVersion = vkgpu->vk_propsDev.properties.driverVersion;
+    vkgpu->desc.gfxApiVersion    = vkgpu->vk_propsDev.properties.apiVersion;
+    vkgpu->desc.driverVersion = vkgpu->vk_propsDev.properties.driverVersion;
+    vkgpu->desc.type       = vk_findGPUTypeTgfx(vkgpu->vk_propsDev.properties.deviceType);
 
     vkgpu->ext()->inspect();
   }

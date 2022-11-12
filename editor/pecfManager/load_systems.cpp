@@ -120,7 +120,7 @@ void load_systems() {
     gpu_tgfxhnd          gpu = gpus[gpuIndx];
     tgfx_gpu_description gpuDesc;
     tgfx->helpers->getGPUInfo_General(gpu, &gpuDesc);
-    printf("\n\nGPU Name: %s\n Queue Fam Count: %u\n", gpuDesc.NAME, gpuDesc.queueFamilyCount);
+    printf("\n\nGPU Name: %s\n Queue Fam Count: %u\n", gpuDesc.name, gpuDesc.queueFamilyCount);
     tgfx->initGPU(gpu);
 
     // Create window and the swapchain
@@ -140,7 +140,7 @@ void load_systems() {
       windowDesc.size                    = {1280, 720};
       windowDesc.Mode                    = windowmode_tgfx_WINDOWED;
       windowDesc.monitor                 = monitors[0];
-      windowDesc.NAME                    = gpuDesc.NAME;
+      windowDesc.NAME                    = gpuDesc.name;
       windowDesc.ResizeCB                = nullptr;
       tgfx->createWindow(&windowDesc, nullptr, &window);
     }
@@ -176,22 +176,23 @@ void load_systems() {
     // Create a device local texture
     texture_tgfxhnd firstTexture      = {};
     texture_tgfxhnd secStorageTexture = {};
+    buffer_tgfxhnd  firstBuffer       = {};
     {
       static constexpr uint32_t heapSize        = 1 << 20;
       uint32_t                  devLocalMemType = UINT32_MAX;
-      for (uint32_t memTypeIndx = 0; memTypeIndx < gpuDesc.memTypesCount; memTypeIndx++) {
-        const memoryDescription_tgfx& memDesc = gpuDesc.memTypes[memTypeIndx];
+      for (uint32_t memTypeIndx = 0; memTypeIndx < gpuDesc.memRegionsCount; memTypeIndx++) {
+        const memoryDescription_tgfx& memDesc = gpuDesc.memRegions[memTypeIndx];
         if (memDesc.allocationtype == memoryallocationtype_DEVICELOCAL) {
           // If there 2 different memory types with same allocation type, select the bigger one!
           if (devLocalMemType != UINT32_MAX &&
-              gpuDesc.memTypes[devLocalMemType].max_allocationsize > memDesc.max_allocationsize) {
+              gpuDesc.memRegions[devLocalMemType].max_allocationsize > memDesc.max_allocationsize) {
             continue;
           }
           devLocalMemType = memTypeIndx;
         }
       }
       heap_tgfxhnd firstHeap = {};
-      contentManager->createHeap(gpu, gpuDesc.memTypes[devLocalMemType].memorytype_id, heapSize,
+      contentManager->createHeap(gpu, gpuDesc.memRegions[devLocalMemType].memorytype_id, heapSize,
                                  nullptr, &firstHeap);
 
       textureDescription_tgfx textureDesc = {};
@@ -208,18 +209,34 @@ void load_systems() {
       textureDesc.usage = storageImageUsage;
       contentManager->createTexture(gpu, &textureDesc, &secStorageTexture);
 
+      bufferDescription_tgfx bufferDesc = {};
+      bufferDesc.dataSize               = 1650;
+      bufferDesc.exts                   = nullptr;
+      bufferDesc.permittedQueues        = allQueues;
+      bufferDesc.usageFlag              = tgfx->helpers->createUsageFlag_Buffer(true, true, false, true, false, false, false, false);
+      contentManager->createBuffer(gpu, &bufferDesc, &firstBuffer);
+
       heapRequirementsInfo_tgfx firstTextureReqs = {};
       contentManager->getHeapRequirement_Texture(firstTexture, nullptr, &firstTextureReqs);
       heapRequirementsInfo_tgfx secTextureReqs = {};
       contentManager->getHeapRequirement_Texture(secStorageTexture, nullptr, &secTextureReqs);
+      heapRequirementsInfo_tgfx bufferHeapReqs = {};
+      contentManager->getHeapRequirement_Buffer(firstBuffer, nullptr, &bufferHeapReqs);
 
-      contentManager->bindToHeap_Texture(firstHeap, 0, firstTexture, nullptr);
-      uint32_t secTextureHeapOffset =
-        ((firstTextureReqs.size / secTextureReqs.offsetAlignment) +
-         ((firstTextureReqs.size % secTextureReqs.offsetAlignment) ? 1 : 0)) *
-        secTextureReqs.offsetAlignment;
-      contentManager->bindToHeap_Texture(firstHeap, secTextureHeapOffset, secStorageTexture,
-                                         nullptr);
+      uint32_t lastMemPoint        = 0;
+      auto& calculateHeapOffset = [&lastMemPoint](const heapRequirementsInfo_tgfx& heapReq) -> void {
+        lastMemPoint = ((lastMemPoint / heapReq.offsetAlignment) +
+                ((lastMemPoint % heapReq.offsetAlignment) ? 1 : 0)) *
+               heapReq.offsetAlignment;
+      };
+      contentManager->bindToHeap_Texture(firstHeap, lastMemPoint, firstTexture, nullptr);
+      lastMemPoint += firstTextureReqs.size;
+      calculateHeapOffset(secTextureReqs);
+      contentManager->bindToHeap_Texture(firstHeap, lastMemPoint, secStorageTexture, nullptr);
+      lastMemPoint += firstTextureReqs.size;
+      calculateHeapOffset(bufferHeapReqs);
+      contentManager->bindToHeap_Buffer(firstHeap, lastMemPoint, firstBuffer, nullptr);
+      lastMemPoint += firstTextureReqs.size;
     }
 
     // Compile compute shader, create binding table type & compute pipeline

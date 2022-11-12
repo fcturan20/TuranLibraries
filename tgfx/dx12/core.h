@@ -22,10 +22,10 @@ struct GPU_VKOBJ {
   ComPtr<ID3D12Device2> vk_logical;
 
  public:
-  inline const char*           DEVICENAME() { return desc.NAME; }
-  inline const unsigned int    APIVERSION() { return desc.API_VERSION; }
-  inline const unsigned int    DRIVERSION() { return desc.DRIVER_VERSION; }
-  inline const gpu_type_tgfx   DEVICETYPE() { return desc.GPU_TYPE; }
+  inline const char*           DEVICENAME() { return desc.name; }
+  inline const unsigned int    APIVERSION() { return desc.gfxApiVersion; }
+  inline const unsigned int    DRIVERSION() { return desc.driverVersion; }
+  inline const gpu_type_tgfx   DEVICETYPE() { return desc.type; }
   inline const bool            GRAPHICSSUPPORTED() { return GRAPHICS_supportedqueuecount; }
   inline const bool            COMPUTESUPPORTED() { return COMPUTE_supportedqueuecount; }
   inline const bool            TRANSFERSUPPORTED() { return TRANSFERs_supportedqueuecount; }

@@ -40,22 +40,13 @@ typedef struct tgfx_memory_description {
 } memoryDescription_tgfx;
 
 typedef struct tgfx_gpu_description {
-  const char*   NAME;
-  unsigned int  API_VERSION, DRIVER_VERSION;
-  gpu_type_tgfx GPU_TYPE;
-  unsigned char is_GraphicOperations_Supported, is_ComputeOperations_Supported,
-    is_TransferOperations_Supported, queueFamilyCount;
-  const memoryDescription_tgfx* memTypes;
-  unsigned char                 memTypesCount;
-  unsigned char isSupported_SeperateDepthStencilLayouts, isSupported_SeperateRTSlotBlending,
-    isSupported_NonUniformShaderInputIndexing;
-  // These limits are maximum count of usable resources in a shader stage (VS, FS etc.)
-  // Don't forget that sum of the accesses in a shader stage shouldn't exceed
-  // MaxUsableResources_perStage!
-  unsigned int MaxSampledTexture_perStage, MaxImageTexture_perStage, MaxUniformBuffer_perStage,
-    MaxStorageBuffer_perStage, MaxUsableResources_perStage;
-  unsigned int MaxShaderInput_SampledTexture, MaxShaderInput_ImageTexture,
-    MaxShaderInput_UniformBuffer, MaxShaderInput_StorageBuffer;
+  const char*   name;
+  unsigned int  gfxApiVersion, driverVersion;
+  gpu_type_tgfx type;
+  unsigned char operationSupport_raster, operationSupport_compute,
+    operationSupport_transfer, queueFamilyCount;
+  const memoryDescription_tgfx* memRegions;
+  unsigned char                 memRegionsCount;
 } gpuDescription_tgfx;
 
 typedef struct tgfx_window_description {

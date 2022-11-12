@@ -88,7 +88,7 @@ void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref, unsig
 void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription& Desc,
                                                         depthstencilslot_vk*     DepthSlot) {
   Desc               = {};
-  Desc.format        = Find_VkFormat_byTEXTURECHANNELs(DepthSlot->RT->m_channels);
+  Desc.format        = vk_findFormatVk(DepthSlot->RT->m_channels);
   Desc.samples       = VK_SAMPLE_COUNT_1_BIT;
   Desc.flags         = 0;
   Desc.loadOp        = Find_LoadOp_byGFXLoadOp(DepthSlot->DEPTH_LOAD);
@@ -135,7 +135,7 @@ void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription&
 void Fill_DepthAttachmentDescription_NOSeperated(VkAttachmentDescription& Desc,
                                                  depthstencilslot_vk*     DepthSlot) {
   Desc               = {};
-  Desc.format        = Find_VkFormat_byTEXTURECHANNELs(DepthSlot->RT->m_channels);
+  Desc.format        = vk_findFormatVk(DepthSlot->RT->m_channels);
   Desc.samples       = VK_SAMPLE_COUNT_1_BIT;
   Desc.flags         = 0;
   Desc.loadOp        = Find_LoadOp_byGFXLoadOp(DepthSlot->DEPTH_LOAD);

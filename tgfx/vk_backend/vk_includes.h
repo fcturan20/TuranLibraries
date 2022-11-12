@@ -138,10 +138,11 @@ inline VkFormat Find_VkFormat_byDataType(datatype_tgfx datatype) {
       return VK_FORMAT_UNDEFINED;
   }
 }
-inline VkFormat Find_VkFormat_byTEXTURECHANNELs(textureChannels_tgfx channels) {
+inline VkFormat vk_findFormatVk(textureChannels_tgfx channels) {
   switch (channels) {
     case texture_channels_tgfx_BGRA8UNORM: return VK_FORMAT_B8G8R8A8_UNORM;
     case texture_channels_tgfx_BGRA8UB: return VK_FORMAT_B8G8R8A8_UINT;
+    case texture_channels_tgfx_R8B: return VK_FORMAT_R8_SINT;
     case texture_channels_tgfx_RGBA8UB: return VK_FORMAT_R8G8B8A8_UINT;
     case texture_channels_tgfx_RGBA8B: return VK_FORMAT_R8G8B8A8_SINT;
     case texture_channels_tgfx_RGBA32F: return VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -159,7 +160,7 @@ inline VkFormat Find_VkFormat_byTEXTURECHANNELs(textureChannels_tgfx channels) {
       return VK_FORMAT_UNDEFINED;
   }
 }
-inline textureChannels_tgfx Find_TEXTURECHANNELs_byVkFormat(VkFormat format) {
+inline textureChannels_tgfx vk_findTextureChannelsTgfx(VkFormat format) {
   switch (format) {
     case VK_FORMAT_B8G8R8A8_UNORM: return texture_channels_tgfx_BGRA8UNORM;
     case VK_FORMAT_B8G8R8A8_UINT: return texture_channels_tgfx_BGRA8UB;
@@ -221,7 +222,7 @@ inline unsigned int Find_VKCONST_DESCSETID_byVkDescType(VkDescriptorType type) {
       return UINT32_MAX;
   }
 }
-inline VkSamplerAddressMode Find_AddressMode_byWRAPPING(texture_wrapping_tgfx Wrapping) {
+inline VkSamplerAddressMode vk_findAddressModeVk(texture_wrapping_tgfx Wrapping) {
   switch (Wrapping) {
     case texture_wrapping_tgfx_REPEAT: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
     case texture_wrapping_tgfx_MIRRORED_REPEAT: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
@@ -232,7 +233,7 @@ inline VkSamplerAddressMode Find_AddressMode_byWRAPPING(texture_wrapping_tgfx Wr
       return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
   }
 }
-inline VkFilter Find_VkFilter_byGFXFilter(texture_mipmapfilter_tgfx filter) {
+inline VkFilter vk_findFilterVk(texture_mipmapfilter_tgfx filter) {
   switch (filter) {
     case texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP:
     case texture_mipmapfilter_tgfx_LINEAR_FROM_2MIP: return VK_FILTER_LINEAR;
@@ -244,7 +245,7 @@ inline VkFilter Find_VkFilter_byGFXFilter(texture_mipmapfilter_tgfx filter) {
       return VK_FILTER_MAX_ENUM;
   }
 }
-inline VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(texture_mipmapfilter_tgfx filter) {
+inline VkSamplerMipmapMode vk_findMipmapModeVk(texture_mipmapfilter_tgfx filter) {
   switch (filter) {
     case texture_mipmapfilter_tgfx_LINEAR_FROM_2MIP:
     case texture_mipmapfilter_tgfx_NEAREST_FROM_2MIP: return VK_SAMPLER_MIPMAP_MODE_LINEAR;
@@ -252,7 +253,7 @@ inline VkSamplerMipmapMode Find_MipmapMode_byGFXFilter(texture_mipmapfilter_tgfx
     case texture_mipmapfilter_tgfx_NEAREST_FROM_1MIP: return VK_SAMPLER_MIPMAP_MODE_NEAREST;
   }
 }
-inline VkCullModeFlags Find_CullMode_byGFXCullMode(cullmode_tgfx mode) {
+inline VkCullModeFlags vk_findCullModeVk(cullmode_tgfx mode) {
   switch (mode) {
     case cullmode_tgfx_OFF: return VK_CULL_MODE_NONE; break;
     case cullmode_tgfx_BACK: return VK_CULL_MODE_BACK_BIT; break;
@@ -436,7 +437,7 @@ inline void Fill_ComponentMapping_byCHANNELs(textureChannels_tgfx channels,
       mapping.r = VK_COMPONENT_SWIZZLE_R;
       mapping.g = VK_COMPONENT_SWIZZLE_G;
       mapping.b = VK_COMPONENT_SWIZZLE_B;
-      mapping.a = VK_COMPONENT_SWIZZLE_ZERO;
+      mapping.a = VK_COMPONENT_SWIZZLE_IDENTITY;
       return;
     case texture_channels_tgfx_RA32F:
     case texture_channels_tgfx_RA32UI:
@@ -444,8 +445,8 @@ inline void Fill_ComponentMapping_byCHANNELs(textureChannels_tgfx channels,
     case texture_channels_tgfx_RA8UB:
     case texture_channels_tgfx_RA8B:
       mapping.r = VK_COMPONENT_SWIZZLE_R;
-      mapping.g = VK_COMPONENT_SWIZZLE_ZERO;
-      mapping.b = VK_COMPONENT_SWIZZLE_ZERO;
+      mapping.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+      mapping.b = VK_COMPONENT_SWIZZLE_IDENTITY;
       mapping.a = VK_COMPONENT_SWIZZLE_A;
       return;
     case texture_channels_tgfx_R32F:
@@ -454,14 +455,14 @@ inline void Fill_ComponentMapping_byCHANNELs(textureChannels_tgfx channels,
     case texture_channels_tgfx_R8UB:
     case texture_channels_tgfx_R8B:
       mapping.r = VK_COMPONENT_SWIZZLE_R;
-      mapping.g = VK_COMPONENT_SWIZZLE_ZERO;
-      mapping.b = VK_COMPONENT_SWIZZLE_ZERO;
-      mapping.a = VK_COMPONENT_SWIZZLE_ZERO;
+      mapping.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+      mapping.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+      mapping.a = VK_COMPONENT_SWIZZLE_IDENTITY;
       return;
     default: break;
   }
 }
-inline void Find_SubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSource,
+inline void vk_findSubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSource,
                                       VkPipelineStageFlags& stageflag, VkAccessFlags& accessflag) {
   switch (access) {
     case subdrawpassaccess_tgfx_ALLCOMMANDS:
@@ -580,11 +581,14 @@ inline void Find_SubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSour
       stageflag |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
       accessflag |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
       break;
-    default: break;
+    default:
+      stageflag  = UINT64_MAX;
+      accessflag = UINT64_MAX;
+      break;
   }
 }
 
-inline void Find_AccessPattern_byIMAGEACCESS(const image_access_tgfx& Access,
+inline void vk_findImageAccessPattern(const image_access_tgfx& Access,
                                              VkAccessFlags&           TargetAccessFlag,
                                              VkImageLayout&           TargetImageLayout) {
   switch (Access) {
@@ -687,7 +691,7 @@ inline void Find_AccessPattern_byIMAGEACCESS(const image_access_tgfx& Access,
       return;
   }
 }
-inline VkImageType Find_VkImageType(texture_dimensions_tgfx dimensions) {
+inline VkImageType vk_findImageTypeVk(texture_dimensions_tgfx dimensions) {
   switch (dimensions) {
     case texture_dimensions_tgfx_2D:
     case texture_dimensions_tgfx_2DCUBE: return VK_IMAGE_TYPE_2D;
@@ -720,7 +724,7 @@ inline unsigned int Find_TextureLayer_fromtgfx_cubeface(cubeface_tgfx cubeface) 
               "type of CubeFace!");
   }
 }
-inline unsigned int get_uniformtypes_sizeinbytes(datatype_tgfx data) {
+inline unsigned int vk_getDataTypeByteSizes(datatype_tgfx data) {
   switch (data) {
     case datatype_tgfx_VAR_BYTE8:
     case datatype_tgfx_VAR_UBYTE8: return 1;

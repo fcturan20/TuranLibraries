@@ -26,17 +26,17 @@ struct core_private {
  public:
   // These are VK_VECTORs, instead of VK_LINEAROBJARRAYs, because they won't change at run-time so
   // frequently
-  VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, 16> DEVICE_GPUs;
+  VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT> DEVICE_GPUs;
   // Window Operations
-  VK_STATICVECTOR<MONITOR_VKOBJ, monitor_tgfxhnd, 20> MONITORs;
-  VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, 50>   WINDOWs;
+  VK_STATICVECTOR<MONITOR_VKOBJ, monitor_tgfxhnd, 16> MONITORs;
+  VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT> WINDOWs;
 
   bool isAnyWindowResized = false, // Instead of checking each window each frame, just check this
     isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = true;
 };
 static core_private* hidden = nullptr;
 
-VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, 50>& core_public::GETWINDOWs() {
+VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT>& core_public::GETWINDOWs() {
   return hidden->WINDOWs;
 }
 VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT>& core_public::getGPUs() {
@@ -202,25 +202,25 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
 
   for (uint32_t memTypeIndx = 0;
        memTypeIndx < VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount; memTypeIndx++) {
-    VkMemoryType& MemoryType     = VKGPU->vk_propsMemory.memoryProperties.memoryTypes[memTypeIndx];
+    VkMemoryType& memType     = VKGPU->vk_propsMemory.memoryProperties.memoryTypes[memTypeIndx];
     bool          isDeviceLocal  = false;
     bool          isHostVisible  = false;
     bool          isHostCoherent = false;
     bool          isHostCached   = false;
 
-    if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ==
+    if ((memType.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ==
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
       isDeviceLocal = true;
     }
-    if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ==
+    if ((memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ==
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
       isHostVisible = true;
     }
-    if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) ==
+    if ((memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) ==
         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
       isHostCoherent = true;
     }
-    if ((MemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) ==
+    if ((memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) ==
         VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
       isHostCached = true;
     }
@@ -229,12 +229,12 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
       continue;
     }
 
-    auto createMemDesc = [memTypeIndx, VKGPU, MemoryType](memoryallocationtype_tgfx allocType) {
+    auto createMemDesc = [memTypeIndx, VKGPU, memType](memoryallocationtype_tgfx allocType) {
       tgfx_memory_description& memtype_desc = VKGPU->m_memoryDescTGFX[memTypeIndx];
       memtype_desc.allocationtype           = allocType;
       memtype_desc.memorytype_id            = memTypeIndx;
       memtype_desc.max_allocationsize =
-        VKGPU->vk_propsMemory.memoryProperties.memoryHeaps[MemoryType.heapIndex].size;
+        VKGPU->vk_propsMemory.memoryProperties.memoryHeaps[memType.heapIndex].size;
     };
     if (isDeviceLocal) {
       if (isHostVisible && isHostCoherent) {
@@ -251,8 +251,8 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
     }
   }
 
-  VKGPU->desc.MEMTYPEs      = VKGPU->m_memoryDescTGFX;
-  VKGPU->desc.MEMTYPEsCOUNT = props.memoryProperties.memoryTypeCount;
+  VKGPU->desc.memTypes      = VKGPU->m_memoryDescTGFX;
+  VKGPU->desc.memTypesCount = props.memoryProperties.memoryTypeCount;
 }
 
 inline void vk_checkComputerSpecs() {
@@ -370,7 +370,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
     swpchn_ci.presentMode      = vk_findPresentModeVk(desc->presentationMode);
     swpchn_ci.surface          = window->vk_surface;
     swpchn_ci.minImageCount    = desc->imageCount;
-    swpchn_ci.imageFormat      = Find_VkFormat_byTEXTURECHANNELs(desc->channels);
+    swpchn_ci.imageFormat      = vk_findFormatVk(desc->channels);
     swpchn_ci.imageColorSpace  = vk_findColorSpaceVk(desc->colorSpace);
     swpchn_ci.imageExtent      = {window->m_newWidth, window->m_newHeight};
     swpchn_ci.imageArrayLayers = 1;
@@ -423,7 +423,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
         ImageView_ci.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         ImageView_ci.image                       = SWPCHN_IMGs[i];
         ImageView_ci.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
-        ImageView_ci.format                      = Find_VkFormat_byTEXTURECHANNELs(desc->channels);
+        ImageView_ci.format                      = vk_findFormatVk(desc->channels);
         ImageView_ci.flags                       = 0;
         ImageView_ci.pNext                       = nullptr;
         ImageView_ci.components.r                = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -768,7 +768,7 @@ result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
   }
   for (uint32_t i = 0; i < formatCount; i++) {
     info->colorSpace[i] = vk_findColorSpaceTgfx(formats[i].colorSpace);
-    info->channels[i]   = Find_TEXTURECHANNELs_byVkFormat(formats[i].format);
+    info->channels[i]   = vk_findTextureChannelsTgfx(formats[i].format);
   }
 
   if (caps.maxImageCount <= caps.minImageCount) {

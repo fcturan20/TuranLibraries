@@ -45,8 +45,8 @@ typedef struct tgfx_gpu_description {
   gpu_type_tgfx GPU_TYPE;
   unsigned char is_GraphicOperations_Supported, is_ComputeOperations_Supported,
     is_TransferOperations_Supported, queueFamilyCount;
-  const memoryDescription_tgfx* MEMTYPEs;
-  unsigned char                 MEMTYPEsCOUNT;
+  const memoryDescription_tgfx* memTypes;
+  unsigned char                 memTypesCount;
   unsigned char isSupported_SeperateDepthStencilLayouts, isSupported_SeperateRTSlotBlending,
     isSupported_NonUniformShaderInputIndexing;
   // These limits are maximum count of usable resources in a shader stage (VS, FS etc.)
@@ -100,12 +100,12 @@ typedef struct tgfx_sampler_description {
 } samplerDescription_tgfx;
 
 typedef struct tgfx_texture_description {
-  texture_dimensions_tgfx  DIMENSION;
-  unsigned int             WIDTH, HEIGHT;
-  textureChannels_tgfx     CHANNEL_TYPE;
-  unsigned char            MIPCOUNT;
-  textureUsageFlag_tgfxhnd USAGE;
-  textureOrder_tgfx        DATAORDER;
+  texture_dimensions_tgfx  dimension;
+  unsigned int             width, height;
+  textureChannels_tgfx     channelType;
+  unsigned char            mipCount;
+  textureUsageFlag_tgfxhnd usage;
+  textureOrder_tgfx        dataOrder;
   gpuQueue_tgfxlsthnd      permittedQueues;
 } textureDescription_tgfx;
 

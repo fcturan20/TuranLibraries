@@ -17,6 +17,7 @@
 #include "tgfx_renderer.h"
 #include "tgfx_structs.h"
 #include "threadingsys_tapi.h"
+#include <assert.h>
 
 allocator_sys_tapi* allocatorSys     = nullptr;
 uint64_t            destructionCount = 0;
@@ -145,20 +146,23 @@ void load_systems() {
     }
 
     // Create swapchain (GPU operation) on the window
-    static constexpr uint32_t swapchainTextureCount                 = 2;
-    texture_tgfxhnd           swpchnTextures[swapchainTextureCount] = {};
+    static constexpr uint32_t swapchainTextureCount                          = 2;
+    texture_tgfxhnd           swpchnTextures[swapchainTextureCount]          = {};
+    gpuQueue_tgfxhnd          allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
+    textureUsageFlag_tgfxhnd  textureAllUsages =
+                               tgfx->helpers->createUsageFlag_Texture(true, true, true, true, true),
+                             storageImageUsage = tgfx->helpers->createUsageFlag_Texture(true, true, false, false, true);
     {
-      swpchn_desc.channels    = texture_channels_tgfx_BGRA8UNORM;
-      swpchn_desc.colorSpace  = colorspace_tgfx_sRGB_NONLINEAR;
-      swpchn_desc.composition = windowcomposition_tgfx_OPAQUE;
-      swpchn_desc.imageCount  = swapchainTextureCount;
-      swpchn_desc.swapchainUsage =
-        tgfx->helpers->createUsageFlag_Texture(true, true, true, true, true);
-      swpchn_desc.presentationMode = windowpresentation_tgfx_FIFO;
+      swpchn_desc.channels       = texture_channels_tgfx_BGRA8UNORM;
+      swpchn_desc.colorSpace     = colorspace_tgfx_sRGB_NONLINEAR;
+      swpchn_desc.composition    = windowcomposition_tgfx_OPAQUE;
+      swpchn_desc.imageCount     = swapchainTextureCount;
+      swpchn_desc.swapchainUsage = textureAllUsages;
+
+      swpchn_desc.presentationMode = windowpresentation_tgfx_IMMEDIATE;
       swpchn_desc.window           = window;
       // Get all supported queues of the first GPU
-      gpuQueue_tgfxhnd        allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
-      tgfx_window_gpu_support swapchainSupport                               = {};
+      tgfx_window_gpu_support swapchainSupport = {};
       tgfx->helpers->getWindow_GPUSupport(window, gpu, &swapchainSupport);
       for (uint32_t i = 0; i < TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT; i++) {
         allQueues[i] = swapchainSupport.queues[i];
@@ -168,9 +172,59 @@ void load_systems() {
       tgfx->createSwapchain(gpu, &swpchn_desc, swpchnTextures);
     }
 
+    // Create a device local texture
+    texture_tgfxhnd firstTexture = {};
+    texture_tgfxhnd secStorageTexture = {};
+    {
+      static constexpr uint32_t heapSize        = 1 << 20;
+      uint32_t                  devLocalMemType = UINT32_MAX;
+      for (uint32_t memTypeIndx = 0; memTypeIndx < gpuDesc.memTypesCount; memTypeIndx++) {
+        const memoryDescription_tgfx& memDesc = gpuDesc.memTypes[memTypeIndx];
+        if (memDesc.allocationtype == memoryallocationtype_DEVICELOCAL) {
+          // If there 2 different memory types with same allocation type, select the bigger one!
+          if (devLocalMemType != UINT32_MAX &&
+              gpuDesc.memTypes[devLocalMemType].max_allocationsize > memDesc.max_allocationsize) {
+            continue;
+          }
+          devLocalMemType = memTypeIndx;
+        }
+      }
+      heap_tgfxhnd firstHeap = {};
+      contentManager->createHeap(gpu, gpuDesc.memTypes[devLocalMemType].memorytype_id, heapSize,
+                                 nullptr, &firstHeap);
+
+      textureDescription_tgfx textureDesc  = {};
+      textureDesc.channelType              = texture_channels_tgfx_R8B;
+      textureDesc.dataOrder                = textureOrder_tgfx_SWIZZLE;
+      textureDesc.dimension                = texture_dimensions_tgfx_2D;
+      textureDesc.height                   = 1 << 8;
+      textureDesc.width                    = 1 << 8;
+      textureDesc.mipCount                 = 1;
+      textureDesc.permittedQueues          = allQueues;
+      textureDesc.usage                    = textureAllUsages;
+      contentManager->createTexture(gpu, &textureDesc, &firstTexture);
+
+      textureDesc.usage = storageImageUsage;
+      contentManager->createTexture(gpu, &textureDesc, &secStorageTexture);
+
+      heapRequirementsInfo_tgfx firstTextureReqs = {};
+      contentManager->getHeapRequirement_Texture(firstTexture, nullptr, &firstTextureReqs);
+      heapRequirementsInfo_tgfx secTextureReqs = {};
+      contentManager->getHeapRequirement_Texture(secStorageTexture, nullptr, &secTextureReqs);
+
+      contentManager->bindToHeap_Texture(firstHeap, 0, firstTexture, nullptr);
+      uint32_t secTextureHeapOffset = ((firstTextureReqs.size / secTextureReqs.offsetAlignment) + 
+        ((firstTextureReqs.size % secTextureReqs.offsetAlignment) ? 1 : 0)) *
+                                      secTextureReqs.offsetAlignment;
+      contentManager->bindToHeap_Texture(
+        firstHeap,
+        secTextureHeapOffset,
+        secStorageTexture, nullptr);
+    }
+
     // Compile compute shader, create binding table type & compute pipeline
     bindingTableType_tgfxhnd bindingType          = {};
-    pipeline_tgfxhnd  firstComputePipeline = {};
+    pipeline_tgfxhnd         firstComputePipeline = {};
     {
       const char*          shaderText = filesys->funcs->read_textfile("../firstComputeShader.comp");
       shaderSource_tgfxhnd firstComputeShader = nullptr;
@@ -211,20 +265,28 @@ void load_systems() {
         renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
         renderer->queueSubmit(queue);
 
+        static constexpr uint32_t cmdCount                = 4;
         commandBundle_tgfxhnd firstCmdBundles[2] = {
-          renderer->beginCommandBundle(queue, nullptr, 3, nullptr),
+                   renderer->beginCommandBundle(queue, nullptr, cmdCount, nullptr),
           ( commandBundle_tgfxhnd )tgfx->INVALIDHANDLE};
         bindingTable_tgfxhnd bindingTable = {};
         contentManager->instantiateBindingTable(bindingType, true, &bindingTable);
         uint32_t bindingIndex = 0;
-        contentManager->setBindingTable_Texture(bindingTable, 1, &bindingIndex, &swpchnTextures[0]);
+        contentManager->setBindingTable_Texture(bindingTable, 1, &bindingIndex, &secStorageTexture);
         // Record command bundle
-        { 
+        {
           bindingTable_tgfxhnd bindingTables[2] = {bindingTable,
                                                    ( bindingTable_tgfxhnd )tgfx->INVALIDHANDLE};
-          renderer->cmdBindPipeline(firstCmdBundles[0], 0, firstComputePipeline);
-          renderer->cmdBindBindingTables(firstCmdBundles[0], 1, bindingTables, 0, pipelineType_tgfx_COMPUTE); 
-          renderer->cmdDispatch(firstCmdBundles[0], 2, {100, 100, 100});
+          uint32_t             cmdKey           = 0;
+          renderer->cmdBarrierTexture(
+            firstCmdBundles[0], cmdKey++, secStorageTexture, image_access_tgfx_NO_ACCESS,
+            image_access_tgfx_SHADER_WRITEONLY, textureAllUsages, textureAllUsages, nullptr);
+            renderer->cmdBindPipeline(firstCmdBundles[0], cmdKey++, firstComputePipeline);
+          renderer->cmdBindBindingTables(firstCmdBundles[0], cmdKey++, bindingTables, 0,
+                                         pipelineType_tgfx_COMPUTE);
+          renderer->cmdDispatch(firstCmdBundles[0], cmdKey++, {100, 100, 100});
+
+          assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
         }
         renderer->finishCommandBundle(firstCmdBundles[0], nullptr);
         commandBuffer_tgfxhnd firstCmdBuffers[2] = {renderer->beginCommandBuffer(queue, nullptr),
@@ -253,12 +315,19 @@ void load_systems() {
         int i = 0;
         while (++i) {
           TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "presentation", &duration);
+          uint64_t currentFenceValue = 0;
+          while (currentFenceValue < signalValue - 2) {
+            renderer->getFenceValue(fence, &currentFenceValue);
+            printf("Waiting for fence value!\n");
+          }
           tgfx->getCurrentSwapchainTextureIndex(window, &swpchnIndx);
+          /*
           firstCmdBuffers[0] = renderer->beginCommandBuffer(queue, nullptr);
           renderer->executeBundles(firstCmdBuffers[0], firstCmdBundles, nullptr);
           renderer->endCommandBuffer(firstCmdBuffers[0]);
           renderer->queueExecuteCmdBuffers(queue, firstCmdBuffers, nullptr);
-          renderer->queueSubmit(queue);
+          renderer->queueSubmit(queue);*/
+
           if (i % 2) {
             renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
             renderer->queueSubmit(queue);

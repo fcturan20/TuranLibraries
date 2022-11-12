@@ -257,7 +257,7 @@ struct HEAP_VKOBJ {
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::HEAP;
 
   static uint16_t GET_EXTRAFLAGS(HEAP_VKOBJ* obj) {
-    assert(0 && "GPU index & memTypeIndex should be passed as extra flag");
+    // assert(0 && "GPU index & memTypeIndex should be passed as extra flag");
     return 0;
   }
   void operator=(const HEAP_VKOBJ& src) {

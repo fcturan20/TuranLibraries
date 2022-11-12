@@ -125,9 +125,9 @@ vk_uint32c VKCONST_DYNAMICDESCRIPTORTYPESCOUNT = 4, VKCONST_DESCSETID_DYNAMICSAM
            VKCONST_DESCSETID_BUFFER = 3; // Dynamic Samplers, Storage Image, Sampled Texture, Buffer
 // User can pass lots of descriptor sets in a list, this defines the max size
 vk_uint32c VKCONST_MAXDESCSET_PERLIST          = 16;
-vk_uint32c VKCONST_MAXWINDOWCOUNT              = 256;
+vk_uint32c VKCONST_MAXWINDOWCOUNT              = 16;
 vk_uint32c VKCONST_MAXVIEWPORTCOUNT            = 16;
-vk_uint32c VKCONST_MAXGPUCOUNT                 = 16;
+vk_uint32c VKCONST_MAXGPUCOUNT                 = 4;
 vk_uint32c VKCONST_MAXRTSLOTCOUNT              = 16;
 vk_uint32c VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT = 16;
 vk_uint32c VKCONST_MAXQUEUEFAMCOUNT_PERGPU = 5, VKCONST_MAXQUEUECOUNT_PERFAM = 16;

@@ -67,7 +67,7 @@ typedef struct tgfx_helper {
 
   // EXTENSION HELPERS
 
-  void (*Destroy_ExtensionData)(extension_tgfx_handle ExtensionToDestroy);
+  void (*destroyExtensionData)(extension_tgfx_handle ExtensionToDestroy);
   void (*EXT_IsVariableDescCount_andNonUniformIndexing_Supported)(unsigned char* isSupported);
   extension_tgfx_handle (*EXT_DepthBoundsInfo)(float bndMin, float bndMax);
 } helper_tgfx;

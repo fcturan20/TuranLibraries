@@ -89,7 +89,7 @@ typedef struct tgfx_gpudatamanager {
 
   result_tgfx (*createRTSlotset)(RTSlotDescription_tgfxlsthnd descriptions,
                                  RTSlotset_tgfxhnd*           slotsetHnd);
-  void (*Delete_RTSlotSet)(RTSlotset_tgfxhnd RTSlotSetHandle);
+  void (*deleteRTSlotset)(RTSlotset_tgfxhnd RTSlotSetHandle);
   // Changes on RTSlots only happens at the frame slot is gonna be used
   result_tgfx (*changeRTSlot_Texture)(RTSlotset_tgfxhnd SlotSetHnd, unsigned char isColor,
                                       unsigned char SlotIndx, unsigned char FrameIndex,

@@ -307,9 +307,9 @@ void vk_cmdBarrierTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
   cmdBar->m_imBar.subresourceRange.levelCount     = 1;
   TEXTURE_VKOBJ* texture = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(i_texture);
   cmdBar->m_imBar.image  = texture->vk_image;
-  Find_AccessPattern_byIMAGEACCESS(lastAccess, cmdBar->m_imBar.srcAccessMask,
+  vk_findImageAccessPattern(lastAccess, cmdBar->m_imBar.srcAccessMask,
                                    cmdBar->m_imBar.oldLayout);
-  Find_AccessPattern_byIMAGEACCESS(nextAccess, cmdBar->m_imBar.dstAccessMask,
+  vk_findImageAccessPattern(nextAccess, cmdBar->m_imBar.dstAccessMask,
                                    cmdBar->m_imBar.newLayout);
   cmdBar->m_imBar.pNext = nullptr;
 }

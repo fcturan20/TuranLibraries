@@ -8,7 +8,7 @@
 #include "vulkan/vulkan.h"
 
 struct core_public {
-  VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, 50>&            GETWINDOWs();
+  VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT>&            GETWINDOWs();
   VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT>& getGPUs();
 };
 

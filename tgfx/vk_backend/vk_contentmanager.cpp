@@ -152,32 +152,32 @@ result_tgfx  vk_createVertexAttribLayout(const datatype_tgfx*           Attribut
      lay->AttribDescs[i].location = i;
      lay->AttribDescs[i].offset   = stride_ofcurrentattribute;
      lay->AttribDescs[i].format   = Find_VkFormat_byDataType(lay->Attribs[i]);
-     stride_ofcurrentattribute += get_uniformtypes_sizeinbytes(lay->Attribs[i]);
+     stride_ofcurrentattribute += vk_getDataTypeByteSizes(lay->Attribs[i]);
   }
 
    *hnd = hidden->vertexattributelayouts.returnHANDLEfromOBJ(lay);
    return result_tgfx_SUCCESS;
 }
 void vk_destroyVertexAttribLayout(vertexAttributeLayout_tgfxhnd VertexAttributeLayoutHandle) {}
-/*
+
 result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* desc,
                              texture_tgfxhnd* TextureHandle) {
   GPU_VKOBJ*        gpu       = core_vk->getGPUs().getOBJfromHANDLE(i_gpu);
   VkImageUsageFlags usageFlag = 0;
   if (VKCONST_isPointerContainVKFLAG) {
-    usageFlag = *( VkImageUsageFlags* )&desc->USAGE;
+    usageFlag = *( VkImageUsageFlags* )&desc->usage;
   } else {
-    usageFlag = *( VkImageUsageFlags* )desc->USAGE;
+    usageFlag = *( VkImageUsageFlags* )desc->usage;
   }
-  if (desc->CHANNEL_TYPE == texture_channels_tgfx_D24S8 ||
-      desc->CHANNEL_TYPE == texture_channels_tgfx_D32) {
+  if (desc->channelType == texture_channels_tgfx_D24S8 ||
+      desc->channelType == texture_channels_tgfx_D32) {
     usageFlag &= ~(1UL << 4);
   } else {
     usageFlag &= ~(1UL << 5);
   }
 
-  if (desc->MIPCOUNT > std::floor(std::log2(std::max(desc->WIDTH, desc->HEIGHT))) + 1 ||
-      !desc->MIPCOUNT) {
+  if (desc->mipCount > std::floor(std::log2(std::max(desc->width, desc->height))) + 1 ||
+      !desc->mipCount) {
     printer(result_tgfx_FAIL,
             "GFXContentManager->Create_Texture() has failed "
             "because mip count of the texture is wrong!");
@@ -189,20 +189,20 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
   VkImageCreateInfo im_ci = {};
   {
     im_ci.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    im_ci.extent.width  = desc->WIDTH;
-    im_ci.extent.height = desc->HEIGHT;
+    im_ci.extent.width  = desc->width;
+    im_ci.extent.height = desc->height;
     im_ci.extent.depth  = 1;
-    if (desc->DIMENSION == texture_dimensions_tgfx_2DCUBE) {
+    if (desc->dimension == texture_dimensions_tgfx_2DCUBE) {
       im_ci.flags       = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
       im_ci.arrayLayers = 6;
     } else {
       im_ci.flags       = 0;
       im_ci.arrayLayers = 1;
     }
-    im_ci.format        = Find_VkFormat_byTEXTURECHANNELs(desc->CHANNEL_TYPE);
-    im_ci.imageType     = Find_VkImageType(desc->DIMENSION);
+    im_ci.format        = vk_findFormatVk(desc->channelType);
+    im_ci.imageType     = vk_findImageTypeVk(desc->dimension);
     im_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    im_ci.mipLevels     = static_cast<uint32_t>(desc->MIPCOUNT);
+    im_ci.mipLevels     = static_cast<uint32_t>(desc->mipCount);
     im_ci.pNext         = nullptr;
 
     uint32_t queueFamIndexList[VKCONST_MAXQUEUEFAMCOUNT_PERGPU];
@@ -210,7 +210,7 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
                                &im_ci.queueFamilyIndexCount, &im_ci.sharingMode);
     im_ci.pQueueFamilyIndices = queueFamIndexList;
 
-    im_ci.tiling  = Find_VkTiling(desc->DATAORDER);
+    im_ci.tiling  = Find_VkTiling(desc->dataOrder);
     im_ci.usage   = usageFlag;
     im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
@@ -218,52 +218,19 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
                   "GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
   }
 
-  // Create VkImageView
-  VkImageView VkTextureViewObj;
-  {
-    VkImageViewCreateInfo ci = {};
-    ci.sType                 = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    ci.flags                 = 0;
-    ci.pNext                 = nullptr;
-
-    ci.image = vkTextureObj;
-    if (desc->DIMENSION == texture_dimensions_tgfx_2DCUBE) {
-      ci.viewType                    = VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE;
-      ci.subresourceRange.layerCount = 6;
-    } else {
-      ci.viewType                    = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
-      ci.subresourceRange.layerCount = 1;
-    }
-    ci.subresourceRange.baseArrayLayer = 0;
-    ci.subresourceRange.baseMipLevel   = 0;
-    ci.subresourceRange.levelCount     = 1;
-    ci.format                          = im_ci.format;
-    if (desc->CHANNEL_TYPE == texture_channels_tgfx_D32) {
-      ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    } else if (desc->CHANNEL_TYPE == texture_channels_tgfx_D24S8) {
-      ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-    } else {
-      ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    }
-
-    Fill_ComponentMapping_byCHANNELs(desc->CHANNEL_TYPE, ci.components);
-
-    ThrowIfFailed(vkCreateImageView(gpu->vk_logical, &ci, nullptr, &VkTextureViewObj),
-                  "GFXContentManager->Upload_Texture() has failed in vkCreateImageView()!");
-  }
 
   TEXTURE_VKOBJ* texture = contentmanager->GETTEXTURES_ARRAY().create_OBJ();
-  texture->m_channels    = desc->CHANNEL_TYPE;
-  texture->m_height      = desc->HEIGHT;
-  texture->m_width       = desc->WIDTH;
+  texture->m_channels    = desc->channelType;
+  texture->m_height      = desc->height;
+  texture->m_width       = desc->width;
   texture->vk_imageUsage = usageFlag;
-  texture->m_dim         = desc->DIMENSION;
-  texture->m_mips        = desc->MIPCOUNT;
+  texture->m_dim         = desc->dimension;
+  texture->m_mips        = desc->mipCount;
 
   vkGetImageMemoryRequirements(gpu->vk_logical, vkTextureObj, &texture->m_memReqs.vk_memReqs);
   texture->vk_image      = vkTextureObj;
-  texture->vk_imageView  = VkTextureViewObj;
-  texture->m_GPU         = i_gpu;
+  texture->vk_imageView  = VK_NULL_HANDLE;
+  texture->m_GPU         = gpu->gpuIndx();
   texture->vk_imageUsage = im_ci.usage;
 
   *TextureHandle = contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(texture);
@@ -300,7 +267,7 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
   {
     vkGetBufferMemoryRequirements(gpu->vk_logical, vkBufObj, &o_buffer->m_memReqs.vk_memReqs);
     o_buffer->vk_buffer = vkBufObj;
-    o_buffer->m_GPU     = i_gpu;
+    o_buffer->m_GPU     = gpu->gpuIndx();
     o_buffer->vk_usage  = ci.usage;
   }
 
@@ -308,7 +275,7 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
   return result_tgfx_SUCCESS;
 }
 
-*/
+
 result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescription_tgfx* desc,
                                       bindingTableType_tgfxhnd* bindingTableHandle) {
 #ifdef VULKAN_DEBUGGING
@@ -1369,6 +1336,45 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
         "bindToHeap_Buffer() has failed at vkBindBufferMemory!")) {
     return result_tgfx_FAIL;
   }
+
+  if (texture->vk_imageView) {
+    vkDestroyImageView(gpu->vk_logical, texture->vk_imageView, nullptr);
+  }
+
+  // Create VkImageView
+  VkImageView VkTextureViewObj;
+  {
+    VkImageViewCreateInfo ci = {};
+    ci.sType                 = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ci.flags                 = 0;
+    ci.pNext                 = nullptr;
+
+    ci.image = texture->vk_image;
+    if (texture->m_dim == texture_dimensions_tgfx_2DCUBE) {
+      ci.viewType                    = VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE;
+      ci.subresourceRange.layerCount = 6;
+    } else {
+      ci.viewType                    = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+      ci.subresourceRange.layerCount = 1;
+    }
+    ci.subresourceRange.baseArrayLayer = 0;
+    ci.subresourceRange.baseMipLevel   = 0;
+    ci.subresourceRange.levelCount     = 1;
+    ci.format                          = vk_findFormatVk(texture->m_channels);
+    if (texture->m_channels == texture_channels_tgfx_D32) {
+      ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    } else if (texture->m_channels == texture_channels_tgfx_D24S8) {
+      ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    } else {
+      ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+
+    Fill_ComponentMapping_byCHANNELs(texture->m_channels, ci.components);
+
+    ThrowIfFailed(vkCreateImageView(gpu->vk_logical, &ci, nullptr, &texture->vk_imageView),
+                  "bindToHeap_Texture() has failed in vkCreateImageView()!");
+  }
+
   return result_tgfx_SUCCESS;
 }
 
@@ -1383,11 +1389,11 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->instantiateBindingTable = vk_instantiateBindingTable;
   core_tgfx_main->contentmanager->copyComputePipeline     = vk_copyComputePipeline;
   core_tgfx_main->contentmanager->createComputePipeline   = vk_createComputePipeline;
-  //  core_tgfx_main->contentmanager->createBuffer               = vk_createBuffer;
+  core_tgfx_main->contentmanager->createBuffer               = vk_createBuffer;
   //  core_tgfx_main->contentmanager->copyRasterPipeline         = vk_copyRasterPipeline;
   //  core_tgfx_main->contentmanager->createRTSlotset = Create_RTSlotset;
   //  core_tgfx_main->contentmanager->createSampler              = vk_createSampler;
-  //  core_tgfx_main->contentmanager->createTexture              = vk_createTexture;
+  core_tgfx_main->contentmanager->createTexture              = vk_createTexture;
   core_tgfx_main->contentmanager->createVertexAttribLayout = vk_createVertexAttribLayout;
   core_tgfx_main->contentmanager->deleteInheritedRTSlotset = vk_deleteInheritedRTSlotset;
   // core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
@@ -1499,7 +1505,7 @@ VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls) {
 unsigned int vk_calculateSizeOfVertexLayout(const datatype_tgfx* ATTRIBUTEs, unsigned int count) {
   unsigned int size = 0;
   for (unsigned int i = 0; i < count; i++) {
-    size += get_uniformtypes_sizeinbytes(ATTRIBUTEs[i]);
+    size += vk_getDataTypeByteSizes(ATTRIBUTEs[i]);
   }
   return size;
 }

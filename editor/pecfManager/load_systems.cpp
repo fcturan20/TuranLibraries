@@ -252,7 +252,7 @@ void load_systems() {
       // Create binding table type
       {
         tgfx_binding_table_description desc = {};
-        desc.DescriptorType                 = shaderdescriptortype_tgfx_STORAGEIMAGE;
+        desc.DescriptorType                 = shaderdescriptortype_tgfx_BUFFER;
         desc.ElementCount                   = 1;
         desc.SttcSmplrs                     = nullptr;
         desc.VisibleStages =
@@ -289,15 +289,19 @@ void load_systems() {
         bindingTable_tgfxhnd bindingTable = {};
         contentManager->instantiateBindingTable(bindingType, true, &bindingTable);
         uint32_t bindingIndex = 0;
-        contentManager->setBindingTable_Texture(bindingTable, 1, &bindingIndex, &secStorageTexture);
+        //contentManager->setBindingTable_Texture(bindingTable, 1, &bindingIndex, &secStorageTexture);
+        
+        contentManager->setBindingTable_Buffer(bindingTable, 1, &bindingIndex, &firstBuffer,
+                                               nullptr, nullptr, nullptr);
         // Record command bundle
         {
           bindingTable_tgfxhnd bindingTables[2] = {bindingTable,
                                                    ( bindingTable_tgfxhnd )tgfx->INVALIDHANDLE};
           uint32_t             cmdKey           = 0;
+          /*
           renderer->cmdBarrierTexture(
             firstCmdBundles[0], cmdKey++, secStorageTexture, image_access_tgfx_NO_ACCESS,
-            image_access_tgfx_SHADER_WRITEONLY, textureAllUsages, textureAllUsages, nullptr);
+            image_access_tgfx_SHADER_WRITEONLY, textureAllUsages, textureAllUsages, nullptr);*/
           renderer->cmdBindPipeline(firstCmdBundles[0], cmdKey++, firstComputePipeline);
           renderer->cmdBindBindingTables(firstCmdBundles[0], cmdKey++, bindingTables, 0,
                                          pipelineType_tgfx_COMPUTE);
@@ -338,13 +342,13 @@ void load_systems() {
             printf("Waiting for fence value!\n");
           }
           tgfx->getCurrentSwapchainTextureIndex(window, &swpchnIndx);
-          /*
+          
           firstCmdBuffers[0] = renderer->beginCommandBuffer(queue, nullptr);
           renderer->executeBundles(firstCmdBuffers[0], firstCmdBundles, nullptr);
           renderer->endCommandBuffer(firstCmdBuffers[0]);
           renderer->queueExecuteCmdBuffers(queue, firstCmdBuffers, nullptr);
           renderer->queueSubmit(queue);
-          */
+          
 
           if (i % 2) {
             renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);

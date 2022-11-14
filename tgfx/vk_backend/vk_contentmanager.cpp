@@ -218,7 +218,6 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
                   "GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
   }
 
-
   TEXTURE_VKOBJ* texture = contentmanager->GETTEXTURES_ARRAY().create_OBJ();
   texture->m_channels    = desc->channelType;
   texture->m_height      = desc->height;
@@ -269,12 +268,12 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
     o_buffer->vk_buffer = vkBufObj;
     o_buffer->m_GPU     = gpu->gpuIndx();
     o_buffer->vk_usage  = ci.usage;
+    o_buffer->m_intendedSize = desc->dataSize;
   }
 
   *buffer = hidden->buffers.returnHANDLEfromOBJ(o_buffer);
   return result_tgfx_SUCCESS;
 }
-
 
 result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescription_tgfx* desc,
                                       bindingTableType_tgfxhnd* bindingTableHandle) {
@@ -931,36 +930,66 @@ void vk_setDescriptor_Sampler(bindingTable_tgfxhnd bindingtable, unsigned int el
   samplerDESC.sampler_obj = sampler->vk_sampler;
   set->isUpdatedCounter.store(3);
 }
-// Set a descriptor of the binding table created with shaderdescriptortype_tgfx_BUFFER
-result_tgfx SetDescriptor_Buffer(bindingTable_tgfxhnd bindingtable, unsigned int elementIndex,
-                                 buffer_tgfxhnd bufferHandle, unsigned int Offset,
-                                 unsigned int DataSize, extension_tgfxlsthnd exts) {
-  BINDINGTABLEINST_VKOBJ* set = hidden->bindingtableinsts.getOBJfromHANDLE(bindingtable);
-
-#ifdef VULKAN_DEBUGGING
-  if (!set || !bufferHandle || elementIndex >= set->bufferDescELEMENTs.size() ||
-      set->DESCTYPE != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
-    printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Buffer() has invalid input!");
-    return result_tgfx_FAIL;
-  }
-  buffer_descVK& bufferDESC          = set->bufferDescELEMENTs[elementIndex];
-  unsigned char  elementUpdateStatus = 0;
-  if (!bufferDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
-    printer(result_tgfx_FAIL,
-            "SetDescriptor_Buffer() failed because you already changed the descriptor in the same "
-            "frame!");
-    return result_tgfx_FAIL;
-  }
-#else
-  bufferDESC.isUpdated.store(1);
-#endif
-  bufferDESC.info.buffer = VK_NULL_HANDLE;
-
-  set->isUpdatedCounter.store(3);
-  return result_tgfx_SUCCESS;
-}
 */
 static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
+// Set a descriptor of the binding table created with shaderdescriptortype_tgfx_BUFFER
+result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int bindingCount,
+                                      const unsigned int*     bindingIndices,
+                                      const buffer_tgfxlsthnd buffers, const unsigned int* offsets,
+                                      const unsigned int* sizes, extension_tgfxlsthnd exts) {
+  BINDINGTABLEINST_VKOBJ* set = hidden->bindingtableinsts.getOBJfromHANDLE(table);
+  if (!set) {
+    printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable!");
+    return result_tgfx_INVALIDARGUMENT;
+  }
+  BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
+  if (setType->vk_descType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER &&
+      setType->vk_descType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
+    printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable type!");
+    return result_tgfx_INVALIDARGUMENT;
+  }
+
+  VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
+  for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
+    BUFFER_VKOBJ* buffer      = hidden->buffers.getOBJfromHANDLE(buffers[bindingIter]);
+    uint32_t      elementIndx = bindingIndices[bindingIter];
+#ifdef VULKAN_DEBUGGING
+    BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
+    if (!buffer || elementIndx >= setType->m_elementCount) {
+      printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Buffer() has invalid input!");
+      return result_tgfx_FAIL;
+    }
+    buffer_descVK& bufferDESC          = (( buffer_descVK* )set->m_descs)[elementIndx];
+    unsigned char  elementUpdateStatus = 0;
+    if (!bufferDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
+      printer(
+        result_tgfx_FAIL,
+        "SetDescriptor_Buffer() failed because you already changed the descriptor in the same "
+        "frame!");
+      return result_tgfx_FAIL;
+    }
+#else
+    bufferDESC.isUpdated.store(1);
+#endif
+    bufferDESC.info.buffer = buffer->vk_buffer;
+    bufferDESC.info.offset = (offsets == nullptr) ? (0) : (offsets[bindingIter]);
+    bufferDESC.info.range = (sizes == nullptr) ? (buffer->m_intendedSize) : (sizes[bindingIter]);
+
+    writeInfos[bindingIter].descriptorCount  = 1;
+    writeInfos[bindingIter].descriptorType   = setType->vk_descType;
+    writeInfos[bindingIter].dstArrayElement  = elementIndx;
+    writeInfos[bindingIter].dstBinding       = 0;
+    writeInfos[bindingIter].pTexelBufferView = nullptr;
+    writeInfos[bindingIter].pNext            = nullptr;
+    writeInfos[bindingIter].dstSet           = set->vk_set;
+    writeInfos[bindingIter].pBufferInfo      = &bufferDESC.info;
+    writeInfos[bindingIter].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  }
+  vkUpdateDescriptorSets(core_vk->getGPUs()[setType->m_gpu]->vk_logical, bindingCount, writeInfos,
+                         0, nullptr);
+
+  return result_tgfx_SUCCESS;
+}
 result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int bindingCount,
                                        const unsigned int*      bindingIndices,
                                        const texture_tgfxlsthnd textures) {
@@ -1389,11 +1418,11 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->instantiateBindingTable = vk_instantiateBindingTable;
   core_tgfx_main->contentmanager->copyComputePipeline     = vk_copyComputePipeline;
   core_tgfx_main->contentmanager->createComputePipeline   = vk_createComputePipeline;
-  core_tgfx_main->contentmanager->createBuffer               = vk_createBuffer;
+  core_tgfx_main->contentmanager->createBuffer            = vk_createBuffer;
   //  core_tgfx_main->contentmanager->copyRasterPipeline         = vk_copyRasterPipeline;
   //  core_tgfx_main->contentmanager->createRTSlotset = Create_RTSlotset;
   //  core_tgfx_main->contentmanager->createSampler              = vk_createSampler;
-  core_tgfx_main->contentmanager->createTexture              = vk_createTexture;
+  core_tgfx_main->contentmanager->createTexture            = vk_createTexture;
   core_tgfx_main->contentmanager->createVertexAttribLayout = vk_createVertexAttribLayout;
   core_tgfx_main->contentmanager->deleteInheritedRTSlotset = vk_deleteInheritedRTSlotset;
   // core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
@@ -1403,7 +1432,7 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->destroyAllResources       = vk_destroyAllResources;
   core_tgfx_main->contentmanager->inheriteRTSlotset         = vk_inheriteRTSlotset;
   // core_tgfx_main->contentmanager->createRasterPipeline       = vk_createRasterPipeline;
-  // core_tgfx_main->contentmanager->setBindingTable_Buffer     = SetDescriptor_Buffer;
+  core_tgfx_main->contentmanager->setBindingTable_Buffer     = vk_setBindingTable_Buffer;
   core_tgfx_main->contentmanager->setBindingTable_Texture    = vk_setBindingTable_Texture;
   core_tgfx_main->contentmanager->createHeap                 = vk_createHeap;
   core_tgfx_main->contentmanager->getHeapRequirement_Buffer  = vk_getHeapRequirement_Buffer;

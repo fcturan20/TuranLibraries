@@ -86,6 +86,7 @@ struct BUFFER_VKOBJ {
   memoryBlock_vk        m_memBlock;
   memoryRequirements_vk m_memReqs;
   uint8_t               m_GPU;
+  uint64_t              m_intendedSize = UINT64_MAX;
 
   VkBuffer           vk_buffer;
   VkBufferUsageFlags vk_usage;

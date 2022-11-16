@@ -218,6 +218,19 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
                   "GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
   }
 
+  memoryRequirements_vk memReqs;
+  vkGetImageMemoryRequirements(gpu->vk_logical, vkTextureObj, &memReqs.vk_memReqs);
+  if (memReqs.requiresDedicatedAlloc) {
+    printer(result_tgfx_FAIL,
+            "Created texture requires a dedicated allocation but you didn't use dedicated "
+            "allocation extension. Provide a dedicated allocation info as extension!");
+    printer(result_tgfx_NOTCODED,
+            "Dedicated allocation extension isn't coded yet, so this resource creation's gonna "
+            "fail until the implementation.");
+    vkDestroyImage(gpu->vk_logical, vkTextureObj, nullptr);
+    return result_tgfx_FAIL;
+  }
+
   TEXTURE_VKOBJ* texture = contentmanager->GETTEXTURES_ARRAY().create_OBJ();
   texture->m_channels    = desc->channelType;
   texture->m_height      = desc->height;
@@ -225,12 +238,11 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
   texture->vk_imageUsage = usageFlag;
   texture->m_dim         = desc->dimension;
   texture->m_mips        = desc->mipCount;
-
-  vkGetImageMemoryRequirements(gpu->vk_logical, vkTextureObj, &texture->m_memReqs.vk_memReqs);
   texture->vk_image      = vkTextureObj;
   texture->vk_imageView  = VK_NULL_HANDLE;
   texture->m_GPU         = gpu->gpuIndx();
   texture->vk_imageUsage = im_ci.usage;
+  texture->m_memReqs     = memReqs;
 
   *TextureHandle = contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(texture);
   return result_tgfx_SUCCESS;
@@ -260,15 +272,27 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
     ThrowIfFailed(vkCreateBuffer(gpu->vk_logical, &ci, nullptr, &vkBufObj),
                   "vkCreateBuffer() has failed!");
   }
+  memoryRequirements_vk memReqs;
+  vkGetBufferMemoryRequirements(gpu->vk_logical, vkBufObj, &memReqs.vk_memReqs);
+  if (memReqs.requiresDedicatedAlloc) {
+    printer(result_tgfx_FAIL,
+            "Created buffer requires a dedicated allocation but you didn't use dedicated "
+            "allocation extension. Provide a dedicated allocation info as extension!");
+    printer(result_tgfx_NOTCODED,
+            "Dedicated allocation extension isn't coded yet, so this resource creation's gonna "
+            "fail until the implementation.");
+    vkDestroyBuffer(gpu->vk_logical, vkBufObj, nullptr);
+    return result_tgfx_FAIL;
+  }
 
   // Get buffer requirements and fill BUFFER_VKOBJ
   BUFFER_VKOBJ* o_buffer = hidden->buffers.create_OBJ();
   {
-    vkGetBufferMemoryRequirements(gpu->vk_logical, vkBufObj, &o_buffer->m_memReqs.vk_memReqs);
-    o_buffer->vk_buffer = vkBufObj;
-    o_buffer->m_GPU     = gpu->gpuIndx();
-    o_buffer->vk_usage  = ci.usage;
+    o_buffer->vk_buffer      = vkBufObj;
+    o_buffer->m_GPU          = gpu->gpuIndx();
+    o_buffer->vk_usage       = ci.usage;
     o_buffer->m_intendedSize = desc->dataSize;
+    o_buffer->m_memReqs      = memReqs;
   }
 
   *buffer = hidden->buffers.returnHANDLEfromOBJ(o_buffer);
@@ -284,7 +308,6 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
     printer(result_tgfx_FAIL, "You shouldn't create a binding table with ElementCount = 0");
     return result_tgfx_FAIL;
   }
-  unsigned int descsetid = Find_VKCONST_DESCSETID_byTGFXDescType(desc->DescriptorType);
   if (desc->SttcSmplrs) {
     unsigned int i = 0;
     while (desc->SttcSmplrs[i] != core_tgfx_main->INVALIDHANDLE) {
@@ -328,7 +351,7 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
   */
   bindngs[dynamicbinding_i].binding            = dynamicbinding_i;
   bindngs[dynamicbinding_i].descriptorCount    = desc->ElementCount;
-  bindngs[dynamicbinding_i].descriptorType     = Find_VkDescType_byVKCONST_DESCSETID(descsetid);
+  bindngs[dynamicbinding_i].descriptorType     = vk_findDescTypeVk(desc->DescriptorType);
   bindngs[dynamicbinding_i].pImmutableSamplers = nullptr;
   if (desc->VisibleStages) {
     bindngs[dynamicbinding_i].stageFlags = *( VkShaderStageFlags* )&desc->VisibleStages;
@@ -952,14 +975,14 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
   VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
     BUFFER_VKOBJ* buffer      = hidden->buffers.getOBJfromHANDLE(buffers[bindingIter]);
-    uint32_t      elementIndx = bindingIndices[bindingIter];
+    uint32_t       elementIndx = bindingIndices[bindingIter];
+    buffer_descVK& bufferDESC  = (( buffer_descVK* )set->m_descs)[elementIndx];
 #ifdef VULKAN_DEBUGGING
     BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
     if (!buffer || elementIndx >= setType->m_elementCount) {
       printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Buffer() has invalid input!");
       return result_tgfx_FAIL;
     }
-    buffer_descVK& bufferDESC          = (( buffer_descVK* )set->m_descs)[elementIndx];
     unsigned char  elementUpdateStatus = 0;
     if (!bufferDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
       printer(
@@ -973,7 +996,7 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
 #endif
     bufferDESC.info.buffer = buffer->vk_buffer;
     bufferDESC.info.offset = (offsets == nullptr) ? (0) : (offsets[bindingIter]);
-    bufferDESC.info.range = (sizes == nullptr) ? (buffer->m_intendedSize) : (sizes[bindingIter]);
+    bufferDESC.info.range  = (sizes == nullptr) ? (buffer->m_intendedSize) : (sizes[bindingIter]);
 
     writeInfos[bindingIter].descriptorCount  = 1;
     writeInfos[bindingIter].descriptorType   = setType->vk_descType;
@@ -1028,7 +1051,7 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
       return result_tgfx_FAIL;
     }
 #else
-    texture_descVK& textureDESC = (( texture_descVK* )set->DescElements)[elementIndx];
+    texture_descVK& textureDESC = (( texture_descVK* )set->m_descs)[elementIndx];
     textureDESC.isUpdated.store(1);
 #endif
     textureDESC.info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -1338,9 +1361,15 @@ result_tgfx vk_bindToHeap_Buffer(heap_tgfxhnd i_heap, unsigned long long offset,
   BUFFER_VKOBJ* buffer = hidden->buffers.getOBJfromHANDLE(i_buffer);
   HEAP_VKOBJ*   heap   = hidden->heaps.getOBJfromHANDLE(i_heap);
   GPU_VKOBJ*    gpu    = core_vk->getGPUs()[buffer->m_GPU];
+  if (buffer->m_memReqs.requiresDedicatedAlloc) {
+    printer(result_tgfx_FAIL,
+            "Driver requires this buffer to be allocated specially, so you can't bind this to an "
+            "heap by hand. TGFX automatically bound it!");
+    return result_tgfx_FAIL;
+  }
   if (offset % buffer->m_memReqs.vk_memReqs.alignment) {
     printer(result_tgfx_FAIL,
-            "Offset should be multiple of the resource's alignment in BindToHeap");
+            "Offset should be multiple of the resource's alignment in bindToHeap");
     return result_tgfx_FAIL;
   }
   if (ThrowIfFailed(
@@ -1355,9 +1384,15 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
   TEXTURE_VKOBJ* texture = hidden->textures.getOBJfromHANDLE(i_texture);
   HEAP_VKOBJ*    heap    = hidden->heaps.getOBJfromHANDLE(i_heap);
   GPU_VKOBJ*     gpu     = core_vk->getGPUs()[texture->m_GPU];
+  if (texture->m_memReqs.requiresDedicatedAlloc) {
+    printer(result_tgfx_FAIL,
+            "Driver requires this texture to be allocated specially, so you can't bind this to an "
+            "heap by hand. TGFX automatically bound it!");
+    return result_tgfx_FAIL;
+  }
   if (offset % texture->m_memReqs.vk_memReqs.alignment) {
     printer(result_tgfx_FAIL,
-            "Offset should be multiple of the resource's alignment in BindToHeap");
+            "Offset should be multiple of the resource's alignment in bindToHeap");
     return result_tgfx_FAIL;
   }
   if (ThrowIfFailed(

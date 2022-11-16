@@ -119,10 +119,6 @@ void pNext_addToLast(void* targetStruct, void* attachStruct);
 #define vk_float32c static constexpr float32_t
 #define vk_handleType static constexpr VKHANDLETYPEs
 #define vk_uint8c static constexpr uint8_t
-// Dynamic Descriptor Types supported by Vulkan
-vk_uint32c VKCONST_DYNAMICDESCRIPTORTYPESCOUNT = 4, VKCONST_DESCSETID_DYNAMICSAMPLER = 0,
-           VKCONST_DESCSETID_SAMPLEDTEXTURE = 1, VKCONST_DESCSETID_STORAGEIMAGE = 2,
-           VKCONST_DESCSETID_BUFFER = 3; // Dynamic Samplers, Storage Image, Sampled Texture, Buffer
 // User can pass lots of descriptor sets in a list, this defines the max size
 vk_uint32c VKCONST_MAXDESCSET_PERLIST          = 16;
 vk_uint32c VKCONST_MAXWINDOWCOUNT              = 16;

@@ -26,8 +26,8 @@ struct memoryRequirements_vk {
   bool                                prefersDedicatedAlloc : 1, requiresDedicatedAlloc : 1;
   static const memoryRequirements_vk& GETINVALID() {
     memoryRequirements_vk invalid;
-    invalid.prefersDedicatedAlloc     = true;
-    invalid.requiresDedicatedAlloc    = true;
+    invalid.prefersDedicatedAlloc     = false;
+    invalid.requiresDedicatedAlloc    = false;
     invalid.vk_memReqs.memoryTypeBits = 0;
     invalid.vk_memReqs.size           = 0;
     invalid.vk_memReqs.alignment      = UINT64_MAX;

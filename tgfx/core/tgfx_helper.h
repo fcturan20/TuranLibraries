@@ -22,9 +22,9 @@ typedef struct tgfx_helper {
     unsigned char copyFrom, unsigned char copyTo, unsigned char uniformBuffer,
     unsigned char storageBuffer, unsigned char vertexBuffer, unsigned char indexBuffer,
     unsigned char indirectBuffer, unsigned char accessByPointerInShader);
-  void (*GetSupportedAllocations_ofTexture)(unsigned int  GPUIndex,
+  void (*getTextureRecommendedAllocationInfo)(unsigned int  GPUIndex,
                                             unsigned int* SupportedMemoryTypesBitset);
-  void (*GetMonitor_Resolution_ColorBites_RefreshRate)(monitor_tgfxhnd MonitorHandle,
+  void (*getMonitorInfo)(monitor_tgfxhnd MonitorHandle,
                                                        unsigned int* WIDTH, unsigned int* HEIGHT,
                                                        unsigned int* ColorBites,
                                                        unsigned int* RefreshRate);

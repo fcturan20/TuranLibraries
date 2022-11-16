@@ -1,5 +1,7 @@
 .gitignore
 .vscode
+.vs
 build
 dynamic_libs
 Example_runnables
+CMakeSettings.json

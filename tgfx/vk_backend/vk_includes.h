@@ -180,46 +180,28 @@ inline textureChannels_tgfx vk_findTextureChannelsTgfx(VkFormat format) {
       return texture_channels_tgfx_R8B;
   }
 }
-static inline VkDescriptorType Find_VkDescType_byVKCONST_DESCSETID(unsigned int DESCSET_ID) {
-  static_assert(VKCONST_DYNAMICDESCRIPTORTYPESCOUNT == 4,
-                "Find_VkDescType_byVKCONST_DESCSETID() supports 4 desc types");
-  switch (DESCSET_ID) {
-    case VKCONST_DESCSETID_BUFFER: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    case VKCONST_DESCSETID_DYNAMICSAMPLER: return VK_DESCRIPTOR_TYPE_SAMPLER;
-    case VKCONST_DESCSETID_SAMPLEDTEXTURE: return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    case VKCONST_DESCSETID_STORAGEIMAGE: return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+inline VkDescriptorType vk_findDescTypeVk(shaderdescriptortype_tgfx desc) {
+  switch (desc) {
+    case shaderdescriptortype_tgfx_BUFFER: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case shaderdescriptortype_tgfx_SAMPLEDTEXTURE: return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    case shaderdescriptortype_tgfx_SAMPLER: return VK_DESCRIPTOR_TYPE_SAMPLER;
+    case shaderdescriptortype_tgfx_STORAGEIMAGE: return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    case shaderdescriptortype_tgfx_EXT_UNIFORMBUFFER: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     default:
-      printer(result_tgfx_FAIL,
-              "Find_VkDescType_byVKCONST_DESCSETID() doesn't support this type of descriptor!");
+      printer(result_tgfx_FAIL, "vk_findDescTypeVk couldn't find descriptor type!");
       return VK_DESCRIPTOR_TYPE_MAX_ENUM;
   }
 }
-inline unsigned int Find_VKCONST_DESCSETID_byTGFXDescType(shaderdescriptortype_tgfx type) {
-  static_assert(VKCONST_DYNAMICDESCRIPTORTYPESCOUNT == 4,
-                "Find_VKCONST_DESCSETID_byTGFXDescType() supports 4 desc types");
-  switch (type) {
-    case shaderdescriptortype_tgfx_BUFFER: return VKCONST_DESCSETID_BUFFER;
-    case shaderdescriptortype_tgfx_SAMPLER: return VKCONST_DESCSETID_DYNAMICSAMPLER;
-    case shaderdescriptortype_tgfx_SAMPLEDTEXTURE: return VKCONST_DESCSETID_SAMPLEDTEXTURE;
-    case shaderdescriptortype_tgfx_STORAGEIMAGE: return VKCONST_DESCSETID_STORAGEIMAGE;
+inline shaderdescriptortype_tgfx vk_findDescTypeTgfx(VkDescriptorType desc) {
+  switch (desc) {
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: return shaderdescriptortype_tgfx_BUFFER;
+    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: return shaderdescriptortype_tgfx_SAMPLEDTEXTURE;
+    case VK_DESCRIPTOR_TYPE_SAMPLER: return shaderdescriptortype_tgfx_SAMPLER;
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: return shaderdescriptortype_tgfx_STORAGEIMAGE;
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: return shaderdescriptortype_tgfx_EXT_UNIFORMBUFFER;
     default:
-      printer(result_tgfx_FAIL,
-              "(Find_VkDescType_byVKCONST_DESCSETID() doesn't support this type of descriptor!");
-      return UINT32_MAX;
-  }
-}
-inline unsigned int Find_VKCONST_DESCSETID_byVkDescType(VkDescriptorType type) {
-  static_assert(VKCONST_DYNAMICDESCRIPTORTYPESCOUNT == 4,
-                "Find_VKCONST_DESCSETID_byVkDescType() supports 4 desc types");
-  switch (type) {
-    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: return VKCONST_DESCSETID_BUFFER;
-    case VK_DESCRIPTOR_TYPE_SAMPLER: return VKCONST_DESCSETID_DYNAMICSAMPLER;
-    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: return VKCONST_DESCSETID_SAMPLEDTEXTURE;
-    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: return VKCONST_DESCSETID_STORAGEIMAGE;
-    default:
-      printer(result_tgfx_FAIL,
-              "(Find_VkDescType_byVKCONST_DESCSETID() doesn't support this type of descriptor!");
-      return UINT32_MAX;
+      printer(result_tgfx_FAIL, "vk_findDescTypeVk couldn't find descriptor type!");
+      return (shaderdescriptortype_tgfx)UINT64_MAX;
   }
 }
 inline VkSamplerAddressMode vk_findAddressModeVk(texture_wrapping_tgfx Wrapping) {
@@ -463,7 +445,8 @@ inline void Fill_ComponentMapping_byCHANNELs(textureChannels_tgfx channels,
   }
 }
 inline void vk_findSubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSource,
-                                      VkPipelineStageFlags& stageflag, VkAccessFlags& accessflag) {
+                                        VkPipelineStageFlags& stageflag,
+                                        VkAccessFlags&        accessflag) {
   switch (access) {
     case subdrawpassaccess_tgfx_ALLCOMMANDS:
       if (isSource) {
@@ -589,8 +572,8 @@ inline void vk_findSubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSo
 }
 
 inline void vk_findImageAccessPattern(const image_access_tgfx& Access,
-                                             VkAccessFlags&           TargetAccessFlag,
-                                             VkImageLayout&           TargetImageLayout) {
+                                      VkAccessFlags&           TargetAccessFlag,
+                                      VkImageLayout&           TargetImageLayout) {
   switch (Access) {
     case image_access_tgfx_DEPTHSTENCIL_READONLY:
       TargetAccessFlag  = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
@@ -783,7 +766,7 @@ inline colorspace_tgfx vk_findColorSpaceTgfx(VkColorSpaceKHR cs) {
     case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT: return colorspace_tgfx_EXTENDED_sRGB_LINEAR;
     default:
       printer(result_tgfx_NOTCODED, "ColorSpace isn't supported by Find_TGFXColorSpace_byVk");
-      return (colorspace_tgfx)UINT32_MAX;
+      return ( colorspace_tgfx )UINT32_MAX;
   }
 }
 inline gpu_type_tgfx vk_findGPUTypeTgfx(VkPhysicalDeviceType t) {

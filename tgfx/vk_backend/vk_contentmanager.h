@@ -36,8 +36,6 @@ struct gpudatamanager_public {
   gpudatamanager_private* hidden;
 
   VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>&                          GETBUFFER_ARRAY();
-  VK_LINEAR_OBJARRAY<RTSLOTSET_VKOBJ, RTSlotset_tgfxhnd, 1 << 10>&           GETRTSLOTSET_ARRAY();
-  VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, inheritedRTSlotset_tgfxhnd, 1 << 10>& GETIRTSLOTSET_ARRAY();
   VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>&               GETTEXTURES_ARRAY();
   VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>&             GETPIPELINE_ARRAY();
   VK_LINEAR_OBJARRAY<VIEWPORT_VKOBJ, viewport_tgfxhnd, 1 << 16>&             GETVIEWPORT_ARRAY();
@@ -45,4 +43,5 @@ struct gpudatamanager_public {
   GETBINDINGTABLE_ARRAY();
   VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10>&
   GETBINDINGTABLETYPE_ARRAY();
+  VK_LINEAR_OBJARRAY<SUBRASTERPASS_VKOBJ, subRasterpass_tgfxhnd, 1 << 16>& GETSUBRASTERPASS_ARRAY();
 };

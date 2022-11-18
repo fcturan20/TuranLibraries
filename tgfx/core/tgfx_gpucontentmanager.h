@@ -67,7 +67,7 @@ typedef struct tgfx_gpudatamanager {
                                       const bindingTableType_tgfxlsthnd   typeTables,
                                       const vertexAttributeLayout_tgfxhnd AttribLayout,
                                       const viewport_tgfxlsthnd           ViewportList,
-                                      const renderSubPass_tgfxhnd         subpass,
+                                      const subRasterpass_tgfxhnd         subpass,
                                       const rasterStateDescription_tgfx*  mainStates,
                                       pipeline_tgfxhnd*                   MaterialHandle);
   // Extensions: Dynamic States, CallBufferInfo, Specialization Constants
@@ -82,21 +82,6 @@ typedef struct tgfx_gpudatamanager {
   result_tgfx (*copyComputePipeline)(pipeline_tgfxhnd src, extension_tgfxlsthnd exts,
                                      pipeline_tgfxhnd* dst);
   void (*destroyPipeline)(pipeline_tgfxhnd pipeline);
-
-  //////////////////////////////
-  // RT SLOTSET
-  //////////////////////////////
-
-  result_tgfx (*createRTSlotset)(RTSlotDescription_tgfxlsthnd descriptions,
-                                 RTSlotset_tgfxhnd*           slotsetHnd);
-  void (*deleteRTSlotset)(RTSlotset_tgfxhnd RTSlotSetHandle);
-  // Changes on RTSlots only happens at the frame slot is gonna be used
-  result_tgfx (*changeRTSlot_Texture)(RTSlotset_tgfxhnd SlotSetHnd, unsigned char isColor,
-                                      unsigned char SlotIndx, unsigned char FrameIndex,
-                                      texture_tgfxhnd TextureHandle);
-  result_tgfx (*inheriteRTSlotset)(RTSlotUsage_tgfxlsthnd descs, RTSlotset_tgfxhnd RTSlotSetHandle,
-                                   inheritedRTSlotset_tgfxhnd* InheritedSlotSetHandle);
-  void (*deleteInheritedRTSlotset)(inheritedRTSlotset_tgfxhnd hnd);
 
   //////////////////////////////
   // MEMORY
@@ -123,4 +108,15 @@ typedef struct tgfx_gpudatamanager {
   result_tgfx (*mapHeap)(heap_tgfxhnd heap, unsigned long long offset, unsigned long long size,
                          extension_tgfxlsthnd exts, void** mappedRegion);
   result_tgfx (*unmapHeap)(heap_tgfxhnd heap);
+
+  ///////////////////////////////
+  // RASTER PASS
+  ///////////////////////////////
+
+  result_tgfx (*createRasterpass)(gpu_tgfxhnd i_gpu, unsigned char slotCount,
+                                  rasterpassSlotDescription_tgfx* colorSlotDescs,
+                                  rasterpassSlotDescription_tgfx  depthStencilSlotDesc,
+                                  extension_tgfxlsthnd            exts,
+                                  subRasterpass_tgfxlsthnd        subRasterpasses);
+  result_tgfx (*destroyRasterpass)(subRasterpass_tgfxhnd firstSubRasterpass);
 } gpudatamanager_tgfx;

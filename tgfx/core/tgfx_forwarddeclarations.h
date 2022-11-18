@@ -33,8 +33,7 @@ typedef struct tgfx_bindingtable_obj*          bindingTable_tgfxhnd;
 typedef struct tgfx_commandbuffer_obj*         commandBuffer_tgfxhnd;
 typedef struct tgfx_commandbundle_obj*         commandBundle_tgfxhnd;
 typedef struct tgfx_gpuqueue_obj*              gpuQueue_tgfxhnd;
-typedef struct tgfx_renderpass_obj*            renderPass_tgfxhnd;
-typedef struct tgfx_rendersubpass_obj*         renderSubPass_tgfxhnd;
+typedef struct tgfx_subrasterpass_obj*         subRasterpass_tgfxhnd;
 typedef struct tgfx_fence_obj*                 fence_tgfxhnd;
 typedef struct tgfx_heap_obj*                  heap_tgfxhnd;
 typedef struct tgfx_pipeline_obj*              pipeline_tgfxhnd;
@@ -79,6 +78,7 @@ typedef window_tgfxhnd*            window_tgfxlsthnd;
 typedef commandBundle_tgfxhnd*     commandBundle_tgfxlsthnd;
 typedef buffer_tgfxhnd*            buffer_tgfxlsthnd;
 typedef texture_tgfxhnd*           texture_tgfxlsthnd;
+typedef subRasterpass_tgfxhnd*     subRasterpass_tgfxlsthnd;
 
 // STRUCTS
 /////////////////////////////////////
@@ -103,6 +103,7 @@ typedef struct tgfx_init_secondstage_info     initSecondStageInfo_tgfx;
 typedef struct tgfx_gpu_info                  gpuInfo_tgfx;
 typedef struct tgfx_heap_requirements_info    heapRequirementsInfo_tgfx;
 typedef struct tgfx_window_gpu_support        windowGPUsupport_tgfx;
+typedef struct tgfx_typelessColor             typelessColor_tgfx;
 
 // ENUMS
 typedef enum {
@@ -151,11 +152,22 @@ typedef enum {
 typedef enum {
   // All values will be cleared to a certain value
   drawpassload_tgfx_CLEAR,
-  // You don't need previous data, just gonna ignore and overwrite on them
-  drawpassload_tgfx_FULL_OVERWRITE,
+  // Loaded data is random (undef or current value) & driver probably clear
+  drawpassload_tgfx_DISCARD,
   // You need previous data, so previous data will affect current draw calls
-  drawpassload_tgfx_LOAD
+  drawpassload_tgfx_LOAD,
+  // There won't be any access to previous data, use this for transient resources
+  drawpassload_tgfx_NONE
 } drawpassload_tgfx;
+
+typedef enum {
+  // Driver do whatever it wants with the data (either write or ignores it)
+  drawpassstore_tgfx_DISCARD,
+  // Driver should write the data to memory
+  drawpassstore_tgfx_STORE,
+  // Driver should ignore writing the data to memory, use this for transient resources
+  drawpassstore_tgfx_NONE
+} drawpassstore_tgfx;
 
 typedef enum {
   depthtest_tgfx_ALWAYS,
@@ -340,8 +352,8 @@ typedef enum {
 } shaderstage_tgfx;
 
 typedef enum {
-  pipelineType_tgfx_RASTER = 0,
-  pipelineType_tgfx_COMPUTE = 1,
+  pipelineType_tgfx_RASTER     = 0,
+  pipelineType_tgfx_COMPUTE    = 1,
   pipelineType_tgfx_RAYTRACING = 2
 } pipelineType_tgfx;
 
@@ -365,13 +377,13 @@ typedef enum {
 // Don't forget that TGFX stores how you access them in shaders
 // So backend'll probably cull some unnecessary transitions
 typedef enum {
-  image_access_tgfx_RTCOLOR_READONLY  = 0,
-  image_access_tgfx_RTCOLOR_WRITEONLY = 1,
+  image_access_tgfx_NO_ACCESS,
+  image_access_tgfx_RTCOLOR_READONLY,
+  image_access_tgfx_RTCOLOR_WRITEONLY,
   image_access_tgfx_RTCOLOR_READWRITE,
   image_access_tgfx_SWAPCHAIN_DISPLAY,
   image_access_tgfx_TRANSFER_DIST,
   image_access_tgfx_TRANSFER_SRC,
-  image_access_tgfx_NO_ACCESS,
   image_access_tgfx_SHADER_SAMPLEONLY,
   image_access_tgfx_SHADER_WRITEONLY,
   image_access_tgfx_SHADER_SAMPLEWRITE,

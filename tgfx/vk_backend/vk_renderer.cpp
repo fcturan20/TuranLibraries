@@ -18,25 +18,24 @@
 
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_RENDERER = nullptr;
 
+
 struct vk_cmd;
 struct CMDBUNDLE_VKOBJ {
   bool            isALIVE    = false;
   vk_handleType   HANDLETYPE = VKHANDLETYPEs::CMDBUNDLE;
   static uint16_t GET_EXTRAFLAGS(CMDBUNDLE_VKOBJ* obj) { return 0; }
 
-  VkCommandBuffer vk_cb = nullptr;
-  // Render States
+  // Command Buffer States
   VkPipeline vk_activePipeline = {};
   // To check pipeline compatibility
   VkPipelineLayout      vk_activePipelineLayout                       = {};
   VkDescriptorSetLayout vk_activeDescSets[VKCONST_MAXDESCSET_PERLIST] = {};
   uint8_t               vk_callBuffer[128] = {}; // CallBuffer = Push Constants = 128 byte
 
-  QUEUEFAM_VK* m_queueFam = nullptr;
-  GPU_VKOBJ*   m_gpu      = nullptr;
-  uint32_t     m_poolIndx = UINT32_MAX;
-  vk_cmd*      m_cmds     = nullptr;
-  uint64_t     m_cmdCount = 0;
+  GPU_VKOBJ*   m_gpu          = nullptr;
+  vk_cmd*      m_cmds         = nullptr;
+  uint64_t     m_cmdCount     = 0;
+  queueflag_vk m_requiredFlag = {};
 
   void createCmdBuffer(uint64_t cmdCount);
 };
@@ -69,10 +68,9 @@ struct vkCmdStruct_example {
 struct vkCmdStruct_barrierTexture {
   static constexpr vk_cmdType cmd_type = vk_cmdType::barrierTexture;
 
-  void cmd_execute(CMDBUNDLE_VKOBJ* cmdBundle) {
-    vkCmdPipelineBarrier(cmdBundle->vk_cb, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0,
-                         nullptr, 0, nullptr, 1, &m_imBar);
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &m_imBar);
   }
 
   // Command specific variables should have "m_" prefix
@@ -82,9 +80,9 @@ struct vkCmdStruct_barrierTexture {
 struct vkCmdStruct_bindBindingTables {
   static constexpr vk_cmdType cmd_type = vk_cmdType::bindBindingTables;
 
-  void cmd_execute(CMDBUNDLE_VKOBJ* cmdBundle) {
-    vkCmdBindDescriptorSets(cmdBundle->vk_cb, vk_bindPoint, cmdBundle->vk_activePipelineLayout,
-                            m_firstSetIndx, m_setCount, vk_sets, 0, nullptr);
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdBindDescriptorSets(cb, vk_bindPoint, cmdBundle->vk_activePipelineLayout, m_firstSetIndx,
+                            m_setCount, vk_sets, 0, nullptr);
     for (uint32_t i = m_firstSetIndx; i < VKCONST_MAXDESCSET_PERLIST; i++) {
       cmdBundle->vk_activeDescSets[i] = vk_setLayouts[i - m_firstSetIndx];
     }
@@ -98,8 +96,8 @@ struct vkCmdStruct_bindBindingTables {
 struct vkCmdStruct_bindPipeline {
   static constexpr vk_cmdType cmd_type = vk_cmdType::bindPipeline;
 
-  void cmd_execute(CMDBUNDLE_VKOBJ* cmdBundle) {
-    vkCmdBindPipeline(cmdBundle->vk_cb, vk_bindPoint, vk_pipeline);
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdBindPipeline(cb, vk_bindPoint, vk_pipeline);
     cmdBundle->vk_activePipeline       = vk_pipeline;
     cmdBundle->vk_activePipelineLayout = vk_pipelineLayout;
   }
@@ -111,8 +109,8 @@ struct vkCmdStruct_bindPipeline {
 struct vkCmdStruct_dispatch {
   static constexpr vk_cmdType cmd_type = vk_cmdType::dispatch;
 
-  void cmd_execute(CMDBUNDLE_VKOBJ* cmdBundle) {
-    vkCmdDispatch(cmdBundle->vk_cb, m_dispatchSize.x, m_dispatchSize.y, m_dispatchSize.z);
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdDispatch(cb, m_dispatchSize.x, m_dispatchSize.y, m_dispatchSize.z);
   };
   uvec3_tgfx m_dispatchSize;
 };
@@ -146,18 +144,20 @@ T* vk_createCmdStruct(vk_cmd* cmd) {
   return ( T* )cmd->cmd_data;
 }
 
-void vk_executeCmd(CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cmd) {
+void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cmd) {
   switch (cmd.cmd_type) {
     case vk_cmdType::barrierTexture:
-      (( vkCmdStruct_barrierTexture* )cmd.cmd_data)->cmd_execute(bundle);
+      (( vkCmdStruct_barrierTexture* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
     case vk_cmdType::bindBindingTables:
-      (( vkCmdStruct_bindBindingTables* )cmd.cmd_data)->cmd_execute(bundle);
+      (( vkCmdStruct_bindBindingTables* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
     case vk_cmdType::bindPipeline:
-      (( vkCmdStruct_bindPipeline* )cmd.cmd_data)->cmd_execute(bundle);
+      (( vkCmdStruct_bindPipeline* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
-    case vk_cmdType::dispatch: (( vkCmdStruct_dispatch* )cmd.cmd_data)->cmd_execute(bundle); break;
+    case vk_cmdType::dispatch:
+      (( vkCmdStruct_dispatch* )cmd.cmd_data)->cmd_execute(cb, bundle);
+      break;
     case vk_cmdType::error:
     case vk_cmdType::error_2:
     default: printer(result_tgfx_WARNING, "One of the cmds is not used!");
@@ -189,46 +189,35 @@ void vk_createFences(gpu_tgfxhnd gpu, unsigned int fenceCount, uint32_t isSignal
 // Command Bundle Functions
 ////////////////////////////
 
-commandBundle_tgfxhnd vk_beginCommandBundle(gpuQueue_tgfxhnd      i_queue,
-                                            renderSubPass_tgfxhnd subpassHandle,
-                                            unsigned long long    maxCmdCount,
-                                            extension_tgfxlsthnd  exts) {
-  getGPUfromQueueHnd(i_queue);
-
+commandBundle_tgfxhnd vk_beginCommandBundle(gpu_tgfxhnd gpu,
+                                            unsigned long long   maxCmdCount,
+                                            extension_tgfxlsthnd exts) {
   VkCommandBuffer vk_cmdBuffer = VK_NULL_HANDLE;
-  vk_allocateCmdBuffer(fam, VK_COMMAND_BUFFER_LEVEL_SECONDARY, &vk_cmdBuffer, 1);
+  cmdPool_vk*     cmdPool;
+  GPU_VKOBJ*      GPU = core_vk->getGPUs().getOBJfromHANDLE(gpu);
+  if (!GPU) {
+    return nullptr;
+  }
   CMDBUNDLE_VKOBJ* cmdBundle = hiddenRenderer->m_cmdBundles.add();
 
-  cmdBundle->vk_cb = vk_cmdBuffer;
-
-  cmdBundle->m_poolIndx = threadingsys->this_thread_index();
-  cmdBundle->m_queueFam = fam;
-  cmdBundle->m_gpu      = gpu;
+  cmdBundle->m_gpu = GPU;
   cmdBundle->createCmdBuffer(maxCmdCount);
 
   return hiddenRenderer->m_cmdBundles.returnHANDLEfromOBJ(cmdBundle);
 }
 void vk_finishCommandBundle(commandBundle_tgfxhnd i_bundle, extension_tgfxlsthnd exts) {
-  CMDBUNDLE_VKOBJ*         bundle        = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
-  VkCommandBufferBeginInfo bi            = {};
-  bi.flags                               = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-  bi.pNext                               = nullptr;
-  bi.sType                               = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  VkCommandBufferInheritanceInfo secInfo = {};
-  secInfo.sType                          = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-  bi.pInheritanceInfo                    = &secInfo;
-  assert(!ThrowIfFailed(vkBeginCommandBuffer(bundle->vk_cb, &bi),
-                        "vkBeginCommandBuffer() shouldn't fail!"));
-  for (uint64_t cmdIndx = 0; cmdIndx < bundle->m_cmdCount; cmdIndx++) {
-    vk_executeCmd(bundle, bundle->m_cmds[cmdIndx]);
-  }
-  assert(!ThrowIfFailed(vkEndCommandBuffer(bundle->vk_cb), "vkEndCommandBuffer() shouldn't fail!"));
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
+
+  // MOVE THIS RECORDING STAGE BECAUSE FRAMEBUFFER WILL RECORD ALREADY!
 }
 void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(hnd);
-  vkFreeCommandBuffers(bundle->m_gpu->vk_logical,
-                       vk_getSecondaryCmdPool(bundle->m_queueFam, bundle->m_poolIndx), 1,
-                       &bundle->vk_cb);
+  /*
+  for (framebuffer_vk : hidden->framebuffers) {
+    if (framebuffer_vk->m_cmdBundleRefs[i] == hnd) {
+      vk_freeCmdBuffer(Ref->cmdPool, Ref->cmdBuffer);
+    }
+  }*/
   hiddenRenderer->m_cmdBundles.erase(hiddenRenderer->m_cmdBundles.getINDEX_byOBJ(bundle));
 }
 
@@ -264,6 +253,10 @@ void vk_cmdBindPipeline(commandBundle_tgfxhnd i_bundle, unsigned long long sortK
   cmd->vk_bindPoint      = pipe->vk_type;
   cmd->vk_pipeline       = pipe->vk_object;
   cmd->vk_pipelineLayout = pipe->vk_layout;
+  if (pipe->m_gfxSubpass) {
+    bundle->m_requiredFlag.is_GRAPHICSsupported = true;
+  }
+  bundle->m_requiredFlag.is_COMPUTEsupported = true;
 }
 void vk_cmdBindVertexBuffer(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
                             buffer_tgfxhnd buffer, unsigned long long offset,
@@ -307,15 +300,13 @@ void vk_cmdBarrierTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
   cmdBar->m_imBar.subresourceRange.levelCount     = 1;
   TEXTURE_VKOBJ* texture = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(i_texture);
   cmdBar->m_imBar.image  = texture->vk_image;
-  vk_findImageAccessPattern(lastAccess, cmdBar->m_imBar.srcAccessMask,
-                                   cmdBar->m_imBar.oldLayout);
-  vk_findImageAccessPattern(nextAccess, cmdBar->m_imBar.dstAccessMask,
-                                   cmdBar->m_imBar.newLayout);
+  vk_findImageAccessPattern(lastAccess, cmdBar->m_imBar.srcAccessMask, cmdBar->m_imBar.oldLayout);
+  vk_findImageAccessPattern(nextAccess, cmdBar->m_imBar.dstAccessMask, cmdBar->m_imBar.newLayout);
   cmdBar->m_imBar.pNext = nullptr;
 }
 void vk_cmdDispatch(commandBundle_tgfxhnd bndl, unsigned long long key, uvec3_tgfx dispatchSize) {
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(bndl);
-  auto*            cmd = vk_createCmdStruct<vkCmdStruct_dispatch>(&bundle->m_cmds[key]);
+  auto*            cmd    = vk_createCmdStruct<vkCmdStruct_dispatch>(&bundle->m_cmds[key]);
 
   cmd->m_dispatchSize = dispatchSize;
 }
@@ -383,6 +374,7 @@ void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxl
 }
 
 void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
+                               FRAMEBUFFER_VKOBJ* framebuffer, QUEUEFAM_VK* queueFam, SUBRASTERPASS_VKOBJ* subpass,
                                VkCommandBuffer* secondaryCmdBuffers, uint32_t* cmdBufferCount) {
   uint32_t bundleCount = 0;
   TGFXLISTCOUNT(core_tgfx_main, commandBundleList, cmdListCount);
@@ -390,10 +382,66 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
     if (!commandBundleList[bundleListIndx]) {
       continue;
     }
-    CMDBUNDLE_VKOBJ* bundle =
-      hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(commandBundleList[bundleListIndx]);
-    if (bundle && bundle->isALIVE && bundle->vk_cb && bundleCount < VKCONST_MAXCMDBUNDLE_PERCALL) {
-      secondaryCmdBuffers[bundleCount++] = bundle->vk_cb;
+    commandBundle_tgfxhnd bundleHnd = commandBundleList[bundleListIndx];
+    CMDBUNDLE_VKOBJ*      bundle    = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(bundleHnd);
+
+    if (!bundle || !bundle->isALIVE || bundleCount >= VKCONST_MAXCMDBUNDLE_PERCALL) {
+      continue;
+    }
+
+    bool isFound = false;
+    if (framebuffer) {
+      for (uint32_t i = 0; i < framebuffer->m_cmdBundleCount && !isFound; i++) {
+        if (framebuffer->m_cmdBundleRefs[i].m_cmdBundle == commandBundleList[bundleListIndx]) {
+          secondaryCmdBuffers[bundleCount++] = framebuffer->m_cmdBundleRefs[i].vk_cmdBuffer;
+          isFound                            = true;
+        }
+      }
+    } else {
+      for (uint32_t i = 0; i < queueFam->m_cmdBundleCount && !isFound; i++) {
+        if (queueFam->m_cmdBundleRefs[i].m_cmdBundle == commandBundleList[bundleListIndx]) {
+          secondaryCmdBuffers[bundleCount++] = queueFam->m_cmdBundleRefs[i].vk_cmdBuffer;
+          isFound                            = true;
+        }
+      }
+    }
+
+    // There is room to create a new cmdBundle reference, so create it
+    if (!isFound) {
+      cmdPool_vk*     cmdPool   = {};
+      VkCommandBuffer cmdBuffer = {};
+      vk_allocateCmdBuffer(queueFam, VK_COMMAND_BUFFER_LEVEL_SECONDARY, cmdPool, &cmdBuffer, 1);
+
+      VkCommandBufferBeginInfo bi            = {};
+      bi.flags                    = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT |
+                 (framebuffer ? VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT : 0);
+      bi.pNext                               = nullptr;
+      bi.sType                               = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+      VkCommandBufferInheritanceInfo secInfo = {};
+      secInfo.sType                          = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+      if (framebuffer) {
+        secInfo.framebuffer = framebuffer->vk_framebuffer;
+        secInfo.renderPass  = subpass->vk_renderPass;
+        secInfo.subpass     = subpass->m_subpassIndx;
+      }
+      bi.pInheritanceInfo                    = &secInfo;
+
+      assert(!ThrowIfFailed(vkBeginCommandBuffer(cmdBuffer, &bi),
+                            "vkBeginCommandBuffer() shouldn't fail!"));
+      for (uint64_t cmdIndx = 0; cmdIndx < bundle->m_cmdCount; cmdIndx++) {
+        vk_executeCmd(cmdBuffer, bundle, bundle->m_cmds[cmdIndx]);
+      }
+      assert(!ThrowIfFailed(vkEndCommandBuffer(cmdBuffer), "vkEndCommandBuffer() shouldn't fail!"));
+
+      if (framebuffer) {
+        framebuffer->m_cmdBundleRefs[framebuffer->m_cmdBundleCount].m_cmdBundle    = bundleHnd;
+        framebuffer->m_cmdBundleRefs[framebuffer->m_cmdBundleCount].m_cmdPool      = cmdPool;
+        framebuffer->m_cmdBundleRefs[framebuffer->m_cmdBundleCount++].vk_cmdBuffer = cmdBuffer;
+      } else {
+        queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdBundle       = bundleHnd;
+        queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdPool         = cmdPool;
+        queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount++].vk_cmdBuffer    = cmdBuffer;
+      }
     }
   }
   *cmdBufferCount = bundleCount;

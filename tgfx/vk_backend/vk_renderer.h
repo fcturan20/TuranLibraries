@@ -33,6 +33,9 @@ struct renderer_public {
  public:
 };
 
+struct FRAMEBUFFER_VKOBJ;
+struct SUBRASTERPASS_VKOBJ;
+struct QUEUEFAM_VK;
 // Extension: QueueOwnershipTransfer
 // Use o_ params with uint32_t queueFamList[VKCONST_MAXQUEUEFAMCOUNT] etc.
 void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxlsthnd i_exts,
@@ -40,7 +43,9 @@ void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxl
                                 VkSharingMode* o_sharingMode);
 
 void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
-                               VkCommandBuffer* secondaryCmdBuffers, uint32_t* cmdBufferCount);
+                               FRAMEBUFFER_VKOBJ* framebuffer, QUEUEFAM_VK* queueFam,
+                               SUBRASTERPASS_VKOBJ* subpass, VkCommandBuffer* secondaryCmdBuffers,
+                               uint32_t* cmdBufferCount);
 
 #define getGPUfromQueueHnd(i_queue)                            \
   GPU_VKOBJ*   gpu   = QUEUE_VKOBJ::getGPUfromHandle(i_queue); \

@@ -64,10 +64,8 @@ struct SHADERSOURCE_VKOBJ {
 };
 
 struct gpudatamanager_private {
-  VK_LINEAR_OBJARRAY<RTSLOTSET_VKOBJ, RTSlotset_tgfxhnd, 1 << 10>           rtslotsets;
-  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>               textures;
-  VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, inheritedRTSlotset_tgfxhnd, 1 << 10> irtslotsets;
-  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>             pipelines;
+  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>   textures;
+  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24> pipelines;
   VK_LINEAR_OBJARRAY<VERTEXATTRIBLAYOUT_VKOBJ, vertexAttributeLayout_tgfxhnd, 1 << 10>
                                                                         vertexattributelayouts;
   VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, shaderSource_tgfxhnd, 1 << 24> shadersources;
@@ -77,6 +75,7 @@ struct gpudatamanager_private {
   VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>     bindingtableinsts;
   VK_LINEAR_OBJARRAY<VIEWPORT_VKOBJ, viewport_tgfxhnd, 1 << 16>                 viewports;
   VK_LINEAR_OBJARRAY<HEAP_VKOBJ, heap_tgfxhnd, 1 << 10>                         heaps;
+  VK_LINEAR_OBJARRAY<SUBRASTERPASS_VKOBJ, subRasterpass_tgfxhnd, 1 << 16>       subrasterpasses;
 
   // These are the textures that will be deleted after waiting for 2 frames ago's command buffer
   VK_VECTOR_ADDONLY<TEXTURE_VKOBJ*, 1 << 16> DeleteTextureList;
@@ -329,8 +328,8 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
   ci.pNext                                = nullptr;
   ci.bindingCount                         = 1;
   ci.pBindings                            = bindngs;
-
-  unsigned int dynamicbinding_i = 0;
+  VkRenderPassBeginInfo bi                = {};
+  unsigned int          dynamicbinding_i  = 0;
   /*
   std::vector<VkSampler> staticSamplers;
   if (desc->DescriptorType == shaderdescriptortype_tgfx_SAMPLER && desc->SttcSmplrs) {
@@ -546,37 +545,23 @@ inline void CountDescSets(bindingTableType_tgfxlsthnd descset, unsigned int* fin
   *finaldesccount = valid_descset_i;
 }
 
-bool Get_SlotSets_fromSubDP(renderSubPass_tgfxhnd subdp_handle, RTSLOTSET_VKOBJ** rtslotset,
-                            IRTSLOTSET_VKOBJ** irtslotset) {
-  /*
-  VKOBJHANDLE subdphandle = *(VKOBJHANDLE*)&subdp_handle;
-  RenderGraph::SubDP_VK* subdp = getPass_fromHandle<RenderGraph::SubDP_VK>(subdphandle);
-  if (!subdp) { printer(13); return false; }
-  *rtslotset = contentmanager->GETRTSLOTSET_ARRAY().getOBJbyINDEX(subdp->getDP()->BASESLOTSET_ID);
-  *irtslotset = contentmanager->GETIRTSLOTSET_ARRAY().getOBJbyINDEX(subdp->IRTSLOTSET_ID);
-  */
-  return true;
-}
-/*
 result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSourcesList,
                                     const bindingTableType_tgfxlsthnd   i_bindingTables,
                                     const vertexAttributeLayout_tgfxhnd i_AttribLayout,
                                     const viewport_tgfxlsthnd           i_viewportList,
-                                    const renderSubPass_tgfxhnd         subpass,
+                                    const subRasterpass_tgfxhnd         i_subpass,
                                     const rasterStateDescription_tgfx*  mainStates,
-                                    rasterPipeline_tgfxhnd*             pipelineHnd) {
-  if (renderer->RGSTATUS() == RGReconstructionStatus::StartedConstruction) {
-    printer(result_tgfx_WRONGTIMING, "You can't link a Material Type while recording RenderGraph!");
-    return result_tgfx_WRONGTIMING;
-  }
+                                    pipeline_tgfxhnd*                   pipelineHnd) {
   VERTEXATTRIBLAYOUT_VKOBJ* LAYOUT =
     hidden->vertexattributelayouts.getOBJfromHANDLE(i_AttribLayout);
   // Subpass is the only required object, so selected GPU is its.
   // Other objects (if specified) should be created from the same GPU too.
-  GPU_VKOBJ* GPU = subpass->m_gpu;
-  if (!LAYOUT && GPU->ext()->ISSUPPORTED_DYNAMICSTATE_VERTEXBINDING()) {
+  SUBRASTERPASS_VKOBJ* subpass = hidden->subrasterpasses.getOBJfromHANDLE(i_subpass);
+  GPU_VKOBJ*           GPU     = core_vk->getGPUs().getOBJfromHANDLE(subpass->m_gpu);
+  if (!LAYOUT) {
     printer(result_tgfx_FAIL,
-            "AttributeLayout can't be null if GPU doesn't support dynamic vertex buffer layout!");
+            "AttributeLayout can't be null if GPU doesn't support dynamic vertex buffer layout! "
+            "Backend doesn't support it for now, so layout has to be valid!");
     return result_tgfx_FAIL;
   }
 
@@ -609,9 +594,6 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
     }
     ShaderSourceCount++;
   }
-
-  // Subpass attachment should happen here!
-  RASTERPIPELINE_VKOBJ VKPipeline;
 
   VkPipelineShaderStageCreateInfo Vertex_ShaderStage   = {};
   VkPipelineShaderStageCreateInfo Fragment_ShaderStage = {};
@@ -668,7 +650,7 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
   {
     RasterizationState.sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     RasterizationState.polygonMode = Find_PolygonMode_byGFXPolygonMode(mainStates->polygonmode);
-    RasterizationState.cullMode    = Find_CullMode_byGFXCullMode(mainStates->culling);
+    RasterizationState.cullMode    = vk_findCullModeVk(mainStates->culling);
     RasterizationState.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     RasterizationState.lineWidth   = 1.0f;
     RasterizationState.depthClampEnable        = VK_FALSE;
@@ -694,57 +676,17 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
   TGFXLISTCOUNT(core_tgfx_main, mainStates->BLENDINGs, BlendingsCount);
   blendinginfo_vk** BLENDINGINFOS = ( blendinginfo_vk** )mainStates->BLENDINGs;
 
-  VkPipelineColorBlendAttachmentState States[VKCONST_MAXRTSLOTCOUNT] = {};
-  VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState       = {};
+  VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
   {
-    VkPipelineColorBlendAttachmentState NonBlendState = {};
-    // Non-blend settings
-    NonBlendState.blendEnable         = VK_FALSE;
-    NonBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-    NonBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-    NonBlendState.colorBlendOp        = VkBlendOp::VK_BLEND_OP_ADD;
-    NonBlendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    NonBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    NonBlendState.alphaBlendOp        = VK_BLEND_OP_ADD;
-
-    for (uint32_t RTSlotIndex = 0; RTSlotIndex < baseslotset->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT;
-         RTSlotIndex++) {
-      bool isFound = false;
-      for (uint32_t BlendingInfoIndex = 0; BlendingInfoIndex < BlendingsCount;
-           BlendingInfoIndex++) {
-        const blendinginfo_vk* blendinginfo = BLENDINGINFOS[BlendingInfoIndex];
-        if (blendinginfo->COLORSLOT_INDEX == RTSlotIndex) {
-          States[RTSlotIndex]                = blendinginfo->BlendState;
-          States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(
-            baseslotset->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
-          isFound = true;
-          break;
-        }
-      }
-      if (!isFound) {
-        States[RTSlotIndex]                = NonBlendState;
-        States[RTSlotIndex].colorWriteMask = Find_ColorWriteMask_byChannels(
-          baseslotset->PERFRAME_SLOTSETs[0].COLOR_SLOTs[RTSlotIndex].RT->CHANNELs);
-      }
-    }
-
     Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    Pipeline_ColorBlendState.attachmentCount = baseslotset->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT;
-    Pipeline_ColorBlendState.pAttachments    = States;
-    if (BlendingsCount) {
-      Pipeline_ColorBlendState.blendConstants[0] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.x;
-      Pipeline_ColorBlendState.blendConstants[1] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.y;
-      Pipeline_ColorBlendState.blendConstants[2] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.z;
-      Pipeline_ColorBlendState.blendConstants[3] = BLENDINGINFOS[0]->BLENDINGCONSTANTs.w;
-    } else {
-      Pipeline_ColorBlendState.blendConstants[0] = 0.0f;
-      Pipeline_ColorBlendState.blendConstants[1] = 0.0f;
-      Pipeline_ColorBlendState.blendConstants[2] = 0.0f;
-      Pipeline_ColorBlendState.blendConstants[3] = 0.0f;
-    }
-    // I won't use logical operations
-    Pipeline_ColorBlendState.logicOpEnable = VK_FALSE;
-    Pipeline_ColorBlendState.logicOp       = VK_LOGIC_OP_COPY;
+    Pipeline_ColorBlendState.attachmentCount   = 0;
+    Pipeline_ColorBlendState.pAttachments      = nullptr;
+    Pipeline_ColorBlendState.blendConstants[0] = 0.0f;
+    Pipeline_ColorBlendState.blendConstants[1] = 0.0f;
+    Pipeline_ColorBlendState.blendConstants[2] = 0.0f;
+    Pipeline_ColorBlendState.blendConstants[3] = 0.0f;
+    Pipeline_ColorBlendState.logicOpEnable     = VK_FALSE;
+    Pipeline_ColorBlendState.logicOp           = VK_LOGIC_OP_COPY;
   }
 
   VkPipelineDynamicStateCreateInfo Dynamic_States = {};
@@ -755,25 +697,30 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
       DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_VIEWPORT;
       DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_SCISSOR;
     }
+    /*
     if (!LAYOUT && rendergpu->ext()->ISSUPPORTED_DYNAMICSTATE_VERTEXBINDING()) {
       DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE;
-    }
+    }*/
 
     Dynamic_States.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     Dynamic_States.dynamicStateCount = DynamicStatesCount;
     Dynamic_States.pDynamicStates    = DynamicStatesList;
   }
 
-  uint32_t typesetscount = 0;
-  CountDescSets(i_bindingTables, &typesetscount, VKPipeline.TypeSETs);
-  if (!VKPipelineLayoutCreation(i_bindingTables, false, &VKPipeline.PipelineLayout)) {
+  unsigned int typeSets[VKCONST_MAXDESCSET_PERLIST] = {};
+  uint32_t     typesetscount                        = 0;
+  CountDescSets(i_bindingTables, &typesetscount, typeSets);
+  VkPipelineLayout layout = {};
+  if (!VKPipelineLayoutCreation(GPU, i_bindingTables, typesetscount, false, &layout)) {
     printer(result_tgfx_FAIL,
-            "Link_MaterialType() has failed at VKDescSet_PipelineLayoutCreation!");
+            "Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
     return result_tgfx_FAIL;
   }
 
   VkPipelineDepthStencilStateCreateInfo depth_state = {};
-  if (baseslotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
+  if (true
+      // baseslotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT
+  ) {
     depth_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     if (mainStates->depthtest) {
       depthsettingsdesc_vk* depthsettings = ( depthsettingsdesc_vk* )mainStates->depthtest;
@@ -811,43 +758,48 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
     }
   }
 
-  VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfo = {};
+  VkPipeline pipeline;
   {
-    GraphicsPipelineCreateInfo.sType            = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    GraphicsPipelineCreateInfo.pColorBlendState = &Pipeline_ColorBlendState;
-    if (baseslotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT) {
-      GraphicsPipelineCreateInfo.pDepthStencilState = &depth_state;
+    VkGraphicsPipelineCreateInfo ci = {};
+    ci.sType                        = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    ci.pColorBlendState             = &Pipeline_ColorBlendState;
+    if (subpass->isDepthAttachment
+        // baseslotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT
+    ) {
+      ci.pDepthStencilState = &depth_state;
     } else {
-      GraphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+      ci.pDepthStencilState = nullptr;
     }
-    GraphicsPipelineCreateInfo.pDynamicState       = &Dynamic_States;
-    GraphicsPipelineCreateInfo.pInputAssemblyState = &InputAssemblyState;
-    GraphicsPipelineCreateInfo.pMultisampleState   = &MSAAState;
-    GraphicsPipelineCreateInfo.pRasterizationState = &RasterizationState;
-    GraphicsPipelineCreateInfo.pVertexInputState   = &VertexInputState_ci;
-    GraphicsPipelineCreateInfo.pViewportState      = &RenderViewportState;
-    GraphicsPipelineCreateInfo.layout              = VKPipeline.PipelineLayout;
-    Get_RPOBJ_andSPINDEX_fromSubDP(Subdrawpass, &GraphicsPipelineCreateInfo.renderPass,
-                                   &GraphicsPipelineCreateInfo.subpass);
-    GraphicsPipelineCreateInfo.stageCount         = 2;
-    GraphicsPipelineCreateInfo.pStages            = STAGEs;
-    GraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
-    GraphicsPipelineCreateInfo.basePipelineIndex  = -1;             // Optional
-    GraphicsPipelineCreateInfo.flags              = 0;
-    GraphicsPipelineCreateInfo.pNext              = nullptr;
-    ThrowIfFailed(
-      vkCreateGraphicsPipelines(rendergpu->devLogical, nullptr, 1, &GraphicsPipelineCreateInfo,
-                                nullptr, &VKPipeline.PipelineObject),
-      "vkCreateGraphicsPipelines has failed!");
+    ci.pDynamicState       = &Dynamic_States;
+    ci.pInputAssemblyState = &InputAssemblyState;
+    ci.pMultisampleState   = &MSAAState;
+    ci.pRasterizationState = &RasterizationState;
+    ci.pVertexInputState   = &VertexInputState_ci;
+    ci.pViewportState      = &RenderViewportState;
+    ci.layout              = layout;
+    ci.renderPass          = subpass->vk_renderPass;
+    ci.subpass             = subpass->m_subpassIndx;
+    ci.stageCount          = 2;
+    ci.pStages             = STAGEs;
+    ci.basePipelineHandle  = VK_NULL_HANDLE; // Optional
+    ci.basePipelineIndex   = -1;             // Optional
+    ci.flags               = 0;
+    ci.pNext               = nullptr;
+    ThrowIfFailed(vkCreateGraphicsPipelines(GPU->vk_logical, nullptr, 1, &ci, nullptr, &pipeline),
+                  "vkCreateGraphicsPipelines has failed!");
   }
 
-  VKPipeline.GFX_Subpass = Subdrawpass;
-
-  RASTERPIPELINE_VKOBJ* finalobj = hidden->pipelines.create_OBJ();
-  *finalobj                      = VKPipeline;
-  *pipelineHnd                   = hidden->pipelines.returnHANDLEfromOBJ(finalobj);
+  PIPELINE_VKOBJ* pipelineObj = hidden->pipelines.create_OBJ();
+  pipelineObj->m_gfxSubpass   = i_subpass;
+  pipelineObj->m_gpu          = GPU->gpuIndx();
+  memcpy(pipelineObj->m_typeSETs, typeSets, sizeof(pipelineObj->m_typeSETs));
+  pipelineObj->vk_layout = layout;
+  pipelineObj->vk_object = pipeline;
+  pipelineObj->vk_type   = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  *pipelineHnd           = hidden->pipelines.returnHANDLEfromOBJ(pipelineObj);
   return result_tgfx_SUCCESS;
 }
+/*
 result_tgfx vk_copyRasterPipeline(rasterPipeline_tgfxhnd src, extension_tgfxlsthnd exts,
                                   rasterPipeline_tgfxhnd* dst) {
   RASTERPIPELINE_VKOBJ* srcPipeline = hidden->pipelines.getOBJfromHANDLE(src);
@@ -974,7 +926,7 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
 
   VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
-    BUFFER_VKOBJ* buffer      = hidden->buffers.getOBJfromHANDLE(buffers[bindingIter]);
+    BUFFER_VKOBJ*  buffer      = hidden->buffers.getOBJfromHANDLE(buffers[bindingIter]);
     uint32_t       elementIndx = bindingIndices[bindingIter];
     buffer_descVK& bufferDESC  = (( buffer_descVK* )set->m_descs)[elementIndx];
 #ifdef VULKAN_DEBUGGING
@@ -983,7 +935,7 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
       printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Buffer() has invalid input!");
       return result_tgfx_FAIL;
     }
-    unsigned char  elementUpdateStatus = 0;
+    unsigned char elementUpdateStatus = 0;
     if (!bufferDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
       printer(
         result_tgfx_FAIL,
@@ -1072,221 +1024,6 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
                          0, nullptr);
   return result_tgfx_SUCCESS;
 }
-/*
-result_tgfx Create_RTSlotset(RTSlotDescription_tgfxlsthnd Descriptions,
-                             RTSlotset_tgfxhnd*           RTSlotSetHandle) {
-  TGFXLISTCOUNT(core_tgfx_main, Descriptions, DescriptionsCount);
-  for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
-    const rtslot_create_description_vk* desc =
-      ( rtslot_create_description_vk* )Descriptions[SlotIndex];
-    TEXTURE_VKOBJ* FirstHandle  = desc->textures[0];
-    TEXTURE_VKOBJ* SecondHandle = desc->textures[1];
-    if ((FirstHandle->m_channels != SecondHandle->m_channels) ||
-        (FirstHandle->m_width != SecondHandle->m_width) ||
-        (FirstHandle->m_height != SecondHandle->m_height)) {
-      printer(result_tgfx_FAIL,
-              "GFXContentManager->Create_RTSlotSet() has failed because one of the slots has "
-              "texture handles that doesn't match channel type, width or height!");
-      return result_tgfx_INVALIDARGUMENT;
-    }
-    if (!(FirstHandle->vk_imageUsage &
-          (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) ||
-        !(SecondHandle->vk_imageUsage &
-          (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))) {
-      printer(result_tgfx_FAIL,
-              "GFXContentManager->Create_RTSlotSet() has failed because one of the slots has a "
-              "handle that doesn't use is_RenderableTo in its USAGEFLAG!");
-      return result_tgfx_INVALIDARGUMENT;
-    }
-  }
-  unsigned int DEPTHSLOT_VECTORINDEX = UINT32_MAX;
-  // Validate the list and find Depth Slot if there is any
-  for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
-    const rtslot_create_description_vk* desc =
-      ( rtslot_create_description_vk* )Descriptions[SlotIndex];
-    for (unsigned int RTIndex = 0; RTIndex < 2; RTIndex++) {
-      TEXTURE_VKOBJ* RT = (desc->textures[RTIndex]);
-      if (!RT) {
-        printer(result_tgfx_FAIL, "Create_RTSlotSet() has failed because intended RT isn't found!");
-        return result_tgfx_INVALIDARGUMENT;
-      }
-      if (desc->optype == operationtype_tgfx_UNUSED) {
-        printer(result_tgfx_FAIL,
-                "Create_RTSlotSet() has failed because you can't create a Base RT SlotSet that has "
-                "unused attachment!");
-        return result_tgfx_INVALIDARGUMENT;
-      }
-      if (RT->m_channels == texture_channels_tgfx_D24S8 ||
-          RT->m_channels == texture_channels_tgfx_D32) {
-        if (DEPTHSLOT_VECTORINDEX != UINT32_MAX && DEPTHSLOT_VECTORINDEX != SlotIndex) {
-          printer(result_tgfx_FAIL,
-                  "Create_RTSlotSet() has failed because you can't use two depth buffers at the "
-                  "same slot set!");
-          return result_tgfx_INVALIDARGUMENT;
-        }
-        DEPTHSLOT_VECTORINDEX = SlotIndex;
-        continue;
-      }
-    }
-  }
-  unsigned char COLORRT_COUNT =
-    (DEPTHSLOT_VECTORINDEX != UINT32_MAX) ? DescriptionsCount - 1 : DescriptionsCount;
-
-  unsigned int FBWIDTH  = (( rtslot_create_description_vk* )Descriptions[0])->textures[0]->m_width;
-  unsigned int FBHEIGHT = (( rtslot_create_description_vk* )Descriptions[0])->textures[0]->m_height;
-  for (unsigned int SlotIndex = 0; SlotIndex < DescriptionsCount; SlotIndex++) {
-    TEXTURE_VKOBJ* Texture =
-      (( rtslot_create_description_vk* )Descriptions[SlotIndex])->textures[0];
-    if (Texture->m_width != FBWIDTH || Texture->m_height != FBHEIGHT) {
-      printer(
-        result_tgfx_FAIL,
-        "Create_RTSlotSet() has failed because one of your slot's texture has wrong resolution!");
-      return result_tgfx_INVALIDARGUMENT;
-    }
-  }
-
-  RTSLOTSET_VKOBJ* VKSLOTSET = hidden->rtslotsets.create_OBJ();
-  for (unsigned int SlotSetIndex = 0; SlotSetIndex < 2; SlotSetIndex++) {
-    rtslots_vk& PF_SLOTSET = VKSLOTSET->PERFRAME_SLOTSETs[SlotSetIndex];
-
-    PF_SLOTSET.COLOR_SLOTs      = new colorslot_vk[COLORRT_COUNT];
-    PF_SLOTSET.COLORSLOTs_COUNT = COLORRT_COUNT;
-    if (DEPTHSLOT_VECTORINDEX != UINT32_MAX) {
-      PF_SLOTSET.DEPTHSTENCIL_SLOT             = new depthstencilslot_vk;
-      depthstencilslot_vk*                slot = PF_SLOTSET.DEPTHSTENCIL_SLOT;
-      const rtslot_create_description_vk* DEPTHDESC =
-        ( rtslot_create_description_vk* )Descriptions[DEPTHSLOT_VECTORINDEX];
-      slot->CLEAR_COLOR    = glm::vec2(DEPTHDESC->clear_value.x, DEPTHDESC->clear_value.y);
-      slot->DEPTH_OPTYPE   = DEPTHDESC->optype;
-      slot->RT             = (DEPTHDESC->textures[SlotSetIndex]);
-      slot->STENCIL_OPTYPE = DEPTHDESC->optype;
-      slot->IS_USED_LATER  = DEPTHDESC->isUsedLater;
-      slot->DEPTH_LOAD     = DEPTHDESC->loadtype;
-      slot->STENCIL_LOAD   = DEPTHDESC->loadtype;
-    }
-    for (unsigned int i = 0; i < DescriptionsCount; i++) {
-      if (i == DEPTHSLOT_VECTORINDEX) {
-        continue;
-      }
-      unsigned int                        slotindex = ((i > DEPTHSLOT_VECTORINDEX) ? (i - 1) : (i));
-      const rtslot_create_description_vk* desc = ( rtslot_create_description_vk* )Descriptions[i];
-      TEXTURE_VKOBJ*                      RT   = desc->textures[SlotSetIndex];
-      colorslot_vk&                       SLOT = PF_SLOTSET.COLOR_SLOTs[slotindex];
-      SLOT.RT_OPERATIONTYPE                    = desc->optype;
-      SLOT.LOADSTATE                           = desc->loadtype;
-      SLOT.RT                                  = RT;
-      SLOT.IS_USED_LATER                       = desc->isUsedLater;
-      SLOT.CLEAR_COLOR = glm::vec4(desc->clear_value.x, desc->clear_value.y, desc->clear_value.z,
-                                   desc->clear_value.w);
-    }
-
-    VkImageView* imageviews = ( VkImageView* )VK_ALLOCATE_AND_GETPTR(
-      VKGLOBAL_VIRMEM_CURRENTFRAME, (PF_SLOTSET.COLORSLOTs_COUNT + 1) * sizeof(VkImageView));
-    for (unsigned int i = 0; i < PF_SLOTSET.COLORSLOTs_COUNT; i++) {
-      TEXTURE_VKOBJ* VKTexture = PF_SLOTSET.COLOR_SLOTs[i].RT;
-      imageviews[i]            = VKTexture->vk_imageView;
-    }
-    if (PF_SLOTSET.DEPTHSTENCIL_SLOT) {
-      imageviews[PF_SLOTSET.COLORSLOTs_COUNT] = PF_SLOTSET.DEPTHSTENCIL_SLOT->RT->vk_imageView;
-    }
-
-    VkFramebufferCreateInfo& fb_ci = VKSLOTSET->FB_ci[SlotSetIndex];
-    fb_ci.attachmentCount = PF_SLOTSET.COLORSLOTs_COUNT + ((PF_SLOTSET.DEPTHSTENCIL_SLOT) ? 1 : 0);
-    fb_ci.pAttachments    = imageviews;
-    fb_ci.flags           = 0;
-    fb_ci.height          = FBHEIGHT;
-    fb_ci.width           = FBWIDTH;
-    fb_ci.layers          = 1;
-    fb_ci.pNext           = nullptr;
-    fb_ci.renderPass      = VK_NULL_HANDLE;
-    fb_ci.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  }
-
-  *RTSlotSetHandle = hidden->rtslotsets.returnHANDLEfromOBJ(VKSLOTSET);
-  return result_tgfx_SUCCESS;
-}
-void Delete_RTSlotSet(RTSlotset_tgfxhnd RTSlotSetHandle) {} */
-// Changes on RTSlots only happens at the frame slot is gonna be used
-// For example; if you change next frame's slot, necessary API calls are gonna be called next frame
-// For example; if you change slot but related slotset isn't used by drawpass, it doesn't happen
-// until it is used
-result_tgfx vk_changeRTSlotTexture(RTSlotset_tgfxhnd RTSlotHandle, unsigned char isColorRT,
-                                   unsigned char SlotIndex, unsigned char FrameIndex,
-                                   texture_tgfxhnd TextureHandle) {
-  return result_tgfx_FAIL;
-}
-result_tgfx vk_inheriteRTSlotset(RTSlotUsage_tgfxlsthnd      DescriptionsGFX,
-                                 RTSlotset_tgfxhnd           RTSlotSetHandle,
-                                 inheritedRTSlotset_tgfxhnd* InheritedSlotSetHandle) {
-  if (!RTSlotSetHandle) {
-    printer(result_tgfx_FAIL, "Inherite_RTSlotSet() has failed because Handle is invalid!");
-    return result_tgfx_INVALIDARGUMENT;
-  }
-  RTSLOTSET_VKOBJ* BaseSet = hidden->rtslotsets.getOBJfromHANDLE(RTSlotSetHandle);
-  IRTSLOTSET_VKOBJ InheritedSet;
-  InheritedSet.BASESLOTSET = hidden->rtslotsets.getINDEXbyOBJ(BaseSet);
-  rtslot_inheritance_descripton_vk** Descriptions =
-    ( rtslot_inheritance_descripton_vk** )DescriptionsGFX;
-
-  // Find Depth/Stencil Slots and count Color Slots
-  bool          DEPTH_FOUND     = false;
-  unsigned char COLORSLOT_COUNT = 0, DEPTHDESC_VECINDEX = 0;
-  TGFXLISTCOUNT(core_tgfx_main, Descriptions, DESCCOUNT);
-  for (unsigned char i = 0; i < DESCCOUNT; i++) {
-    const rtslot_inheritance_descripton_vk* DESC = Descriptions[i];
-    if (DESC->IS_DEPTH) {
-      if (DEPTH_FOUND) {
-        printer(result_tgfx_FAIL,
-                "Inherite_RTSlotSet() has failed because there are two depth buffers in the "
-                "description, which is not supported!");
-        return result_tgfx_INVALIDARGUMENT;
-      }
-      DEPTH_FOUND        = true;
-      DEPTHDESC_VECINDEX = i;
-      if (BaseSet->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT->DEPTH_OPTYPE ==
-            operationtype_tgfx_READ_ONLY &&
-          (DESC->OPTYPE == operationtype_tgfx_WRITE_ONLY ||
-           DESC->OPTYPE == operationtype_tgfx_READ_AND_WRITE)) {
-        printer(result_tgfx_FAIL,
-                "Inherite_RTSlotSet() has failed because you can't use a Read-Only DepthSlot with "
-                "Write Access in a Inherited Set!");
-        return result_tgfx_INVALIDARGUMENT;
-      }
-      InheritedSet.DEPTH_OPTYPE   = DESC->OPTYPE;
-      InheritedSet.STENCIL_OPTYPE = DESC->OPTYPESTENCIL;
-    } else {
-      COLORSLOT_COUNT++;
-    }
-  }
-  if (!DEPTH_FOUND) {
-    InheritedSet.DEPTH_OPTYPE = operationtype_tgfx_UNUSED;
-  }
-  if (COLORSLOT_COUNT != BaseSet->PERFRAME_SLOTSETs[0].COLORSLOTs_COUNT) {
-    printer(result_tgfx_FAIL,
-            "Inherite_RTSlotSet() has failed because BaseSet's Color Slot count doesn't match "
-            "given Descriptions's one!");
-    return result_tgfx_INVALIDARGUMENT;
-  }
-
-  InheritedSet.COLOR_OPTYPEs = new operationtype_tgfx[COLORSLOT_COUNT];
-  // Set OPTYPEs of inherited slotset
-  for (unsigned int i = 0; i < COLORSLOT_COUNT; i++) {
-    if (i == DEPTHDESC_VECINDEX) {
-      continue;
-    }
-    unsigned char slotindex = ((i > DEPTHDESC_VECINDEX) ? (i - 1) : i);
-
-    // FIX: LoadType isn't supported natively while changing subpass, it may be supported by adding
-    // a VkCmdPipelineBarrier but don't want to bother with it for now!
-    InheritedSet.COLOR_OPTYPEs[slotindex] = Descriptions[i]->OPTYPE;
-  }
-
-  IRTSLOTSET_VKOBJ* finalobj = hidden->irtslotsets.create_OBJ();
-  *finalobj                  = InheritedSet;
-  *InheritedSlotSetHandle    = hidden->irtslotsets.returnHANDLEfromOBJ(finalobj);
-  return result_tgfx_SUCCESS;
-}
-void vk_deleteInheritedRTSlotset(inheritedRTSlotset_tgfxhnd InheritedRTSlotSetHandle) {}
 
 /////////////////////////////////////////////////////
 //								MEMORY
@@ -1442,31 +1179,77 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
   return result_tgfx_SUCCESS;
 }
 
+result_tgfx vk_createRasterpass(gpu_tgfxhnd i_gpu, unsigned char colorSlotCount,
+                                rasterpassSlotDescription_tgfx* colorSlotDescs,
+                                rasterpassSlotDescription_tgfx  depthStencilSlotDesc,
+                                extension_tgfxlsthnd            exts,
+                                subRasterpass_tgfxlsthnd        subRasterpasses) {
+  GPU_VKOBJ* gpu = core_vk->getGPUs().getOBJfromHANDLE(i_gpu);
+
+  VkAttachmentDescription attachmentDescs[VKCONST_MAXRTSLOTCOUNT]     = {};
+  VkAttachmentReference   colorAttachmentRefs[VKCONST_MAXRTSLOTCOUNT] = {}, depthAttachmentRef = {};
+  for (uint32_t i = 0; i < colorSlotCount; i++) {
+    attachmentDescs[i].storeOp        = vk_findStoreTypeVk(colorSlotDescs[i].storeType);
+    attachmentDescs[i].loadOp         = vk_findLoadTypeVk(colorSlotDescs[i].loadType);
+    VkAccessFlags firstAccess, lastAccess;
+    vk_findImageAccessPattern(colorSlotDescs[i].layout, firstAccess,
+                              attachmentDescs[i].initialLayout);
+    attachmentDescs[i].finalLayout    = attachmentDescs[i].initialLayout;
+    attachmentDescs[i].format         = vk_findFormatVk(colorSlotDescs[i].format);
+    attachmentDescs[i].samples        = VK_SAMPLE_COUNT_1_BIT;
+
+    colorAttachmentRefs[i].attachment = i;
+    colorAttachmentRefs[i].layout     = attachmentDescs[i].initialLayout;
+  }
+
+  VkSubpassDescription    subpassDesc                             = {};
+  {
+    subpassDesc.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpassDesc.colorAttachmentCount = colorSlotCount;
+    subpassDesc.pColorAttachments    = colorAttachmentRefs;
+    if (depthStencilSlotDesc.layout) {
+      subpassDesc.pDepthStencilAttachment = &depthAttachmentRef;
+    }
+  }
+
+
+  VkRenderPassCreateInfo ci = {};
+  ci.attachmentCount        = colorSlotCount + ((depthStencilSlotDesc.layout) ? 1 : 0);
+  ci.pAttachments           = attachmentDescs;
+  ci.subpassCount           = 1;
+  ci.pSubpasses             = &subpassDesc;
+  ci.sType                  = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+  VkRenderPass rp;
+  THROW_RETURN_IF_FAIL(vkCreateRenderPass(gpu->vk_logical, &ci, nullptr, &rp),
+                       "RenderPass creation has failed!", result_tgfx_FAIL);
+
+  SUBRASTERPASS_VKOBJ* subpass = hidden->subrasterpasses.create_OBJ();
+  subpass->isDepthAttachment   = (depthStencilSlotDesc.layout) ? 1 : 0;
+  subpass->m_gpu               = i_gpu;
+  subpass->m_subpassIndx       = 0;
+  subpass->vk_renderPass       = rp;
+  subRasterpasses[0]          = hidden->subrasterpasses.returnHANDLEfromOBJ(subpass);
+  return result_tgfx_SUCCESS;
+}
+
 /////////////////////////////////////////////////////
 ///				INITIALIZATION PROCEDURE
 /////////////////////////////////////////////////////
 
 inline void set_functionpointers() {
-  core_tgfx_main->contentmanager->changeRTSlot_Texture    = vk_changeRTSlotTexture;
-  core_tgfx_main->contentmanager->compileShaderSource     = vk_compileShaderSource;
-  core_tgfx_main->contentmanager->createBindingTableType  = vk_createBindingTableType;
-  core_tgfx_main->contentmanager->instantiateBindingTable = vk_instantiateBindingTable;
-  core_tgfx_main->contentmanager->copyComputePipeline     = vk_copyComputePipeline;
-  core_tgfx_main->contentmanager->createComputePipeline   = vk_createComputePipeline;
-  core_tgfx_main->contentmanager->createBuffer            = vk_createBuffer;
-  //  core_tgfx_main->contentmanager->copyRasterPipeline         = vk_copyRasterPipeline;
-  //  core_tgfx_main->contentmanager->createRTSlotset = Create_RTSlotset;
-  //  core_tgfx_main->contentmanager->createSampler              = vk_createSampler;
+  core_tgfx_main->contentmanager->compileShaderSource      = vk_compileShaderSource;
+  core_tgfx_main->contentmanager->createBindingTableType   = vk_createBindingTableType;
+  core_tgfx_main->contentmanager->instantiateBindingTable  = vk_instantiateBindingTable;
+  core_tgfx_main->contentmanager->copyComputePipeline      = vk_copyComputePipeline;
+  core_tgfx_main->contentmanager->createComputePipeline    = vk_createComputePipeline;
+  core_tgfx_main->contentmanager->createBuffer             = vk_createBuffer;
   core_tgfx_main->contentmanager->createTexture            = vk_createTexture;
   core_tgfx_main->contentmanager->createVertexAttribLayout = vk_createVertexAttribLayout;
-  core_tgfx_main->contentmanager->deleteInheritedRTSlotset = vk_deleteInheritedRTSlotset;
   // core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
-  // core_tgfx_main->contentmanager->Delete_RTSlotSet          = Delete_RTSlotSet;
-  core_tgfx_main->contentmanager->deleteShaderSource        = vk_destroyShaderSource;
-  core_tgfx_main->contentmanager->destroyVertexAttribLayout = vk_destroyVertexAttribLayout;
-  core_tgfx_main->contentmanager->destroyAllResources       = vk_destroyAllResources;
-  core_tgfx_main->contentmanager->inheriteRTSlotset         = vk_inheriteRTSlotset;
-  // core_tgfx_main->contentmanager->createRasterPipeline       = vk_createRasterPipeline;
+  core_tgfx_main->contentmanager->deleteShaderSource         = vk_destroyShaderSource;
+  core_tgfx_main->contentmanager->destroyVertexAttribLayout  = vk_destroyVertexAttribLayout;
+  core_tgfx_main->contentmanager->destroyAllResources        = vk_destroyAllResources;
+  core_tgfx_main->contentmanager->createRasterPipeline       = vk_createRasterPipeline;
   core_tgfx_main->contentmanager->setBindingTable_Buffer     = vk_setBindingTable_Buffer;
   core_tgfx_main->contentmanager->setBindingTable_Texture    = vk_setBindingTable_Texture;
   core_tgfx_main->contentmanager->createHeap                 = vk_createHeap;
@@ -1475,14 +1258,17 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->getRemainingMemory         = vk_getRemainingMemory;
   core_tgfx_main->contentmanager->bindToHeap_Buffer          = vk_bindToHeap_Buffer;
   core_tgfx_main->contentmanager->bindToHeap_Texture         = vk_bindToHeap_Texture;
+  core_tgfx_main->contentmanager->createRasterpass           = vk_createRasterpass;
 }
 
-void startGlslang() {
-  auto* dllHandle           = DLIB_LOAD_TAPI("TGFXVulkanGlslang.dll");
-  void (*startGlslangFnc)() = ( void (*)() )DLIB_FUNC_LOAD_TAPI(dllHandle, "startGlslang");
+void initGlslang() {
+  // Load dll and func pointers
+  auto* dllHandle          = DLIB_LOAD_TAPI("TGFXVulkanGlslang.dll");
+  void (*initGlslangFnc)() = ( void (*)() )DLIB_FUNC_LOAD_TAPI(dllHandle, "startGlslang");
   VKCONST_GLSLANG_COMPILE_FNC =
     ( vk_glslangCompileFnc )DLIB_FUNC_LOAD_TAPI(dllHandle, "glslangCompile");
-  startGlslangFnc();
+  // Init glslang
+  initGlslangFnc();
 }
 void vk_createContentManager() {
   VKGLOBAL_VIRMEM_CONTENTMANAGER =
@@ -1493,19 +1279,11 @@ void vk_createContentManager() {
 
   set_functionpointers();
 
-  startGlslang();
+  initGlslang();
 }
 
 // Helper funcs
 
-VK_LINEAR_OBJARRAY<RTSLOTSET_VKOBJ, RTSlotset_tgfxhnd, 1024>&
-gpudatamanager_public::GETRTSLOTSET_ARRAY() {
-  return hidden->rtslotsets;
-}
-VK_LINEAR_OBJARRAY<IRTSLOTSET_VKOBJ, inheritedRTSlotset_tgfxhnd, 1024>&
-gpudatamanager_public::GETIRTSLOTSET_ARRAY() {
-  return hidden->irtslotsets;
-}
 VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>&
 gpudatamanager_public::GETTEXTURES_ARRAY() {
   return hidden->textures;
@@ -1528,6 +1306,10 @@ gpudatamanager_public::GETBINDINGTABLE_ARRAY() {
 VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10>&
 gpudatamanager_public::GETBINDINGTABLETYPE_ARRAY() {
   return hidden->bindingtabletypes;
+}
+VK_LINEAR_OBJARRAY<SUBRASTERPASS_VKOBJ, subRasterpass_tgfxhnd, 1 << 16>&
+gpudatamanager_public::GETSUBRASTERPASS_ARRAY() {
+  return hidden->subrasterpasses;
 }
 
 VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls) {

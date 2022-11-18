@@ -43,8 +43,8 @@ typedef struct tgfx_gpu_description {
   const char*   name;
   unsigned int  gfxApiVersion, driverVersion;
   gpu_type_tgfx type;
-  unsigned char operationSupport_raster, operationSupport_compute,
-    operationSupport_transfer, queueFamilyCount;
+  unsigned char operationSupport_raster, operationSupport_compute, operationSupport_transfer,
+    queueFamilyCount;
   const memoryDescription_tgfx* memRegions;
   unsigned char                 memRegionsCount;
 } gpuDescription_tgfx;
@@ -132,25 +132,15 @@ typedef struct tgfx_heap_requirements_info {
   unsigned long long size;
 } heapRequirementsInfo_tgfx;
 
-typedef struct tgfx_init_secondstage_info {
-  gpu_tgfxhnd RendererGPU;
-  /*
-  If isMultiThreaded is 0 :
-  * 1) You shouldn't call TGFX functions concurrently. So your calls to TGFX functions should be
-  externally synchronized.
-  * 2) TGFX never uses multiple threads. So GPU command creation process may take longer on large
-  workloads
-  * If isMultiThreaded is 1 :
-  * 1) You shouldn't call TGFX functions concurrently. So your calls to TGFX functions should be
-  externally synchronized.
-  * 2) TGFX uses multiple threads to create GPU commands faster.
-  * If isMultiThreaded is 2 :
-  * 1) You can call TGFX functions concurrently. You can call all TGFX functions asynchronously
-  unless otherwise is mentioned.
-  * 2) TGFX uses multiple threads to create GPU commands faster.
-  */
-  unsigned char ShouldActive_dearIMGUI, isMultiThreaded;
-  // Possibly, these won't be needed anymore with new design
-  unsigned int MAXDYNAMICSAMPLER_DESCCOUNT, MAXDYNAMICSAMPLEDIMAGE_DESCCOUNT,
-    MAXDYNAMICSTORAGEIMAGE_DESCCOUNT, MAXDYNAMICBUFFER_DESCCOUNT, MAXBINDINGTABLECOUNT;
-} initSecondStageInfo_tgfx;
+// 32 byte data to store extreme colors (RGBA64)
+typedef struct tgfx_typelessColor {
+  char data[32];
+} typelessColor_tgfx;
+
+typedef struct tgfx_rasterpass_slot_description {
+  drawpassstore_tgfx   storeType;
+  drawpassload_tgfx    loadType;
+  typelessColor_tgfx   clearValue;
+  textureChannels_tgfx format;
+  image_access_tgfx    layout;
+} rasterpassSlotDescription_tgfx;

@@ -213,7 +213,8 @@ void load_systems() {
       bufferDesc.dataSize               = 1650;
       bufferDesc.exts                   = nullptr;
       bufferDesc.permittedQueues        = allQueues;
-      bufferDesc.usageFlag              = tgfx->helpers->createUsageFlag_Buffer(true, true, false, true, false, false, false, false);
+      bufferDesc.usageFlag =
+        tgfx->helpers->createUsageFlag_Buffer(true, true, false, true, false, false, false, false);
       contentManager->createBuffer(gpu, &bufferDesc, &firstBuffer);
 
       heapRequirementsInfo_tgfx firstTextureReqs = {};
@@ -223,11 +224,12 @@ void load_systems() {
       heapRequirementsInfo_tgfx bufferHeapReqs = {};
       contentManager->getHeapRequirement_Buffer(firstBuffer, nullptr, &bufferHeapReqs);
 
-      uint32_t lastMemPoint        = 0;
-      auto& calculateHeapOffset = [&lastMemPoint](const heapRequirementsInfo_tgfx& heapReq) -> void {
+      uint32_t lastMemPoint = 0;
+      auto&    calculateHeapOffset =
+        [&lastMemPoint](const heapRequirementsInfo_tgfx& heapReq) -> void {
         lastMemPoint = ((lastMemPoint / heapReq.offsetAlignment) +
-                ((lastMemPoint % heapReq.offsetAlignment) ? 1 : 0)) *
-               heapReq.offsetAlignment;
+                        ((lastMemPoint % heapReq.offsetAlignment) ? 1 : 0)) *
+                       heapReq.offsetAlignment;
       };
       contentManager->bindToHeap_Texture(firstHeap, lastMemPoint, firstTexture, nullptr);
       lastMemPoint += firstTextureReqs.size;
@@ -267,6 +269,18 @@ void load_systems() {
                                             &firstComputePipeline);
     }
 
+    rasterpassSlotDescription_tgfx firstSlotDesc;
+    subRasterpass_tgfxhnd          firstSubRasterpass = {};
+    float                          clearValue[]       = {1.0f, 1.0f, 1.0f, 1.0f};
+    memcpy(firstSlotDesc.clearValue.data, clearValue, sizeof(clearValue));
+    firstSlotDesc.clearValue = {};
+    firstSlotDesc.loadType   = drawpassload_tgfx_CLEAR;
+    firstSlotDesc.storeType  = drawpassstore_tgfx_STORE;
+    firstSlotDesc.layout     = image_access_tgfx_SHADER_SAMPLEWRITE;
+    firstSlotDesc.format     = texture_channels_tgfx_R8B;
+    contentManager->createRasterpass(gpu, 1, &firstSlotDesc, rasterpassSlotDescription_tgfx(),
+                                     nullptr, &firstSubRasterpass);
+
     fence_tgfxhnd fence;
     renderer->createFences(gpu, 1, 15u, &fence);
     for (uint32_t queueFamIndx = 0; queueFamIndx < 1; queueFamIndx++) {
@@ -284,13 +298,14 @@ void load_systems() {
 
         static constexpr uint32_t cmdCount           = 4;
         commandBundle_tgfxhnd     firstCmdBundles[2] = {
-              renderer->beginCommandBundle(queue, nullptr, cmdCount, nullptr),
+              renderer->beginCommandBundle(gpu, cmdCount, nullptr),
               ( commandBundle_tgfxhnd )tgfx->INVALIDHANDLE};
         bindingTable_tgfxhnd bindingTable = {};
         contentManager->instantiateBindingTable(bindingType, true, &bindingTable);
         uint32_t bindingIndex = 0;
-        //contentManager->setBindingTable_Texture(bindingTable, 1, &bindingIndex, &secStorageTexture);
-        
+        // contentManager->setBindingTable_Texture(bindingTable, 1, &bindingIndex,
+        // &secStorageTexture);
+
         contentManager->setBindingTable_Buffer(bindingTable, 1, &bindingIndex, &firstBuffer,
                                                nullptr, nullptr, nullptr);
         // Record command bundle
@@ -298,10 +313,10 @@ void load_systems() {
           bindingTable_tgfxhnd bindingTables[2] = {bindingTable,
                                                    ( bindingTable_tgfxhnd )tgfx->INVALIDHANDLE};
           uint32_t             cmdKey           = 0;
-          /*
+          
           renderer->cmdBarrierTexture(
-            firstCmdBundles[0], cmdKey++, secStorageTexture, image_access_tgfx_NO_ACCESS,
-            image_access_tgfx_SHADER_WRITEONLY, textureAllUsages, textureAllUsages, nullptr);*/
+            firstCmdBundles[0], cmdKey++, firstTexture, image_access_tgfx_NO_ACCESS,
+            image_access_tgfx_SHADER_WRITEONLY, textureAllUsages, textureAllUsages, nullptr);
           renderer->cmdBindPipeline(firstCmdBundles[0], cmdKey++, firstComputePipeline);
           renderer->cmdBindBindingTables(firstCmdBundles[0], cmdKey++, bindingTables, 0,
                                          pipelineType_tgfx_COMPUTE);
@@ -312,7 +327,13 @@ void load_systems() {
         renderer->finishCommandBundle(firstCmdBundles[0], nullptr);
         commandBuffer_tgfxhnd firstCmdBuffers[2] = {renderer->beginCommandBuffer(queue, nullptr),
                                                     ( commandBuffer_tgfxhnd )tgfx->INVALIDHANDLE};
+        typelessColor_tgfx    clearValue         = {};
+        texture_tgfxhnd       colorAttachments[2] = {firstTexture,
+                                                     ( texture_tgfxhnd )tgfx->INVALIDHANDLE};
+        renderer->beginRasterpass(firstCmdBuffers[0], firstSubRasterpass, colorAttachments,
+                                  &clearValue, nullptr, {});
         renderer->executeBundles(firstCmdBuffers[0], firstCmdBundles, nullptr);
+        renderer->endRasterpass(firstCmdBuffers[0]);
         renderer->endCommandBuffer(firstCmdBuffers[0]);
         for (uint32_t i = 0; i < 3; i++) {
           _sleep(1 << 4);
@@ -342,13 +363,15 @@ void load_systems() {
             printf("Waiting for fence value!\n");
           }
           tgfx->getCurrentSwapchainTextureIndex(window, &swpchnIndx);
-          
+
           firstCmdBuffers[0] = renderer->beginCommandBuffer(queue, nullptr);
+          renderer->beginRasterpass(firstCmdBuffers[0], firstSubRasterpass, colorAttachments,
+                                    &clearValue, nullptr, {});
           renderer->executeBundles(firstCmdBuffers[0], firstCmdBundles, nullptr);
+          renderer->endRasterpass(firstCmdBuffers[0]);
           renderer->endCommandBuffer(firstCmdBuffers[0]);
           renderer->queueExecuteCmdBuffers(queue, firstCmdBuffers, nullptr);
           renderer->queueSubmit(queue);
-          
 
           if (i % 2) {
             renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);

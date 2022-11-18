@@ -180,6 +180,27 @@ inline textureChannels_tgfx vk_findTextureChannelsTgfx(VkFormat format) {
       return texture_channels_tgfx_R8B;
   }
 }
+inline datatype_tgfx vk_findTextureDataType(VkFormat format) {
+  switch (format) {
+    case VK_FORMAT_D32_SFLOAT:
+    case VK_FORMAT_R32G32B32A32_SFLOAT:
+    case VK_FORMAT_B8G8R8A8_SRGB:
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+    case VK_FORMAT_B8G8R8A8_UNORM: return datatype_tgfx_VAR_FLOAT32;
+
+    case VK_FORMAT_B8G8R8A8_UINT:
+    case VK_FORMAT_R8G8B8A8_UINT:
+    case VK_FORMAT_R8G8B8_UINT:
+    case VK_FORMAT_R32G32B32A32_UINT:
+    case VK_FORMAT_D24_UNORM_S8_UINT: return datatype_tgfx_VAR_UINT32;
+
+    case VK_FORMAT_R8G8B8A8_SINT:
+    case VK_FORMAT_R8_SINT:
+    case VK_FORMAT_R32G32B32A32_SINT: return datatype_tgfx_VAR_INT32;
+    default: printer(result_tgfx_FAIL, "vk_findTextureDataType() has failed!"); return datatype_tgfx_UNDEFINED;
+  }
+}
 inline VkDescriptorType vk_findDescTypeVk(shaderdescriptortype_tgfx desc) {
   switch (desc) {
     case shaderdescriptortype_tgfx_BUFFER: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -315,15 +336,27 @@ inline void Find_DepthMode_byGFXDepthMode(depthmode_tgfx mode, VkBool32& ShouldT
       break;
   }
 }
-inline VkAttachmentLoadOp Find_LoadOp_byGFXLoadOp(drawpassload_tgfx load) {
+inline VkAttachmentLoadOp vk_findLoadTypeVk(drawpassload_tgfx load) {
   switch (load) {
     case drawpassload_tgfx_CLEAR: return VK_ATTACHMENT_LOAD_OP_CLEAR;
-    case drawpassload_tgfx_FULL_OVERWRITE: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    case drawpassload_tgfx_DISCARD: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     case drawpassload_tgfx_LOAD: return VK_ATTACHMENT_LOAD_OP_LOAD;
+    case drawpassload_tgfx_NONE: return VK_ATTACHMENT_LOAD_OP_NONE_EXT;
     default:
       printer(result_tgfx_INVALIDARGUMENT,
-              "Find_LoadOp_byGFXLoadOp() doesn't support this type of load!");
+              "vk_findLoadTypeVk() doesn't support this type of load!");
       return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
+  }
+}
+inline VkAttachmentStoreOp vk_findStoreTypeVk(drawpassstore_tgfx store) {
+  switch (store) {
+    case drawpassstore_tgfx_STORE: return VK_ATTACHMENT_STORE_OP_STORE;
+    case drawpassstore_tgfx_DISCARD: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    case drawpassload_tgfx_NONE: return VK_ATTACHMENT_STORE_OP_NONE;
+    default:
+      printer(result_tgfx_INVALIDARGUMENT,
+              "vk_findLoadTypeVk() doesn't support this type of load!");
+      return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
   }
 }
 inline VkCompareOp Find_CompareOp_byGFXStencilCompare(stencilcompare_tgfx op) {

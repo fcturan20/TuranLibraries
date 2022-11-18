@@ -144,89 +144,11 @@ static shaderStageFlag_tgfxhnd vk_createShaderStageFlag(unsigned char count, ...
     return ( shaderStageFlag_tgfxhnd )flag;
   }
 }
-static RTSlotDescription_tgfxhnd CreateRTSlotDescription_Color(
-  texture_tgfxhnd Texture0, texture_tgfxhnd Texture1, operationtype_tgfx OPTYPE,
-  drawpassload_tgfx LOADTYPE, unsigned char isUsedLater, unsigned char SLOTINDEX,
-  vec4_tgfx clear_value) {
-  rtslot_create_description_vk* desc = new rtslot_create_description_vk;
-  desc->clear_value                  = clear_value;
-  desc->isUsedLater                  = isUsedLater;
-  desc->loadtype                     = LOADTYPE;
-  desc->optype                       = OPTYPE;
-  desc->textures[0] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(Texture0);
-  desc->textures[1] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(Texture1);
-  return ( RTSlotDescription_tgfxhnd )desc;
-}
-static RTSlotDescription_tgfxhnd CreateRTSlotDescription_DepthStencil(
-  texture_tgfxhnd Texture0, texture_tgfxhnd Texture1, operationtype_tgfx DEPTHOP,
-  drawpassload_tgfx DEPTHLOAD, operationtype_tgfx STENCILOP, drawpassload_tgfx STENCILLOAD,
-  float DEPTHCLEARVALUE, unsigned char STENCILCLEARVALUE) {
-  printer(result_tgfx_WARNING,
-          "CreateRTSlotDescription_DepthStencil should be implemented properly!");
-  rtslot_create_description_vk* desc = new rtslot_create_description_vk;
-  desc->clear_value.x                = DEPTHCLEARVALUE;
-  desc->clear_value.y                = STENCILCLEARVALUE;
-  desc->isUsedLater                  = true;
-  desc->loadtype                     = DEPTHLOAD;
-  desc->optype                       = DEPTHOP;
-  desc->textures[0] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(Texture0);
-  desc->textures[1] = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(Texture1);
-  return ( RTSlotDescription_tgfxhnd )desc;
-}
-static rtslotusage_tgfx_handle CreateRTSlotUsage_Color(RTSlotDescription_tgfxhnd base_slot,
-                                                       operationtype_tgfx        OPTYPE,
-                                                       drawpassload_tgfx         LOADTYPE) {
-  printer(result_tgfx_WARNING, "Vulkan backend doesn't use LOADTYPE for now!");
-  if (!base_slot) {
-    printer(result_tgfx_INVALIDARGUMENT,
-            "CreateRTSlotUsage_Color() has failed because base_slot is nullptr!");
-    return nullptr;
-  }
-  rtslot_create_description_vk* baseslot = ( rtslot_create_description_vk* )base_slot;
-  if (baseslot->optype == operationtype_tgfx_READ_ONLY &&
-      (OPTYPE == operationtype_tgfx_WRITE_ONLY || OPTYPE == operationtype_tgfx_READ_AND_WRITE)) {
-    printer(result_tgfx_INVALIDARGUMENT,
-            "Inherite_RTSlotSet() has failed because you can't use a Read-Only ColorSlot with "
-            "Write Access in a Inherited Set!");
-    return nullptr;
-  }
-  rtslot_inheritance_descripton_vk* usage = new rtslot_inheritance_descripton_vk;
-  usage->IS_DEPTH                         = false;
-  usage->OPTYPE                           = OPTYPE;
-  usage->OPTYPESTENCIL                    = operationtype_tgfx_UNUSED;
-  usage->LOADTYPE                         = LOADTYPE;
-  usage->LOADTYPESTENCIL                  = drawpassload_tgfx_CLEAR;
-  return ( rtslotusage_tgfx_handle )usage;
-}
-static rtslotusage_tgfx_handle CreateRTSlotUsage_Depth(RTSlotDescription_tgfxhnd base_slot,
-                                                       operationtype_tgfx        DEPTHOP,
-                                                       drawpassload_tgfx         DEPTHLOAD,
-                                                       operationtype_tgfx        STENCILOP,
-                                                       drawpassload_tgfx         STENCILLOAD) {
-  if (!base_slot) {
-    printer(result_tgfx_INVALIDARGUMENT,
-            "CreateRTSlotUsage_Color() has failed because base_slot is nullptr!");
-    return nullptr;
-  }
-  rtslot_create_description_vk* baseslot = ( rtslot_create_description_vk* )base_slot;
-  if (baseslot->optype == operationtype_tgfx_READ_ONLY &&
-      (DEPTHOP == operationtype_tgfx_WRITE_ONLY || DEPTHOP == operationtype_tgfx_READ_AND_WRITE)) {
-    printer(result_tgfx_INVALIDARGUMENT,
-            "Inherite_RTSlotSet() has failed because you can't use a Read-Only DepthSlot with "
-            "Write Access in a Inherited Set!");
-    return nullptr;
-  }
-  rtslot_inheritance_descripton_vk* usage = new rtslot_inheritance_descripton_vk;
-  usage->IS_DEPTH                         = true;
-  usage->OPTYPE                           = DEPTHOP;
-  usage->OPTYPESTENCIL                    = STENCILOP;
-  usage->LOADTYPE                         = DEPTHLOAD;
-  usage->LOADTYPESTENCIL                  = STENCILLOAD;
-  return ( rtslotusage_tgfx_handle )usage;
-}
+
 static depthsettings_tgfxhnd CreateDepthConfiguration(unsigned char        ShouldWrite,
                                                       depthtest_tgfx       COMPAREOP,
                                                       extension_tgfxlsthnd EXTENSIONS) {
+  
   /*
   depthsettingsdesc_vk* desc = new depthsettingsdesc_vk;
   TGFXLISTCOUNT(core_tgfx_main, EXTENSIONS, extcount);

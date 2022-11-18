@@ -3,6 +3,7 @@
 
 #include "vk_core.h"
 #include "vk_predefinitions.h"
+#include "vk_resource.h"
 
 vk_uint32c                    VKCONST_MAXSUBMITCOUNT = 32, VKCONST_MAXQUEUEFENCECOUNT = 32;
 extern vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER;
@@ -126,6 +127,9 @@ struct QUEUEFAM_VK {
   cmdPool_vk*  m_pools          = nullptr;
 
   VK_STATICVECTOR<QUEUE_VKOBJ, gpuQueue_tgfxhnd, VKCONST_MAXQUEUECOUNT_PERFAM> m_queues;
+  static constexpr uint32_t MAXCMDBUNDLECOUNT   = 1024;
+  uint32_t                  m_cmdBundleCount = 0;
+  cmdBundleRef_vk           m_cmdBundleRefs[MAXCMDBUNDLECOUNT];
 
   QUEUEFAM_VK& operator=(const QUEUEFAM_VK& src) {
     isALIVE = true;
@@ -134,20 +138,20 @@ struct QUEUEFAM_VK {
     return *this;
   }
 };
-  /*
-  This class manages queues and command buffer allocations per GPU
-    This is important in multi-threaded cases because;
-  1) You can't use the same command pool from different threads at the same time
-  2) Command buffers should be tracked as if their execution has done, free command buffer
-  3) Execution tracking is achieved by tracking queues, fences etc. So queues should be managed
-      here too
- NOTE: User-side command buffers are different because they're not actual calls (sorting
- is needed) So after sorting, thread calls poolManager to get command buffer. poolManager find
- available command pool, if there isn't then creates. Then attaches command pool to queue, so if
- queue finishes executing then command pool is freed. *POSSIBILITY: Maybe no need to bind command
- pools, just bind command buffers to queue.
-    *  While creating cmdbuffers, search all previous pools and select the one with
-        no actively recorded-executed cmdbuffer. Because pool creation-destruction is costly.
+/*
+This class manages queues and command buffer allocations per GPU
+  This is important in multi-threaded cases because;
+1) You can't use the same command pool from different threads at the same time
+2) Command buffers should be tracked as if their execution has done, free command buffer
+3) Execution tracking is achieved by tracking queues, fences etc. So queues should be managed
+    here too
+NOTE: User-side command buffers are different because they're not actual calls (sorting
+is needed) So after sorting, thread calls poolManager to get command buffer. poolManager find
+available command pool, if there isn't then creates. Then attaches command pool to queue, so if
+queue finishes executing then command pool is freed. *POSSIBILITY: Maybe no need to bind command
+pools, just bind command buffers to queue.
+  *  While creating cmdbuffers, search all previous pools and select the one with
+      no actively recorded-executed cmdbuffer. Because pool creation-destruction is costly.
 */
 struct manager_vk {
  public:
@@ -179,8 +183,9 @@ struct manager_vk {
   QUEUE_VKOBJ* m_internalQueue;
 
   VK_STATICVECTOR<QUEUEFAM_VK, gpuQueue_tgfxhnd, VKCONST_MAXQUEUEFAMCOUNT_PERGPU> m_queueFams;
+  VK_STATICVECTOR<FRAMEBUFFER_VKOBJ, void*, 10>                           m_framebuffers;
 };
 
-void vk_allocateCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, VkCommandBuffer* cbs,
-                          uint32_t count);
-VkCommandPool vk_getSecondaryCmdPool(QUEUEFAM_VK* queueFam, unsigned int poolIndx);
+void vk_allocateCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, cmdPool_vk*& cmdPool,
+                          VkCommandBuffer* cbs, uint32_t count);
+void vk_freeCmdBuffer(cmdPool_vk* cmdPool, VkCommandBufferLevel level, VkCommandBuffer cb);

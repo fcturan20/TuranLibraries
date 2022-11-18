@@ -91,8 +91,8 @@ void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription&
   Desc.format        = vk_findFormatVk(DepthSlot->RT->m_channels);
   Desc.samples       = VK_SAMPLE_COUNT_1_BIT;
   Desc.flags         = 0;
-  Desc.loadOp        = Find_LoadOp_byGFXLoadOp(DepthSlot->DEPTH_LOAD);
-  Desc.stencilLoadOp = Find_LoadOp_byGFXLoadOp(DepthSlot->STENCIL_LOAD);
+  Desc.loadOp        = vk_findLoadTypeVk(DepthSlot->DEPTH_LOAD);
+  Desc.stencilLoadOp = vk_findLoadTypeVk(DepthSlot->STENCIL_LOAD);
   if (DepthSlot->IS_USED_LATER) {
     Desc.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
     Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -138,8 +138,8 @@ void Fill_DepthAttachmentDescription_NOSeperated(VkAttachmentDescription& Desc,
   Desc.format        = vk_findFormatVk(DepthSlot->RT->m_channels);
   Desc.samples       = VK_SAMPLE_COUNT_1_BIT;
   Desc.flags         = 0;
-  Desc.loadOp        = Find_LoadOp_byGFXLoadOp(DepthSlot->DEPTH_LOAD);
-  Desc.stencilLoadOp = Find_LoadOp_byGFXLoadOp(DepthSlot->STENCIL_LOAD);
+  Desc.loadOp        = vk_findLoadTypeVk(DepthSlot->DEPTH_LOAD);
+  Desc.stencilLoadOp = vk_findLoadTypeVk(DepthSlot->STENCIL_LOAD);
   if (DepthSlot->IS_USED_LATER) {
     Desc.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
     Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;

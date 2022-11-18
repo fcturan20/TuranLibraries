@@ -214,7 +214,8 @@ enum class VKHANDLETYPEs : unsigned short {
   FENCE,
   CMDBUFFER,
   CMDBUNDLE,
-  PIPELINE
+  PIPELINE,
+  SUBRASTERPASS
 };
 
 struct VKOBJHANDLE {

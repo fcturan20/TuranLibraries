@@ -12,6 +12,7 @@
 #include <mutex>
 
 #include "tgfx_renderer.h"
+#include "vk_contentmanager.h"
 #include "vk_core.h"
 #include "vk_renderer.h"
 #include "vkext_timelineSemaphore.h"
@@ -41,8 +42,10 @@ struct CMDBUFFER_VKOBJ {
     VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
     return (uint32_t(handle.EXTRA_FLAGs) << 24) >> 24;
   }
-  VkCommandBuffer vk_cb     = nullptr;
-  uint8_t         m_gpuIndx = 0, m_queueFamIndx = 0, m_cmdPoolIndx = 0;
+  VkCommandBuffer      vk_cb     = {};
+  uint8_t              m_gpuIndx = 0, m_queueFamIndx = 0, m_cmdPoolIndx = 0;
+  FRAMEBUFFER_VKOBJ*   m_activeFramebuffer = {};
+  SUBRASTERPASS_VKOBJ* m_activeSubpass     = {};
 };
 
 struct cmdPool_vk {
@@ -52,12 +55,11 @@ struct cmdPool_vk {
     vk_secondaryCP = RefCP.vk_secondaryCP;
   }
   VkCommandPool vk_primaryCP = VK_NULL_HANDLE, vk_secondaryCP = VK_NULL_HANDLE;
+  QUEUEFAM_VK*  m_queueFam = nullptr;
+  std::mutex    m_primarySync, m_secondarySync;
 
   VK_STATICVECTOR<CMDBUFFER_VKOBJ, commandBuffer_tgfxhnd, VKCONST_MAXCMDBUFFER_PRIMARY_COUNT>
     m_cbsPrimary;
-
- private:
-  std::mutex Sync;
 };
 GPU_VKOBJ* QUEUE_VKOBJ::getGPUfromHandle(gpuQueue_tgfxhnd hnd) {
   VKOBJHANDLE handle  = *( VKOBJHANDLE* )&hnd;
@@ -103,15 +105,15 @@ manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
 
     queueFam->vk_queueFamIndex = queueFamIndx;
     if (props->queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-      gpu->desc.operationSupport_raster     = true;
+      gpu->desc.operationSupport_raster            = true;
       queueFam->m_supportFlag.is_GRAPHICSsupported = true;
     }
     if (props->queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) {
-      gpu->desc.operationSupport_compute    = true;
+      gpu->desc.operationSupport_compute          = true;
       queueFam->m_supportFlag.is_COMPUTEsupported = true;
     }
     if (props->queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) {
-      gpu->desc.operationSupport_transfer    = true;
+      gpu->desc.operationSupport_transfer          = true;
       queueFam->m_supportFlag.is_TRANSFERsupported = true;
     }
     if (props->queueFamilyProperties.queueCount > VKCONST_MAXQUEUECOUNT_PERFAM) {
@@ -203,21 +205,43 @@ manager_vk::queueCreateInfoList manager_vk::get_queue_cis() const {
   return QueueCreationInfos;
 }
 
-void vk_allocateCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, VkCommandBuffer* cbs,
-                          uint32_t count) {
+void vk_allocateCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, cmdPool_vk*& cmdPool,
+                          VkCommandBuffer* cbs, uint32_t count) {
+  bool        isFound      = false;
+  std::mutex* synchronizer = nullptr;
+  uint32_t    cmdPoolIndx  = 0;
+  while (!isFound) {
+    cmdPool      = &queueFam->m_pools[cmdPoolIndx];
+    synchronizer = (level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) ? (&cmdPool->m_primarySync)
+                                                              : (&cmdPool->m_secondarySync);
+    if (synchronizer->try_lock()) {
+      break;
+    }
+    // Loop again and again till find an unlocked one
+    cmdPoolIndx = (cmdPoolIndx + 1) % threadcount;
+  }
+
   VkCommandBufferAllocateInfo cb_ai = {};
   cb_ai.pNext                       = nullptr;
   cb_ai.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   cb_ai.commandBufferCount          = count;
   cb_ai.level                       = level;
   if (level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    cb_ai.commandPool = queueFam->m_pools[threadingsys->this_thread_index()].vk_primaryCP;
+    cb_ai.commandPool = queueFam->m_pools[cmdPoolIndx].vk_primaryCP;
   } else {
-    cb_ai.commandPool = queueFam->m_pools[threadingsys->this_thread_index()].vk_secondaryCP;
+    cb_ai.commandPool = queueFam->m_pools[cmdPoolIndx].vk_secondaryCP;
   }
   ThrowIfFailed(vkAllocateCommandBuffers(queueFam->m_gpu->vk_logical, &cb_ai, cbs),
                 "vkAllocateCommandBuffers() failed while creating a command buffer, "
                 "report this please!");
+  synchronizer->unlock();
+}
+void vk_freeCmdBuffer(cmdPool_vk* cmdPool, VkCommandBufferLevel level, VkCommandBuffer cb) {
+  vkFreeCommandBuffers(cmdPool->m_queueFam->m_gpu->vk_logical,
+                       (level == VkCommandBufferLevel::VK_COMMAND_BUFFER_LEVEL_PRIMARY)
+                         ? cmdPool->vk_primaryCP
+                         : cmdPool->vk_secondaryCP,
+                       1, &cb);
 }
 void manager_vk::get_queue_objects() {
   for (unsigned int i = 0; i < m_queueFams.size(); i++) {
@@ -255,7 +279,8 @@ void manager_vk::get_queue_objects() {
     }
     queueFam->m_pools = new (VKGLOBAL_VIRMEM_MANAGER) cmdPool_vk[threadcount];
     for (unsigned char threadIndx = 0; threadIndx < threadcount; threadIndx++) {
-      cmdPool_vk&             CP      = queueFam->m_pools[threadIndx];
+      cmdPool_vk& CP                  = queueFam->m_pools[threadIndx];
+      CP.m_queueFam                   = queueFam;
       VkCommandPoolCreateInfo cp_ci_g = {};
       cp_ci_g.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
       cp_ci_g.queueFamilyIndex        = queueFamIndx;
@@ -263,7 +288,8 @@ void manager_vk::get_queue_objects() {
 
       // Create primary Command Pool
       {
-        cp_ci_g.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        cp_ci_g.flags =
+          VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         ThrowIfFailed(vkCreateCommandPool(m_gpu->vk_logical, &cp_ci_g, nullptr, &CP.vk_primaryCP),
                       "Primary command pool creation for a queue has failed!");
       }
@@ -277,8 +303,14 @@ void manager_vk::get_queue_objects() {
       // Allocate Primary Command Buffers
       {
         VkCommandBuffer primaryCBs[VKCONST_MAXCMDBUFFER_PRIMARY_COUNT];
-        vk_allocateCmdBuffer(queueFam, VK_COMMAND_BUFFER_LEVEL_PRIMARY, primaryCBs,
-                             VKCONST_MAXCMDBUFFER_PRIMARY_COUNT);
+
+        VkCommandBufferAllocateInfo ai = {};
+        ai.commandBufferCount          = VKCONST_MAXCMDBUFFER_PRIMARY_COUNT;
+        ai.commandPool                 = CP.vk_primaryCP;
+        ai.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        ai.pNext                       = nullptr;
+        ai.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        vkAllocateCommandBuffers(m_gpu->vk_logical, &ai, primaryCBs);
 
         for (uint32_t cmdBufferIndx = 0; cmdBufferIndx < VKCONST_MAXCMDBUFFER_PRIMARY_COUNT;
              cmdBufferIndx++) {
@@ -588,7 +620,8 @@ void vk_executeBundles(commandBuffer_tgfxhnd cb, commandBundle_tgfxlsthnd bundle
 
   uint32_t        cmdBundleCount                              = 0;
   VkCommandBuffer secCmdBuffers[VKCONST_MAXCMDBUNDLE_PERCALL] = {};
-  vk_getSecondaryCmdBuffers(bundles, secCmdBuffers, &cmdBundleCount);
+  vk_getSecondaryCmdBuffers(bundles, cmdBuffer->m_activeFramebuffer, queueFam,
+                            cmdBuffer->m_activeSubpass, secCmdBuffers, &cmdBundleCount);
   assert(cmdBundleCount <= VKCONST_MAXCMDBUNDLE_PERCALL &&
          "vk_GetSecondaryCmdBuffers() can't exceed VKCONST_MAXCMDBUNDLE_PERCALL!");
   if (!cmdBundleCount) {
@@ -596,10 +629,132 @@ void vk_executeBundles(commandBuffer_tgfxhnd cb, commandBundle_tgfxlsthnd bundle
   }
   vkCmdExecuteCommands(cmdBuffer->vk_cb, cmdBundleCount, secCmdBuffers);
 }
-void vk_startRenderpass(commandBuffer_tgfxhnd commandBuffer, renderPass_tgfxhnd renderPass) {}
-void vk_nextRendersubpass(commandBuffer_tgfxhnd commandBuffer,
-                          renderSubPass_tgfxhnd renderSubPass) {}
-void vk_endRenderpass(commandBuffer_tgfxhnd commandBuffer) {}
+void vk_beginRasterpass(commandBuffer_tgfxhnd commandBuffer, subRasterpass_tgfxhnd firstSubpass,
+                        texture_tgfxlsthnd  colorAttachments,
+                        typelessColor_tgfx* colorAttachmentClearValues,
+                        texture_tgfxhnd     depthAttachment,
+                        typelessColor_tgfx  depthAttachmentClearValue) {
+  getCmdBufferfromHnd(commandBuffer);
+#ifdef VULKAN_DEBUGGING
+  checkCmdBufferHnd();
+#endif
+  SUBRASTERPASS_VKOBJ* subpass =
+    contentmanager->GETSUBRASTERPASS_ARRAY().getOBJfromHANDLE(firstSubpass);
+
+  FRAMEBUFFER_VKOBJ* framebuffer = nullptr;
+  TGFXLISTCOUNT(core_tgfx_main, colorAttachments, colorAttachmentCount);
+
+  TEXTURE_VKOBJ* baseTexture = nullptr;
+  if (depthAttachment) {
+    baseTexture = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(depthAttachment);
+  } else {
+    baseTexture = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(colorAttachments[0]);
+  }
+
+  bool isFound = false;
+  for (uint32_t fbIndx = 0; fbIndx < gpu->manager()->m_framebuffers.size(); fbIndx++) {
+    FRAMEBUFFER_VKOBJ* fb           = gpu->manager()->m_framebuffers[fbIndx];
+    uint32_t           slotIndx     = 0;
+    bool               isCompatible = true;
+
+    while (fb->m_textures[slotIndx] && slotIndx <= colorAttachmentCount &&
+           slotIndx <= VKCONST_MAXRTSLOTCOUNT) {
+      if (fb->m_textures[slotIndx] != colorAttachments[slotIndx]) {
+        isCompatible = false;
+        break;
+      }
+      slotIndx++;
+    }
+    if (isCompatible) {
+      if ((depthAttachment && fb->m_textures[colorAttachmentCount] == depthAttachment) ||
+          !depthAttachment) {
+        framebuffer = fb;
+        break;
+      }
+    }
+  }
+  if (!framebuffer) {
+    VkImageView imageViews[VKCONST_MAXRTSLOTCOUNT + 1] = {};
+    for (uint32_t colorSlotIndx = 0; colorSlotIndx < colorAttachmentCount; colorSlotIndx++) {
+      imageViews[colorSlotIndx] = contentmanager->GETTEXTURES_ARRAY()
+                                    .getOBJfromHANDLE(colorAttachments[colorSlotIndx])
+                                    ->vk_imageView;
+    }
+    if (depthAttachment) {
+      imageViews[colorAttachmentCount] = baseTexture->vk_imageView;
+    }
+
+    VkFramebuffer           vkFb;
+    VkFramebufferCreateInfo ci = {};
+    ci.attachmentCount         = colorAttachmentCount + ((depthAttachment) ? 1 : 0);
+    ci.height                  = baseTexture->m_height;
+    ci.width                   = baseTexture->m_width;
+    ci.layers                  = 1;
+    ci.pAttachments            = imageViews;
+    ci.renderPass              = subpass->vk_renderPass;
+    ci.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    ThrowIfFailed(vkCreateFramebuffer(gpu->vk_logical, &ci, nullptr, &vkFb),
+                  "VkFramebuffer creation has failed");
+
+    framebuffer = gpu->manager()->m_framebuffers.add();
+    for (uint32_t colorIndx = 0; colorIndx < colorAttachmentCount; colorIndx++) {
+      framebuffer->m_textures[colorIndx] = colorAttachments[colorIndx];
+    }
+    if (depthAttachment) {
+      framebuffer->m_textures[colorAttachmentCount] = depthAttachment;
+    }
+    framebuffer->vk_framebuffer = vkFb;
+  }
+
+  VkClearValue clearValues[VKCONST_MAXRTSLOTCOUNT + 1] = {};
+  for (uint32_t colorSlotIndx = 0; colorSlotIndx < colorAttachmentCount; colorSlotIndx++) {
+    VkFormat format = vk_findFormatVk(contentmanager->GETTEXTURES_ARRAY()
+                                        .getOBJfromHANDLE(colorAttachments[colorSlotIndx])
+                                        ->m_channels);
+    switch (vk_findTextureDataType(format)) {
+      case datatype_tgfx_VAR_UINT32:
+        memcpy(clearValues[colorSlotIndx].color.uint32,
+               colorAttachmentClearValues[colorSlotIndx].data, sizeof(VkClearColorValue));
+      case datatype_tgfx_VAR_INT32:
+        memcpy(clearValues[colorSlotIndx].color.uint32,
+               colorAttachmentClearValues[colorSlotIndx].data, sizeof(VkClearColorValue));
+      case datatype_tgfx_VAR_FLOAT32:
+        memcpy(clearValues[colorSlotIndx].color.float32,
+               colorAttachmentClearValues[colorSlotIndx].data, sizeof(VkClearColorValue));
+    }
+  }
+  VkRenderPassBeginInfo bi    = {};
+  bi.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  bi.pNext                    = nullptr;
+  bi.renderPass               = subpass->vk_renderPass;
+  bi.framebuffer              = framebuffer->vk_framebuffer;
+  bi.pClearValues             = clearValues;
+  bi.renderArea.extent.width  = baseTexture->m_width;
+  bi.renderArea.extent.height = baseTexture->m_height;
+  bi.renderArea.offset        = {};
+  bi.clearValueCount          = colorAttachmentCount + ((depthAttachment) ? 1 : 0);
+  vkCmdBeginRenderPass(cmdBuffer->vk_cb, &bi, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+  cmdBuffer->m_activeFramebuffer = framebuffer;
+  cmdBuffer->m_activeSubpass     = subpass;
+}
+void vk_nextRendersubpass(commandBuffer_tgfxhnd commandBuffer) {
+  getCmdBufferfromHnd(commandBuffer);
+#ifdef VULKAN_DEBUGGING
+  checkCmdBufferHnd();
+#endif
+
+  vkCmdNextSubpass(cmdBuffer->vk_cb, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+}
+void vk_endRasterpass(commandBuffer_tgfxhnd commandBuffer) {
+  getCmdBufferfromHnd(commandBuffer);
+#ifdef VULKAN_DEBUGGING
+  checkCmdBufferHnd();
+#endif
+
+  vkCmdEndRenderPass(cmdBuffer->vk_cb);
+  cmdBuffer->m_activeFramebuffer = nullptr;
+  cmdBuffer->m_activeSubpass     = nullptr;
+}
 
 void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandBuffer_tgfxlsthnd i_cmdBuffersList,
                                extension_tgfxlsthnd exts) {
@@ -728,8 +883,8 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
   submit->vk_present.swapchainCount     = windowCount;
 }
 
-VkCommandPool vk_getSecondaryCmdPool(QUEUEFAM_VK* queueFam, unsigned int poolIndx) {
-  cmdPool_vk& cmdPool = queueFam->m_pools[poolIndx];
+VkCommandPool vk_getSecondaryCmdPool(QUEUEFAM_VK* queueFam, uint32_t cmdPoolIndx) {
+  cmdPool_vk& cmdPool = queueFam->m_pools[cmdPoolIndx];
   assert(!(cmdPool.m_cbsPrimary.size() > VKCONST_MAXCMDBUFFER_PRIMARY_COUNT ||
            !cmdPool.vk_primaryCP || !cmdPool.vk_secondaryCP) &&
          "vk_getSecondaryCmdPool failed because cmdpool is invalid!");
@@ -739,8 +894,9 @@ void vk_setQueueFuncPtrs() {
   core_tgfx_main->renderer->beginCommandBuffer     = vk_beginCommandBuffer;
   core_tgfx_main->renderer->endCommandBuffer       = vk_endCommandBuffer;
   core_tgfx_main->renderer->executeBundles         = vk_executeBundles;
-  core_tgfx_main->renderer->startRenderpass        = vk_startRenderpass;
-  core_tgfx_main->renderer->nextRendersubpass      = vk_nextRendersubpass;
+  core_tgfx_main->renderer->beginRasterpass        = vk_beginRasterpass;
+  core_tgfx_main->renderer->nextSubRasterpass      = vk_nextRendersubpass;
+  core_tgfx_main->renderer->endRasterpass          = vk_endRasterpass;
   core_tgfx_main->renderer->queueExecuteCmdBuffers = vk_queueExecuteCmdBuffers;
   core_tgfx_main->renderer->queueFenceSignalWait   = vk_queueFenceWaitSignal;
   core_tgfx_main->renderer->queueSubmit            = vk_queueSubmit;

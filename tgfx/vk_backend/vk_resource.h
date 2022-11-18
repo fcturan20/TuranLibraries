@@ -127,6 +127,8 @@ struct rtslots_vk {
     COLORSLOTs_COUNT  = copyFrom.COLORSLOTs_COUNT;
   }
 };
+
+/*
 struct RTSLOTSET_VKOBJ {
   std::atomic_bool isALIVE    = false;
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::RTSLOTSET;
@@ -171,6 +173,18 @@ struct rtslot_inheritance_descripton_vk {
   bool               IS_DEPTH = false;
   operationtype_tgfx OPTYPE = operationtype_tgfx_UNUSED, OPTYPESTENCIL = operationtype_tgfx_UNUSED;
   drawpassload_tgfx  LOADTYPE = drawpassload_tgfx_CLEAR, LOADTYPESTENCIL = drawpassload_tgfx_CLEAR;
+};*/
+
+struct SUBRASTERPASS_VKOBJ {
+  std::atomic_bool               isALIVE    = false;
+  static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::SUBRASTERPASS;
+  static uint16_t                GET_EXTRAFLAGS(SUBRASTERPASS_VKOBJ* obj) { return 0; }
+
+  uint32_t     m_subpassIndx;
+  gpu_tgfxhnd  m_gpu;
+  VkRenderPass vk_renderPass; // It's same across all subpasses
+  bool         isDepthAttachment = false;
+  // Extra information to check raster pipeline compilations without relying on validation layer
 };
 struct SAMPLER_VKOBJ {
   std::atomic_bool isALIVE    = false;
@@ -191,7 +205,7 @@ struct PIPELINE_VKOBJ {
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::PIPELINE;
   static uint16_t  GET_EXTRAFLAGS(PIPELINE_VKOBJ* obj) { return obj->vk_type; }
 
-  renderSubPass_tgfxhnd m_gfxSubpass; // Only used in raster pipeline
+  subRasterpass_tgfxhnd m_gfxSubpass; // Only used in raster pipeline
 
   uint8_t  m_gpu;
   uint32_t m_typeSETs[VKCONST_MAXDESCSET_PERLIST];
@@ -273,4 +287,25 @@ struct HEAP_VKOBJ {
 
   VkDeviceMemory vk_memoryHandle;
   unsigned int   vk_memoryTypeIndex;
+};
+
+struct cmdPool_vk;
+struct cmdBundleRef_vk {
+  cmdPool_vk*           m_cmdPool;
+  commandBundle_tgfxhnd m_cmdBundle;
+  VkCommandBuffer       vk_cmdBuffer;
+};
+
+struct FRAMEBUFFER_VKOBJ {
+  std::atomic_bool isALIVE    = false;
+  vk_handleType    HANDLETYPE = VKHANDLETYPEs::INTERNAL;
+  static uint16_t  GET_EXTRAFLAGS(FRAMEBUFFER_VKOBJ* obj) { return 0; }
+
+  texture_tgfxhnd m_textures[VKCONST_MAXRTSLOTCOUNT];
+  // Command bundles records a command buffer for each framebuffer
+  // For now, proper tracking mechanism isn't implemented.
+  static constexpr uint32_t MAXCMDBUNDLECOUNT                  = 32;
+  uint32_t                  m_cmdBundleCount                   = 0;
+  cmdBundleRef_vk           m_cmdBundleRefs[MAXCMDBUNDLECOUNT] = {};
+  VkFramebuffer             vk_framebuffer                     = {};
 };

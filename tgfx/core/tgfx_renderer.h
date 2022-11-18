@@ -16,9 +16,13 @@ typedef struct tgfx_renderer {
   // All bundles should be from the compatible queue with the cmdBuffer's queue
   void (*executeBundles)(commandBuffer_tgfxhnd commandBuffer, commandBundle_tgfxlsthnd bundles,
                          extension_tgfxlsthnd exts);
-  void (*startRenderpass)(commandBuffer_tgfxhnd commandBuffer, renderPass_tgfxhnd renderPass);
-  void (*nextRendersubpass)(commandBuffer_tgfxhnd cmdBuffer, renderSubPass_tgfxhnd renderSubPass);
-  void (*endRenderpass)(commandBuffer_tgfxhnd commandBuffer);
+  void (*beginRasterpass)(commandBuffer_tgfxhnd commandBuffer, subRasterpass_tgfxhnd firstSubpass,
+                          texture_tgfxlsthnd  colorAttachments,
+                          typelessColor_tgfx* colorAttachmentClearValues,
+                          texture_tgfxhnd     depthAttachment,
+                          typelessColor_tgfx  depthAttachmentClearValue);
+  void (*nextSubRasterpass)(commandBuffer_tgfxhnd commandBuffer);
+  void (*endRasterpass)(commandBuffer_tgfxhnd commandBuffer);
 
   // Synchronization Functions
 
@@ -60,8 +64,7 @@ typedef struct tgfx_renderer {
   //    bundle matches with the active rendersubpass
   // @param maxCmdCount: Backend allocates a command buffer to store commands
   // Every cmdXXX call's "key" argument should be [0,maxCmdCount-1].
-  commandBundle_tgfxhnd (*beginCommandBundle)(gpuQueue_tgfxhnd      queue,
-                                              renderSubPass_tgfxhnd subpassHandle,
+  commandBundle_tgfxhnd (*beginCommandBundle)(gpu_tgfxhnd gpu,
                                               unsigned long long    maxCmdCount,
                                               extension_tgfxlsthnd  exts);
   void (*finishCommandBundle)(commandBundle_tgfxhnd bundle, extension_tgfxlsthnd exts);
@@ -72,7 +75,7 @@ typedef struct tgfx_renderer {
                                bindingTable_tgfxlsthnd bindingtables, unsigned int firstSetIndx,
                                pipelineType_tgfx pipelineType);
   void (*cmdBindPipeline)(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
-                                 pipeline_tgfxhnd pipeline);
+                          pipeline_tgfxhnd pipeline);
   // For devices that doesn't allow storage buffers to store vertex buffers,
   //   this function is needed
   void (*cmdBindVertexBuffer)(commandBundle_tgfxhnd bundle, unsigned long long key,

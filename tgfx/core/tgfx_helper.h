@@ -38,11 +38,11 @@ typedef struct tgfx_helper {
   RTSlotDescription_tgfxhnd (*CreateRTSlotDescription_Color)(
     texture_tgfxhnd text0, texture_tgfxhnd text1, operationtype_tgfx OPTYPE,
     drawpassload_tgfx LOADTYPE, unsigned char useLater, unsigned char slotIndx,
-    vec4_tgfx CLEARVALUE);
+    typelessColor_tgfx CLEARVALUE);
   RTSlotDescription_tgfxhnd (*CreateRTSlotDescription_DepthStencil)(
     texture_tgfxhnd text0, texture_tgfxhnd text1, operationtype_tgfx depthOp,
     drawpassload_tgfx depthLoad, operationtype_tgfx stencilOp, drawpassload_tgfx stencilLoad,
-    float depthClearValue, unsigned char stencilClearValue);
+    double depthClearValue, unsigned char stencilClearValue);
   rtslotusage_tgfx_handle (*CreateRTSlotUsage_Color)(RTSlotDescription_tgfxhnd base,
                                                      operationtype_tgfx        opType,
                                                      drawpassload_tgfx         LOADTYPE);

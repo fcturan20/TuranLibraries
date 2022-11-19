@@ -56,20 +56,15 @@ typedef struct tgfx_gpudatamanager {
   /////////////////////////////////////
 
   result_tgfx (*compileShaderSource)(gpu_tgfxhnd gpu, shaderlanguages_tgfx language,
-                                     shaderstage_tgfx shaderstage, void* DATA,
+                                     shaderstage_tgfx shaderstage, const void* DATA,
                                      unsigned int          DATA_SIZE,
                                      shaderSource_tgfxhnd* ShaderSourceHandle);
   void (*deleteShaderSource)(shaderSource_tgfxhnd ShaderSourceHandle);
   // AttribLayout can be NULL if GPU supports dynamic vertex buffer layout
   // All objects should be created from the same GPU
   // Extensions: CallBufferInfo
-  result_tgfx (*createRasterPipeline)(const shaderSource_tgfxlsthnd       ShaderSourcsLst,
-                                      const bindingTableType_tgfxlsthnd   typeTables,
-                                      const vertexAttributeLayout_tgfxhnd AttribLayout,
-                                      const viewport_tgfxlsthnd           ViewportList,
-                                      const subRasterpass_tgfxhnd         subpass,
-                                      const rasterStateDescription_tgfx*  mainStates,
-                                      pipeline_tgfxhnd*                   MaterialHandle);
+  result_tgfx (*createRasterPipeline)(const rasterPipelineDescription_tgfx* desc,
+                                      extension_tgfxlsthnd exts, pipeline_tgfxhnd* hnd);
   // Extensions: Dynamic States, CallBufferInfo, Specialization Constants
   result_tgfx (*copyRasterPipeline)(pipeline_tgfxhnd basePipeline, extension_tgfxlsthnd exts,
                                     pipeline_tgfxhnd* derivedPipeline);
@@ -109,14 +104,4 @@ typedef struct tgfx_gpudatamanager {
                          extension_tgfxlsthnd exts, void** mappedRegion);
   result_tgfx (*unmapHeap)(heap_tgfxhnd heap);
 
-  ///////////////////////////////
-  // RASTER PASS
-  ///////////////////////////////
-
-  result_tgfx (*createRasterpass)(gpu_tgfxhnd i_gpu, unsigned char slotCount,
-                                  rasterpassSlotDescription_tgfx* colorSlotDescs,
-                                  rasterpassSlotDescription_tgfx  depthStencilSlotDesc,
-                                  extension_tgfxlsthnd            exts,
-                                  subRasterpass_tgfxlsthnd        subRasterpasses);
-  result_tgfx (*destroyRasterpass)(subRasterpass_tgfxhnd firstSubRasterpass);
 } gpudatamanager_tgfx;

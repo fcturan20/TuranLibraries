@@ -25,6 +25,10 @@ typedef struct tgfx_vec4 {
   float x, y, z, w;
 } vec4_tgfx;
 
+typedef struct tgfx_ivec2 {
+  int x, y;
+} ivec2_tgfx;
+
 typedef struct tgfx_boxRegion {
   unsigned int XOffset, YOffset, WIDTH, HEIGHT;
 } boxRegion_tgfx;
@@ -137,10 +141,34 @@ typedef struct tgfx_typelessColor {
   char data[32];
 } typelessColor_tgfx;
 
-typedef struct tgfx_rasterpass_slot_description {
-  drawpassstore_tgfx   storeType;
-  drawpassload_tgfx    loadType;
+// TGFX_SUBPASS_EXTENSION
+typedef struct tgfx_subpass_slot_description {
+  rasterpassStore_tgfx storeType;
+  rasterpassLoad_tgfx  loadType;
   typelessColor_tgfx   clearValue;
   textureChannels_tgfx format;
   image_access_tgfx    layout;
-} rasterpassSlotDescription_tgfx;
+} subpassSlotDescription_tgfx;
+
+typedef struct tgfx_viewport_info {
+  vec2_tgfx topLeftCorner, size, depthMinMax;
+} viewportInfo_tgfx;
+
+#define TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT 8
+typedef struct tgfx_raster_pipeline_description {
+  shaderSource_tgfxlsthnd       shaderSourceList;
+  bindingTableType_tgfxlsthnd   typeTables;
+  vertexAttributeLayout_tgfxhnd attribLayout;
+  viewportInfo_tgfx                   viewportList;
+  const rasterStateDescription_tgfx*  mainStates;
+  textureChannels_tgfx                colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
+  textureChannels_tgfx                depthStencilTextureFormat;
+} rasterPipelineDescription_tgfx;
+
+typedef struct tgfx_rasterpass_begin_slot_info {
+  texture_tgfxhnd      texture;
+  image_access_tgfx    imageAccess;
+  rasterpassLoad_tgfx  loadOp, loadStencilOp;
+  rasterpassStore_tgfx storeOp, storeStencilOp;
+  typelessColor_tgfx   clearValue;
+} rasterpassBeginSlotInfo_tgfx;

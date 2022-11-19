@@ -18,7 +18,6 @@
 
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_RENDERER = nullptr;
 
-
 struct vk_cmd;
 struct CMDBUNDLE_VKOBJ {
   bool            isALIVE    = false;
@@ -32,10 +31,11 @@ struct CMDBUNDLE_VKOBJ {
   VkDescriptorSetLayout vk_activeDescSets[VKCONST_MAXDESCSET_PERLIST] = {};
   uint8_t               vk_callBuffer[128] = {}; // CallBuffer = Push Constants = 128 byte
 
-  GPU_VKOBJ*   m_gpu          = nullptr;
-  vk_cmd*      m_cmds         = nullptr;
-  uint64_t     m_cmdCount     = 0;
-  queueflag_vk m_requiredFlag = {};
+  GPU_VKOBJ*          m_gpu             = {};
+  vk_cmd*             m_cmds            = {};
+  uint64_t            m_cmdCount        = 0;
+  pipeline_tgfxhnd    m_defaultPipeline = {};
+  VkPipelineBindPoint vk_bindPoint      = {};
 
   void createCmdBuffer(uint64_t cmdCount);
 };
@@ -46,7 +46,8 @@ enum class vk_cmdType : vkEnumType_cmdType(){
   bindBindingTables,
   bindVertexBuffer,
   bindIndexBuffer,
-  bindViewport,
+  setViewport,
+  setScissor,
   drawNonIndexedDirect,
   drawIndexedDirect,
   drawNonIndexedIndirect,
@@ -115,6 +116,34 @@ struct vkCmdStruct_dispatch {
   uvec3_tgfx m_dispatchSize;
 };
 
+struct vkCmdStruct_setViewport {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::setViewport;
+
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdSetViewport(cb, 0, 1, &vk_viewport);
+  };
+
+  VkViewport vk_viewport = {};
+};
+
+struct vkCmdStruct_setScissor {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::setScissor;
+
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdSetScissor(cb, 0, 1, &vk_rect);
+  };
+  VkRect2D vk_rect = {};
+};
+
+struct vkCmdStruct_drawNonIndexedDirect {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::drawNonIndexedDirect;
+
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdDraw(cb, vertexCount, instanceCount, firstVertex, firstInstance);
+  };
+  uint32_t vertexCount = {}, instanceCount = {}, firstVertex = {}, firstInstance = {};
+};
+
 struct vk_cmd {
   vk_cmdType cmd_type = vk_cmdType::error_2;
 
@@ -158,9 +187,18 @@ void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cm
     case vk_cmdType::dispatch:
       (( vkCmdStruct_dispatch* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
+    case vk_cmdType::setScissor:
+      (( vkCmdStruct_setScissor* )cmd.cmd_data)->cmd_execute(cb, bundle);
+      break;
+    case vk_cmdType::setViewport:
+      (( vkCmdStruct_setViewport* )cmd.cmd_data)->cmd_execute(cb, bundle);
+      break;
+    case vk_cmdType::drawNonIndexedDirect:
+      (( vkCmdStruct_drawNonIndexedDirect* )cmd.cmd_data)->cmd_execute(cb, bundle);
+      break;
     case vk_cmdType::error:
-    case vk_cmdType::error_2:
-    default: printer(result_tgfx_WARNING, "One of the cmds is not used!");
+    case vk_cmdType::error_2: printf(0 && "One of the cmds is not used!");
+    default: assert(0 && "Don't forget to specify command execution in vk_executeCmd()!");
   }
 }
 
@@ -189,8 +227,8 @@ void vk_createFences(gpu_tgfxhnd gpu, unsigned int fenceCount, uint32_t isSignal
 // Command Bundle Functions
 ////////////////////////////
 
-commandBundle_tgfxhnd vk_beginCommandBundle(gpu_tgfxhnd gpu,
-                                            unsigned long long   maxCmdCount,
+commandBundle_tgfxhnd vk_beginCommandBundle(gpu_tgfxhnd gpu, unsigned long long maxCmdCount,
+                                            pipeline_tgfxhnd     defaultPipeline,
                                             extension_tgfxlsthnd exts) {
   VkCommandBuffer vk_cmdBuffer = VK_NULL_HANDLE;
   cmdPool_vk*     cmdPool;
@@ -202,6 +240,13 @@ commandBundle_tgfxhnd vk_beginCommandBundle(gpu_tgfxhnd gpu,
 
   cmdBundle->m_gpu = GPU;
   cmdBundle->createCmdBuffer(maxCmdCount);
+  cmdBundle->m_defaultPipeline = defaultPipeline;
+  if (defaultPipeline) {
+    PIPELINE_VKOBJ* pipe    = contentmanager->GETPIPELINE_ARRAY().getOBJfromHANDLE(defaultPipeline);
+    cmdBundle->vk_bindPoint = pipe->vk_type;
+  } else {
+    cmdBundle->vk_bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
+  }
 
   return hiddenRenderer->m_cmdBundles.returnHANDLEfromOBJ(cmdBundle);
 }
@@ -248,15 +293,35 @@ void vk_cmdBindPipeline(commandBundle_tgfxhnd i_bundle, unsigned long long sortK
                         pipeline_tgfxhnd pipeline) {
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
   auto*            cmd    = vk_createCmdStruct<vkCmdStruct_bindPipeline>(&bundle->m_cmds[sortKey]);
-
   PIPELINE_VKOBJ* pipe   = contentmanager->GETPIPELINE_ARRAY().getOBJfromHANDLE(pipeline);
+
+  assert(pipe->vk_type == bundle->vk_bindPoint &&
+         "You can't call this type of operation in this command bundle!");
   cmd->vk_bindPoint      = pipe->vk_type;
   cmd->vk_pipeline       = pipe->vk_object;
   cmd->vk_pipelineLayout = pipe->vk_layout;
-  if (pipe->m_gfxSubpass) {
-    bundle->m_requiredFlag.is_GRAPHICSsupported = true;
-  }
-  bundle->m_requiredFlag.is_COMPUTEsupported = true;
+}
+void vk_cmdSetViewport(commandBundle_tgfxhnd i_bundle, unsigned long long sortKey,
+                       viewportInfo_tgfx viewport) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
+  auto*            cmd    = vk_createCmdStruct<vkCmdStruct_setViewport>(&bundle->m_cmds[sortKey]);
+
+  cmd->vk_viewport.x        = viewport.topLeftCorner.x;
+  cmd->vk_viewport.y        = viewport.topLeftCorner.y;
+  cmd->vk_viewport.width    = viewport.size.x;
+  cmd->vk_viewport.height   = viewport.size.y;
+  cmd->vk_viewport.minDepth = viewport.depthMinMax.x;
+  cmd->vk_viewport.maxDepth = viewport.depthMinMax.y;
+}
+void vk_cmdSetScissor(commandBundle_tgfxhnd i_bundle, unsigned long long sortKey, ivec2_tgfx offset,
+                      uvec2_tgfx size) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
+  auto*            cmd    = vk_createCmdStruct<vkCmdStruct_setScissor>(&bundle->m_cmds[sortKey]);
+
+  cmd->vk_rect.offset.x      = offset.x;
+  cmd->vk_rect.offset.y      = offset.x;
+  cmd->vk_rect.extent.width  = size.x;
+  cmd->vk_rect.extent.height = size.y;
 }
 void vk_cmdBindVertexBuffer(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
                             buffer_tgfxhnd buffer, unsigned long long offset,
@@ -267,9 +332,17 @@ void vk_cmdBindVertexBuffer(commandBundle_tgfxhnd bundle, unsigned long long sor
 void vk_cmdBindIndexBuffers(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
                             buffer_tgfxhnd buffer, unsigned long long offset,
                             unsigned char IndexTypeSize) {}
-void vk_cmdDrawNonIndexedDirect(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
+void vk_cmdDrawNonIndexedDirect(commandBundle_tgfxhnd i_bundle, unsigned long long sortKey,
                                 unsigned int vertexCount, unsigned int instanceCount,
-                                unsigned int firstVertex, unsigned int firstInstance) {}
+                                unsigned int firstVertex, unsigned int firstInstance) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
+  auto* cmd = vk_createCmdStruct<vkCmdStruct_drawNonIndexedDirect>(&bundle->m_cmds[sortKey]);
+
+  cmd->firstInstance = firstInstance;
+  cmd->firstVertex   = firstVertex;
+  cmd->vertexCount   = vertexCount;
+  cmd->instanceCount = instanceCount;
+}
 void vk_cmdDrawIndexedDirect(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
                              unsigned int indexCount, unsigned int instanceCount,
                              unsigned int firstIndex, int vertexOffset,
@@ -311,32 +384,6 @@ void vk_cmdDispatch(commandBundle_tgfxhnd bndl, unsigned long long key, uvec3_tg
   cmd->m_dispatchSize = dispatchSize;
 }
 
-void set_VkRenderer_funcPtrs() {
-  core_tgfx_main->renderer->cmdBindBindingTables      = vk_cmdBindBindingTables;
-  core_tgfx_main->renderer->cmdBindIndexBuffers       = vk_cmdBindIndexBuffers;
-  core_tgfx_main->renderer->cmdBindVertexBuffer       = vk_cmdBindVertexBuffer;
-  core_tgfx_main->renderer->cmdDrawIndexedDirect      = vk_cmdDrawIndexedDirect;
-  core_tgfx_main->renderer->cmdDrawIndexedIndirect    = vk_cmdDrawIndexedIndirect;
-  core_tgfx_main->renderer->cmdDrawNonIndexedDirect   = vk_cmdDrawNonIndexedDirect;
-  core_tgfx_main->renderer->cmdDrawNonIndexedIndirect = vk_cmdDrawNonIndexedIndirect;
-  core_tgfx_main->renderer->cmdBarrierTexture         = vk_cmdBarrierTexture;
-  core_tgfx_main->renderer->cmdBindPipeline           = vk_cmdBindPipeline;
-  core_tgfx_main->renderer->cmdDispatch               = vk_cmdDispatch;
-
-  core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
-  core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;
-  core_tgfx_main->renderer->createFences         = vk_createFences;
-  core_tgfx_main->renderer->destroyCommandBundle = vk_destroyCommandBundle;
-  core_tgfx_main->renderer->getFenceValue        = vk_getFenceValue;
-  core_tgfx_main->renderer->setFence             = vk_setFenceValue;
-}
-
-void vk_initRenderer() {
-  set_VkRenderer_funcPtrs();
-  VKGLOBAL_VIRMEM_RENDERER = vk_virmem::allocate_dynamicmem(sizeof(vk_renderer_private));
-  hiddenRenderer           = new (VKGLOBAL_VIRMEM_RENDERER) vk_renderer_private;
-}
-
 // Helper functions
 
 void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxlsthnd i_exts,
@@ -373,8 +420,7 @@ void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxl
   }
 }
 
-void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
-                               FRAMEBUFFER_VKOBJ* framebuffer, QUEUEFAM_VK* queueFam, SUBRASTERPASS_VKOBJ* subpass,
+void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUEFAM_VK* queueFam,
                                VkCommandBuffer* secondaryCmdBuffers, uint32_t* cmdBufferCount) {
   uint32_t bundleCount = 0;
   TGFXLISTCOUNT(core_tgfx_main, commandBundleList, cmdListCount);
@@ -390,19 +436,10 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
     }
 
     bool isFound = false;
-    if (framebuffer) {
-      for (uint32_t i = 0; i < framebuffer->m_cmdBundleCount && !isFound; i++) {
-        if (framebuffer->m_cmdBundleRefs[i].m_cmdBundle == commandBundleList[bundleListIndx]) {
-          secondaryCmdBuffers[bundleCount++] = framebuffer->m_cmdBundleRefs[i].vk_cmdBuffer;
-          isFound                            = true;
-        }
-      }
-    } else {
-      for (uint32_t i = 0; i < queueFam->m_cmdBundleCount && !isFound; i++) {
-        if (queueFam->m_cmdBundleRefs[i].m_cmdBundle == commandBundleList[bundleListIndx]) {
-          secondaryCmdBuffers[bundleCount++] = queueFam->m_cmdBundleRefs[i].vk_cmdBuffer;
-          isFound                            = true;
-        }
+    for (uint32_t i = 0; i < queueFam->m_cmdBundleCount && !isFound; i++) {
+      if (queueFam->m_cmdBundleRefs[i].m_cmdBundle == commandBundleList[bundleListIndx]) {
+        secondaryCmdBuffers[bundleCount++] = queueFam->m_cmdBundleRefs[i].vk_cmdBuffer;
+        isFound                            = true;
       }
     }
 
@@ -412,19 +449,32 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
       VkCommandBuffer cmdBuffer = {};
       vk_allocateCmdBuffer(queueFam, VK_COMMAND_BUFFER_LEVEL_SECONDARY, cmdPool, &cmdBuffer, 1);
 
-      VkCommandBufferBeginInfo bi            = {};
-      bi.flags                    = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT |
-                 (framebuffer ? VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT : 0);
-      bi.pNext                               = nullptr;
-      bi.sType                               = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+      VkCommandBufferInheritanceRenderingInfo rInfo = {};
+
       VkCommandBufferInheritanceInfo secInfo = {};
       secInfo.sType                          = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-      if (framebuffer) {
-        secInfo.framebuffer = framebuffer->vk_framebuffer;
-        secInfo.renderPass  = subpass->vk_renderPass;
-        secInfo.subpass     = subpass->m_subpassIndx;
+      if (bundle->vk_bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+        rInfo.sType    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO;
+        rInfo.viewMask = 0;
+        PIPELINE_VKOBJ* defaultPipe =
+          contentmanager->GETPIPELINE_ARRAY().getOBJfromHANDLE(bundle->m_defaultPipeline);
+        rInfo.pColorAttachmentFormats = defaultPipe->vk_colorAttachmentFormats;
+        while (rInfo.colorAttachmentCount < TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT &&
+               rInfo.pColorAttachmentFormats[rInfo.colorAttachmentCount] != VK_FORMAT_UNDEFINED) {
+          rInfo.colorAttachmentCount++;
+        }
+        rInfo.depthAttachmentFormat = defaultPipe->vk_depthAttachmentFormat;
+        rInfo.rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT;
+        secInfo.pNext               = &rInfo;
       }
-      bi.pInheritanceInfo                    = &secInfo;
+
+      VkCommandBufferBeginInfo bi = {};
+      bi.flags                    = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT |
+                 ((bundle->vk_bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
+                    ? VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT
+                    : 0);
+      bi.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+      bi.pInheritanceInfo = &secInfo;
 
       assert(!ThrowIfFailed(vkBeginCommandBuffer(cmdBuffer, &bi),
                             "vkBeginCommandBuffer() shouldn't fail!"));
@@ -433,16 +483,38 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
       }
       assert(!ThrowIfFailed(vkEndCommandBuffer(cmdBuffer), "vkEndCommandBuffer() shouldn't fail!"));
 
-      if (framebuffer) {
-        framebuffer->m_cmdBundleRefs[framebuffer->m_cmdBundleCount].m_cmdBundle    = bundleHnd;
-        framebuffer->m_cmdBundleRefs[framebuffer->m_cmdBundleCount].m_cmdPool      = cmdPool;
-        framebuffer->m_cmdBundleRefs[framebuffer->m_cmdBundleCount++].vk_cmdBuffer = cmdBuffer;
-      } else {
-        queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdBundle       = bundleHnd;
-        queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdPool         = cmdPool;
-        queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount++].vk_cmdBuffer    = cmdBuffer;
-      }
+      queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdBundle    = bundleHnd;
+      queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdPool      = cmdPool;
+      queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount++].vk_cmdBuffer = cmdBuffer;
     }
   }
   *cmdBufferCount = bundleCount;
+}
+
+void set_VkRenderer_funcPtrs() {
+  core_tgfx_main->renderer->cmdBindBindingTables      = vk_cmdBindBindingTables;
+  core_tgfx_main->renderer->cmdBindIndexBuffers       = vk_cmdBindIndexBuffers;
+  core_tgfx_main->renderer->cmdBindVertexBuffer       = vk_cmdBindVertexBuffer;
+  core_tgfx_main->renderer->cmdDrawIndexedDirect      = vk_cmdDrawIndexedDirect;
+  core_tgfx_main->renderer->cmdDrawIndexedIndirect    = vk_cmdDrawIndexedIndirect;
+  core_tgfx_main->renderer->cmdDrawNonIndexedDirect   = vk_cmdDrawNonIndexedDirect;
+  core_tgfx_main->renderer->cmdDrawNonIndexedIndirect = vk_cmdDrawNonIndexedIndirect;
+  core_tgfx_main->renderer->cmdBarrierTexture         = vk_cmdBarrierTexture;
+  core_tgfx_main->renderer->cmdBindPipeline           = vk_cmdBindPipeline;
+  core_tgfx_main->renderer->cmdDispatch               = vk_cmdDispatch;
+  core_tgfx_main->renderer->cmdSetViewport            = vk_cmdSetViewport;
+  core_tgfx_main->renderer->cmdSetScissor             = vk_cmdSetScissor;
+
+  core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
+  core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;
+  core_tgfx_main->renderer->createFences         = vk_createFences;
+  core_tgfx_main->renderer->destroyCommandBundle = vk_destroyCommandBundle;
+  core_tgfx_main->renderer->getFenceValue        = vk_getFenceValue;
+  core_tgfx_main->renderer->setFence             = vk_setFenceValue;
+}
+
+void vk_initRenderer() {
+  set_VkRenderer_funcPtrs();
+  VKGLOBAL_VIRMEM_RENDERER = vk_virmem::allocate_dynamicmem(sizeof(vk_renderer_private));
+  hiddenRenderer           = new (VKGLOBAL_VIRMEM_RENDERER) vk_renderer_private;
 }

@@ -154,6 +154,9 @@ inline VkFormat vk_findFormatVk(textureChannels_tgfx channels) {
     case texture_channels_tgfx_BGRA8SRGB: return VK_FORMAT_B8G8R8A8_SRGB;
     case texture_channels_tgfx_RGBA16F: return VK_FORMAT_R16G16B16A16_SFLOAT;
     case texture_channels_tgfx_A2B10G10R10_UNORM: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+    case texture_channels_tgfx_RGBA8SRGB: return VK_FORMAT_R8G8B8A8_SRGB;
+    case texture_channels_tgfx_UNDEF: return VK_FORMAT_UNDEFINED;
+    case texture_channels_tgfx_UNDEF2:
     default:
       printer(result_tgfx_FAIL,
               "(Find_VkFormat_byTEXTURECHANNELs doesn't support this type of channel!");
@@ -175,6 +178,8 @@ inline textureChannels_tgfx vk_findTextureChannelsTgfx(VkFormat format) {
     case VK_FORMAT_B8G8R8A8_SRGB: return texture_channels_tgfx_BGRA8SRGB;
     case VK_FORMAT_R16G16B16A16_SFLOAT: return texture_channels_tgfx_RGBA16F;
     case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return texture_channels_tgfx_A2B10G10R10_UNORM;
+    case VK_FORMAT_R8G8B8A8_UNORM: return texture_channels_tgfx_RGBA8UNORM;
+    case VK_FORMAT_R8G8B8A8_SRGB: return texture_channels_tgfx_RGBA8SRGB;
     default:
       printer(result_tgfx_FAIL, "(Find_TEXTURECHANNELs_byVkFormat doesn't support this VkFormat!");
       return texture_channels_tgfx_R8B;
@@ -336,23 +341,23 @@ inline void Find_DepthMode_byGFXDepthMode(depthmode_tgfx mode, VkBool32& ShouldT
       break;
   }
 }
-inline VkAttachmentLoadOp vk_findLoadTypeVk(drawpassload_tgfx load) {
+inline VkAttachmentLoadOp vk_findLoadTypeVk(rasterpassLoad_tgfx load) {
   switch (load) {
-    case drawpassload_tgfx_CLEAR: return VK_ATTACHMENT_LOAD_OP_CLEAR;
-    case drawpassload_tgfx_DISCARD: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    case drawpassload_tgfx_LOAD: return VK_ATTACHMENT_LOAD_OP_LOAD;
-    case drawpassload_tgfx_NONE: return VK_ATTACHMENT_LOAD_OP_NONE_EXT;
+    case rasterpassLoad_tgfx_CLEAR: return VK_ATTACHMENT_LOAD_OP_CLEAR;
+    case rasterpassLoad_tgfx_DISCARD: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    case rasterpassLoad_tgfx_LOAD: return VK_ATTACHMENT_LOAD_OP_LOAD;
+    case rasterpassLoad_tgfx_NONE: return VK_ATTACHMENT_LOAD_OP_NONE_EXT;
     default:
       printer(result_tgfx_INVALIDARGUMENT,
               "vk_findLoadTypeVk() doesn't support this type of load!");
       return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
   }
 }
-inline VkAttachmentStoreOp vk_findStoreTypeVk(drawpassstore_tgfx store) {
+inline VkAttachmentStoreOp vk_findStoreTypeVk(rasterpassStore_tgfx store) {
   switch (store) {
-    case drawpassstore_tgfx_STORE: return VK_ATTACHMENT_STORE_OP_STORE;
-    case drawpassstore_tgfx_DISCARD: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    case drawpassload_tgfx_NONE: return VK_ATTACHMENT_STORE_OP_NONE;
+    case rasterpassStore_tgfx_STORE: return VK_ATTACHMENT_STORE_OP_STORE;
+    case rasterpassStore_tgfx_DISCARD: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    case rasterpassLoad_tgfx_NONE: return VK_ATTACHMENT_STORE_OP_NONE;
     default:
       printer(result_tgfx_INVALIDARGUMENT,
               "vk_findLoadTypeVk() doesn't support this type of load!");

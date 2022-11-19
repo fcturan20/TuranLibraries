@@ -315,26 +315,7 @@ class VK_LINEAR_OBJARRAY {
     return nullptr;
   }
   void destroyOBJfromHANDLE(VKOBJHANDLE handle) {
-#ifdef VULKAN_DEBUGGING
-    if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX ||
-        (handle.OBJ_memoffset + uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) - uintptr_t(data)) %
-          (sizeof(T)) ||
-        ( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) < data ||
-        ( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) > data + OBJCOUNT) {
-      printer(result_tgfx_FAIL,
-              "Given handle is invalid! You probably used a invalid arithmetic/write operations on "
-              "the handle");
-    }
-#endif
-    T* obj = ( T* )VK_MEMOFFSET_TO_POINTER(handle.OBJ_memoffset);
-#ifdef VULKAN_DEBUGGING
-    if (!obj->isALIVE) {
-      printer(result_tgfx_FAIL,
-              "Given handle is probably deleted but you try to delete it anyway, so please check "
-              "your destroy calls!");
-      return;
-    }
-#endif
+    getOBJfromHANDLE(hnd);
     obj->isALIVE = (0);
   }
   T* getOBJfromHANDLE(TGFXHND hnd) {

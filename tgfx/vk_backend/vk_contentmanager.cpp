@@ -73,7 +73,6 @@ struct gpudatamanager_private {
   VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>                      buffers;
   VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10> bindingtabletypes;
   VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>     bindingtableinsts;
-  VK_LINEAR_OBJARRAY<VIEWPORT_VKOBJ, viewport_tgfxhnd, 1 << 16>                 viewports;
   VK_LINEAR_OBJARRAY<HEAP_VKOBJ, heap_tgfxhnd, 1 << 10>                         heaps;
   VK_LINEAR_OBJARRAY<SUBRASTERPASS_VKOBJ, subRasterpass_tgfxhnd, 1 << 16>       subrasterpasses;
 
@@ -242,6 +241,7 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
   texture->m_GPU         = gpu->gpuIndx();
   texture->vk_imageUsage = im_ci.usage;
   texture->m_memReqs     = memReqs;
+  
 
   *TextureHandle = contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(texture);
   return result_tgfx_SUCCESS;
@@ -473,13 +473,13 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, bindingTableType_tgfxhnd* descs,
   return true;
 }
 
-typedef const void* (*vk_glslangCompileFnc)(shaderstage_tgfx tgfxstage, void* i_DATA,
+typedef const void* (*vk_glslangCompileFnc)(shaderstage_tgfx tgfxstage, const void* i_DATA,
                                             unsigned int  i_DATA_SIZE,
                                             unsigned int* compiledbinary_datasize);
 vk_glslangCompileFnc VKCONST_GLSLANG_COMPILE_FNC;
 
 result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx language,
-                                   shaderstage_tgfx shaderstage, void* DATA, unsigned int DATA_SIZE,
+                                   shaderstage_tgfx shaderstage, const void* DATA, unsigned int DATA_SIZE,
                                    shaderSource_tgfxhnd* ShaderSourceHandle) {
   GPU_VKOBJ*   GPU                   = core_vk->getGPUs().getOBJfromHANDLE(gpu);
   const void*  binary_spirv_data     = nullptr;
@@ -545,114 +545,104 @@ inline void CountDescSets(bindingTableType_tgfxlsthnd descset, unsigned int* fin
   *finaldesccount = valid_descset_i;
 }
 
-result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSourcesList,
-                                    const bindingTableType_tgfxlsthnd   i_bindingTables,
-                                    const vertexAttributeLayout_tgfxhnd i_AttribLayout,
-                                    const viewport_tgfxlsthnd           i_viewportList,
-                                    const subRasterpass_tgfxhnd         i_subpass,
-                                    const rasterStateDescription_tgfx*  mainStates,
-                                    pipeline_tgfxhnd*                   pipelineHnd) {
-  VERTEXATTRIBLAYOUT_VKOBJ* LAYOUT =
-    hidden->vertexattributelayouts.getOBJfromHANDLE(i_AttribLayout);
-  // Subpass is the only required object, so selected GPU is its.
-  // Other objects (if specified) should be created from the same GPU too.
-  SUBRASTERPASS_VKOBJ* subpass = hidden->subrasterpasses.getOBJfromHANDLE(i_subpass);
-  GPU_VKOBJ*           GPU     = core_vk->getGPUs().getOBJfromHANDLE(subpass->m_gpu);
-  if (!LAYOUT) {
-    printer(result_tgfx_FAIL,
-            "AttributeLayout can't be null if GPU doesn't support dynamic vertex buffer layout! "
-            "Backend doesn't support it for now, so layout has to be valid!");
-    return result_tgfx_FAIL;
-  }
+result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
+                                    extension_tgfxlsthnd exts, pipeline_tgfxhnd* hnd) {
+  GPU_VKOBJ* GPU = nullptr;
 
-  SHADERSOURCE_VKOBJ *VertexSource = nullptr, *FragmentSource = nullptr;
-  unsigned int        ShaderSourceCount = 0;
-  while (ShaderSourcesList[ShaderSourceCount] != core_tgfx_main->INVALIDHANDLE) {
-    SHADERSOURCE_VKOBJ* ShaderSource =
-      hidden->shadersources.getOBJfromHANDLE(ShaderSourcesList[ShaderSourceCount]);
-    switch (ShaderSource->stage) {
-      case shaderstage_tgfx_VERTEXSHADER:
-        if (VertexSource) {
-          printer(result_tgfx_FAIL,
-                  "Link_MaterialType() has failed because there 2 vertex shaders in the list!");
-          return result_tgfx_FAIL;
-        }
-        VertexSource = ShaderSource;
-        break;
-      case shaderstage_tgfx_FRAGMENTSHADER:
-        if (FragmentSource) {
-          printer(result_tgfx_FAIL,
-                  "Link_MaterialType() has failed because there 2 fragment shaders in the list!");
-          return result_tgfx_FAIL;
-        }
-        FragmentSource = ShaderSource;
-        break;
-      default:
-        printer(result_tgfx_NOTCODED,
-                "Link_MaterialType() has failed because list has unsupported shader source type!");
-        return result_tgfx_NOTCODED;
-    }
-    ShaderSourceCount++;
-  }
-
-  VkPipelineShaderStageCreateInfo Vertex_ShaderStage   = {};
-  VkPipelineShaderStageCreateInfo Fragment_ShaderStage = {};
+  // Detect GPU & create shader stage infos
+  VkPipelineShaderStageCreateInfo STAGEs[2] = {};
   {
-    Vertex_ShaderStage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    Vertex_ShaderStage.stage  = VK_SHADER_STAGE_VERTEX_BIT;
-    VkShaderModule* VS_Module = &VertexSource->Module;
-    Vertex_ShaderStage.module = *VS_Module;
-    Vertex_ShaderStage.pName  = "main";
+    // Find vertex & fragment shader sources and detect GPU
+    SHADERSOURCE_VKOBJ *vkSource_vertex = nullptr, *vkSource_fragment = nullptr;
+    unsigned int        ShaderSourceCount = 0;
+    while (ShaderSourceCount < 2 &&
+           desc->shaderSourceList[ShaderSourceCount] != core_tgfx_main->INVALIDHANDLE) {
+      SHADERSOURCE_VKOBJ* source =
+        hidden->shadersources.getOBJfromHANDLE(desc->shaderSourceList[ShaderSourceCount]);
+      if (!GPU) {
+        GPU = core_vk->getGPUs().getOBJfromHANDLE(source->m_gpu);
+      } else if (GPU != core_vk->getGPUs().getOBJfromHANDLE(source->m_gpu)) {
+        printer(result_tgfx_FAIL, "Shaders has to be from the same GPU!");
+        return result_tgfx_FAIL;
+      }
+      switch (source->stage) {
+        case shaderstage_tgfx_VERTEXSHADER:
+          if (vkSource_vertex) {
+            printer(result_tgfx_FAIL,
+                    "Link_MaterialType() has failed because there 2 vertex shaders in the list!");
+            return result_tgfx_FAIL;
+          }
+          vkSource_vertex = source;
+          break;
+        case shaderstage_tgfx_FRAGMENTSHADER:
+          if (vkSource_fragment) {
+            printer(result_tgfx_FAIL,
+                    "Link_MaterialType() has failed because there 2 fragment shaders in the list!");
+            return result_tgfx_FAIL;
+          }
+          vkSource_fragment = source;
+          break;
+        default:
+          printer(
+            result_tgfx_NOTCODED,
+            "Link_MaterialType() has failed because list has unsupported shader source type!");
+          return result_tgfx_NOTCODED;
+      }
+      ShaderSourceCount++;
+    }
 
-    Fragment_ShaderStage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    Fragment_ShaderStage.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
-    VkShaderModule* FS_Module   = &FragmentSource->Module;
-    Fragment_ShaderStage.module = *FS_Module;
-    Fragment_ShaderStage.pName  = "main";
+    VkPipelineShaderStageCreateInfo& vertexStage_ci   = STAGEs[0];
+    VkPipelineShaderStageCreateInfo& fragmentStage_ci = STAGEs[1];
+    vertexStage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertexStage_ci.stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    vertexStage_ci.module = vkSource_vertex->Module;
+    vertexStage_ci.pName  = "main";
+
+    fragmentStage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragmentStage_ci.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragmentStage_ci.module = vkSource_fragment->Module;
+    fragmentStage_ci.pName  = "main";
   }
-  VkPipelineShaderStageCreateInfo STAGEs[2] = {Vertex_ShaderStage, Fragment_ShaderStage};
 
   VkPipelineVertexInputStateCreateInfo VertexInputState_ci = {};
-  VertexInputState_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  VertexInputState_ci.flags = 0;
-  VertexInputState_ci.pNext = nullptr;
-  if (LAYOUT) {
-    VertexInputState_ci.pVertexBindingDescriptions      = &LAYOUT->BindingDesc;
-    VertexInputState_ci.vertexBindingDescriptionCount   = 1;
-    VertexInputState_ci.pVertexAttributeDescriptions    = LAYOUT->AttribDescs;
-    VertexInputState_ci.vertexAttributeDescriptionCount = LAYOUT->AttribDesc_Count;
+  {
+    VertexInputState_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    if (desc->attribLayout) {
+      VERTEXATTRIBLAYOUT_VKOBJ* LAYOUT =
+        hidden->vertexattributelayouts.getOBJfromHANDLE(desc->attribLayout);
+      VertexInputState_ci.pVertexBindingDescriptions      = &LAYOUT->BindingDesc;
+      VertexInputState_ci.vertexBindingDescriptionCount   = 1;
+      VertexInputState_ci.pVertexAttributeDescriptions    = LAYOUT->AttribDescs;
+      VertexInputState_ci.vertexAttributeDescriptionCount = LAYOUT->AttribDesc_Count;
+    }
   }
+
   VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
   {
-    InputAssemblyState.sType    = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    InputAssemblyState.topology = Find_PrimitiveTopology_byGFXVertexListType(mainStates->topology);
+    InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    InputAssemblyState.topology =
+      Find_PrimitiveTopology_byGFXVertexListType(desc->mainStates->topology);
     InputAssemblyState.primitiveRestartEnable = false;
     InputAssemblyState.flags                  = 0;
     InputAssemblyState.pNext                  = nullptr;
   }
+
   VkPipelineViewportStateCreateInfo RenderViewportState = {};
   RenderViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-  TGFXLISTCOUNT(core_tgfx_main, i_viewportList, viewportCount);
-  VkRect2D   vk_scissors[VKCONST_MAXVIEWPORTCOUNT];
-  VkViewport vk_viewports[VKCONST_MAXVIEWPORTCOUNT];
-  if (viewportCount) {
-    for (uint32_t i = 0; i < viewportCount; i++) {
-      VIEWPORT_VKOBJ* viewport = hidden->viewports.getOBJfromHANDLE(i_viewportList[i]);
-      vk_scissors[i]           = viewport->scissor;
-      vk_viewports[i]          = viewport->viewport;
-    }
-    RenderViewportState.viewportCount = viewportCount;
-    RenderViewportState.scissorCount  = viewportCount;
-    RenderViewportState.pScissors     = vk_scissors;
-    RenderViewportState.pViewports    = vk_viewports;
+  {
+    VkRect2D   vk_scissors[VKCONST_MAXVIEWPORTCOUNT];
+    VkViewport vk_viewports[VKCONST_MAXVIEWPORTCOUNT];
+    RenderViewportState.viewportCount = 1;
+    RenderViewportState.scissorCount  = 1;
   }
   VkPipelineRasterizationStateCreateInfo RasterizationState = {};
   {
-    RasterizationState.sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    RasterizationState.polygonMode = Find_PolygonMode_byGFXPolygonMode(mainStates->polygonmode);
-    RasterizationState.cullMode    = vk_findCullModeVk(mainStates->culling);
-    RasterizationState.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    RasterizationState.lineWidth   = 1.0f;
+    RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    RasterizationState.polygonMode =
+      Find_PolygonMode_byGFXPolygonMode(desc->mainStates->polygonmode);
+    RasterizationState.cullMode                = vk_findCullModeVk(desc->mainStates->culling);
+    RasterizationState.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    RasterizationState.lineWidth               = 1.0f;
     RasterizationState.depthClampEnable        = VK_FALSE;
     RasterizationState.rasterizerDiscardEnable = VK_FALSE;
 
@@ -661,7 +651,8 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
     RasterizationState.depthBiasConstantFactor = 0.0f;
     RasterizationState.depthBiasSlopeFactor    = 0.0f;
   }
-  // Draw pass dependent data but draw passes doesn't support MSAA right now
+
+  // MSAA isn't supported for now
   VkPipelineMultisampleStateCreateInfo MSAAState = {};
   {
     MSAAState.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -673,9 +664,7 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
     MSAAState.alphaToOneEnable      = VK_FALSE;
   }
 
-  TGFXLISTCOUNT(core_tgfx_main, mainStates->BLENDINGs, BlendingsCount);
-  blendinginfo_vk** BLENDINGINFOS = ( blendinginfo_vk** )mainStates->BLENDINGs;
-
+  // Blending isn't supported for now
   VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
   {
     Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -693,10 +682,8 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
   VkDynamicState                   DynamicStatesList[64];
   uint32_t                         DynamicStatesCount = 0;
   {
-    if (!viewportCount) {
-      DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_VIEWPORT;
-      DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_SCISSOR;
-    }
+    DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_VIEWPORT;
+    DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_SCISSOR;
     /*
     if (!LAYOUT && rendergpu->ext()->ISSUPPORTED_DYNAMICSTATE_VERTEXBINDING()) {
       DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE;
@@ -709,11 +696,11 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
 
   unsigned int typeSets[VKCONST_MAXDESCSET_PERLIST] = {};
   uint32_t     typesetscount                        = 0;
-  CountDescSets(i_bindingTables, &typesetscount, typeSets);
+  CountDescSets(desc->typeTables, &typesetscount, typeSets);
   VkPipelineLayout layout = {};
-  if (!VKPipelineLayoutCreation(GPU, i_bindingTables, typesetscount, false, &layout)) {
+  if (!VKPipelineLayoutCreation(GPU, desc->typeTables, typesetscount, false, &layout)) {
     printer(result_tgfx_FAIL,
-            "Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
+            "Compile_RasterPipeline() has failed at VKPipelineLayoutCreation!");
     return result_tgfx_FAIL;
   }
 
@@ -722,8 +709,8 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
       // baseslotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT
   ) {
     depth_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    if (mainStates->depthtest) {
-      depthsettingsdesc_vk* depthsettings = ( depthsettingsdesc_vk* )mainStates->depthtest;
+    if (desc->mainStates->depthtest) {
+      depthsettingsdesc_vk* depthsettings = ( depthsettingsdesc_vk* )desc->mainStates->depthtest;
       depth_state.depthTestEnable         = VK_TRUE;
       depth_state.depthCompareOp          = depthsettings->DepthCompareOP;
       depth_state.depthWriteEnable        = depthsettings->ShouldWrite;
@@ -737,10 +724,10 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
     depth_state.flags = 0;
     depth_state.pNext = nullptr;
 
-    if (mainStates->StencilFrontFaced || mainStates->StencilBackFaced) {
+    if (desc->mainStates->StencilFrontFaced || desc->mainStates->StencilBackFaced) {
       depth_state.stencilTestEnable    = VK_TRUE;
-      stencildesc_vk* frontfacestencil = ( stencildesc_vk* )mainStates->StencilFrontFaced;
-      stencildesc_vk* backfacestencil  = ( stencildesc_vk* )mainStates->StencilBackFaced;
+      stencildesc_vk* frontfacestencil = ( stencildesc_vk* )desc->mainStates->StencilFrontFaced;
+      stencildesc_vk* backfacestencil  = ( stencildesc_vk* )desc->mainStates->StencilBackFaced;
       if (backfacestencil) {
         depth_state.back = backfacestencil->OPSTATE;
       } else {
@@ -760,13 +747,27 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
 
   VkPipeline pipeline;
   {
+    VkPipelineRenderingCreateInfoKHR dynCi = {};
+    dynCi.sType                         = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    VkFormat VKCOLORATTACHMENTFORMATS[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
+    while (dynCi.colorAttachmentCount <= TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT &&
+           desc->colorTextureFormats[dynCi.colorAttachmentCount] != texture_channels_tgfx_UNDEF) {
+      VKCOLORATTACHMENTFORMATS[dynCi.colorAttachmentCount] =
+        vk_findFormatVk(desc->colorTextureFormats[dynCi.colorAttachmentCount]);
+      dynCi.colorAttachmentCount++;
+    }
+    dynCi.pColorAttachmentFormats = VKCOLORATTACHMENTFORMATS;
+    dynCi.viewMask                = 0;
+    dynCi.pNext                   = {};
+
     VkGraphicsPipelineCreateInfo ci = {};
     ci.sType                        = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     ci.pColorBlendState             = &Pipeline_ColorBlendState;
-    if (subpass->isDepthAttachment
-        // baseslotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT
-    ) {
-      ci.pDepthStencilState = &depth_state;
+    if (desc->depthStencilTextureFormat != texture_channels_tgfx_UNDEF &&
+        desc->depthStencilTextureFormat != texture_channels_tgfx_UNDEF2) {
+      ci.pDepthStencilState         = &depth_state;
+      dynCi.depthAttachmentFormat   = vk_findFormatVk(desc->depthStencilTextureFormat);
+      dynCi.stencilAttachmentFormat = vk_findFormatVk(desc->depthStencilTextureFormat);
     } else {
       ci.pDepthStencilState = nullptr;
     }
@@ -777,26 +778,29 @@ result_tgfx vk_createRasterPipeline(const shaderSource_tgfxlsthnd       ShaderSo
     ci.pVertexInputState   = &VertexInputState_ci;
     ci.pViewportState      = &RenderViewportState;
     ci.layout              = layout;
-    ci.renderPass          = subpass->vk_renderPass;
-    ci.subpass             = subpass->m_subpassIndx;
     ci.stageCount          = 2;
     ci.pStages             = STAGEs;
     ci.basePipelineHandle  = VK_NULL_HANDLE; // Optional
     ci.basePipelineIndex   = -1;             // Optional
     ci.flags               = 0;
-    ci.pNext               = nullptr;
+    ci.pNext               = &dynCi;
+    ci.renderPass          = VK_NULL_HANDLE;
+    ci.subpass             = 0;
     ThrowIfFailed(vkCreateGraphicsPipelines(GPU->vk_logical, nullptr, 1, &ci, nullptr, &pipeline),
                   "vkCreateGraphicsPipelines has failed!");
   }
 
   PIPELINE_VKOBJ* pipelineObj = hidden->pipelines.create_OBJ();
-  pipelineObj->m_gfxSubpass   = i_subpass;
   pipelineObj->m_gpu          = GPU->gpuIndx();
   memcpy(pipelineObj->m_typeSETs, typeSets, sizeof(pipelineObj->m_typeSETs));
   pipelineObj->vk_layout = layout;
   pipelineObj->vk_object = pipeline;
   pipelineObj->vk_type   = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  *pipelineHnd           = hidden->pipelines.returnHANDLEfromOBJ(pipelineObj);
+  for (uint32_t i = 0; i < TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT; i++) {
+    pipelineObj->vk_colorAttachmentFormats[i] = vk_findFormatVk(desc->colorTextureFormats[i]);
+  }
+  pipelineObj->vk_depthAttachmentFormat = vk_findFormatVk(desc->depthStencilTextureFormat);
+  *hnd                   = hidden->pipelines.returnHANDLEfromOBJ(pipelineObj);
   return result_tgfx_SUCCESS;
 }
 /*
@@ -863,7 +867,6 @@ result_tgfx vk_createComputePipeline(shaderSource_tgfxhnd        Source,
   }
 
   PIPELINE_VKOBJ* obj = hidden->pipelines.create_OBJ();
-  obj->m_gfxSubpass   = nullptr;
   obj->m_gpu          = GPU->gpuIndx();
   memcpy(obj->m_typeSETs, typeSets, sizeof(obj->m_typeSETs));
   obj->vk_layout     = layout;
@@ -1179,59 +1182,6 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
   return result_tgfx_SUCCESS;
 }
 
-result_tgfx vk_createRasterpass(gpu_tgfxhnd i_gpu, unsigned char colorSlotCount,
-                                rasterpassSlotDescription_tgfx* colorSlotDescs,
-                                rasterpassSlotDescription_tgfx  depthStencilSlotDesc,
-                                extension_tgfxlsthnd            exts,
-                                subRasterpass_tgfxlsthnd        subRasterpasses) {
-  GPU_VKOBJ* gpu = core_vk->getGPUs().getOBJfromHANDLE(i_gpu);
-
-  VkAttachmentDescription attachmentDescs[VKCONST_MAXRTSLOTCOUNT]     = {};
-  VkAttachmentReference   colorAttachmentRefs[VKCONST_MAXRTSLOTCOUNT] = {}, depthAttachmentRef = {};
-  for (uint32_t i = 0; i < colorSlotCount; i++) {
-    attachmentDescs[i].storeOp        = vk_findStoreTypeVk(colorSlotDescs[i].storeType);
-    attachmentDescs[i].loadOp         = vk_findLoadTypeVk(colorSlotDescs[i].loadType);
-    VkAccessFlags firstAccess, lastAccess;
-    vk_findImageAccessPattern(colorSlotDescs[i].layout, firstAccess,
-                              attachmentDescs[i].initialLayout);
-    attachmentDescs[i].finalLayout    = attachmentDescs[i].initialLayout;
-    attachmentDescs[i].format         = vk_findFormatVk(colorSlotDescs[i].format);
-    attachmentDescs[i].samples        = VK_SAMPLE_COUNT_1_BIT;
-
-    colorAttachmentRefs[i].attachment = i;
-    colorAttachmentRefs[i].layout     = attachmentDescs[i].initialLayout;
-  }
-
-  VkSubpassDescription    subpassDesc                             = {};
-  {
-    subpassDesc.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpassDesc.colorAttachmentCount = colorSlotCount;
-    subpassDesc.pColorAttachments    = colorAttachmentRefs;
-    if (depthStencilSlotDesc.layout) {
-      subpassDesc.pDepthStencilAttachment = &depthAttachmentRef;
-    }
-  }
-
-
-  VkRenderPassCreateInfo ci = {};
-  ci.attachmentCount        = colorSlotCount + ((depthStencilSlotDesc.layout) ? 1 : 0);
-  ci.pAttachments           = attachmentDescs;
-  ci.subpassCount           = 1;
-  ci.pSubpasses             = &subpassDesc;
-  ci.sType                  = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-  VkRenderPass rp;
-  THROW_RETURN_IF_FAIL(vkCreateRenderPass(gpu->vk_logical, &ci, nullptr, &rp),
-                       "RenderPass creation has failed!", result_tgfx_FAIL);
-
-  SUBRASTERPASS_VKOBJ* subpass = hidden->subrasterpasses.create_OBJ();
-  subpass->isDepthAttachment   = (depthStencilSlotDesc.layout) ? 1 : 0;
-  subpass->m_gpu               = i_gpu;
-  subpass->m_subpassIndx       = 0;
-  subpass->vk_renderPass       = rp;
-  subRasterpasses[0]          = hidden->subrasterpasses.returnHANDLEfromOBJ(subpass);
-  return result_tgfx_SUCCESS;
-}
-
 /////////////////////////////////////////////////////
 ///				INITIALIZATION PROCEDURE
 /////////////////////////////////////////////////////
@@ -1258,7 +1208,6 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->getRemainingMemory         = vk_getRemainingMemory;
   core_tgfx_main->contentmanager->bindToHeap_Buffer          = vk_bindToHeap_Buffer;
   core_tgfx_main->contentmanager->bindToHeap_Texture         = vk_bindToHeap_Texture;
-  core_tgfx_main->contentmanager->createRasterpass           = vk_createRasterpass;
 }
 
 void initGlslang() {
@@ -1294,10 +1243,6 @@ gpudatamanager_public::GETPIPELINE_ARRAY() {
 }
 VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>& gpudatamanager_public::GETBUFFER_ARRAY() {
   return hidden->buffers;
-}
-VK_LINEAR_OBJARRAY<VIEWPORT_VKOBJ, viewport_tgfxhnd, 1 << 16>&
-gpudatamanager_public::GETVIEWPORT_ARRAY() {
-  return hidden->viewports;
 }
 VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
 gpudatamanager_public::GETBINDINGTABLE_ARRAY() {

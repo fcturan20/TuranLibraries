@@ -38,7 +38,6 @@ struct gpudatamanager_public {
   VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>&                          GETBUFFER_ARRAY();
   VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>&               GETTEXTURES_ARRAY();
   VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>&             GETPIPELINE_ARRAY();
-  VK_LINEAR_OBJARRAY<VIEWPORT_VKOBJ, viewport_tgfxhnd, 1 << 16>&             GETVIEWPORT_ARRAY();
   VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
   GETBINDINGTABLE_ARRAY();
   VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10>&

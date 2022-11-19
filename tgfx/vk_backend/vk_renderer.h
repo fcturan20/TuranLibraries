@@ -42,10 +42,8 @@ void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxl
                                 uint32_t* o_famList, uint32_t* o_famListSize,
                                 VkSharingMode* o_sharingMode);
 
-void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList,
-                               FRAMEBUFFER_VKOBJ* framebuffer, QUEUEFAM_VK* queueFam,
-                               SUBRASTERPASS_VKOBJ* subpass, VkCommandBuffer* secondaryCmdBuffers,
-                               uint32_t* cmdBufferCount);
+void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUEFAM_VK* queueFam,
+                               VkCommandBuffer* secondaryCmdBuffers, uint32_t* cmdBufferCount);
 
 #define getGPUfromQueueHnd(i_queue)                            \
   GPU_VKOBJ*   gpu   = QUEUE_VKOBJ::getGPUfromHandle(i_queue); \

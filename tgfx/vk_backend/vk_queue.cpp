@@ -15,6 +15,7 @@
 #include "vk_contentmanager.h"
 #include "vk_core.h"
 #include "vk_renderer.h"
+#include "vkext_dynamic_rendering.h"
 #include "vkext_timelineSemaphore.h"
 
 vk_uint32c             VKCONST_MAXFENCECOUNT_PERSUBMIT = 8, VKCONST_MAXCMDBUFFER_PRIMARY_COUNT = 32;
@@ -42,10 +43,8 @@ struct CMDBUFFER_VKOBJ {
     VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
     return (uint32_t(handle.EXTRA_FLAGs) << 24) >> 24;
   }
-  VkCommandBuffer      vk_cb     = {};
-  uint8_t              m_gpuIndx = 0, m_queueFamIndx = 0, m_cmdPoolIndx = 0;
-  FRAMEBUFFER_VKOBJ*   m_activeFramebuffer = {};
-  SUBRASTERPASS_VKOBJ* m_activeSubpass     = {};
+  VkCommandBuffer vk_cb     = {};
+  uint8_t         m_gpuIndx = 0, m_queueFamIndx = 0, m_cmdPoolIndx = 0;
 };
 
 struct cmdPool_vk {
@@ -157,7 +156,20 @@ manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
       break;
     }
   }
-  gpu->vk_propsQueue[bestQueueFam->vk_queueFamIndex].queueFamilyProperties.queueCount--;
+  if (gpu->vk_propsQueue[bestQueueFam->vk_queueFamIndex].queueFamilyProperties.queueCount > 1) {
+    gpu->vk_propsQueue[bestQueueFam->vk_queueFamIndex].queueFamilyProperties.queueCount--;
+
+    // Create internal queue
+    {
+      mngr->m_internalQueue                   = new (VKGLOBAL_VIRMEM_MANAGER) QUEUE_VKOBJ;
+      mngr->m_internalQueue->m_gpu            = gpu;
+      mngr->m_internalQueue->vk_queueFamIndex = bestQueueFam->vk_queueFamIndex;
+      mngr->m_internalQueue->vk_queue         = VK_NULL_HANDLE;
+    }
+  } else {
+    // First queue will be internal queue
+    mngr->m_internalQueue = bestQueueFam->m_queues.data();
+  }
 
   // Create user queues
   for (uint32_t queueFamIndx = 0; queueFamIndx < queueFamiliesCount; queueFamIndx++) {
@@ -172,14 +184,6 @@ manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
     }
   }
 
-  // Create internal queue
-  {
-    mngr->m_internalQueue                   = new (VKGLOBAL_VIRMEM_MANAGER) QUEUE_VKOBJ;
-    mngr->m_internalQueue->m_gpu            = gpu;
-    mngr->m_internalQueue->vk_queueFamIndex = bestQueueFam->vk_queueFamIndex;
-    mngr->m_internalQueue->vk_queue         = VK_NULL_HANDLE;
-    gpu->vk_propsQueue[bestQueueFam->vk_queueFamIndex].queueFamilyProperties.queueCount++;
-  }
   return mngr;
 }
 
@@ -260,13 +264,6 @@ void manager_vk::get_queue_objects() {
                       "Queue Synchronizer Binary Semaphore Creation failed!");
       }
     }
-  }
-
-  // Get internal queue
-  {
-    QUEUEFAM_VK* internalQueueFam = m_queueFams[m_internalQueue->vk_queueFamIndex];
-    vkGetDeviceQueue(m_gpu->vk_logical, m_internalQueue->vk_queueFamIndex,
-                     internalQueueFam->m_queues.size(), &m_internalQueue->vk_queue);
   }
 
   // Create cmdPool for each queue family and CPU thread
@@ -620,8 +617,7 @@ void vk_executeBundles(commandBuffer_tgfxhnd cb, commandBundle_tgfxlsthnd bundle
 
   uint32_t        cmdBundleCount                              = 0;
   VkCommandBuffer secCmdBuffers[VKCONST_MAXCMDBUNDLE_PERCALL] = {};
-  vk_getSecondaryCmdBuffers(bundles, cmdBuffer->m_activeFramebuffer, queueFam,
-                            cmdBuffer->m_activeSubpass, secCmdBuffers, &cmdBundleCount);
+  vk_getSecondaryCmdBuffers(bundles, queueFam, secCmdBuffers, &cmdBundleCount);
   assert(cmdBundleCount <= VKCONST_MAXCMDBUNDLE_PERCALL &&
          "vk_GetSecondaryCmdBuffers() can't exceed VKCONST_MAXCMDBUNDLE_PERCALL!");
   if (!cmdBundleCount) {
@@ -629,113 +625,19 @@ void vk_executeBundles(commandBuffer_tgfxhnd cb, commandBundle_tgfxlsthnd bundle
   }
   vkCmdExecuteCommands(cmdBuffer->vk_cb, cmdBundleCount, secCmdBuffers);
 }
-void vk_beginRasterpass(commandBuffer_tgfxhnd commandBuffer, subRasterpass_tgfxhnd firstSubpass,
-                        texture_tgfxlsthnd  colorAttachments,
-                        typelessColor_tgfx* colorAttachmentClearValues,
-                        texture_tgfxhnd     depthAttachment,
-                        typelessColor_tgfx  depthAttachmentClearValue) {
+
+void vk_beginRasterpass(commandBuffer_tgfxhnd commandBuffer, unsigned int colorAttachmentCount,
+                        const rasterpassBeginSlotInfo_tgfx* colorAttachments,
+                        rasterpassBeginSlotInfo_tgfx depthAttachment, extension_tgfxlsthnd exts) {
   getCmdBufferfromHnd(commandBuffer);
 #ifdef VULKAN_DEBUGGING
   checkCmdBufferHnd();
 #endif
-  SUBRASTERPASS_VKOBJ* subpass =
-    contentmanager->GETSUBRASTERPASS_ARRAY().getOBJfromHANDLE(firstSubpass);
 
-  FRAMEBUFFER_VKOBJ* framebuffer = nullptr;
-  TGFXLISTCOUNT(core_tgfx_main, colorAttachments, colorAttachmentCount);
-
-  TEXTURE_VKOBJ* baseTexture = nullptr;
-  if (depthAttachment) {
-    baseTexture = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(depthAttachment);
-  } else {
-    baseTexture = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(colorAttachments[0]);
-  }
-
-  bool isFound = false;
-  for (uint32_t fbIndx = 0; fbIndx < gpu->manager()->m_framebuffers.size(); fbIndx++) {
-    FRAMEBUFFER_VKOBJ* fb           = gpu->manager()->m_framebuffers[fbIndx];
-    uint32_t           slotIndx     = 0;
-    bool               isCompatible = true;
-
-    while (fb->m_textures[slotIndx] && slotIndx <= colorAttachmentCount &&
-           slotIndx <= VKCONST_MAXRTSLOTCOUNT) {
-      if (fb->m_textures[slotIndx] != colorAttachments[slotIndx]) {
-        isCompatible = false;
-        break;
-      }
-      slotIndx++;
-    }
-    if (isCompatible) {
-      if ((depthAttachment && fb->m_textures[colorAttachmentCount] == depthAttachment) ||
-          !depthAttachment) {
-        framebuffer = fb;
-        break;
-      }
-    }
-  }
-  if (!framebuffer) {
-    VkImageView imageViews[VKCONST_MAXRTSLOTCOUNT + 1] = {};
-    for (uint32_t colorSlotIndx = 0; colorSlotIndx < colorAttachmentCount; colorSlotIndx++) {
-      imageViews[colorSlotIndx] = contentmanager->GETTEXTURES_ARRAY()
-                                    .getOBJfromHANDLE(colorAttachments[colorSlotIndx])
-                                    ->vk_imageView;
-    }
-    if (depthAttachment) {
-      imageViews[colorAttachmentCount] = baseTexture->vk_imageView;
-    }
-
-    VkFramebuffer           vkFb;
-    VkFramebufferCreateInfo ci = {};
-    ci.attachmentCount         = colorAttachmentCount + ((depthAttachment) ? 1 : 0);
-    ci.height                  = baseTexture->m_height;
-    ci.width                   = baseTexture->m_width;
-    ci.layers                  = 1;
-    ci.pAttachments            = imageViews;
-    ci.renderPass              = subpass->vk_renderPass;
-    ci.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    ThrowIfFailed(vkCreateFramebuffer(gpu->vk_logical, &ci, nullptr, &vkFb),
-                  "VkFramebuffer creation has failed");
-
-    framebuffer = gpu->manager()->m_framebuffers.add();
-    for (uint32_t colorIndx = 0; colorIndx < colorAttachmentCount; colorIndx++) {
-      framebuffer->m_textures[colorIndx] = colorAttachments[colorIndx];
-    }
-    if (depthAttachment) {
-      framebuffer->m_textures[colorAttachmentCount] = depthAttachment;
-    }
-    framebuffer->vk_framebuffer = vkFb;
-  }
-
-  VkClearValue clearValues[VKCONST_MAXRTSLOTCOUNT + 1] = {};
-  for (uint32_t colorSlotIndx = 0; colorSlotIndx < colorAttachmentCount; colorSlotIndx++) {
-    VkFormat format = vk_findFormatVk(contentmanager->GETTEXTURES_ARRAY()
-                                        .getOBJfromHANDLE(colorAttachments[colorSlotIndx])
-                                        ->m_channels);
-    switch (vk_findTextureDataType(format)) {
-      case datatype_tgfx_VAR_UINT32:
-        memcpy(clearValues[colorSlotIndx].color.uint32,
-               colorAttachmentClearValues[colorSlotIndx].data, sizeof(VkClearColorValue));
-      case datatype_tgfx_VAR_INT32:
-        memcpy(clearValues[colorSlotIndx].color.uint32,
-               colorAttachmentClearValues[colorSlotIndx].data, sizeof(VkClearColorValue));
-      case datatype_tgfx_VAR_FLOAT32:
-        memcpy(clearValues[colorSlotIndx].color.float32,
-               colorAttachmentClearValues[colorSlotIndx].data, sizeof(VkClearColorValue));
-    }
-  }
-  VkRenderPassBeginInfo bi    = {};
-  bi.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-  bi.pNext                    = nullptr;
-  bi.renderPass               = subpass->vk_renderPass;
-  bi.framebuffer              = framebuffer->vk_framebuffer;
-  bi.pClearValues             = clearValues;
-  bi.renderArea.extent.width  = baseTexture->m_width;
-  bi.renderArea.extent.height = baseTexture->m_height;
-  bi.renderArea.offset        = {};
-  bi.clearValueCount          = colorAttachmentCount + ((depthAttachment) ? 1 : 0);
-  vkCmdBeginRenderPass(cmdBuffer->vk_cb, &bi, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-  cmdBuffer->m_activeFramebuffer = framebuffer;
-  cmdBuffer->m_activeSubpass     = subpass;
+  vkext_dynamicRendering* dynRenderingExt =
+    ( vkext_dynamicRendering* )gpu->ext()->m_exts[vkext_interface::dynamicRendering_vkExtEnum];
+  dynRenderingExt->vk_beginRenderpass(cmdBuffer->vk_cb, colorAttachmentCount, colorAttachments,
+                                      depthAttachment, exts);
 }
 void vk_nextRendersubpass(commandBuffer_tgfxhnd commandBuffer) {
   getCmdBufferfromHnd(commandBuffer);
@@ -745,15 +647,15 @@ void vk_nextRendersubpass(commandBuffer_tgfxhnd commandBuffer) {
 
   vkCmdNextSubpass(cmdBuffer->vk_cb, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 }
-void vk_endRasterpass(commandBuffer_tgfxhnd commandBuffer) {
+void vk_endRasterpass(commandBuffer_tgfxhnd commandBuffer, extension_tgfxlsthnd exts) {
   getCmdBufferfromHnd(commandBuffer);
 #ifdef VULKAN_DEBUGGING
   checkCmdBufferHnd();
 #endif
 
-  vkCmdEndRenderPass(cmdBuffer->vk_cb);
-  cmdBuffer->m_activeFramebuffer = nullptr;
-  cmdBuffer->m_activeSubpass     = nullptr;
+  vkext_dynamicRendering* dynRenderingExt =
+    ( vkext_dynamicRendering* )gpu->ext()->m_exts[vkext_interface::dynamicRendering_vkExtEnum];
+  dynRenderingExt->vk_endRenderpass(cmdBuffer->vk_cb, exts);
 }
 
 void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, commandBuffer_tgfxlsthnd i_cmdBuffersList,

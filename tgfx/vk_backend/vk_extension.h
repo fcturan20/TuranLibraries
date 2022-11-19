@@ -16,41 +16,6 @@ struct extManager_vkDevice {
   // Swapchain
   bool SwapchainDisplay = false;
 
-  // VK_KHR_descriptor_indexing
-  // This extension'll be used to support variable descriptor count and NonUniformDescIndexing
-  // bool isVariableDescCountSupported = false;
-
-  // VK_KHR_buffer_device_address
-  // This extension'll be used to implement pointer support for buffers
-  // This extension is better than all DX12. But if gpu doesn't support, VK is worse than DX12 so i
-  // still couldn't figure out the best possible way.
-  // bool isBufferDeviceAddressSupported = false;
-
-  // VK_KHR_push_descriptor
-  // This extension'll be used to implement CallBufferDescriptors for now
-  // But in future, maybe this can be used to move all descriptor updating CPU cost to GPU with an
-  // TGFX extension Because this is what DX12 does, updating descriptors in command lists (so in
-  // GPU)
-  // bool isPushDescriptorSupported = false;
-
-  // VK_EXT_inline_uniform_block
-  // This is VK only extension, which has extreme use cases on certain AMD GPUs (at the time of
-  // writing: March '22)
-  // bool isInlineUniformBlockSupported = false;
-
-  // These limits are maximum count of defined resources in material linking (including global
-  // buffers and textures) That means; at specified shader input type-> all global shader inputs +
-  // general shader inputs + per instance shader inputs shouldn't exceed the related limit
-  // unsigned int MaxDescCounts[VKCONST_DYNAMICDESCRIPTORTYPESCOUNT] = {}, MaxDesc_ALL = 0,
-  // MaxAccessibleDesc_PerStage = 0, MaxBoundDescSet = 0;
-
-  // bool isDynamicStateVertexInputBindingSupported = false;
-
-  // VK_KHR_timeline_semaphore
-  // This feature is expected to be supported.
-  // There'll be an emulation layer later for devices that don't support this extension
-  // bool isTimelineSemaphoresSupported = false;
-
  public:
   static void createExtManager(GPU_VKOBJ* gpu);
   void        Describe_SupportedExtensions(GPU_VKOBJ* VKGPU);
@@ -72,6 +37,7 @@ struct vkext_interface {
     depthStencil_vkExtEnum,
     descIndexing_vkExtEnum,
     timelineSemaphores_vkExtEnum,
+    dynamicRendering_vkExtEnum,
     vkext_count
   };
 

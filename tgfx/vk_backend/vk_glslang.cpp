@@ -125,7 +125,7 @@ static EShLanguage Find_EShShaderStage_byTGFXShaderStage(shaderstage_tgfx stage)
   }
 }
 
-const void* compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, void* i_DATA,
+const void* compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, const void* i_DATA,
                                              unsigned int  i_DATA_SIZE,
                                              unsigned int* compiledbinary_datasize) {
   EShLanguage       stage = Find_EShShaderStage_byTGFXShaderStage(tgfxstage);

@@ -37,20 +37,20 @@ typedef struct tgfx_helper {
   shaderStageFlag_tgfxhnd (*createShaderStageFlag)(unsigned char count, ...);
   RTSlotDescription_tgfxhnd (*CreateRTSlotDescription_Color)(
     texture_tgfxhnd text0, texture_tgfxhnd text1, operationtype_tgfx OPTYPE,
-    drawpassload_tgfx LOADTYPE, unsigned char useLater, unsigned char slotIndx,
+    rasterpassLoad_tgfx LOADTYPE, unsigned char useLater, unsigned char slotIndx,
     typelessColor_tgfx CLEARVALUE);
   RTSlotDescription_tgfxhnd (*CreateRTSlotDescription_DepthStencil)(
     texture_tgfxhnd text0, texture_tgfxhnd text1, operationtype_tgfx depthOp,
-    drawpassload_tgfx depthLoad, operationtype_tgfx stencilOp, drawpassload_tgfx stencilLoad,
+    rasterpassLoad_tgfx depthLoad, operationtype_tgfx stencilOp, rasterpassLoad_tgfx stencilLoad,
     double depthClearValue, unsigned char stencilClearValue);
   rtslotusage_tgfx_handle (*CreateRTSlotUsage_Color)(RTSlotDescription_tgfxhnd base,
                                                      operationtype_tgfx        opType,
-                                                     drawpassload_tgfx         LOADTYPE);
+                                                     rasterpassLoad_tgfx         LOADTYPE);
   rtslotusage_tgfx_handle (*CreateRTSlotUsage_Depth)(RTSlotDescription_tgfxhnd base,
                                                      operationtype_tgfx        depthOp,
-                                                     drawpassload_tgfx         depthLoad,
+                                                     rasterpassLoad_tgfx         depthLoad,
                                                      operationtype_tgfx        stencilOp,
-                                                     drawpassload_tgfx         stencilLoad);
+                                                     rasterpassLoad_tgfx         stencilLoad);
   // Depth bounds extension
   depthsettings_tgfxhnd (*CreateDepthConfiguration)(unsigned char write, depthtest_tgfx compareOp,
                                                     extension_tgfxlsthnd exts);

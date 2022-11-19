@@ -13,6 +13,7 @@
 #include "vkext_depthstencil.h"
 #include "vkext_descIndexing.h"
 #include "vkext_timelineSemaphore.h"
+#include "vkext_dynamic_rendering.h"
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_EXTS = nullptr;
 
 vkext_interface::vkext_interface(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct) {
@@ -38,12 +39,14 @@ void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu) {
   mngr->m_exts = new (VKGLOBAL_VIRMEM_EXTS) vkext_interface*[vkext_interface::vkext_count];
   mngr->m_GPU  = gpu;
 
-  mngr->m_exts[vkext_interface::descIndexing_vkExtEnum] =
-    new (VKGLOBAL_VIRMEM_EXTS) vkext_descIndexing(gpu);
   mngr->m_exts[vkext_interface::depthStencil_vkExtEnum] =
     new (VKGLOBAL_VIRMEM_EXTS) vkext_depthStencil(gpu);
+  mngr->m_exts[vkext_interface::descIndexing_vkExtEnum] =
+    new (VKGLOBAL_VIRMEM_EXTS) vkext_descIndexing(gpu);
   mngr->m_exts[vkext_interface::timelineSemaphores_vkExtEnum] =
     new (VKGLOBAL_VIRMEM_EXTS) vkext_timelineSemaphore(gpu);
+  mngr->m_exts[vkext_interface::dynamicRendering_vkExtEnum] =
+    new (VKGLOBAL_VIRMEM_EXTS) vkext_dynamicRendering(gpu);
 
   gpu->ext() = mngr;
 }

@@ -148,7 +148,7 @@ void vk_createInstance() {
   VKGLOBAL_APPINFO.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   VKGLOBAL_APPINFO.pEngineName        = "GFX API";
   VKGLOBAL_APPINFO.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
-  VKGLOBAL_APPINFO.apiVersion         = VK_API_VERSION_1_0;
+  VKGLOBAL_APPINFO.apiVersion         = VK_API_VERSION_1_3;
 
   // CHECK SUPPORTED EXTENSIONs
   uint32_t extCount = 0;
@@ -277,6 +277,7 @@ inline void vk_checkComputerSpecs() {
     // GPU initializer handles everything else
     GPU_VKOBJ* vkgpu   = hidden->DEVICE_GPUs.add();
     vkgpu->vk_physical = PhysicalGPUs[i];
+    vkgpu->setGPUINDX(i);
 
     // Analize GPU memory & extensions
     vk_analizeGPUmemory(vkgpu);
@@ -380,8 +381,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
         (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
       swpchn_ci.imageUsage &= ~(1UL << 5);
     }
-    swpchn_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                           VK_IMAGE_USAGE_STORAGE_BIT;
+    swpchn_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     swpchn_ci.clipped        = VK_TRUE;
     swpchn_ci.preTransform   = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
@@ -850,11 +850,7 @@ void        vk_errorCallback(int error_code, const char* description) {
 result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallback printcallback) {
   if (!regsys->getSystem(TGFX_PLUGIN_NAME)) return result_tgfx_FAIL;
 
-  if (printcallback) {
-    printer_cb = printcallback;
-  } else {
-    printer_cb = vk_printfLog;
-  }
+  printer_cb = printcallback;
 
   VIRTUALMEMORY_TAPI_PLUGIN_TYPE virmemsystype =
     ( VIRTUALMEMORY_TAPI_PLUGIN_TYPE )regsys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
@@ -952,7 +948,7 @@ vk_debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      Message_Severity,
         "VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT: Potential non-optimal use of Vulkan\n";
       break;
     default:
-      printer(result_tgfx_FAIL, "Vulkan Callback has returned a unsupported Message_Type");
+      printer(result_tgfx_FAIL, "Vulkan Callback has returned a unsupported Message_Type\n");
       return true;
       break;
   }

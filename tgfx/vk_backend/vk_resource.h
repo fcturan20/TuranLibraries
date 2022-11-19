@@ -96,7 +96,7 @@ struct BUFFER_VKOBJ {
 
 struct colorslot_vk {
   TEXTURE_VKOBJ*     RT;
-  drawpassload_tgfx  LOADSTATE;
+  rasterpassLoad_tgfx  LOADSTATE;
   bool               IS_USED_LATER;
   operationtype_tgfx RT_OPERATIONTYPE;
   glm::vec4          CLEAR_COLOR;
@@ -104,7 +104,7 @@ struct colorslot_vk {
 };
 struct depthstencilslot_vk {
   TEXTURE_VKOBJ*     RT;
-  drawpassload_tgfx  DEPTH_LOAD, STENCIL_LOAD;
+  rasterpassLoad_tgfx  DEPTH_LOAD, STENCIL_LOAD;
   bool               IS_USED_LATER;
   operationtype_tgfx DEPTH_OPTYPE, STENCIL_OPTYPE;
   glm::vec2          CLEAR_COLOR;
@@ -205,14 +205,15 @@ struct PIPELINE_VKOBJ {
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::PIPELINE;
   static uint16_t  GET_EXTRAFLAGS(PIPELINE_VKOBJ* obj) { return obj->vk_type; }
 
-  subRasterpass_tgfxhnd m_gfxSubpass; // Only used in raster pipeline
-
   uint8_t  m_gpu;
   uint32_t m_typeSETs[VKCONST_MAXDESCSET_PERLIST];
 
   VkPipelineLayout    vk_layout = VK_NULL_HANDLE;
   VkPipeline          vk_object = VK_NULL_HANDLE;
   VkPipelineBindPoint vk_type   = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+
+  VkFormat vk_colorAttachmentFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
+  VkFormat vk_depthAttachmentFormat                                            = {};
 };
 struct depthsettingsdesc_vk {
   VkBool32    ShouldWrite    = VK_FALSE;
@@ -251,20 +252,6 @@ struct VERTEXATTRIBLAYOUT_VKOBJ {
   VkVertexInputBindingDescription    BindingDesc;
   VkVertexInputAttributeDescription* AttribDescs;
   unsigned char                      AttribDesc_Count;
-};
-
-struct VIEWPORT_VKOBJ {
-  std::atomic_bool isALIVE    = false;
-  vk_handleType    HANDLETYPE = VKHANDLETYPEs::VIEWPORT;
-  static uint16_t  GET_EXTRAFLAGS(VIEWPORT_VKOBJ* obj) { return 0; }
-
-  void operator=(const VIEWPORT_VKOBJ& copyFrom) {
-    isALIVE.store(true);
-    viewport = copyFrom.viewport;
-    scissor  = copyFrom.scissor;
-  }
-  VkViewport viewport;
-  VkRect2D   scissor;
 };
 
 struct HEAP_VKOBJ {

@@ -12,11 +12,11 @@ struct core_public {
   VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT>& getGPUs();
 };
 
+static uint32_t gpuCounter = 0;
 struct GPU_VKOBJ {
   bool            isALIVE    = 1;
   vk_handleType   HANDLETYPE = VKHANDLETYPEs::GPU;
   static uint16_t GET_EXTRAFLAGS(GPU_VKOBJ* obj) { return obj->m_gpuIndx; }
-  GPU_VKOBJ() { m_gpuIndx = core_vk->getGPUs().size(); }
 
   tgfx_gpu_description desc;
 
@@ -32,7 +32,6 @@ struct GPU_VKOBJ {
  private:
   extManager_vkDevice* m_extensions;
   manager_vk*          m_manager = nullptr;
-  // core_public->getGPUs(m_gpuIndx) is a valid usage
   uint8_t m_gpuIndx = 255;
 
  public:
@@ -41,6 +40,7 @@ struct GPU_VKOBJ {
   const manager_vk*          manager() const { return m_manager; }
   manager_vk*&               manager() { return m_manager; }
   uint8_t                    gpuIndx() const { return m_gpuIndx; }
+  void                       setGPUINDX(uint8_t v) { m_gpuIndx = v; }
 };
 
 struct MONITOR_VKOBJ {

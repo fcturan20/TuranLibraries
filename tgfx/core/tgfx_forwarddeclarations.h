@@ -25,7 +25,6 @@ typedef struct tgfx_rtslotset_obj*             RTSlotset_tgfxhnd;
 typedef struct tgfx_buffer_obj*                buffer_tgfxhnd;
 typedef struct tgfx_samplingtype_obj*          sampler_tgfxhnd;
 typedef struct tgfx_vertexattributelayout_obj* vertexAttributeLayout_tgfxhnd;
-typedef struct tgfx_viewport_obj*              viewport_tgfxhnd;
 typedef struct tgfx_shadersource_obj*          shaderSource_tgfxhnd;
 typedef struct tgfx_inheritedrtslotset_obj*    inheritedRTSlotset_tgfxhnd;
 typedef struct tgfx_bindingtabletype_obj*      bindingTableType_tgfxhnd;
@@ -72,7 +71,6 @@ typedef bindingTableType_tgfxhnd*  bindingTableType_tgfxlsthnd;
 typedef bindingTable_tgfxhnd*      bindingTable_tgfxlsthnd;
 typedef commandBuffer_tgfxhnd*     commandBuffer_tgfxlsthnd;
 typedef fence_tgfxhnd*             fence_tgfxlsthnd;
-typedef viewport_tgfxhnd*          viewport_tgfxlsthnd;
 typedef gpuQueue_tgfxhnd*          gpuQueue_tgfxlsthnd;
 typedef window_tgfxhnd*            window_tgfxlsthnd;
 typedef commandBundle_tgfxhnd*     commandBundle_tgfxlsthnd;
@@ -89,6 +87,7 @@ typedef struct tgfx_uvec4                     uvec4_tgfx;
 typedef struct tgfx_vec2                      vec2_tgfx;
 typedef struct tgfx_vec3                      vec3_tgfx;
 typedef struct tgfx_vec4                      vec4_tgfx;
+typedef struct tgfx_ivec2                     ivec2_tgfx;
 typedef struct tgfx_boxRegion                 boxRegion_tgfx;
 typedef struct tgfx_cubeRegion                cubeRegion_tgfx;
 typedef struct tgfx_memory_description        memoryDescription_tgfx;
@@ -151,23 +150,23 @@ typedef enum {
 
 typedef enum {
   // All values will be cleared to a certain value
-  drawpassload_tgfx_CLEAR,
+  rasterpassLoad_tgfx_CLEAR,
   // Loaded data is random (undef or current value) & driver probably clear
-  drawpassload_tgfx_DISCARD,
+  rasterpassLoad_tgfx_DISCARD,
   // You need previous data, so previous data will affect current draw calls
-  drawpassload_tgfx_LOAD,
+  rasterpassLoad_tgfx_LOAD,
   // There won't be any access to previous data, use this for transient resources
-  drawpassload_tgfx_NONE
-} drawpassload_tgfx;
+  rasterpassLoad_tgfx_NONE
+} rasterpassLoad_tgfx;
 
 typedef enum {
   // Driver do whatever it wants with the data (either write or ignores it)
-  drawpassstore_tgfx_DISCARD,
+  rasterpassStore_tgfx_DISCARD,
   // Driver should write the data to memory
-  drawpassstore_tgfx_STORE,
+  rasterpassStore_tgfx_STORE,
   // Driver should ignore writing the data to memory, use this for transient resources
-  drawpassstore_tgfx_NONE
-} drawpassstore_tgfx;
+  rasterpassStore_tgfx_NONE
+} rasterpassStore_tgfx;
 
 typedef enum {
   depthtest_tgfx_ALWAYS,
@@ -288,6 +287,7 @@ typedef enum {
 } texture_wrapping_tgfx;
 
 typedef enum {
+  texture_channels_tgfx_UNDEF,
   texture_channels_tgfx_BGRA8UB,    // Unsigned but non-normalized char
   texture_channels_tgfx_BGRA8UNORM, // Unsigned and normalized char
   texture_channels_tgfx_BGRA8SRGB,
@@ -296,6 +296,8 @@ typedef enum {
   texture_channels_tgfx_RGBA32UI,
   texture_channels_tgfx_RGBA32I,
   texture_channels_tgfx_RGBA8UB,
+  texture_channels_tgfx_RGBA8UNORM,
+  texture_channels_tgfx_RGBA8SRGB,
   texture_channels_tgfx_RGBA8B,
   texture_channels_tgfx_RGBA16F,
 
@@ -319,7 +321,8 @@ typedef enum {
 
   texture_channels_tgfx_D32,
   texture_channels_tgfx_D24S8,
-  texture_channels_tgfx_A2B10G10R10_UNORM
+  texture_channels_tgfx_A2B10G10R10_UNORM,
+  texture_channels_tgfx_UNDEF2
 } textureChannels_tgfx;
 
 typedef enum {
@@ -333,11 +336,7 @@ typedef enum { VSYNC_OFF, VSYNC_DOUBLEBUFFER, VSYNC_TRIPLEBUFFER } vsync_tgfx;
 
 typedef enum { windowmode_tgfx_FULLSCREEN, windowmode_tgfx_WINDOWED } windowmode_tgfx;
 
-typedef enum {
-  backends_tgfx_OPENGL4 = 0,
-  backends_tgfx_VULKAN  = 1,
-  backends_tgfx_D3D12   = 2
-} backends_tgfx;
+typedef enum { backends_tgfx_VULKAN = 1, backends_tgfx_D3D12 = 2 } backends_tgfx;
 
 typedef enum {
   shaderlanguages_tgfx_GLSL  = 0,

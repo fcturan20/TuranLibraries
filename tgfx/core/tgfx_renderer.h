@@ -16,13 +16,11 @@ typedef struct tgfx_renderer {
   // All bundles should be from the compatible queue with the cmdBuffer's queue
   void (*executeBundles)(commandBuffer_tgfxhnd commandBuffer, commandBundle_tgfxlsthnd bundles,
                          extension_tgfxlsthnd exts);
-  void (*beginRasterpass)(commandBuffer_tgfxhnd commandBuffer, subRasterpass_tgfxhnd firstSubpass,
-                          texture_tgfxlsthnd  colorAttachments,
-                          typelessColor_tgfx* colorAttachmentClearValues,
-                          texture_tgfxhnd     depthAttachment,
-                          typelessColor_tgfx  depthAttachmentClearValue);
+  void (*beginRasterpass)(commandBuffer_tgfxhnd commandBuffer, unsigned int colorAttachmentCount,
+                          const rasterpassBeginSlotInfo_tgfx* colorAttachments,
+                          rasterpassBeginSlotInfo_tgfx depthAttachment, extension_tgfxlsthnd exts);
   void (*nextSubRasterpass)(commandBuffer_tgfxhnd commandBuffer);
-  void (*endRasterpass)(commandBuffer_tgfxhnd commandBuffer);
+  void (*endRasterpass)(commandBuffer_tgfxhnd commandBuffer, extension_tgfxlsthnd exts);
 
   // Synchronization Functions
 
@@ -60,13 +58,13 @@ typedef struct tgfx_renderer {
   // Command Bundle Functions
   ////////////////////////////
 
-  // @param subpassHandle: Used to check if calls are called correctly + does
-  //    bundle matches with the active rendersubpass
   // @param maxCmdCount: Backend allocates a command buffer to store commands
+  // @param subpassHandle: If command bundle is gonna run raster operations, this should be a valid
+  // raster pipeline. Compute bundles doesn't need this to be set.
   // Every cmdXXX call's "key" argument should be [0,maxCmdCount-1].
-  commandBundle_tgfxhnd (*beginCommandBundle)(gpu_tgfxhnd gpu,
-                                              unsigned long long    maxCmdCount,
-                                              extension_tgfxlsthnd  exts);
+  commandBundle_tgfxhnd (*beginCommandBundle)(gpu_tgfxhnd gpu, unsigned long long maxCmdCount,
+                                              pipeline_tgfxhnd     defaultPipeline,
+                                              extension_tgfxlsthnd exts);
   void (*finishCommandBundle)(commandBundle_tgfxhnd bundle, extension_tgfxlsthnd exts);
   // If you won't execute same bundle later, destroy to allow backend
   //   implementation to optimize memory usage
@@ -86,8 +84,10 @@ typedef struct tgfx_renderer {
   void (*cmdBindIndexBuffers)(commandBundle_tgfxhnd bundle, unsigned long long key,
                               buffer_tgfxhnd buffer, unsigned long long offset,
                               unsigned char indexDataTypeSize);
-  void (*cmdBindViewport)(commandBundle_tgfxhnd bundle, unsigned long long key,
-                          viewport_tgfxhnd viewport);
+  void (*cmdSetViewport)(commandBundle_tgfxhnd bundle, unsigned long long key,
+                          viewportInfo_tgfx viewport);
+  void (*cmdSetScissor)(commandBundle_tgfxhnd bundle, unsigned long long key,
+                          ivec2_tgfx offset, uvec2_tgfx size);
   void (*cmdSetDynamicVertexLayout)(commandBundle_tgfxhnd bundle, unsigned long long key,
                                     vertexAttributeLayout_tgfxhnd layout);
   void (*cmdDrawNonIndexedDirect)(commandBundle_tgfxhnd bndl, unsigned long long key,

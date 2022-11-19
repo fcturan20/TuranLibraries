@@ -20,7 +20,7 @@ static core_tgfx_type* core_type_ptr;
 static ecs_tapi*       core_regsys;
 
 void defaultPrintCallback(result_tgfx result, const char* text) {
-  printf("TGFX Result: %u, Message: %s", result, text);
+  printf("TGFX Result: %u, Message: %s\n", result, text);
 }
 
 result_tgfx load_backend(core_tgfx* parent, backends_tgfx backend,

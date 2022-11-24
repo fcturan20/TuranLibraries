@@ -13,12 +13,12 @@
 #include <string>
 #include <vector>
 
+#include "vk_contentmanager.h"
 #include "vk_extension.h"
 #include "vk_helper.h"
 #include "vk_predefinitions.h"
 #include "vk_queue.h"
 #include "vk_renderer.h"
-#include "vk_contentmanager.h"
 
 struct device_features_chainedstructs;
 
@@ -28,7 +28,7 @@ struct core_private {
   // frequently
   VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT> DEVICE_GPUs;
   // Window Operations
-  VK_STATICVECTOR<MONITOR_VKOBJ, monitor_tgfxhnd, 16> MONITORs;
+  VK_STATICVECTOR<MONITOR_VKOBJ, monitor_tgfxhnd, 16>                   MONITORs;
   VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT> WINDOWs;
 
   bool isAnyWindowResized = false, // Instead of checking each window each frame, just check this
@@ -134,11 +134,9 @@ bool vk_checkInstanceExts() {
     }
   }
 
-#ifdef VULKAN_DEBUGGING
   if (vk_checkInstExtSupported(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
     activeInstanceExts.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   }
-#endif
   return true;
 }
 void vk_createInstance() {
@@ -176,16 +174,11 @@ void vk_createInstance() {
   // Extensions
   InstCreation_Info.enabledExtensionCount   = ( uint32_t )activeInstanceExts.size();
   InstCreation_Info.ppEnabledExtensionNames = activeInstanceExts.data();
-
+  
   // Validation Layers
-#ifdef VULKAN_DEBUGGING
   const char* Validation_Layers[1]      = {"VK_LAYER_KHRONOS_validation"};
   InstCreation_Info.enabledLayerCount   = 1;
   InstCreation_Info.ppEnabledLayerNames = Validation_Layers;
-#else
-  InstCreation_Info.enabledLayerCount   = 0;
-  InstCreation_Info.ppEnabledLayerNames = nullptr;
-#endif
 
   ThrowIfFailed(vkCreateInstance(&InstCreation_Info, nullptr, &VKGLOBAL_INSTANCE),
                 "Failed to create a Vulkan Instance!");
@@ -202,7 +195,7 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
 
   for (uint32_t memTypeIndx = 0;
        memTypeIndx < VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount; memTypeIndx++) {
-    VkMemoryType& memType     = VKGPU->vk_propsMemory.memoryProperties.memoryTypes[memTypeIndx];
+    VkMemoryType& memType        = VKGPU->vk_propsMemory.memoryProperties.memoryTypes[memTypeIndx];
     bool          isDeviceLocal  = false;
     bool          isHostVisible  = false;
     bool          isHostCoherent = false;
@@ -267,9 +260,8 @@ inline void vk_checkComputerSpecs() {
   vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &GPU_NUMBER, PhysicalGPUs);
 
   if (GPU_NUMBER == 0) {
-    printer(result_tgfx_FAIL,
-            "There is no GPU that has Vulkan support! Updating your drivers or Upgrading the OS "
-            "may help");
+    printer(result_tgfx_FAIL, "There is no Vulkan GPU!");
+    return;
   }
 
   // GET GPU INFORMATIONs, QUEUE FAMILIES etc
@@ -288,11 +280,11 @@ inline void vk_checkComputerSpecs() {
     extManager_vkDevice::createExtManager(vkgpu);
 
     // SAVE BASIC INFOs TO THE GPU DESC
-    vkgpu->desc.name           = vkgpu->vk_propsDev.properties.deviceName;
+    vkgpu->desc.name          = vkgpu->vk_propsDev.properties.deviceName;
     vkgpu->desc.driverVersion = vkgpu->vk_propsDev.properties.driverVersion;
-    vkgpu->desc.gfxApiVersion    = vkgpu->vk_propsDev.properties.apiVersion;
+    vkgpu->desc.gfxApiVersion = vkgpu->vk_propsDev.properties.apiVersion;
     vkgpu->desc.driverVersion = vkgpu->vk_propsDev.properties.driverVersion;
-    vkgpu->desc.type       = vk_findGPUTypeTgfx(vkgpu->vk_propsDev.properties.deviceType);
+    vkgpu->desc.type          = vk_findGPUTypeTgfx(vkgpu->vk_propsDev.properties.deviceType);
 
     vkgpu->ext()->inspect();
   }
@@ -419,18 +411,18 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
                               SWPCHN_IMGs);
 
       for (unsigned int i = 0; i < desc->imageCount; i++) {
-        VkImageViewCreateInfo ImageView_ci       = {};
-        ImageView_ci.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        ImageView_ci.image                       = SWPCHN_IMGs[i];
-        ImageView_ci.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
-        ImageView_ci.format                      = vk_findFormatVk(desc->channels);
-        ImageView_ci.flags                       = 0;
-        ImageView_ci.pNext                       = nullptr;
-        ImageView_ci.components.r                = VK_COMPONENT_SWIZZLE_IDENTITY;
-        ImageView_ci.components.g                = VK_COMPONENT_SWIZZLE_IDENTITY;
-        ImageView_ci.components.b                = VK_COMPONENT_SWIZZLE_IDENTITY;
-        ImageView_ci.components.a                = VK_COMPONENT_SWIZZLE_IDENTITY;
-        ImageView_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        VkImageViewCreateInfo ImageView_ci           = {};
+        ImageView_ci.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        ImageView_ci.image                           = SWPCHN_IMGs[i];
+        ImageView_ci.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+        ImageView_ci.format                          = vk_findFormatVk(desc->channels);
+        ImageView_ci.flags                           = 0;
+        ImageView_ci.pNext                           = nullptr;
+        ImageView_ci.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        ImageView_ci.components.g                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        ImageView_ci.components.b                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        ImageView_ci.components.a                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+        ImageView_ci.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
         ImageView_ci.subresourceRange.baseArrayLayer = 0;
         ImageView_ci.subresourceRange.baseMipLevel   = 0;
         ImageView_ci.subresourceRange.layerCount     = 1;
@@ -594,7 +586,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
 
     queueFamListIterIndx++;
   }
-  
+
   // Create TEXTURE_VKOBJs and return handles
   window->vk_swapchainTextureUsage = swpchn_ci.imageUsage;
   for (uint32_t vkim_index = 0; vkim_index < desc->imageCount; vkim_index++) {
@@ -905,9 +897,7 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallbac
   vk_saveMonitors();
 
   vk_createInstance();
-#ifdef VULKAN_DEBUGGING
   vk_setupDebugging();
-#endif
   vk_checkComputerSpecs();
 
   // Init systems
@@ -919,6 +909,7 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallbac
 }
 
 TGFX_BACKEND_ENTRY() { return vk_load(ecsSys, core, printCallback); }
+
 
 ////////////////////////////////////////////////
 ////////////////////////////////////////////////

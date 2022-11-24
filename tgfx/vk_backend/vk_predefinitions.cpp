@@ -237,13 +237,6 @@ uint32_t vk_virmem::allocate_from_dynamicmem(dynamicmem* mem, uint32_t size, boo
       return NULL;
     }
   }
-  if (shouldcommit) {
-    uintptr_t loc_of_base_mem = uintptr_t(mem);
-    uintptr_t location        = (loc_of_base_mem + sizeof(dynamicmem) + mem->all_space - remaining);
-    virmemsys->virtual_commit(( void* )location, size);
-  }
-  return uintptr_t(mem) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + sizeof(dynamicmem) +
-         mem->all_space - remaining;
 #else
   uint32_t remaining = mem->remaining_space.fetch_sub(size);
   if (remaining < size) {
@@ -252,8 +245,14 @@ uint32_t vk_virmem::allocate_from_dynamicmem(dynamicmem* mem, uint32_t size, boo
             "please report this issue");
     return NULL;
   }
-  return mem->ending_offset - remaining;
 #endif
+  if (shouldcommit) {
+    uintptr_t loc_of_base_mem = uintptr_t(mem);
+    uintptr_t location        = (loc_of_base_mem + sizeof(dynamicmem) + mem->all_space - remaining);
+    virmemsys->virtual_commit(( void* )location, size);
+  }
+  return uintptr_t(mem) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + sizeof(dynamicmem) +
+         mem->all_space - remaining;
 }
 void vk_virmem::free_dynamicmem(dynamicmem* mem) {
   free_page(uintptr_t(mem) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN));
@@ -270,12 +269,12 @@ void pNext_addToLast(void* targetStruct, void* attachStruct) {
 }
 void* operator new(size_t size) {
   printer(result_tgfx_FAIL, "Default new() operator shouldn't be called by backend");
-  assert(0);
+  assert_vk(0);
   return nullptr;
 }
 void* operator new[](size_t size) {
   printer(result_tgfx_FAIL, "Default new() operator shouldn't be called by backend");
-  assert(0);
+  assert_vk(0);
   return nullptr;
 }
 void* operator new(size_t size, vk_virmem::dynamicmem* mem) {

@@ -216,7 +216,7 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
                   "GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
   }
 
-  memoryRequirements_vk memReqs;
+  memoryRequirements_vk memReqs = memoryRequirements_vk::GETINVALID();
   vkGetImageMemoryRequirements(gpu->vk_logical, vkTextureObj, &memReqs.vk_memReqs);
   if (memReqs.requiresDedicatedAlloc) {
     printer(result_tgfx_FAIL,
@@ -666,10 +666,16 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
 
   // Blending isn't supported for now
   VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
+  VkPipelineColorBlendAttachmentState states[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT]                 = {};
   {
     Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    Pipeline_ColorBlendState.attachmentCount   = 0;
-    Pipeline_ColorBlendState.pAttachments      = nullptr;
+    Pipeline_ColorBlendState.attachmentCount   = 1;
+    for (uint32_t i = 0; i < TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT; i++) {
+      states[i].blendEnable = VK_FALSE;
+      states[i].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    }
+    Pipeline_ColorBlendState.pAttachments      = states;
     Pipeline_ColorBlendState.blendConstants[0] = 0.0f;
     Pipeline_ColorBlendState.blendConstants[1] = 0.0f;
     Pipeline_ColorBlendState.blendConstants[2] = 0.0f;
@@ -745,9 +751,10 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     }
   }
 
-  VkPipeline pipeline;
+  VkPipeline                       pipeline;
   {
     VkPipelineRenderingCreateInfoKHR dynCi = {};
+    VkGraphicsPipelineCreateInfo     ci    = {};
     dynCi.sType                         = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
     VkFormat VKCOLORATTACHMENTFORMATS[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
     while (dynCi.colorAttachmentCount <= TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT &&
@@ -760,7 +767,6 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     dynCi.viewMask                = 0;
     dynCi.pNext                   = {};
 
-    VkGraphicsPipelineCreateInfo ci = {};
     ci.sType                        = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     ci.pColorBlendState             = &Pipeline_ColorBlendState;
     if (desc->depthStencilTextureFormat != texture_channels_tgfx_UNDEF &&
@@ -989,14 +995,14 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
   VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
     TEXTURE_VKOBJ* texture     = hidden->textures.getOBJfromHANDLE(textures[bindingIter]);
-    uint32_t       elementIndx = bindingIndices[bindingIter];
+    uint32_t        elementIndx = bindingIndices[bindingIter];
+    texture_descVK& textureDESC = (( texture_descVK* )set->m_descs)[elementIndx];
 #ifdef VULKAN_DEBUGGING
     if (!texture || elementIndx >= setType->m_elementCount) {
       printer(result_tgfx_INVALIDARGUMENT,
               "setBindingTable_Texture() has invalid input! Either texture is invalid or index");
       return result_tgfx_INVALIDARGUMENT;
     }
-    texture_descVK& textureDESC         = (( texture_descVK* )set->m_descs)[elementIndx];
     unsigned char   elementUpdateStatus = 0;
     if (!textureDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
       printer(
@@ -1006,7 +1012,6 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
       return result_tgfx_FAIL;
     }
 #else
-    texture_descVK& textureDESC = (( texture_descVK* )set->m_descs)[elementIndx];
     textureDESC.isUpdated.store(1);
 #endif
     textureDESC.info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;

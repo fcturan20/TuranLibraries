@@ -136,14 +136,14 @@ manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
     QUEUEFAM_VK*              queueFam = mngr->m_queueFams[queueFamIndx];
     if (!bestQueueFam) {
       bestQueueFam = queueFam;
-      break;
+      continue;
     }
     const VkQueueFamilyProperties& bestQueueProps =
       gpu->vk_propsQueue[bestQueueFam->vk_queueFamIndex].queueFamilyProperties;
 
     if (props->queueFamilyProperties.queueCount > bestQueueProps.queueCount) {
       bestQueueFam = queueFam;
-      break;
+      continue;
     }
 
     // Bigger values in VkQueueFlags means more useful the queue gets
@@ -151,9 +151,9 @@ manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
     // For example: 4 is tranfer, 8 is sparse, 16 is protected bits which are supported by all
     //  queues if device supports. Main difference between is generally in Graphics and Compute
     //  bits. So Graphics & Compute bits are main usefulness detector.
-    if (props->queueFamilyProperties.queueFlags < bestQueueProps.queueFlags) {
+    if (props->queueFamilyProperties.queueFlags < bestQueueProps.queueFlags && props->queueFamilyProperties.queueCount > 1) {
       bestQueueFam = queueFam;
-      break;
+      continue;
     }
   }
   if (gpu->vk_propsQueue[bestQueueFam->vk_queueFamIndex].queueFamilyProperties.queueCount > 1) {
@@ -165,6 +165,7 @@ manager_vk* manager_vk::createManager(GPU_VKOBJ* gpu) {
       mngr->m_internalQueue->m_gpu            = gpu;
       mngr->m_internalQueue->vk_queueFamIndex = bestQueueFam->vk_queueFamIndex;
       mngr->m_internalQueue->vk_queue         = VK_NULL_HANDLE;
+      mngr->m_internalQueue->isALIVE          = true;
     }
   } else {
     // First queue will be internal queue
@@ -265,6 +266,23 @@ void manager_vk::get_queue_objects() {
       }
     }
   }
+  if (!m_internalQueue->vk_queue) {
+    vkGetDeviceQueue(
+      m_gpu->vk_logical, m_internalQueue->vk_queueFamIndex,
+      m_gpu->vk_propsQueue[m_internalQueue->vk_queueFamIndex].queueFamilyProperties.queueCount - 1,
+      &m_internalQueue->vk_queue);
+
+    // Create synchronizer binary semaphore
+    {
+      VkSemaphoreCreateInfo sem_ci = {};
+      sem_ci.flags                 = 0;
+      sem_ci.pNext                 = nullptr;
+      sem_ci.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+      ThrowIfFailed(vkCreateSemaphore(m_gpu->vk_logical, &sem_ci, nullptr,
+                                      &m_internalQueue->vk_callSynchronizer),
+                    "Queue Synchronizer Binary Semaphore Creation failed!");
+    }
+  }
 
   // Create cmdPool for each queue family and CPU thread
   for (unsigned int queueFamIndx = 0; queueFamIndx < m_queueFams.size(); queueFamIndx++) {
@@ -331,7 +349,7 @@ VkCommandBuffer manager_vk::getPrimaryCmdBuffer(QUEUEFAM_VK* family) {
     }
     return CP.m_cbsPrimary[i]->vk_cb;
   }
-  assert(0 && "Command Buffer Count is exceeded!");
+  assert_vk(0 && "Command Buffer Count is exceeded!");
   return VK_NULL_HANDLE;
 }
 
@@ -443,7 +461,7 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
                 ->vk_generalToPresent[queue->vk_queueFamIndex][swpchnIndices[swpchnCount]];
             presentToGeneral[swpchnCount] =
               submit->m_windows[swpchnIndx]
-                ->vk_presentToGeneral[queue->vk_queueFamIndex][swpchnIndices[swpchnCount]];
+                ->vk_presentToGeneral[m_internalQueue->vk_queueFamIndex][swpchnIndices[swpchnCount]];
 
             swpchnCount++;
           }
@@ -588,17 +606,17 @@ commandBuffer_tgfxhnd vk_beginCommandBuffer(gpuQueue_tgfxhnd i_queue, extension_
   return nullptr;
 }
 
-#define getCmdBufferfromHnd(cmdBufferHnd)                      \
-  VKOBJHANDLE      hnd       = *( VKOBJHANDLE* )&cmdBufferHnd; \
-  CMDBUFFER_VKOBJ* cmdBuffer = ( CMDBUFFER_VKOBJ* )VK_MEMOFFSET_TO_POINTER(hnd.OBJ_memoffset);
+#define getCmdBufferfromHnd(cmdBufferHnd)                                                      \
+  VKOBJHANDLE      hnd       = *( VKOBJHANDLE* )&cmdBufferHnd;                                 \
+  CMDBUFFER_VKOBJ* cmdBuffer = ( CMDBUFFER_VKOBJ* )VK_MEMOFFSET_TO_POINTER(hnd.OBJ_memoffset); \
+  GPU_VKOBJ*       gpu       = core_vk->getGPUs()[cmdBuffer->m_gpuIndx];                       \
+  QUEUEFAM_VK*     queueFam  = gpu->manager()->m_queueFams[cmdBuffer->m_queueFamIndx];
 
 #define checkCmdBufferHnd()                                                                       \
-  GPU_VKOBJ* gpu = core_vk->getGPUs()[cmdBuffer->m_gpuIndx];                                      \
-  assert(gpu && "GPU isn't found, wrong commandBuffer_tgfxhnd in vk_endCommandBuffer");           \
-  QUEUEFAM_VK* queueFam = gpu->manager()->m_queueFams[cmdBuffer->m_queueFamIndx];                 \
-  assert(queueFam && "QueueFam isn't found, wrong commandBuffer_tgfxhnd in vk_endCommandBuffer"); \
+  assert_vk(gpu && "GPU isn't found, wrong commandBuffer_tgfxhnd in vk_endCommandBuffer");           \
+  assert_vk(queueFam && "QueueFam isn't found, wrong commandBuffer_tgfxhnd in vk_endCommandBuffer"); \
   cmdPool_vk& cmdPool = queueFam->m_pools[cmdBuffer->m_cmdPoolIndx];                              \
-  assert(cmdPool.m_cbsPrimary.returnHANDLEfromOBJ(cmdBuffer) &&                                   \
+  assert_vk(cmdPool.m_cbsPrimary.returnHANDLEfromOBJ(cmdBuffer) &&                                   \
          "CmdPool failed to find, wrong commandBuffer_tgfxhnd in vk_endCommandBuffer");
 
 void vk_endCommandBuffer(commandBuffer_tgfxhnd cb) {
@@ -618,7 +636,7 @@ void vk_executeBundles(commandBuffer_tgfxhnd cb, commandBundle_tgfxlsthnd bundle
   uint32_t        cmdBundleCount                              = 0;
   VkCommandBuffer secCmdBuffers[VKCONST_MAXCMDBUNDLE_PERCALL] = {};
   vk_getSecondaryCmdBuffers(bundles, queueFam, secCmdBuffers, &cmdBundleCount);
-  assert(cmdBundleCount <= VKCONST_MAXCMDBUNDLE_PERCALL &&
+  assert_vk(cmdBundleCount <= VKCONST_MAXCMDBUNDLE_PERCALL &&
          "vk_GetSecondaryCmdBuffers() can't exceed VKCONST_MAXCMDBUNDLE_PERCALL!");
   if (!cmdBundleCount) {
     return;
@@ -787,7 +805,7 @@ void vk_queuePresent(gpuQueue_tgfxhnd i_queue, const window_tgfxlsthnd windowlis
 
 VkCommandPool vk_getSecondaryCmdPool(QUEUEFAM_VK* queueFam, uint32_t cmdPoolIndx) {
   cmdPool_vk& cmdPool = queueFam->m_pools[cmdPoolIndx];
-  assert(!(cmdPool.m_cbsPrimary.size() > VKCONST_MAXCMDBUFFER_PRIMARY_COUNT ||
+  assert_vk(!(cmdPool.m_cbsPrimary.size() > VKCONST_MAXCMDBUFFER_PRIMARY_COUNT ||
            !cmdPool.vk_primaryCP || !cmdPool.vk_secondaryCP) &&
          "vk_getSecondaryCmdPool failed because cmdpool is invalid!");
   return cmdPool.vk_secondaryCP;

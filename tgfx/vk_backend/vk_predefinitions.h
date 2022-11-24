@@ -2,11 +2,11 @@
 // Vulkan Libs
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include <assert.h>
 #include <stdint.h>
 #include <tgfx_core.h>
 #include <tgfx_forwarddeclarations.h>
 #include <virtualmemorysys_tapi.h>
+#include <assert.h>
 
 #include <atomic>
 #include <functional>
@@ -90,7 +90,12 @@ inline bool ThrowIfFailed(VkResult func, const char* errorstring,
     return returnTGFXResult;                                        \
   }
 
-void pNext_addToLast(void* targetStruct, void* attachStruct);
+inline void assert_vk(bool status) {
+  if (!status) {
+    assert(0);
+  }
+}
+void        pNext_addToLast(void* targetStruct, void* attachStruct);
 
 #define VK_PRIM_MIN(primType) std::numeric_limits<primType>::min()
 #define VK_PRIM_MAX(primType) std::numeric_limits<primType>::max()
@@ -354,15 +359,13 @@ class VK_LINEAR_OBJARRAY {
   T*           getOBJbyINDEX(unsigned int i) { return (data[i].isALIVE) ? (&data[i]) : (NULL); }
   T*           operator[](unsigned int index) { return getOBJbyINDEX(index); }
   uint32_t     getINDEXbyOBJ(T* obj) {
+        uint32_t offset = (uintptr_t(obj) - uintptr_t(data));
 #ifdef VULKAN_DEBUGGING
-    uint32_t offset = (uintptr_t(obj) - uintptr_t(data));
     if (offset % sizeof(T)) {
       return UINT32_MAX;
     }
-    return offset / sizeof(T);
-#else
-    return ((uintptr_t(obj) - uintptr_t(data))) / sizeof(T);
 #endif
+    return offset / sizeof(T);
   }
 };
 
@@ -462,7 +465,7 @@ class VK_STATICVECTOR {
 
   T* add() {
     uint32_t indx = currentelement_i.fetch_add(1);
-    assert(indx != maxelementcount && "Static vector is exceeded!");
+    assert_vk(indx != maxelementcount && "Static vector is exceeded!");
     T* added = (*this)[indx];
     if constexpr (!std::is_pointer_v<T>) {
       added->isALIVE = true;

@@ -260,12 +260,6 @@ typedef enum {
 } vertexlisttypes_tgfx;
 
 typedef enum {
-  rendernodetypes_tgfx_SUBDRAWPASS,
-  rendernodetypes_tgfx_COMPUTEPASS,
-  rendernodetypes_tgfx_TRANSFERPASS
-} rendernodetypes_tgfx;
-
-typedef enum {
   texture_dimensions_tgfx_2D     = 0,
   texture_dimensions_tgfx_3D     = 1,
   texture_dimensions_tgfx_2DCUBE = 2

@@ -31,16 +31,9 @@ void vkext_dynamicRendering::inspect() {
 void vkext_dynamicRendering::manage(VkStructureType structType, void* structPtr,
                                     extension_tgfx_handle extData) {}
 
-void vkext_dynamicRendering::vk_beginRenderpass(VkCommandBuffer cb, unsigned int colorAttachmentCount,
-  const rasterpassBeginSlotInfo_tgfx* colorAttachments,
-  rasterpassBeginSlotInfo_tgfx depthAttachment, extension_tgfxlsthnd exts) {
-  if (!features.dynamicRendering && exts == nullptr) {
-    assert(0 &&
-           "Your device doesn't support dynamic rendering, which means you have to use "
-           "TGFX_Subpass extension! Extension isn't supported for now.");
-    return;
-  }
-
+void vkext_beginDynamicRenderPass(VkCommandBuffer cb, unsigned int colorAttachmentCount,
+                                 const rasterpassBeginSlotInfo_tgfx* colorAttachments,
+                                 rasterpassBeginSlotInfo_tgfx        depthAttachment) {
   TEXTURE_VKOBJ* baseTexture = nullptr;
   if (depthAttachment.texture) {
     baseTexture = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(depthAttachment.texture);
@@ -105,6 +98,24 @@ void vkext_dynamicRendering::vk_beginRenderpass(VkCommandBuffer cb, unsigned int
   ri.renderArea.extent.height = baseTexture->m_height;
   ri.renderArea.offset        = {};
   vkCmdBeginRenderingKHR_loaded(cb, &ri);
+}
+
+void vkext_beginStaticRenderPass(VkCommandBuffer cb, extension_tgfxlsthnd exts) {
+
+}
+
+void vkext_dynamicRendering::vk_beginRenderpass(VkCommandBuffer cb, unsigned int colorAttachmentCount,
+  const rasterpassBeginSlotInfo_tgfx* colorAttachments,
+  rasterpassBeginSlotInfo_tgfx depthAttachment, extension_tgfxlsthnd exts) {
+  if (features.dynamicRendering) {
+    vkext_beginDynamicRenderPass(cb, colorAttachmentCount, colorAttachments, depthAttachment);
+  } else {
+    assert_vk(exts &&
+           "Your device doesn't support dynamic rendering, which means you have to use "
+           "TGFX_Subpass extension! Extension isn't supported for now.");
+
+    vkext_beginStaticRenderPass(cb, exts);
+  }
 }
 
 void vkext_dynamicRendering::vk_endRenderpass(VkCommandBuffer cb, extension_tgfxlsthnd exts) {

@@ -28,7 +28,6 @@ result_tgfx load_backend(core_tgfx* parent, backends_tgfx backend,
   const char* path = nullptr;
   switch (backend) {
     case backends_tgfx_VULKAN: path = "TGFXVulkan.dll"; break;
-    case backends_tgfx_OPENGL4: path = "TGFXOpenGL4.dll"; break;
     case backends_tgfx_D3D12: path = "TGFXD3D12.dll"; break;
     default: assert(0 && "This backend can't be loaded!"); return result_tgfx_FAIL;
   };

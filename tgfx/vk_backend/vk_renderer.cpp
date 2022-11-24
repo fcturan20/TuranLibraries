@@ -198,7 +198,7 @@ void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cm
       break;
     case vk_cmdType::error:
     case vk_cmdType::error_2: printf(0 && "One of the cmds is not used!");
-    default: assert(0 && "Don't forget to specify command execution in vk_executeCmd()!");
+    default: assert_vk(0 && "Don't forget to specify command execution in vk_executeCmd()!");
   }
 }
 
@@ -295,7 +295,7 @@ void vk_cmdBindPipeline(commandBundle_tgfxhnd i_bundle, unsigned long long sortK
   auto*            cmd    = vk_createCmdStruct<vkCmdStruct_bindPipeline>(&bundle->m_cmds[sortKey]);
   PIPELINE_VKOBJ* pipe   = contentmanager->GETPIPELINE_ARRAY().getOBJfromHANDLE(pipeline);
 
-  assert(pipe->vk_type == bundle->vk_bindPoint &&
+  assert_vk(pipe->vk_type == bundle->vk_bindPoint &&
          "You can't call this type of operation in this command bundle!");
   cmd->vk_bindPoint      = pipe->vk_type;
   cmd->vk_pipeline       = pipe->vk_object;
@@ -397,7 +397,7 @@ void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxl
     if (!theGPU) {
       theGPU = gpu;
     }
-    assert(theGPU == gpu && "Queues from different devices!");
+    assert_vk(theGPU == gpu && "Queues from different devices!");
     bool isPreviouslyAdded = false;
     for (uint32_t validQueueIndx = 0; validQueueIndx < validQueueFamCount; validQueueIndx++) {
       if (o_famList[validQueueIndx] == queue->vk_queueFamIndex) {
@@ -476,12 +476,12 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUE
       bi.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
       bi.pInheritanceInfo = &secInfo;
 
-      assert(!ThrowIfFailed(vkBeginCommandBuffer(cmdBuffer, &bi),
+      assert_vk(!ThrowIfFailed(vkBeginCommandBuffer(cmdBuffer, &bi),
                             "vkBeginCommandBuffer() shouldn't fail!"));
       for (uint64_t cmdIndx = 0; cmdIndx < bundle->m_cmdCount; cmdIndx++) {
         vk_executeCmd(cmdBuffer, bundle, bundle->m_cmds[cmdIndx]);
       }
-      assert(!ThrowIfFailed(vkEndCommandBuffer(cmdBuffer), "vkEndCommandBuffer() shouldn't fail!"));
+      assert_vk(!ThrowIfFailed(vkEndCommandBuffer(cmdBuffer), "vkEndCommandBuffer() shouldn't fail!"));
 
       queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdBundle    = bundleHnd;
       queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdPool      = cmdPool;

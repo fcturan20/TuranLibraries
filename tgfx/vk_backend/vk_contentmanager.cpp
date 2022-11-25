@@ -241,7 +241,6 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
   texture->m_GPU         = gpu->gpuIndx();
   texture->vk_imageUsage = im_ci.usage;
   texture->m_memReqs     = memReqs;
-  
 
   *TextureHandle = contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(texture);
   return result_tgfx_SUCCESS;
@@ -443,7 +442,7 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, bindingTableType_tgfxhnd* descs,
   pl_ci.pNext                      = nullptr;
   pl_ci.flags                      = 0;
 
-  VkDescriptorSetLayout DESCLAYOUTs[VKCONST_MAXDESCSET_PERLIST];
+  VkDescriptorSetLayout DESCLAYOUTs[VKCONST_MAXDESCSET_PERLIST] = {};
   for (unsigned int typeSets_i = 0; typeSets_i < descsCount; typeSets_i++) {
     BINDINGTABLETYPE_VKOBJ* type = hidden->bindingtabletypes.getOBJfromHANDLE(descs[typeSets_i]);
     if (type->m_gpu != GPU->gpuIndx()) {
@@ -461,7 +460,7 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, bindingTableType_tgfxhnd* descs,
     pl_ci.pPushConstantRanges    = &range;
     range.offset                 = 0;
     range.size                   = 128;
-    range.stageFlags             = VK_SHADER_STAGE_ALL_GRAPHICS;
+    range.stageFlags             = VK_SHADER_STAGE_ALL;
   } else {
     pl_ci.pushConstantRangeCount = 0;
     pl_ci.pPushConstantRanges    = nullptr;
@@ -479,7 +478,8 @@ typedef const void* (*vk_glslangCompileFnc)(shaderstage_tgfx tgfxstage, const vo
 vk_glslangCompileFnc VKCONST_GLSLANG_COMPILE_FNC;
 
 result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx language,
-                                   shaderstage_tgfx shaderstage, const void* DATA, unsigned int DATA_SIZE,
+                                   shaderstage_tgfx shaderstage, const void* DATA,
+                                   unsigned int          DATA_SIZE,
                                    shaderSource_tgfxhnd* ShaderSourceHandle) {
   GPU_VKOBJ*   GPU                   = core_vk->getGPUs().getOBJfromHANDLE(gpu);
   const void*  binary_spirv_data     = nullptr;
@@ -665,15 +665,15 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
   }
 
   // Blending isn't supported for now
-  VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState = {};
-  VkPipelineColorBlendAttachmentState states[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT]                 = {};
+  VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState                        = {};
+  VkPipelineColorBlendAttachmentState states[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
   {
     Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    Pipeline_ColorBlendState.attachmentCount   = 1;
+    Pipeline_ColorBlendState.attachmentCount = 1;
     for (uint32_t i = 0; i < TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT; i++) {
-      states[i].blendEnable = VK_FALSE;
+      states[i].blendEnable    = VK_FALSE;
       states[i].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+                                 VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     }
     Pipeline_ColorBlendState.pAttachments      = states;
     Pipeline_ColorBlendState.blendConstants[0] = 0.0f;
@@ -705,8 +705,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
   CountDescSets(desc->typeTables, &typesetscount, typeSets);
   VkPipelineLayout layout = {};
   if (!VKPipelineLayoutCreation(GPU, desc->typeTables, typesetscount, false, &layout)) {
-    printer(result_tgfx_FAIL,
-            "Compile_RasterPipeline() has failed at VKPipelineLayoutCreation!");
+    printer(result_tgfx_FAIL, "Compile_RasterPipeline() has failed at VKPipelineLayoutCreation!");
     return result_tgfx_FAIL;
   }
 
@@ -751,11 +750,11 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     }
   }
 
-  VkPipeline                       pipeline;
+  VkPipeline pipeline;
   {
     VkPipelineRenderingCreateInfoKHR dynCi = {};
     VkGraphicsPipelineCreateInfo     ci    = {};
-    dynCi.sType                         = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    dynCi.sType                            = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
     VkFormat VKCOLORATTACHMENTFORMATS[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
     while (dynCi.colorAttachmentCount <= TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT &&
            desc->colorTextureFormats[dynCi.colorAttachmentCount] != texture_channels_tgfx_UNDEF) {
@@ -767,8 +766,8 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     dynCi.viewMask                = 0;
     dynCi.pNext                   = {};
 
-    ci.sType                        = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    ci.pColorBlendState             = &Pipeline_ColorBlendState;
+    ci.sType            = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    ci.pColorBlendState = &Pipeline_ColorBlendState;
     if (desc->depthStencilTextureFormat != texture_channels_tgfx_UNDEF &&
         desc->depthStencilTextureFormat != texture_channels_tgfx_UNDEF2) {
       ci.pDepthStencilState         = &depth_state;
@@ -806,7 +805,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     pipelineObj->vk_colorAttachmentFormats[i] = vk_findFormatVk(desc->colorTextureFormats[i]);
   }
   pipelineObj->vk_depthAttachmentFormat = vk_findFormatVk(desc->depthStencilTextureFormat);
-  *hnd                   = hidden->pipelines.returnHANDLEfromOBJ(pipelineObj);
+  *hnd                                  = hidden->pipelines.returnHANDLEfromOBJ(pipelineObj);
   return result_tgfx_SUCCESS;
 }
 /*
@@ -994,7 +993,7 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
   }
   VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
-    TEXTURE_VKOBJ* texture     = hidden->textures.getOBJfromHANDLE(textures[bindingIter]);
+    TEXTURE_VKOBJ*  texture     = hidden->textures.getOBJfromHANDLE(textures[bindingIter]);
     uint32_t        elementIndx = bindingIndices[bindingIter];
     texture_descVK& textureDESC = (( texture_descVK* )set->m_descs)[elementIndx];
 #ifdef VULKAN_DEBUGGING
@@ -1003,7 +1002,7 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
               "setBindingTable_Texture() has invalid input! Either texture is invalid or index");
       return result_tgfx_INVALIDARGUMENT;
     }
-    unsigned char   elementUpdateStatus = 0;
+    unsigned char elementUpdateStatus = 0;
     if (!textureDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
       printer(
         result_tgfx_FAIL,
@@ -1187,6 +1186,21 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
   return result_tgfx_SUCCESS;
 }
 
+result_tgfx vk_mapHeap(heap_tgfxhnd i_heap, unsigned long long offset, unsigned long long size,
+                    extension_tgfxlsthnd exts, void** mappedRegion) {
+  HEAP_VKOBJ*    heap    = hidden->heaps.getOBJfromHANDLE(i_heap);
+  GPU_VKOBJ*     gpu     = core_vk->getGPUs()[heap->m_GPU];
+  THROW_RETURN_IF_FAIL(vkMapMemory(gpu->vk_logical, heap->vk_memoryHandle, offset, size, 0, mappedRegion), "VkMapMemory failed!", result_tgfx_FAIL);
+  return result_tgfx_SUCCESS;
+}
+
+result_tgfx vk_unmapHeap(heap_tgfxhnd i_heap) {
+  HEAP_VKOBJ* heap = hidden->heaps.getOBJfromHANDLE(i_heap);
+  GPU_VKOBJ*  gpu  = core_vk->getGPUs()[heap->m_GPU];
+  vkUnmapMemory(gpu->vk_logical, heap->vk_memoryHandle);
+  return result_tgfx_SUCCESS;
+}
+
 /////////////////////////////////////////////////////
 ///				INITIALIZATION PROCEDURE
 /////////////////////////////////////////////////////
@@ -1213,6 +1227,8 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->getRemainingMemory         = vk_getRemainingMemory;
   core_tgfx_main->contentmanager->bindToHeap_Buffer          = vk_bindToHeap_Buffer;
   core_tgfx_main->contentmanager->bindToHeap_Texture         = vk_bindToHeap_Texture;
+  core_tgfx_main->contentmanager->mapHeap                    = vk_mapHeap;
+  core_tgfx_main->contentmanager->unmapHeap                  = vk_unmapHeap;
 }
 
 void initGlslang() {

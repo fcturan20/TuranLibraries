@@ -146,7 +146,7 @@ void vk_createInstance() {
   VKGLOBAL_APPINFO.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   VKGLOBAL_APPINFO.pEngineName        = "GFX API";
   VKGLOBAL_APPINFO.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
-  VKGLOBAL_APPINFO.apiVersion         = VK_API_VERSION_1_3;
+  VKGLOBAL_APPINFO.apiVersion         = VK_API_VERSION_1_0;
 
   // CHECK SUPPORTED EXTENSIONs
   uint32_t extCount = 0;
@@ -188,10 +188,9 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
   VkPhysicalDeviceMemoryBudgetPropertiesEXT budgetProps;
   budgetProps.pNext = nullptr;
   budgetProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
-  VkPhysicalDeviceMemoryProperties2 props;
-  props.pNext = &budgetProps;
-  props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
-  vkGetPhysicalDeviceMemoryProperties2(VKGPU->vk_physical, &props);
+  VKGPU->vk_propsMemory.pNext = &budgetProps;
+  VKGPU->vk_propsMemory.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+  vkGetPhysicalDeviceMemoryProperties2(VKGPU->vk_physical, &VKGPU->vk_propsMemory);
 
   for (uint32_t memTypeIndx = 0;
        memTypeIndx < VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount; memTypeIndx++) {
@@ -245,7 +244,7 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
   }
 
   VKGPU->desc.memRegions      = VKGPU->m_memoryDescTGFX;
-  VKGPU->desc.memRegionsCount = props.memoryProperties.memoryTypeCount;
+  VKGPU->desc.memRegionsCount = VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount;
 }
 
 inline void vk_checkComputerSpecs() {

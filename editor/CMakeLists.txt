@@ -8,6 +8,11 @@ set_target_properties(editor PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_B
 set_target_properties(editor PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
 set_target_properties(editor PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/ReleaseDbg RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/ReleaseDbg PREFIX "")
 install(TARGETS editor RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
+target_compile_definitions(editor PUBLIC SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+find_package(glm REQUIRED)
+target_include_directories(editor PUBLIC ${glm_INCLUDE_DIRS})
+target_link_libraries(editor PUBLIC glm::glm)
 
 add_subdirectory("scene")
 add_subdirectory("UI")

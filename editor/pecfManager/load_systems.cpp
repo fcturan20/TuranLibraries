@@ -1,6 +1,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+#include <glm/common.hpp>
+#include <glm/gtx/common.hpp>
 #include <random>
 #include <string>
 
@@ -137,7 +139,7 @@ void createGPU() {
   tgfx->initGPU(gpu);
 }
 
-static tgfx_window_gpu_support swapchainSupport = {};
+static tgfx_window_gpu_support swapchainSupport                      = {};
 static textureChannels_tgfx    rtFormat                              = texture_channels_tgfx_UNDEF;
 texture_tgfxhnd                swpchnTextures[swapchainTextureCount] = {};
 
@@ -186,32 +188,36 @@ void createFirstWindow() {
     tgfx->createSwapchain(gpu, &swpchn_desc, swpchnTextures);
   }
   rtFormat = swapchainSupport.channels[0];
-  #ifdef NDEBUG
+#ifdef NDEBUG
   printf("createGPUandFirstWindow() finished!\n");
-  #endif
+#endif
 }
 
 // Create device local resources
-texture_tgfxhnd             customRTs[2] = {};
-buffer_tgfxhnd              firstBuffer  = {};
+texture_tgfxhnd customRTs[2] = {};
+buffer_tgfxhnd  firstBuffer  = {};
+void*           mappedRegion = nullptr;
 
 void createDeviceLocalResources() {
-  static constexpr uint32_t heapSize        = 1 << 27;
-  uint32_t                  devLocalMemType = UINT32_MAX;
+  static constexpr uint32_t heapSize           = 1 << 25;
+  uint32_t                  hostVisibleMemType = UINT32_MAX;
   for (uint32_t memTypeIndx = 0; memTypeIndx < gpuDesc.memRegionsCount; memTypeIndx++) {
     const memoryDescription_tgfx& memDesc = gpuDesc.memRegions[memTypeIndx];
-    if (memDesc.allocationtype == memoryallocationtype_DEVICELOCAL) {
+    if (memDesc.allocationtype == memoryallocationtype_HOSTVISIBLE ||
+        memDesc.allocationtype == memoryallocationtype_FASTHOSTVISIBLE) {
       // If there 2 different memory types with same allocation type, select the bigger one!
-      if (devLocalMemType != UINT32_MAX &&
-          gpuDesc.memRegions[devLocalMemType].max_allocationsize > memDesc.max_allocationsize) {
+      if (hostVisibleMemType != UINT32_MAX &&
+          gpuDesc.memRegions[hostVisibleMemType].max_allocationsize > memDesc.max_allocationsize) {
         continue;
       }
-      devLocalMemType = memTypeIndx;
+      hostVisibleMemType = memTypeIndx;
     }
   }
   heap_tgfxhnd firstHeap = {};
-  contentManager->createHeap(gpu, gpuDesc.memRegions[devLocalMemType].memorytype_id, heapSize,
+  assert(hostVisibleMemType != UINT32_MAX && "An appropriate memory region isn't found!");
+  contentManager->createHeap(gpu, gpuDesc.memRegions[hostVisibleMemType].memorytype_id, heapSize,
                              nullptr, &firstHeap);
+  contentManager->mapHeap(firstHeap, 0, heapSize, nullptr, &mappedRegion);
 
   textureDescription_tgfx textureDesc = {};
   textureDesc.channelType             = rtFormat;
@@ -222,8 +228,8 @@ void createDeviceLocalResources() {
   textureDesc.mipCount                = 1;
   textureDesc.permittedQueues         = allQueues;
   textureDesc.usage                   = textureAllUsages;
-  //contentManager->createTexture(gpu, &textureDesc, &customRTs[0]);
-  //contentManager->createTexture(gpu, &textureDesc, &customRTs[1]);
+  // contentManager->createTexture(gpu, &textureDesc, &customRTs[0]);
+  // contentManager->createTexture(gpu, &textureDesc, &customRTs[1]);
 
   bufferDescription_tgfx bufferDesc = {};
   bufferDesc.dataSize               = 1650;
@@ -234,17 +240,18 @@ void createDeviceLocalResources() {
   contentManager->createBuffer(gpu, &bufferDesc, &firstBuffer);
 
   heapRequirementsInfo_tgfx firstTextureReqs = {};
-  //contentManager->getHeapRequirement_Texture(customRTs[0], nullptr, &firstTextureReqs);
+  // contentManager->getHeapRequirement_Texture(customRTs[0], nullptr, &firstTextureReqs);
   heapRequirementsInfo_tgfx bufferHeapReqs = {};
-  //contentManager->getHeapRequirement_Buffer(firstBuffer, nullptr, &bufferHeapReqs);
+  contentManager->getHeapRequirement_Buffer(firstBuffer, nullptr, &bufferHeapReqs);
 
-  uint32_t lastMemPoint        = 0;
-  auto&    calculateHeapOffset = [&lastMemPoint](const heapRequirementsInfo_tgfx& heapReq) -> void {
+  uint32_t lastMemPoint = 0;
+  /*auto& calculateHeapOffset =
+    [&lastMemPoint](const heapRequirementsInfo_tgfx& heapReq) -> void {
     lastMemPoint = ((lastMemPoint / heapReq.offsetAlignment) +
                     ((lastMemPoint % heapReq.offsetAlignment) ? 1 : 0)) *
                    heapReq.offsetAlignment;
   };
-  /*contentManager->bindToHeap_Texture(firstHeap, lastMemPoint, customRTs[0], nullptr);
+  contentManager->bindToHeap_Texture(firstHeap, lastMemPoint, customRTs[0], nullptr);
   lastMemPoint += firstTextureReqs.size;
   calculateHeapOffset(firstTextureReqs);
   contentManager->bindToHeap_Texture(firstHeap, lastMemPoint, customRTs[1], nullptr);
@@ -266,7 +273,8 @@ bindingTable_tgfxhnd     bindingTable         = {};
 void compileShadersandPipelines() {
   // Compile compute shader, create binding table type & compute pipeline
   {
-    const char*          shaderText = filesys->funcs->read_textfile("../firstComputeShader.comp");
+    const char* shaderText =
+      filesys->funcs->read_textfile(SOURCE_DIR "/shaders/firstComputeShader.comp");
     shaderSource_tgfxhnd firstComputeShader = nullptr;
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderstage_tgfx_COMPUTESHADER, ( void* )shaderText,
@@ -278,7 +286,9 @@ void compileShadersandPipelines() {
       desc.DescriptorType                 = shaderdescriptortype_tgfx_BUFFER;
       desc.ElementCount                   = 1;
       desc.SttcSmplrs                     = nullptr;
-      desc.VisibleStages = tgfx->helpers->createShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER);
+      desc.VisibleStages = tgfx->helpers->createShaderStageFlag(3, shaderstage_tgfx_COMPUTESHADER,
+                                                                shaderstage_tgfx_VERTEXSHADER,
+                                                                shaderstage_tgfx_FRAGMENTSHADER);
 
       contentManager->createBindingTableType(gpu, &desc, &bindingType);
     }
@@ -292,9 +302,8 @@ void compileShadersandPipelines() {
   // Compile first vertex-fragment shader & raster pipeline
   {
     shaderSource_tgfxhnd shaderSources[2] = {};
-    const char*          vertShaderText   = filesys->funcs->read_textfile("../firstShader.vert");
-    // unsigned long vertDataSize;
-    // void* vertShaderBin = filesys->funcs->read_binaryfile("../firstVert.spv", &vertDataSize);
+    const char*          vertShaderText =
+      filesys->funcs->read_textfile(SOURCE_DIR "/shaders/firstShader.vert");
     shaderSource_tgfxhnd& firstVertShader = shaderSources[0];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderstage_tgfx_VERTEXSHADER, ( void* )vertShaderText,
@@ -302,9 +311,8 @@ void compileShadersandPipelines() {
                                         // vertShaderBin, vertDataSize,
                                         &firstVertShader);
 
-    const char* fragShaderText = filesys->funcs->read_textfile("../firstShader.frag");
-    // unsigned long fragDataSize;
-    // void* fragShaderBin = filesys->funcs->read_binaryfile("../firstFrag.spv", &fragDataSize);
+    const char* fragShaderText =
+      filesys->funcs->read_textfile(SOURCE_DIR "/shaders/firstShader.frag");
     shaderSource_tgfxhnd& firstFragShader = shaderSources[1];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderstage_tgfx_FRAGMENTSHADER, ( void* )fragShaderText,
@@ -327,7 +335,6 @@ void compileShadersandPipelines() {
     contentManager->createRasterPipeline(&pipelineDesc, nullptr, &firstRasterPipeline);
   }
 
-  
   // Instantiate binding table
   {
     contentManager->instantiateBindingTable(bindingType, true, &bindingTable);
@@ -340,15 +347,16 @@ void compileShadersandPipelines() {
 commandBundle_tgfxhnd standardDrawBundle, initBundle;
 
 void recordCommandBundles() {
-  /*initBundle = renderer->beginCommandBundle(gpu, 1, nullptr, nullptr);
+  /*
+  initBundle = renderer->beginCommandBundle(gpu, 1, nullptr, nullptr);
   renderer->cmdBarrierTexture(initBundle, 0, customRTs[0], image_access_tgfx_NO_ACCESS,
                               image_access_tgfx_RTCOLOR_READWRITE, textureAllUsages,
                               textureAllUsages, nullptr);
   renderer->cmdBarrierTexture(initBundle, 0, customRTs[1], image_access_tgfx_NO_ACCESS,
                               image_access_tgfx_RTCOLOR_READWRITE, textureAllUsages,
                               textureAllUsages, nullptr);
-  renderer->finishCommandBundle(initBundle, nullptr);*/
-
+  renderer->finishCommandBundle(initBundle, nullptr);
+  */
   static constexpr uint32_t cmdCount = 5;
   // Record command bundle
   standardDrawBundle = renderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, nullptr);
@@ -359,9 +367,9 @@ void recordCommandBundles() {
 
     renderer->cmdBindPipeline(standardDrawBundle, cmdKey++, firstRasterPipeline);
     renderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, bindingTables, 0,
-                                   pipelineType_tgfx_COMPUTE);
-    renderer->cmdSetViewport(standardDrawBundle, cmdKey++, {0, 0, 256, 256, 0.0f, 1.0f});
-    renderer->cmdSetScissor(standardDrawBundle, cmdKey++, {0, 0}, {256, 256});
+                                   pipelineType_tgfx_RASTER);
+    renderer->cmdSetViewport(standardDrawBundle, cmdKey++, {0, 0, 1280, 720, 0.0f, 1.0f});
+    renderer->cmdSetScissor(standardDrawBundle, cmdKey++, {0, 0}, {1280, 720});
     renderer->cmdDrawNonIndexedDirect(standardDrawBundle, cmdKey++, 3, 1, 0, 0);
 
     assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
@@ -385,8 +393,8 @@ void recordSwpchnCmdBundles() {
       renderer->cmdBindPipeline(perSwpchnCmdBundles[i], cmdKey++, firstRasterPipeline);
       renderer->cmdBindBindingTables(perSwpchnCmdBundles[i], cmdKey++, bindingTables, 0,
                                      pipelineType_tgfx_COMPUTE);
-      renderer->cmdSetViewport(perSwpchnCmdBundles[i], cmdKey++, {0, 0, 256, 256, 0.0f, 1.0f});
-      renderer->cmdSetScissor(perSwpchnCmdBundles[i], cmdKey++, {0, 0}, {256, 256});
+      renderer->cmdSetViewport(perSwpchnCmdBundles[i], cmdKey++, {0, 0, 1280, 720, 0.0f, 1.0f});
+      renderer->cmdSetScissor(perSwpchnCmdBundles[i], cmdKey++, {0, 0}, {1280, 720});
       renderer->cmdDrawNonIndexedDirect(perSwpchnCmdBundles[i], cmdKey++, 3, 1, 0, 0);
 
       assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
@@ -420,9 +428,8 @@ void load_systems() {
   fence_tgfxhnd   waitFences[2] = {fence, ( fence_tgfxhnd )tgfx->INVALIDHANDLE};
   renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
   renderer->queueSubmit(queue);
-  
-  // Initialization Command Buffer Recording
-  commandBuffer_tgfxhnd        initCmdBuffer          = {};
+
+  // Color Attachment Info for Begin Render Pass
   rasterpassBeginSlotInfo_tgfx colorAttachmentInfo    = {};
   commandBundle_tgfxhnd        standardDrawBundles[2] = {standardDrawBundle,
                                                          ( commandBundle_tgfxhnd )tgfx->INVALIDHANDLE};
@@ -433,6 +440,9 @@ void load_systems() {
     float cleardata[]               = {0.5, 0.5, 0.5, 1.0};
     memcpy(colorAttachmentInfo.clearValue.data, cleardata, sizeof(cleardata));
   }
+
+  // Initialization Command Buffer Recording
+  commandBuffer_tgfxhnd initCmdBuffer = {};
   /* {
     initCmdBuffer = renderer->beginCommandBuffer(queue, nullptr);
     colorAttachmentInfo.texture          = customRTs[0];
@@ -490,6 +500,7 @@ void load_systems() {
       renderer->executeBundles(frameCmdBuffer, standardDrawBundles, nullptr);
       renderer->endRasterpass(frameCmdBuffer, {});
       renderer->endCommandBuffer(frameCmdBuffer);
+      *( vec2_tgfx* )mappedRegion = {sinf(i / 360.0), cosf(i / 360.0)};
     }
 
     renderer->queueExecuteCmdBuffers(queue, frameCmdBuffers, nullptr);

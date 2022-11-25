@@ -1,0 +1,14 @@
+#version 430 core
+layout(local_size_x = 3, local_size_y = 3, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer  CameraBuffer{
+  ivec2 views[2];
+} cameraData;
+//layout(binding = 0, set = 0, r8i) writeonly uniform iimage2D swpchnTexture;
+
+void main()
+{
+  vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
+  ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+  cameraData.views[0] = ivec2(15,-1);
+}

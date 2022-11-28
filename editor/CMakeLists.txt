@@ -14,6 +14,9 @@ find_package(glm REQUIRED)
 target_include_directories(editor PUBLIC ${glm_INCLUDE_DIRS})
 target_link_libraries(editor PUBLIC glm::glm)
 
+find_path(STB_INCLUDE_DIRS "stb.h")
+target_include_directories(editor PRIVATE ${STB_INCLUDE_DIRS})
+
 add_subdirectory("scene")
 add_subdirectory("UI")
 add_subdirectory("gameLinker")

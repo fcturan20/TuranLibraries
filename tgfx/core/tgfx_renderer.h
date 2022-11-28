@@ -85,9 +85,9 @@ typedef struct tgfx_renderer {
                               buffer_tgfxhnd buffer, unsigned long long offset,
                               unsigned char indexDataTypeSize);
   void (*cmdSetViewport)(commandBundle_tgfxhnd bundle, unsigned long long key,
-                          viewportInfo_tgfx viewport);
-  void (*cmdSetScissor)(commandBundle_tgfxhnd bundle, unsigned long long key,
-                          ivec2_tgfx offset, uvec2_tgfx size);
+                         viewportInfo_tgfx viewport);
+  void (*cmdSetScissor)(commandBundle_tgfxhnd bundle, unsigned long long key, ivec2_tgfx offset,
+                        uvec2_tgfx size);
   void (*cmdSetDynamicVertexLayout)(commandBundle_tgfxhnd bundle, unsigned long long key,
                                     vertexAttributeLayout_tgfxhnd layout);
   void (*cmdSetDepthBounds)(commandBundle_tgfxhnd bundle, unsigned long long key, float min,
@@ -99,6 +99,10 @@ typedef struct tgfx_renderer {
                                unsigned int indxCount, unsigned int instanceCount,
                                unsigned int firstIndex, int vertexOffset,
                                unsigned int firstInstance);
+  void (*cmdCopyBufferToTexture)(commandBundle_tgfxhnd bndl, unsigned long long key,
+                                 buffer_tgfxhnd srcBuffer, unsigned long long bufferOffset,
+                                 texture_tgfxhnd dstTexture, image_access_tgfx lastAccess,
+                                 extension_tgfxlsthnd exts);
   // @param Note: If your GPU doesn't support draw_count_indirect;
   //   drawCountBuffer should be NULL & bufferOffset should be drawCount
   void (*cmdDrawNonIndexedIndirect)(commandBundle_tgfxhnd bndl, unsigned long long key,

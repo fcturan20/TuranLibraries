@@ -87,37 +87,40 @@ struct gpudatamanager_private {
 static gpudatamanager_private* hidden = nullptr;
 
 void vk_destroyAllResources() {}
-/*
+
 result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* desc,
                              sampler_tgfxhnd* hnd) {
-  GPU_VKOBJ*          GPU      = core_vk->getGPUs().getOBJfromHANDLE(gpu);
-  VkSamplerCreateInfo s_ci     = {};
-  s_ci.addressModeU            = Find_AddressMode_byWRAPPING(desc->wrapWidth);
-  s_ci.addressModeV            = Find_AddressMode_byWRAPPING(desc->wrapHeight);
-  s_ci.addressModeW            = Find_AddressMode_byWRAPPING(desc->wrapDepth);
-  s_ci.anisotropyEnable        = VK_FALSE;
-  s_ci.borderColor             = VkBorderColor::VK_BORDER_COLOR_MAX_ENUM;
-  s_ci.compareEnable           = VK_FALSE;
-  s_ci.flags                   = 0;
-  s_ci.magFilter               = Find_VkFilter_byGFXFilter(desc->magFilter);
-  s_ci.minFilter               = Find_VkFilter_byGFXFilter(desc->minFilter);
-  s_ci.maxLod                  = static_cast<float>(desc->MaxMipLevel);
-  s_ci.minLod                  = static_cast<float>(desc->MinMipLevel);
-  s_ci.mipLodBias              = 0.0f;
-  s_ci.mipmapMode              = Find_MipmapMode_byGFXFilter(desc->minFilter);
-  s_ci.pNext                   = nullptr;
-  s_ci.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  s_ci.unnormalizedCoordinates = VK_FALSE;
+  GPU_VKOBJ* GPU = core_vk->getGPUs().getOBJfromHANDLE(gpu);
 
   VkSampler sampler;
-  ThrowIfFailed(vkCreateSampler(GPU->vk_logical, &s_ci, nullptr, &sampler),
-                "GFXContentManager->Create_SamplingType() has failed at vkCreateSampler!");
+  {
+    VkSamplerCreateInfo s_ci     = {};
+    s_ci.addressModeU            = vk_findAddressModeVk(desc->wrapWidth);
+    s_ci.addressModeV            = vk_findAddressModeVk(desc->wrapHeight);
+    s_ci.addressModeW            = vk_findAddressModeVk(desc->wrapDepth);
+    s_ci.anisotropyEnable        = VK_FALSE;
+    s_ci.borderColor             = VkBorderColor::VK_BORDER_COLOR_MAX_ENUM;
+    s_ci.compareEnable           = VK_FALSE;
+    s_ci.flags                   = 0;
+    s_ci.magFilter               = vk_findFilterVk(desc->magFilter);
+    s_ci.minFilter               = vk_findFilterVk(desc->minFilter);
+    s_ci.maxLod                  = static_cast<float>(desc->MaxMipLevel);
+    s_ci.minLod                  = static_cast<float>(desc->MinMipLevel);
+    s_ci.mipLodBias              = 0.0f;
+    s_ci.mipmapMode              = vk_findMipmapModeVk(desc->minFilter);
+    s_ci.pNext                   = nullptr;
+    s_ci.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    s_ci.unnormalizedCoordinates = VK_FALSE;
+    THROW_RETURN_IF_FAIL(vkCreateSampler(GPU->vk_logical, &s_ci, nullptr, &sampler),
+                         "GFXContentManager->Create_SamplingType() has failed at vkCreateSampler!",
+                         result_tgfx_FAIL);
+  }
+
   SAMPLER_VKOBJ* SAMPLER = hidden->samplers.create_OBJ();
-  SAMPLER->Sampler       = sampler;
+  SAMPLER->vk_sampler    = sampler;
   *hnd                   = hidden->samplers.returnHANDLEfromOBJ(SAMPLER);
   return result_tgfx_SUCCESS;
 }
-*/
 
 /*Attributes are ordered as the same order of input vector
  * For example: Same attribute ID may have different location/order in another attribute layout
@@ -165,7 +168,7 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
   VkImageUsageFlags usageFlag = vk_findTextureUsageFlagVk(desc->usage);
   if (desc->channelType == texture_channels_tgfx_D24S8 ||
       desc->channelType == texture_channels_tgfx_D32) {
-    usageFlag &= ~(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
+    usageFlag &= ~(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
   } else {
     usageFlag &= ~(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
   }
@@ -289,16 +292,25 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
   return result_tgfx_SUCCESS;
 }
 
+vk_uint32c  VKCONST_MAXSTATICSAMPLERCOUNT = 128;
 result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescription_tgfx* desc,
                                       bindingTableType_tgfxhnd* bindingTableHandle) {
 #ifdef VULKAN_DEBUGGING
   // Check if pool has enough space for the desc set and if there is, then decrease the amount of
   // available descs in the pool for other checks
-  if (!desc->ElementCount) {
+  if (!desc->ElementCount && !desc->SttcSmplrs) {
     printer(result_tgfx_FAIL, "You shouldn't create a binding table with ElementCount = 0");
     return result_tgfx_FAIL;
   }
-  if (desc->SttcSmplrs) {
+#endif
+  GPU_VKOBJ* GPU = core_vk->getGPUs().getOBJfromHANDLE(gpu);
+
+  // Static Immutable Sampler binding
+  VkDescriptorSetLayoutBinding bindngs[2] = {};
+  VkSampler                    staticSamplers[VKCONST_MAXSTATICSAMPLERCOUNT];
+  unsigned int                 dynamicbinding_i = 0;
+  TGFXLISTCOUNT(core_tgfx_main, desc->SttcSmplrs, staticsamplerscount);
+  if (desc->DescriptorType == shaderdescriptortype_tgfx_SAMPLER && desc->SttcSmplrs) {
     unsigned int i = 0;
     while (desc->SttcSmplrs[i] != core_tgfx_main->INVALIDHANDLE) {
       if (!hidden->samplers.getOBJfromHANDLE(desc->SttcSmplrs[i])) {
@@ -306,52 +318,45 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
                 "You shouldn't give NULL or invalid handles to StaticSamplers list!");
         return result_tgfx_WARNING;
       }
+
       i++;
     }
-  }
-#endif
-  GPU_VKOBJ* GPU = core_vk->getGPUs().getOBJfromHANDLE(gpu);
-
-  VkDescriptorSetLayoutCreateInfo ci      = {};
-  ci.sType                                = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-  VkDescriptorSetLayoutBinding bindngs[2] = {};
-  ci.flags                                = 0;
-  ci.pNext                                = nullptr;
-  ci.bindingCount                         = 1;
-  ci.pBindings                            = bindngs;
-  VkRenderPassBeginInfo bi                = {};
-  unsigned int          dynamicbinding_i  = 0;
-  /*
-  std::vector<VkSampler> staticSamplers;
-  if (desc->DescriptorType == shaderdescriptortype_tgfx_SAMPLER && desc->SttcSmplrs) {
-    TGFXLISTCOUNT(core_tgfx_main, desc->SttcSmplrs, staticsamplerscount);
-    staticSamplers.resize(staticsamplerscount);
     for (unsigned int i = 0; i < staticsamplerscount; i++) {
       staticSamplers[i] = hidden->samplers.getOBJfromHANDLE(desc->SttcSmplrs[i])->vk_sampler;
     }
-    bindngs[0].binding            = 0;
+    bindngs[0].binding            = dynamicbinding_i;
     bindngs[0].descriptorCount    = staticsamplerscount;
     bindngs[0].descriptorType     = VK_DESCRIPTOR_TYPE_SAMPLER;
-    bindngs[0].pImmutableSamplers = staticSamplers.data();
+    bindngs[0].pImmutableSamplers = staticSamplers;
     bindngs[0].stageFlags         = VK_SHADER_STAGE_ALL;
 
-    ci.bindingCount++;
     dynamicbinding_i++;
   }
-  */
-  bindngs[dynamicbinding_i].binding            = dynamicbinding_i;
-  bindngs[dynamicbinding_i].descriptorCount    = desc->ElementCount;
-  bindngs[dynamicbinding_i].descriptorType     = vk_findDescTypeVk(desc->DescriptorType);
-  bindngs[dynamicbinding_i].pImmutableSamplers = nullptr;
-  bindngs[dynamicbinding_i].stageFlags         = vk_findShaderStageVk(desc->visibleStagesMask);
+
+  // Main binding
+  {
+    bindngs[dynamicbinding_i].binding            = dynamicbinding_i;
+    bindngs[dynamicbinding_i].descriptorCount    = desc->ElementCount;
+    bindngs[dynamicbinding_i].descriptorType     = vk_findDescTypeVk(desc->DescriptorType);
+    bindngs[dynamicbinding_i].pImmutableSamplers = nullptr;
+    bindngs[dynamicbinding_i].stageFlags         = vk_findShaderStageVk(desc->visibleStagesMask);
+  }
 
   VkDescriptorSetLayout DSL;
-  ThrowIfFailed(vkCreateDescriptorSetLayout(GPU->vk_logical, &ci, nullptr, &DSL),
-                "Descriptor Set Layout creation has failed!");
+  {
+    VkDescriptorSetLayoutCreateInfo ci = {};
+    ci.sType                           = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    ci.flags                           = 0;
+    ci.pNext                           = nullptr;
+    ci.bindingCount                    = dynamicbinding_i + 1;
+    ci.pBindings                       = bindngs;
+    ThrowIfFailed(vkCreateDescriptorSetLayout(GPU->vk_logical, &ci, nullptr, &DSL),
+                  "Descriptor Set Layout creation has failed!");
+  }
 
   BINDINGTABLETYPE_VKOBJ* finalobj = hidden->bindingtabletypes.create_OBJ();
   finalobj->vk_descType            = bindngs[dynamicbinding_i].descriptorType;
-  finalobj->m_elementCount         = bindngs[dynamicbinding_i].descriptorCount;
+  finalobj->m_elementCount = bindngs[dynamicbinding_i].descriptorCount + staticsamplerscount;
   finalobj->m_gpu                  = GPU->gpuIndx();
   finalobj->vk_layout              = DSL;
   finalobj->vk_stages              = bindngs[dynamicbinding_i].stageFlags;
@@ -867,36 +872,56 @@ result_tgfx vk_copyComputePipeline(pipeline_tgfxhnd src, extension_tgfxlsthnd ex
                                    pipeline_tgfxhnd* dst) {
   return result_tgfx_NOTCODED;
 }
-/*
-// Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
-void vk_setDescriptor_Sampler(bindingTable_tgfxhnd bindingtable, unsigned int elementIndex,
-                              sampler_tgfxhnd samplerHandle) {
-  BINDINGTABLEINST_VKOBJ* set     = hidden->bindingtableinsts.getOBJfromHANDLE(bindingtable);
-  SAMPLER_VKOBJ*          sampler = hidden->samplers.getOBJfromHANDLE(samplerHandle);
 
+static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
+// Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
+result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsigned int bindingCount,
+                               const unsigned int* bindingIndices, const sampler_tgfxlsthnd samplerHandles) {
+  BINDINGTABLEINST_VKOBJ* set     = hidden->bindingtableinsts.getOBJfromHANDLE(bindingtable);
+  BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
+
+  VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
+  VkDescriptorImageInfo imageInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
+  for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
+    SAMPLER_VKOBJ* sampler = hidden->samplers.getOBJfromHANDLE(samplerHandles[bindingIter]);
 #ifdef VULKAN_DEBUGGING
-  if (!set || !sampler || elementIndex >= set->samplerDescELEMENTs.size() ||
-      set->DESCTYPE != VK_DESCRIPTOR_TYPE_SAMPLER) {
-    printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Sampler() has invalid input!");
-    return;
-  }
-  sampler_descVK& samplerDESC         = set->samplerDescELEMENTs[elementIndex];
-  unsigned char   elementUpdateStatus = 0;
-  if (!samplerDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
-    printer(result_tgfx_FAIL,
-            "SetDescriptor_Sampler() failed because you already changed the descriptor in the same "
-            "frame!");
-  }
+    uint32_t elementIndx = bindingIndices[bindingIter];
+    if (!set || !sampler || bindingIndices[bindingIter] >= setType->m_elementCount ||
+        setType->vk_descType != VK_DESCRIPTOR_TYPE_SAMPLER) {
+      printer(result_tgfx_INVALIDARGUMENT, "vk_setBindingTable_Buffer() has invalid input!");
+      return result_tgfx_INVALIDARGUMENT;
+    }
+    sampler_descVK& samplerDESC         = (( sampler_descVK* )set->m_descs)[elementIndx];
+    unsigned char   elementUpdateStatus = 0;
+    if (!samplerDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
+      printer(
+        result_tgfx_FAIL,
+        "SetDescriptor_Sampler() failed because you already changed the descriptor in the same "
+        "frame!");
+    }
 #else
-  sampler_descVK& samplerDESC = (( sampler_descVK* )set->DescElements)[elementIndex];
-  samplerDESC.isUpdated.store(1);
+    sampler_descVK& samplerDESC = (( sampler_descVK* )set->DescElements)[elementIndex];
+    samplerDESC.isUpdated.store(1);
 #endif
 
-  samplerDESC.sampler_obj = sampler->vk_sampler;
-  set->isUpdatedCounter.store(3);
+    samplerDESC.sampler_obj = sampler->vk_sampler;
+    imageInfos[bindingIter].sampler = sampler->vk_sampler;
+
+    writeInfos[bindingIter].descriptorCount  = 1;
+    writeInfos[bindingIter].descriptorType   = setType->vk_descType;
+    writeInfos[bindingIter].dstArrayElement  = elementIndx;
+    writeInfos[bindingIter].dstBinding       = 0;
+    writeInfos[bindingIter].pTexelBufferView = nullptr;
+    writeInfos[bindingIter].pNext            = nullptr;
+    writeInfos[bindingIter].dstSet           = set->vk_set;
+    writeInfos[bindingIter].pImageInfo       = &imageInfos[bindingIter];
+    writeInfos[bindingIter].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  }
+  vkUpdateDescriptorSets(core_vk->getGPUs()[setType->m_gpu]->vk_logical, bindingCount, writeInfos,
+                         0, nullptr);
+  return result_tgfx_SUCCESS;
 }
-*/
-static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
+
 // Set a descriptor of the binding table created with shaderdescriptortype_tgfx_BUFFER
 result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int bindingCount,
                                       const unsigned int*     bindingIndices,
@@ -995,7 +1020,9 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
 #else
     textureDESC.isUpdated.store(1);
 #endif
-    textureDESC.info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    textureDESC.info.imageLayout = (setType->vk_descType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                                     ? VK_IMAGE_LAYOUT_GENERAL
+                                     : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     textureDESC.info.imageView   = texture->vk_imageView;
     textureDESC.info.sampler     = VK_NULL_HANDLE;
 
@@ -1213,6 +1240,8 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->bindToHeap_Texture         = vk_bindToHeap_Texture;
   core_tgfx_main->contentmanager->mapHeap                    = vk_mapHeap;
   core_tgfx_main->contentmanager->unmapHeap                  = vk_unmapHeap;
+  core_tgfx_main->contentmanager->createSampler              = vk_createSampler;
+  core_tgfx_main->contentmanager->setBindingTable_Sampler    = vk_setBindingTable_Sampler;
 }
 
 void initGlslang() {

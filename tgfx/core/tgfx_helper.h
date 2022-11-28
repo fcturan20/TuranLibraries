@@ -7,19 +7,17 @@ typedef struct tgfx_helper {
   void (*getGPUInfo_Queues)(gpu_tgfxhnd GPUhnd, unsigned int queueFamIndx,
                             gpuQueue_tgfxlsthnd* queueList);
   unsigned char (*getTextureTypeLimits)(texture_dimensions_tgfx dims, textureOrder_tgfx dataorder,
-                                        textureChannels_tgfx     channeltype,
+                                        textureChannels_tgfx      channeltype,
                                         textureUsageMask_tgfxflag usageflag, gpu_tgfxhnd GPUHandle,
                                         unsigned int* MAXWIDTH, unsigned int* MAXHEIGHT,
                                         unsigned int* MAXDEPTH, unsigned int* MAXMIPLEVEL);
   result_tgfx (*getWindow_GPUSupport)(window_tgfxhnd window, gpu_tgfxhnd gpu,
                                       windowGPUsupport_tgfx* info);
 
-  void (*getTextureRecommendedAllocationInfo)(unsigned int  GPUIndex,
-                                            unsigned int* SupportedMemoryTypesBitset);
-  void (*getMonitorInfo)(monitor_tgfxhnd MonitorHandle,
-                                                       unsigned int* WIDTH, unsigned int* HEIGHT,
-                                                       unsigned int* ColorBites,
-                                                       unsigned int* RefreshRate);
+  void (*getTextureSupportedMemTypes)(texture_tgfxhnd texture,
+                                      unsigned int*   SupportedMemoryTypesBitset);
+  void (*getMonitorInfo)(monitor_tgfxhnd MonitorHandle, unsigned int* WIDTH, unsigned int* HEIGHT,
+                         unsigned int* ColorBites, unsigned int* RefreshRate);
 
   // TO BE USED IN TGFX_SUBPASS
   RTSlotDescription_tgfxhnd (*CreateRTSlotDescription_Color)(
@@ -32,12 +30,12 @@ typedef struct tgfx_helper {
     double depthClearValue, unsigned char stencilClearValue);
   rtslotusage_tgfx_handle (*CreateRTSlotUsage_Color)(RTSlotDescription_tgfxhnd base,
                                                      operationtype_tgfx        opType,
-                                                     rasterpassLoad_tgfx         LOADTYPE);
+                                                     rasterpassLoad_tgfx       LOADTYPE);
   rtslotusage_tgfx_handle (*CreateRTSlotUsage_Depth)(RTSlotDescription_tgfxhnd base,
                                                      operationtype_tgfx        depthOp,
-                                                     rasterpassLoad_tgfx         depthLoad,
+                                                     rasterpassLoad_tgfx       depthLoad,
                                                      operationtype_tgfx        stencilOp,
-                                                     rasterpassLoad_tgfx         stencilLoad);
+                                                     rasterpassLoad_tgfx       stencilLoad);
   // EXTENSION HELPERS
 
   void (*destroyExtensionData)(extension_tgfx_handle ExtensionToDestroy);

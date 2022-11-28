@@ -83,6 +83,7 @@ typedef struct tgfx_vec2                      vec2_tgfx;
 typedef struct tgfx_vec3                      vec3_tgfx;
 typedef struct tgfx_vec4                      vec4_tgfx;
 typedef struct tgfx_ivec2                     ivec2_tgfx;
+typedef struct tgfx_ivec3                     ivec3_tgfx;
 typedef struct tgfx_boxRegion                 boxRegion_tgfx;
 typedef struct tgfx_cubeRegion                cubeRegion_tgfx;
 typedef struct tgfx_memory_description        memoryDescription_tgfx;

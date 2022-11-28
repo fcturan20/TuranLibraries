@@ -5,6 +5,8 @@
 #include <glm/gtx/common.hpp>
 #include <random>
 #include <string>
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 #include "allocator_tapi.h"
 #include "array_of_strings_tapi.h"
@@ -125,9 +127,8 @@ textureUsageMask_tgfxflag textureAllUsages = textureUsageMask_tgfx_COPYFROM |
                                              textureUsageMask_tgfx_RANDOMACCESS |
                                              textureUsageMask_tgfx_RASTERSAMPLE |
                                              textureUsageMask_tgfx_RENDERATTACHMENT,
-                          storageImageUsage = textureUsageMask_tgfx_COPYFROM |
-                                              textureUsageMask_tgfx_COPYTO |
-                                              textureUsageMask_tgfx_RANDOMACCESS;
+                          storageImageUsage =
+                            textureUsageMask_tgfx_COPYTO | textureUsageMask_tgfx_RANDOMACCESS;
 gpuQueue_tgfxhnd           allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
 window_tgfxhnd             window;
 tgfx_swapchain_description swpchn_desc;
@@ -197,12 +198,12 @@ void createFirstWindow() {
 }
 
 // Create device local resources
-texture_tgfxhnd customDepthRT = {};
-buffer_tgfxhnd  firstBuffer   = {};
-void*           mappedRegion  = nullptr;
+texture_tgfxhnd customDepthRT = {}, reiChikitaTexture = {};
+buffer_tgfxhnd  firstBuffer  = {};
+void*           mappedRegion = nullptr;
 
 void createDeviceLocalResources() {
-  static constexpr uint32_t heapSize           = 1 << 25;
+  static constexpr uint32_t heapSize           = 1 << 27;
   uint32_t                  deviceLocalMemType = UINT32_MAX, hostVisibleMemType = UINT32_MAX;
   for (uint32_t memTypeIndx = 0; memTypeIndx < gpuDesc.memRegionsCount; memTypeIndx++) {
     const memoryDescription_tgfx& memDesc = gpuDesc.memRegions[memTypeIndx];
@@ -244,43 +245,70 @@ void createDeviceLocalResources() {
   textureDesc.permittedQueues         = allQueues;
   textureDesc.usage = textureUsageMask_tgfx_RENDERATTACHMENT | textureUsageMask_tgfx_COPYFROM |
                       textureUsageMask_tgfx_COPYTO;
-  uvec4_tgfx maxSize                  = {};
-  if(tgfx->helpers->getTextureTypeLimits(textureDesc.dimension, textureDesc.dataOrder,
-                                      textureDesc.channelType, textureDesc.usage, gpu, &maxSize.x, &maxSize.y, &maxSize.z, &maxSize.w)) {
+  uvec4_tgfx maxSize = {};
+  if (tgfx->helpers->getTextureTypeLimits(textureDesc.dimension, textureDesc.dataOrder,
+                                          textureDesc.channelType, textureDesc.usage, gpu,
+                                          &maxSize.x, &maxSize.y, &maxSize.z, &maxSize.w)) {
     contentManager->createTexture(gpu, &textureDesc, &customDepthRT);
   }
 
+  textureDesc.channelType = texture_channels_tgfx_RGBA8UB;
+  textureDesc.width       = 3000;
+  textureDesc.height      = 3000;
+  textureDesc.usage       = textureAllUsages;
+  if (tgfx->helpers->getTextureTypeLimits(textureDesc.dimension, textureDesc.dataOrder,
+                                          textureDesc.channelType, textureDesc.usage, gpu,
+                                          &maxSize.x, &maxSize.y, &maxSize.z, &maxSize.w)) {
+    contentManager->createTexture(gpu, &textureDesc, &reiChikitaTexture);
+  }
+
+  heapRequirementsInfo_tgfx reiChikitaTextureReqs = {}, depthTextureReqs = {};
+  contentManager->getHeapRequirement_Texture(reiChikitaTexture, nullptr, &reiChikitaTextureReqs);
+  contentManager->getHeapRequirement_Texture(customDepthRT, nullptr, &depthTextureReqs);
+
   bufferDescription_tgfx bufferDesc = {};
-  bufferDesc.dataSize               = 1650;
+  bufferDesc.dataSize               = 2048 + reiChikitaTextureReqs.size;
   bufferDesc.exts                   = nullptr;
   bufferDesc.permittedQueues        = allQueues;
   bufferDesc.usageFlag              = bufferUsageMask_tgfx_COPYFROM | bufferUsageMask_tgfx_COPYTO |
                          bufferUsageMask_tgfx_STORAGEBUFFER;
   contentManager->createBuffer(gpu, &bufferDesc, &firstBuffer);
 
-  heapRequirementsInfo_tgfx firstTextureReqs = {};
-  // contentManager->getHeapRequirement_Texture(customRTs[0], nullptr, &firstTextureReqs);
   heapRequirementsInfo_tgfx bufferHeapReqs = {};
   contentManager->getHeapRequirement_Buffer(firstBuffer, nullptr, &bufferHeapReqs);
 
+  // Host Visible Heap
+  contentManager->bindToHeap_Buffer(hostVisibleHeap, 0, firstBuffer, nullptr);
+  ivec3_tgfx reiChikitaWHC  = {};
+  void*      reiChikitaData = stbi_load(SOURCE_DIR "/shaders/reiChikita.jpg", &reiChikitaWHC.x,
+                                        &reiChikitaWHC.y, &reiChikitaWHC.z, 4);
+  memcpy((( char* )mappedRegion) + 2048, reiChikitaData, 3000 * 3000 * 4);
+
+  uint32_t reiChikitaSupportedMemTypes = {};
+  tgfx->helpers->getTextureSupportedMemTypes(reiChikitaTexture, &reiChikitaSupportedMemTypes);
+
+  // DevLocal heap
   uint32_t lastMemPoint        = 0;
   auto&    calculateHeapOffset = [&lastMemPoint](const heapRequirementsInfo_tgfx& heapReq) -> void {
     lastMemPoint = ((lastMemPoint / heapReq.offsetAlignment) +
                     ((lastMemPoint % heapReq.offsetAlignment) ? 1 : 0)) *
                    heapReq.offsetAlignment;
   };
+  contentManager->bindToHeap_Texture(deviceLocalHeap, lastMemPoint, reiChikitaTexture, nullptr);
+  lastMemPoint += reiChikitaTextureReqs.size;
+  calculateHeapOffset(depthTextureReqs);
   contentManager->bindToHeap_Texture(deviceLocalHeap, lastMemPoint, customDepthRT, nullptr);
-  contentManager->bindToHeap_Buffer(hostVisibleHeap, lastMemPoint, firstBuffer, nullptr);
 
 #ifdef NDEBUG
   printf("createDeviceLocalResources() finished!\n");
 #endif
 }
 
-bindingTableType_tgfxhnd bindingType          = {};
+bindingTableType_tgfxhnd bufferBindingType = {}, textureBindingType = {}, samplerBindingType = {};
 pipeline_tgfxhnd         firstComputePipeline = {};
 pipeline_tgfxhnd         firstRasterPipeline  = {};
-bindingTable_tgfxhnd     bindingTable         = {};
+bindingTable_tgfxhnd bufferBindingTable = {}, textureBindingTable = {}, samplerBindingTable = {};
+sampler_tgfxhnd      firstSampler = {};
 
 void compileShadersandPipelines() {
   // Compile compute shader, create binding table type & compute pipeline
@@ -292,7 +320,19 @@ void compileShadersandPipelines() {
                                         shaderStage_tgfx_COMPUTESHADER, ( void* )shaderText,
                                         strlen(shaderText), &firstComputeShader);
 
-    // Create binding table type
+    {
+      samplerDescription_tgfx samplerDesc = {};
+      samplerDesc.MinMipLevel             = 0;
+      samplerDesc.MaxMipLevel             = 0;
+      samplerDesc.magFilter               = texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP;
+      samplerDesc.minFilter               = texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP;
+      samplerDesc.wrapWidth               = texture_wrapping_tgfx_REPEAT;
+      samplerDesc.wrapHeight              = texture_wrapping_tgfx_REPEAT;
+      samplerDesc.wrapDepth               = texture_wrapping_tgfx_REPEAT;
+      contentManager->createSampler(gpu, &samplerDesc, &firstSampler);
+    }
+
+    // Create binding table types
     {
       tgfx_binding_table_description desc = {};
       desc.DescriptorType                 = shaderdescriptortype_tgfx_BUFFER;
@@ -300,11 +340,19 @@ void compileShadersandPipelines() {
       desc.SttcSmplrs                     = nullptr;
       desc.visibleStagesMask = shaderStage_tgfx_COMPUTESHADER | shaderStage_tgfx_VERTEXSHADER |
                                shaderStage_tgfx_FRAGMENTSHADER;
+      contentManager->createBindingTableType(gpu, &desc, &bufferBindingType);
 
-      contentManager->createBindingTableType(gpu, &desc, &bindingType);
+      desc.DescriptorType = shaderdescriptortype_tgfx_SAMPLEDTEXTURE;
+      contentManager->createBindingTableType(gpu, &desc, &textureBindingType);
+
+      desc.DescriptorType         = shaderdescriptortype_tgfx_SAMPLER;
+      sampler_tgfxhnd samplers[2] = {firstSampler, ( sampler_tgfxhnd )tgfx->INVALIDHANDLE};
+      desc.SttcSmplrs             = samplers;
+      desc.ElementCount = 0;
+      contentManager->createBindingTableType(gpu, &desc, &samplerBindingType);
     }
 
-    bindingTableType_tgfxhnd bindingTypes[2] = {bindingType,
+    bindingTableType_tgfxhnd bindingTypes[2] = {bufferBindingType,
                                                 ( bindingTableType_tgfxhnd )tgfx->INVALIDHANDLE};
     contentManager->createComputePipeline(firstComputeShader, bindingTypes, false,
                                           &firstComputePipeline);
@@ -338,7 +386,7 @@ void compileShadersandPipelines() {
     stateDesc.depthStencilState.depthTestEnabled  = true;
     stateDesc.depthStencilState.depthWriteEnabled = true;
     stateDesc.depthStencilState.depthCompare      = compare_tgfx_ALWAYS;
-    stateDesc.blendStates[0].blendEnabled         = true;
+    stateDesc.blendStates[0].blendEnabled         = false;
     stateDesc.blendStates[0].blendComponents      = textureComponentMask_tgfx_ALL;
     stateDesc.blendStates[0].alphaMode            = blendmode_tgfx_MAX;
     stateDesc.blendStates[0].colorMode            = blendmode_tgfx_ADDITIVE;
@@ -351,40 +399,50 @@ void compileShadersandPipelines() {
     pipelineDesc.depthStencilTextureFormat        = depthRTFormat;
     pipelineDesc.mainStates                       = &stateDesc;
     pipelineDesc.shaderSourceList                 = shaderSources;
-    bindingTableType_tgfxhnd bindingTypes[2]      = {bindingType,
+    bindingTableType_tgfxhnd bindingTypes[4]      = {bufferBindingType, textureBindingType,
+                                                     samplerBindingType,
                                                      ( bindingTableType_tgfxhnd )tgfx->INVALIDHANDLE};
     pipelineDesc.typeTables                       = bindingTypes;
 
     contentManager->createRasterPipeline(&pipelineDesc, nullptr, &firstRasterPipeline);
   }
 
-  // Instantiate binding table
+  // Instantiate binding tables
   {
-    contentManager->instantiateBindingTable(bindingType, true, &bindingTable);
+    contentManager->instantiateBindingTable(bufferBindingType, true, &bufferBindingTable);
     uint32_t bindingIndex = 0;
-    contentManager->setBindingTable_Buffer(bindingTable, 1, &bindingIndex, &firstBuffer, nullptr,
-                                           nullptr, nullptr);
+    contentManager->setBindingTable_Buffer(bufferBindingTable, 1, &bindingIndex, &firstBuffer,
+                                           nullptr, nullptr, nullptr);
+
+    contentManager->instantiateBindingTable(textureBindingType, true, &textureBindingTable);
+    contentManager->setBindingTable_Texture(textureBindingTable, 1, &bindingIndex,
+                                            &reiChikitaTexture);
+
+    contentManager->instantiateBindingTable(samplerBindingType, true, &samplerBindingTable);
+    /*contentManager->setBindingTable_Sampler(samplerBindingTable, 1, &bindingIndex,
+                                            &firstSampler);*/
   }
 }
 
 commandBundle_tgfxhnd standardDrawBundle, initBundle;
 
 void recordCommandBundles() {
-  /*
-  initBundle = renderer->beginCommandBundle(gpu, 1, nullptr, nullptr);
-  renderer->cmdBarrierTexture(initBundle, 0, customRTs[0], image_access_tgfx_NO_ACCESS,
-                              image_access_tgfx_RTCOLOR_READWRITE, textureAllUsages,
-                              textureAllUsages, nullptr);
-  renderer->cmdBarrierTexture(initBundle, 0, customRTs[1], image_access_tgfx_NO_ACCESS,
-                              image_access_tgfx_RTCOLOR_READWRITE, textureAllUsages,
-                              textureAllUsages, nullptr);
+  initBundle = renderer->beginCommandBundle(gpu, 3, nullptr, nullptr);
+  renderer->cmdBarrierTexture(initBundle, 0, reiChikitaTexture, image_access_tgfx_NO_ACCESS,
+                              image_access_tgfx_TRANSFER_DIST, textureAllUsages, textureAllUsages,
+                              nullptr);
+  renderer->cmdCopyBufferToTexture(initBundle, 1, firstBuffer, 2048, reiChikitaTexture,
+                                   image_access_tgfx_TRANSFER_DIST, nullptr);
+  renderer->cmdBarrierTexture(initBundle, 2, reiChikitaTexture, image_access_tgfx_TRANSFER_DIST,
+                              image_access_tgfx_SHADER_SAMPLEONLY, textureAllUsages,
+                              textureAllUsages,
+                              nullptr);
   renderer->finishCommandBundle(initBundle, nullptr);
-  */
   static constexpr uint32_t cmdCount = 7;
   // Record command bundle
   standardDrawBundle = renderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, nullptr);
   {
-    bindingTable_tgfxhnd bindingTables[2] = {bindingTable,
+    bindingTable_tgfxhnd bindingTables[4] = {bufferBindingTable, textureBindingTable, samplerBindingTable,
                                              ( bindingTable_tgfxhnd )tgfx->INVALIDHANDLE};
     uint32_t             cmdKey           = 0;
 
@@ -394,7 +452,7 @@ void recordCommandBundles() {
     renderer->cmdBindPipeline(standardDrawBundle, cmdKey++, firstRasterPipeline);
     renderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, bindingTables, 0,
                                    pipelineType_tgfx_RASTER);
-    renderer->cmdDrawNonIndexedDirect(standardDrawBundle, cmdKey++, 3, 1, 0, 0);
+    renderer->cmdDrawNonIndexedDirect(standardDrawBundle, cmdKey++, 6, 1, 0, 0);
 
     assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
   }
@@ -410,7 +468,7 @@ void recordSwpchnCmdBundles() {
     perSwpchnCmdBundles[i] =
       renderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, nullptr);
     {
-      bindingTable_tgfxhnd bindingTables[2] = {bindingTable,
+      bindingTable_tgfxhnd bindingTables[2] = {bufferBindingTable,
                                                ( bindingTable_tgfxhnd )tgfx->INVALIDHANDLE};
       uint32_t             cmdKey           = 0;
 
@@ -474,21 +532,14 @@ void load_systems() {
 
   // Initialization Command Buffer Recording
   commandBuffer_tgfxhnd initCmdBuffer = {};
-  /*
   {
-    initCmdBuffer = renderer->beginCommandBuffer(queue, nullptr);
-    colorAttachmentInfo.texture          = customRTs[0];
+    initCmdBuffer                        = renderer->beginCommandBuffer(queue, nullptr);
     commandBundle_tgfxhnd initBundles[2] = {initBundle,
                                             ( commandBundle_tgfxhnd )tgfx->INVALIDHANDLE};
     renderer->executeBundles(initCmdBuffer, initBundles, nullptr);
-
-    renderer->beginRasterpass(initCmdBuffer, 1, &colorAttachmentInfo, {}, {});
-    renderer->executeBundles(initCmdBuffer, standardDrawBundles, nullptr);
-    renderer->endRasterpass(initCmdBuffer, {});
-
     renderer->endCommandBuffer(initCmdBuffer);
   }
-  */
+
   // Submit initialization operations to GPU!
   window_tgfxhnd windowlst[2] = {window, ( window_tgfxhnd )tgfx->INVALIDHANDLE};
   {
@@ -514,7 +565,8 @@ void load_systems() {
     uint64_t currentFenceValue = 0;
     while (currentFenceValue < signalValue - 2) {
       renderer->getFenceValue(fence, &currentFenceValue);
-      printf("Waiting for fence value!\n");
+      printf("Waiting for fence value %u, currentFenceValue %u!\n", signalValue - 2,
+             currentFenceValue);
     }
     uint32_t swpchnIndx = 0;
     tgfx->getCurrentSwapchainTextureIndex(window, &swpchnIndx);

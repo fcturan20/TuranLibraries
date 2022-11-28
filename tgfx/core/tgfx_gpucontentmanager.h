@@ -49,7 +49,7 @@ typedef struct tgfx_gpudatamanager {
                                         const unsigned int* offsets, const unsigned int* sizes,
                                         extension_tgfxlsthnd exts);
   result_tgfx (*setBindingTable_Sampler)(bindingTable_tgfxhnd table, unsigned int bindingCount,
-                                         unsigned int*            bindingIndices,
+                                         const unsigned int*            bindingIndices,
                                          const sampler_tgfxlsthnd samplers);
 
   // SHADER & PIPELINE COMPILATION

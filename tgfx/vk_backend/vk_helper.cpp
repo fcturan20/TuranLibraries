@@ -53,10 +53,18 @@ static unsigned char vk_getTextureTypeLimits(
   return true;
 }
 
+static void vk_getTextureSupportedMemTypes(texture_tgfxhnd texture,
+                                           unsigned int*   SupportedMemoryTypesBitset) {
+  *SupportedMemoryTypesBitset = contentmanager->GETTEXTURES_ARRAY()
+                                  .getOBJfromHANDLE(texture)
+                                  ->m_memReqs.vk_memReqs.memoryTypeBits;
+}
+
 // EXTENSION HELPERS
 
 void Destroy_ExtensionData(extension_tgfx_handle ExtensionToDestroy) {}
 
 void vk_setHelperFuncPtrs() {
-  core_tgfx_main->helpers->getTextureTypeLimits    = vk_getTextureTypeLimits;
+  core_tgfx_main->helpers->getTextureTypeLimits = vk_getTextureTypeLimits;
+  core_tgfx_main->helpers->getTextureSupportedMemTypes = vk_getTextureSupportedMemTypes;
 }

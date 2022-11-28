@@ -29,6 +29,10 @@ typedef struct tgfx_ivec2 {
   int x, y;
 } ivec2_tgfx;
 
+typedef struct tgfx_ivec3 {
+  int x, y, z;
+} ivec3_tgfx;
+
 typedef struct tgfx_boxRegion {
   unsigned int XOffset, YOffset, WIDTH, HEIGHT;
 } boxRegion_tgfx;

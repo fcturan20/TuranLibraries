@@ -57,6 +57,7 @@ enum class vk_cmdType : vkEnumType_cmdType(){
   barrierBuffer,
   bindPipeline,
   dispatch,
+  copyBufferToTexture,
   error_2 = VK_PRIM_MAX(vkEnumType_cmdType())};
 // Template struct for new cmd structs
 // Then specify the struct in vkCmdStructsLists
@@ -154,6 +155,18 @@ struct vkCmdStruct_setDepthBounds {
   float min = 0.0f, max = 1.0f;
 };
 
+struct vkCmdStruct_copyBufferToTexture {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::copyBufferToTexture;
+
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdCopyBufferToImage(cb, vk_src, vk_dst, vk_dstImageLayout, 1, &vk_copy);
+  };
+  VkBuffer vk_src;
+  VkImage  vk_dst;
+  VkImageLayout vk_dstImageLayout;
+  VkBufferImageCopy vk_copy;
+};
+
 struct vk_cmd {
   vk_cmdType cmd_type = vk_cmdType::error_2;
 
@@ -207,6 +220,9 @@ void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cm
       break;
     case vk_cmdType::setDepthBounds:
       (( vkCmdStruct_setDepthBounds* )cmd.cmd_data)->cmd_execute(cb, bundle);
+      break;
+    case vk_cmdType::copyBufferToTexture:
+      (( vkCmdStruct_copyBufferToTexture* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
     case vk_cmdType::error:
     case vk_cmdType::error_2: printf("One of the cmds is not used!"); break;
@@ -403,6 +419,39 @@ void vk_cmdDispatch(commandBundle_tgfxhnd bndl, unsigned long long key, uvec3_tg
 
   cmd->m_dispatchSize = dispatchSize;
 }
+void vk_cmdCopyBufferToTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
+                               buffer_tgfxhnd srcBuffer, unsigned long long bufferOffset,
+                               texture_tgfxhnd dstTexture, image_access_tgfx lastAccess,
+                               extension_tgfxlsthnd exts) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(bndl);
+  auto*            cmd    = vk_createCmdStruct<vkCmdStruct_copyBufferToTexture>(&bundle->m_cmds[key]);
+
+  BUFFER_VKOBJ* buffer = contentmanager->GETBUFFER_ARRAY().getOBJfromHANDLE(srcBuffer);
+  TEXTURE_VKOBJ* texture = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(dstTexture);
+
+  cmd->vk_src = buffer->vk_buffer;
+  cmd->vk_dst = texture->vk_image;
+  VkAccessFlags flag;
+  vk_findImageAccessPattern(lastAccess, flag, cmd->vk_dstImageLayout);
+  cmd->vk_copy.imageOffset = {};
+  cmd->vk_copy.imageExtent.width = texture->m_width;
+  cmd->vk_copy.imageExtent.height = texture->m_height;
+  cmd->vk_copy.imageExtent.depth = 1;
+  cmd->vk_copy.bufferImageHeight  = 0;
+  cmd->vk_copy.bufferOffset       = bufferOffset;
+  cmd->vk_copy.bufferRowLength    = 0;
+  if (texture->m_channels == texture_channels_tgfx_D32) {
+    cmd->vk_copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+  } else if (texture->m_channels == texture_channels_tgfx_D24S8) {
+    cmd->vk_copy.imageSubresource.aspectMask =
+      VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+  } else {
+    cmd->vk_copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  }
+  cmd->vk_copy.imageSubresource.baseArrayLayer = 0;
+  cmd->vk_copy.imageSubresource.layerCount = 1;
+  cmd->vk_copy.imageSubresource.mipLevel = 0;
+}
 
 // Helper functions
 
@@ -507,6 +556,7 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUE
       queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdBundle    = bundleHnd;
       queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdPool      = cmdPool;
       queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount++].vk_cmdBuffer = cmdBuffer;
+      secondaryCmdBuffers[bundleCount++] = cmdBuffer;
     }
   }
   *cmdBufferCount = bundleCount;
@@ -526,6 +576,7 @@ void set_VkRenderer_funcPtrs() {
   core_tgfx_main->renderer->cmdSetViewport            = vk_cmdSetViewport;
   core_tgfx_main->renderer->cmdSetScissor             = vk_cmdSetScissor;
   core_tgfx_main->renderer->cmdSetDepthBounds         = vk_cmdSetDepthBounds;
+  core_tgfx_main->renderer->cmdCopyBufferToTexture    = vk_cmdCopyBufferToTexture;
 
   core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
   core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;

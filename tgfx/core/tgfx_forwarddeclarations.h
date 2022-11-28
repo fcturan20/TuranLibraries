@@ -41,9 +41,7 @@ typedef struct tgfx_pipeline_obj*              pipeline_tgfxhnd;
 //////////////////////////////////////
 
 typedef struct tgfx_extension_data*         extension_tgfx_handle;
-typedef struct tgfx_textureusageflag_data*  textureUsageFlag_tgfxhnd;
 typedef struct tgfx_vertexattributedata*    vertexattributetgfx_handle;
-typedef struct tgfx_shaderstageflag_data*   shaderStageFlag_tgfxhnd;
 typedef struct tgfx_rtslotdescription_data* RTSlotDescription_tgfxhnd;
 typedef struct tgfx_rtslotusage_data*       rtslotusage_tgfx_handle;
 typedef struct tgfx_stencilsettings_data*   stencilcnfg_tgfxnd;
@@ -52,7 +50,6 @@ typedef struct tgfx_memorytype_data*        memorytype_tgfx_handle;
 typedef struct tgfx_bindingtypeinfo_data*   bindingtypeinfo_tgfx_handle;
 typedef struct tgfx_buffereddrawcall*       buffereddrawcall_tgfx_handle;
 typedef struct tgfx_buffereddispatchcall*   buffereddispatchcall_tgfx_handle;
-typedef struct tgfx_buffer_usage_flag_data* bufferUsageFlag_tgfxhnd;
 
 // LISTS
 //////////////////////////////////////
@@ -313,10 +310,11 @@ typedef enum {
 } shaderlanguages_tgfx;
 
 typedef enum {
-  shaderstage_tgfx_VERTEXSHADER   = 0,
-  shaderstage_tgfx_FRAGMENTSHADER = 1,
-  shaderstage_tgfx_COMPUTESHADER  = 2
-} shaderstage_tgfx;
+  shaderStage_tgfx_VERTEXSHADER   = 1,
+  shaderStage_tgfx_FRAGMENTSHADER = 1 << 1,
+  shaderStage_tgfx_COMPUTESHADER  = 1 << 2
+} shaderStage_tgfx;
+typedef int shaderStage_tgfxflag;
 
 typedef enum {
   pipelineType_tgfx_RASTER     = 0,
@@ -462,6 +460,27 @@ typedef enum texture_component_mask_tgfx {
   textureComponentMask_tgfx_ALL, // All possible values if texture's format is known
   textureComponentMask_tgfx_NONE
 } textureComponentMask_tgfx;
+
+typedef enum texture_usage_mask_tgfx {
+  textureUsageMask_tgfx_COPYFROM         = 1,
+  textureUsageMask_tgfx_COPYTO           = 1 << 1,
+  textureUsageMask_tgfx_RENDERATTACHMENT = 1 << 2,
+  textureUsageMask_tgfx_RASTERSAMPLE     = 1 << 3,
+  textureUsageMask_tgfx_RANDOMACCESS     = 1 << 4
+} textureUsageMask_tgfx;
+typedef int textureUsageMask_tgfxflag;
+
+typedef enum buffer_usage_mask_tgfx {
+  bufferUsageMask_tgfx_COPYFROM                = 1,
+  bufferUsageMask_tgfx_COPYTO                  = 1 << 1,
+  bufferUsageMask_tgfx_UNIFORMBUFFER           = 1 << 2,
+  bufferUsageMask_tgfx_STORAGEBUFFER           = 1 << 3,
+  bufferUsageMask_tgfx_VERTEXBUFFER            = 1 << 4,
+  bufferUsageMask_tgfx_INDEXBUFFER             = 1 << 5,
+  bufferUsageMask_tgfx_INDIRECTBUFFER          = 1 << 6,
+  bufferUsageMask_tgfx_accessByPointerInShader = 1 << 7
+} bufferUsageMask_tgfx;
+typedef int bufferUsageMask_tgfxflag;
 
 // CALLBACKS
 

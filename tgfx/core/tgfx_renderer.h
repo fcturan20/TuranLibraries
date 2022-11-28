@@ -115,8 +115,8 @@ typedef struct tgfx_renderer {
   // Extensions: TransferQueueOwnership
   void (*cmdBarrierTexture)(commandBundle_tgfxhnd bndl, unsigned long long key,
                             texture_tgfxhnd texture, image_access_tgfx lastAccess,
-                            image_access_tgfx nextAccess, textureUsageFlag_tgfxhnd lastUsage,
-                            textureUsageFlag_tgfxhnd nextUsage, extension_tgfxlsthnd exts);
+                            image_access_tgfx nextAccess, textureUsageMask_tgfxflag lastUsage,
+                            textureUsageMask_tgfxflag nextUsage, extension_tgfxlsthnd exts);
 
   void (*cmdDispatch)(commandBundle_tgfxhnd bndl, unsigned long long key, uvec3_tgfx dispatchSize);
 } renderer_tgfx;

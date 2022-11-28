@@ -58,7 +58,7 @@ struct SHADERSOURCE_VKOBJ {
     DATA_SIZE   = copyFrom.DATA_SIZE;
   }
   VkShaderModule   Module;
-  shaderstage_tgfx stage;
+  shaderStage_tgfx stage;
   void*            SOURCE_CODE = nullptr;
   unsigned int     DATA_SIZE   = 0;
   gpu_tgfxhnd      m_gpu;
@@ -162,17 +162,12 @@ void vk_destroyVertexAttribLayout(vertexAttributeLayout_tgfxhnd VertexAttributeL
 result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* desc,
                              texture_tgfxhnd* TextureHandle) {
   GPU_VKOBJ*        gpu       = core_vk->getGPUs().getOBJfromHANDLE(i_gpu);
-  VkImageUsageFlags usageFlag = 0;
-  if (VKCONST_isPointerContainVKFLAG) {
-    usageFlag = *( VkImageUsageFlags* )&desc->usage;
-  } else {
-    usageFlag = *( VkImageUsageFlags* )desc->usage;
-  }
+  VkImageUsageFlags usageFlag = vk_findTextureUsageFlagVk(desc->usage);
   if (desc->channelType == texture_channels_tgfx_D24S8 ||
       desc->channelType == texture_channels_tgfx_D32) {
-    usageFlag &= ~(1UL << 4);
+    usageFlag &= ~(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
   } else {
-    usageFlag &= ~(1UL << 5);
+    usageFlag &= ~(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
   }
 
   if (desc->mipCount > std::floor(std::log2(std::max(desc->width, desc->height))) + 1 ||
@@ -255,11 +250,7 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
   VkBuffer           vkBufObj;
   VkBufferCreateInfo ci = {};
   {
-    if (VKCONST_isPointerContainVKFLAG) {
-      ci.usage = *( VkBufferUsageFlags* )&desc->usageFlag;
-    } else {
-      ci.usage = *( VkBufferUsageFlags* )desc->usageFlag;
-    }
+    ci.usage = vk_findBufferUsageFlagVk(desc->usageFlag);
 
     uint32_t queueFamIndexList[VKCONST_MAXQUEUEFAMCOUNT_PERGPU];
     VK_getQueueAndSharingInfos(desc->permittedQueues, nullptr, queueFamIndexList,
@@ -352,10 +343,7 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
   bindngs[dynamicbinding_i].descriptorCount    = desc->ElementCount;
   bindngs[dynamicbinding_i].descriptorType     = vk_findDescTypeVk(desc->DescriptorType);
   bindngs[dynamicbinding_i].pImmutableSamplers = nullptr;
-  if (desc->VisibleStages) {
-    bindngs[dynamicbinding_i].stageFlags = *( VkShaderStageFlags* )&desc->VisibleStages;
-  }
-  bindngs[dynamicbinding_i].stageFlags = GetVkShaderStageFlags_fromTGFXHandle(desc->VisibleStages);
+  bindngs[dynamicbinding_i].stageFlags         = vk_findShaderStageVk(desc->visibleStagesMask);
 
   VkDescriptorSetLayout DSL;
   ThrowIfFailed(vkCreateDescriptorSetLayout(GPU->vk_logical, &ci, nullptr, &DSL),
@@ -473,13 +461,13 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, bindingTableType_tgfxhnd* descs,
   return true;
 }
 
-typedef const void* (*vk_glslangCompileFnc)(shaderstage_tgfx tgfxstage, const void* i_DATA,
+typedef const void* (*vk_glslangCompileFnc)(shaderStage_tgfx tgfxstage, const void* i_DATA,
                                             unsigned int  i_DATA_SIZE,
                                             unsigned int* compiledbinary_datasize);
 vk_glslangCompileFnc VKCONST_GLSLANG_COMPILE_FNC;
 
 result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx language,
-                                   shaderstage_tgfx shaderstage, const void* DATA,
+                                   shaderStage_tgfx shaderstage, const void* DATA,
                                    unsigned int          DATA_SIZE,
                                    shaderSource_tgfxhnd* ShaderSourceHandle) {
   GPU_VKOBJ*   GPU                   = core_vk->getGPUs().getOBJfromHANDLE(gpu);
@@ -567,7 +555,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
         return result_tgfx_FAIL;
       }
       switch (source->stage) {
-        case shaderstage_tgfx_VERTEXSHADER:
+        case shaderStage_tgfx_VERTEXSHADER:
           if (vkSource_vertex) {
             printer(result_tgfx_FAIL,
                     "Link_MaterialType() has failed because there 2 vertex shaders in the list!");
@@ -575,7 +563,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
           }
           vkSource_vertex = source;
           break;
-        case shaderstage_tgfx_FRAGMENTSHADER:
+        case shaderStage_tgfx_FRAGMENTSHADER:
           if (vkSource_fragment) {
             printer(result_tgfx_FAIL,
                     "Link_MaterialType() has failed because there 2 fragment shaders in the list!");
@@ -678,12 +666,12 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
       states[i].blendEnable             = blendState.blendEnabled;
       states[i].colorWriteMask =
         vk_findColorComponentsVk(blendState.blendComponents, desc->colorTextureFormats[i]);
-      states[i].alphaBlendOp        = Find_BlendOp_byGFXBlendMode(blendState.alphaMode);
-      states[i].colorBlendOp        = Find_BlendOp_byGFXBlendMode(blendState.colorMode);
-      states[i].dstAlphaBlendFactor = Find_BlendFactor_byGFXBlendFactor(blendState.dstAlphaFactor);
-      states[i].dstColorBlendFactor = Find_BlendFactor_byGFXBlendFactor(blendState.dstColorFactor);
-      states[i].srcAlphaBlendFactor = Find_BlendFactor_byGFXBlendFactor(blendState.srcAlphaFactor);
-      states[i].srcColorBlendFactor = Find_BlendFactor_byGFXBlendFactor(blendState.srcColorFactor);
+      states[i].alphaBlendOp        = vk_findBlendOpVk(blendState.alphaMode);
+      states[i].colorBlendOp        = vk_findBlendOpVk(blendState.colorMode);
+      states[i].dstAlphaBlendFactor = vk_findBlendFactorVk(blendState.dstAlphaFactor);
+      states[i].dstColorBlendFactor = vk_findBlendFactorVk(blendState.dstColorFactor);
+      states[i].srcAlphaBlendFactor = vk_findBlendFactorVk(blendState.srcAlphaFactor);
+      states[i].srcColorBlendFactor = vk_findBlendFactorVk(blendState.srcColorFactor);
     }
     blendState.pAttachments  = states;
     blendState.logicOpEnable = VK_FALSE;
@@ -782,12 +770,8 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     ci.layout              = layout;
     ci.stageCount          = 2;
     ci.pStages             = STAGEs;
-    ci.basePipelineHandle  = VK_NULL_HANDLE; // Optional
-    ci.basePipelineIndex   = -1;             // Optional
     ci.flags               = VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
     ci.pNext               = &dynCi;
-    ci.renderPass          = VK_NULL_HANDLE;
-    ci.subpass             = 0;
     vk_fillRasterPipelineStateInfo(GPU, &ci, desc, exts);
     ThrowIfFailed(vkCreateGraphicsPipelines(GPU->vk_logical, nullptr, 1, &ci, nullptr, &pipeline),
                   "vkCreateGraphicsPipelines has failed!");

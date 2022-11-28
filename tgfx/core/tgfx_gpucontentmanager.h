@@ -56,7 +56,7 @@ typedef struct tgfx_gpudatamanager {
   /////////////////////////////////////
 
   result_tgfx (*compileShaderSource)(gpu_tgfxhnd gpu, shaderlanguages_tgfx language,
-                                     shaderstage_tgfx shaderstage, const void* DATA,
+                                     shaderStage_tgfx shaderstage, const void* DATA,
                                      unsigned int          DATA_SIZE,
                                      shaderSource_tgfxhnd* ShaderSourceHandle);
   void (*deleteShaderSource)(shaderSource_tgfxhnd ShaderSourceHandle);

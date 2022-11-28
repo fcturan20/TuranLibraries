@@ -118,9 +118,16 @@ void load_plugins() {
   }
 }
 
-gpu_tgfxhnd                gpu;
-tgfx_gpu_description       gpuDesc;
-textureUsageFlag_tgfxhnd   textureAllUsages;
+gpu_tgfxhnd               gpu;
+tgfx_gpu_description      gpuDesc;
+textureUsageMask_tgfxflag textureAllUsages = textureUsageMask_tgfx_COPYFROM |
+                                             textureUsageMask_tgfx_COPYTO |
+                                             textureUsageMask_tgfx_RANDOMACCESS |
+                                             textureUsageMask_tgfx_RASTERSAMPLE |
+                                             textureUsageMask_tgfx_RENDERATTACHMENT,
+                          storageImageUsage = textureUsageMask_tgfx_COPYFROM |
+                                              textureUsageMask_tgfx_COPYTO |
+                                              textureUsageMask_tgfx_RANDOMACCESS;
 gpuQueue_tgfxhnd           allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
 window_tgfxhnd             window;
 tgfx_swapchain_description swpchn_desc;
@@ -165,9 +172,6 @@ void createFirstWindow() {
   }
 
   // Create swapchain (GPU operation) on the window
-  textureAllUsages = tgfx->helpers->createUsageFlag_Texture(false, false, true, false, false);
-  textureUsageFlag_tgfxhnd storageImageUsage =
-    tgfx->helpers->createUsageFlag_Texture(true, true, false, false, true);
   {
     tgfx->helpers->getWindow_GPUSupport(window, gpu, &swapchainSupport);
 
@@ -238,15 +242,20 @@ void createDeviceLocalResources() {
   textureDesc.width                   = 1280;
   textureDesc.mipCount                = 1;
   textureDesc.permittedQueues         = allQueues;
-  textureDesc.usage                   = textureAllUsages;
-  contentManager->createTexture(gpu, &textureDesc, &customDepthRT);
+  textureDesc.usage = textureUsageMask_tgfx_RENDERATTACHMENT | textureUsageMask_tgfx_COPYFROM |
+                      textureUsageMask_tgfx_COPYTO;
+  uvec4_tgfx maxSize                  = {};
+  if(tgfx->helpers->getTextureTypeLimits(textureDesc.dimension, textureDesc.dataOrder,
+                                      textureDesc.channelType, textureDesc.usage, gpu, &maxSize.x, &maxSize.y, &maxSize.z, &maxSize.w)) {
+    contentManager->createTexture(gpu, &textureDesc, &customDepthRT);
+  }
 
   bufferDescription_tgfx bufferDesc = {};
   bufferDesc.dataSize               = 1650;
   bufferDesc.exts                   = nullptr;
   bufferDesc.permittedQueues        = allQueues;
-  bufferDesc.usageFlag =
-    tgfx->helpers->createUsageFlag_Buffer(true, true, false, true, false, false, false, false);
+  bufferDesc.usageFlag              = bufferUsageMask_tgfx_COPYFROM | bufferUsageMask_tgfx_COPYTO |
+                         bufferUsageMask_tgfx_STORAGEBUFFER;
   contentManager->createBuffer(gpu, &bufferDesc, &firstBuffer);
 
   heapRequirementsInfo_tgfx firstTextureReqs = {};
@@ -280,7 +289,7 @@ void compileShadersandPipelines() {
       filesys->funcs->read_textfile(SOURCE_DIR "/shaders/firstComputeShader.comp");
     shaderSource_tgfxhnd firstComputeShader = nullptr;
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
-                                        shaderstage_tgfx_COMPUTESHADER, ( void* )shaderText,
+                                        shaderStage_tgfx_COMPUTESHADER, ( void* )shaderText,
                                         strlen(shaderText), &firstComputeShader);
 
     // Create binding table type
@@ -289,9 +298,8 @@ void compileShadersandPipelines() {
       desc.DescriptorType                 = shaderdescriptortype_tgfx_BUFFER;
       desc.ElementCount                   = 1;
       desc.SttcSmplrs                     = nullptr;
-      desc.VisibleStages = tgfx->helpers->createShaderStageFlag(3, shaderstage_tgfx_COMPUTESHADER,
-                                                                shaderstage_tgfx_VERTEXSHADER,
-                                                                shaderstage_tgfx_FRAGMENTSHADER);
+      desc.visibleStagesMask = shaderStage_tgfx_COMPUTESHADER | shaderStage_tgfx_VERTEXSHADER |
+                               shaderStage_tgfx_FRAGMENTSHADER;
 
       contentManager->createBindingTableType(gpu, &desc, &bindingType);
     }
@@ -309,7 +317,7 @@ void compileShadersandPipelines() {
       filesys->funcs->read_textfile(SOURCE_DIR "/shaders/firstShader.vert");
     shaderSource_tgfxhnd& firstVertShader = shaderSources[0];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
-                                        shaderstage_tgfx_VERTEXSHADER, ( void* )vertShaderText,
+                                        shaderStage_tgfx_VERTEXSHADER, ( void* )vertShaderText,
                                         strlen(vertShaderText),
                                         // vertShaderBin, vertDataSize,
                                         &firstVertShader);
@@ -318,7 +326,7 @@ void compileShadersandPipelines() {
       filesys->funcs->read_textfile(SOURCE_DIR "/shaders/firstShader.frag");
     shaderSource_tgfxhnd& firstFragShader = shaderSources[1];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
-                                        shaderstage_tgfx_FRAGMENTSHADER, ( void* )fragShaderText,
+                                        shaderStage_tgfx_FRAGMENTSHADER, ( void* )fragShaderText,
                                         strlen(fragShaderText),
                                         // fragShaderBin, fragDataSize,
                                         &firstFragShader);
@@ -330,14 +338,14 @@ void compileShadersandPipelines() {
     stateDesc.depthStencilState.depthTestEnabled  = true;
     stateDesc.depthStencilState.depthWriteEnabled = true;
     stateDesc.depthStencilState.depthCompare      = compare_tgfx_ALWAYS;
-    stateDesc.blendStates[0].blendEnabled = true;
-    stateDesc.blendStates[0].blendComponents = textureComponentMask_tgfx_ALL;
-    stateDesc.blendStates[0].alphaMode = blendmode_tgfx_MAX;
-    stateDesc.blendStates[0].colorMode = blendmode_tgfx_ADDITIVE;
-    stateDesc.blendStates[0].dstAlphaFactor = blendfactor_tgfx_DST_ALPHA;
-    stateDesc.blendStates[0].srcAlphaFactor = blendfactor_tgfx_SRC_ALPHA;
-    stateDesc.blendStates[0].dstColorFactor = blendfactor_tgfx_DST_COLOR;
-    stateDesc.blendStates[0].srcColorFactor = blendfactor_tgfx_SRC_COLOR;
+    stateDesc.blendStates[0].blendEnabled         = true;
+    stateDesc.blendStates[0].blendComponents      = textureComponentMask_tgfx_ALL;
+    stateDesc.blendStates[0].alphaMode            = blendmode_tgfx_MAX;
+    stateDesc.blendStates[0].colorMode            = blendmode_tgfx_ADDITIVE;
+    stateDesc.blendStates[0].dstAlphaFactor       = blendfactor_tgfx_DST_ALPHA;
+    stateDesc.blendStates[0].srcAlphaFactor       = blendfactor_tgfx_SRC_ALPHA;
+    stateDesc.blendStates[0].dstColorFactor       = blendfactor_tgfx_DST_COLOR;
+    stateDesc.blendStates[0].srcColorFactor       = blendfactor_tgfx_SRC_COLOR;
     rasterPipelineDescription_tgfx pipelineDesc   = {};
     pipelineDesc.colorTextureFormats[0]           = swpchn_desc.channels;
     pipelineDesc.depthStencilTextureFormat        = depthRTFormat;

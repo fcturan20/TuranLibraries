@@ -379,8 +379,8 @@ void vk_cmdDrawIndexedIndirect(commandBundle_tgfxhnd bundle, unsigned long long 
                                extension_tgfxlsthnd exts) {}
 void vk_cmdBarrierTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
                           texture_tgfxhnd i_texture, image_access_tgfx lastAccess,
-                          image_access_tgfx nextAccess, textureUsageFlag_tgfxhnd lastUsage,
-                          textureUsageFlag_tgfxhnd nextUsage, extension_tgfxlsthnd exts) {
+                          image_access_tgfx nextAccess, textureUsageMask_tgfxflag lastUsage,
+                          textureUsageMask_tgfxflag nextUsage, extension_tgfxlsthnd exts) {
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(bndl);
   auto*            cmdBar = vk_createCmdStruct<vkCmdStruct_barrierTexture>(&bundle->m_cmds[key]);
   cmdBar->m_imBar.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;

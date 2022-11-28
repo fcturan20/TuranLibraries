@@ -383,7 +383,7 @@ inline VkStencilOp vk_findStencilOpVk(stencilop_tgfx op) {
       return VK_STENCIL_OP_KEEP;
   }
 }
-inline VkBlendOp Find_BlendOp_byGFXBlendMode(blendmode_tgfx mode) {
+inline VkBlendOp vk_findBlendOpVk(blendmode_tgfx mode) {
   switch (mode) {
     case blendmode_tgfx_ADDITIVE: return VK_BLEND_OP_ADD;
     case blendmode_tgfx_SUBTRACTIVE: return VK_BLEND_OP_SUBTRACT;
@@ -396,7 +396,7 @@ inline VkBlendOp Find_BlendOp_byGFXBlendMode(blendmode_tgfx mode) {
       return VK_BLEND_OP_MAX_ENUM;
   }
 }
-inline VkBlendFactor Find_BlendFactor_byGFXBlendFactor(blendfactor_tgfx factor) {
+inline VkBlendFactor vk_findBlendFactorVk(blendfactor_tgfx factor) {
   switch (factor) {
     case blendfactor_tgfx_ONE: return VK_BLEND_FACTOR_ONE;
     case blendfactor_tgfx_ZERO: return VK_BLEND_FACTOR_ZERO;
@@ -819,7 +819,7 @@ inline VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls) 
   }
 }
 inline VkColorComponentFlags vk_findColorComponentsVk(textureComponentMask_tgfx mask,
-                                                      textureChannels_tgfx format) {
+                                                      textureChannels_tgfx      format) {
   if (mask == textureComponentMask_tgfx_ALL && format != texture_channels_tgfx_UNDEF) {
     return vk_findColorWriteMask(format);
   }
@@ -843,6 +843,13 @@ inline colorspace_tgfx vk_findColorSpaceTgfx(VkColorSpaceKHR cs) {
       return ( colorspace_tgfx )UINT32_MAX;
   }
 }
+inline VkShaderStageFlags vk_findShaderStageVk(shaderStage_tgfxflag mask) {
+  VkShaderStageFlags flag = {};
+  flag |= (mask & shaderStage_tgfx_VERTEXSHADER) ? VK_SHADER_STAGE_VERTEX_BIT : 0;
+  flag |= (mask & shaderStage_tgfx_FRAGMENTSHADER) ? VK_SHADER_STAGE_FRAGMENT_BIT : 0;
+  flag |= (mask & shaderStage_tgfx_COMPUTESHADER) ? VK_SHADER_STAGE_COMPUTE_BIT : 0;
+  return flag;
+}
 inline gpu_type_tgfx vk_findGPUTypeTgfx(VkPhysicalDeviceType t) {
   switch (t) {
     case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return gpu_type_tgfx_DISCRETE_GPU;
@@ -859,4 +866,38 @@ inline VkPipelineBindPoint vk_findPipelineBindPoint(pipelineType_tgfx type) {
       printer(result_tgfx_FAIL, "vk_findPipelineBindPoint() doesn't support this pipeline!");
       return VK_PIPELINE_BIND_POINT_MAX_ENUM;
   }
+}
+inline VkBufferUsageFlags vk_findBufferUsageFlagVk(bufferUsageMask_tgfxflag mask) {
+  VkBufferUsageFlags flag = {};
+  flag |= (mask & bufferUsageMask_tgfx_COPYFROM) ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0;
+  flag |= (mask & bufferUsageMask_tgfx_COPYTO) ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0;
+  flag |= (mask & bufferUsageMask_tgfx_INDEXBUFFER) ? VK_BUFFER_USAGE_INDEX_BUFFER_BIT : 0;
+  flag |= (mask & bufferUsageMask_tgfx_INDIRECTBUFFER) ? VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT : 0;
+  flag |= (mask & bufferUsageMask_tgfx_STORAGEBUFFER) ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : 0;
+  flag |= (mask & bufferUsageMask_tgfx_UNIFORMBUFFER) ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT : 0;
+  flag |= (mask & bufferUsageMask_tgfx_VERTEXBUFFER) ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : 0;
+  return flag;
+}
+inline VkImageUsageFlags vk_findTextureUsageFlagVk(textureUsageMask_tgfxflag mask) {
+  VkImageUsageFlags flag = {};
+  flag |= (mask & textureUsageMask_tgfx_COPYFROM) ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0;
+  flag |= (mask & textureUsageMask_tgfx_COPYTO) ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0;
+  flag |= (mask & textureUsageMask_tgfx_RANDOMACCESS) ? VK_IMAGE_USAGE_STORAGE_BIT : 0;
+  flag |= (mask & textureUsageMask_tgfx_RASTERSAMPLE) ? VK_IMAGE_USAGE_SAMPLED_BIT : 0;
+  flag |= (mask & textureUsageMask_tgfx_RENDERATTACHMENT)
+            ? (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+            : 0;
+  return flag;
+}
+inline textureUsageMask_tgfxflag vk_findTextureUsageFlagTgfx(VkImageUsageFlags mask) {
+  textureUsageMask_tgfxflag flag = {};
+  flag |= (mask & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) ? textureUsageMask_tgfx_COPYFROM : 0;
+  flag |= (mask & VK_IMAGE_USAGE_TRANSFER_DST_BIT) ? textureUsageMask_tgfx_COPYTO : 0;
+  flag |= (mask & VK_IMAGE_USAGE_STORAGE_BIT) ? textureUsageMask_tgfx_RANDOMACCESS : 0;
+  flag |= (mask & VK_IMAGE_USAGE_SAMPLED_BIT) ? textureUsageMask_tgfx_RASTERSAMPLE : 0;
+  flag |=
+    (mask & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))
+      ? textureUsageMask_tgfx_RENDERATTACHMENT
+      : 0;
+  return flag;
 }

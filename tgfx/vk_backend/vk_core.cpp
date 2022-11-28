@@ -743,7 +743,7 @@ result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
 
   VkSurfaceCapabilitiesKHR caps;
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(GPU->vk_physical, window->vk_surface, &caps);
-  info->usageFlag = Get_TGFXTextureUsageFlag_byVk(caps.supportedUsageFlags);
+  info->usageFlag = vk_findTextureUsageFlagTgfx(caps.supportedUsageFlags);
 
   uint32_t           formatCount = 0;
   VkSurfaceFormatKHR formats[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];

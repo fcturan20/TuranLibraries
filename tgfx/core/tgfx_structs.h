@@ -63,27 +63,27 @@ typedef struct tgfx_window_description {
 
 typedef enum windowpresentation_tgfx windowpresentation_tgfx;
 typedef struct tgfx_swapchain_description {
-  window_tgfxhnd           window;
-  windowpresentation_tgfx  presentationMode;
-  windowcomposition_tgfx   composition;
-  colorspace_tgfx          colorSpace;
-  textureChannels_tgfx     channels;
-  textureUsageFlag_tgfxhnd swapchainUsage;
-  gpuQueue_tgfxlsthnd      permittedQueues;
-  unsigned int             imageCount;
+  window_tgfxhnd            window;
+  windowpresentation_tgfx   presentationMode;
+  windowcomposition_tgfx    composition;
+  colorspace_tgfx           colorSpace;
+  textureChannels_tgfx      channels;
+  textureUsageMask_tgfxflag swapchainUsage;
+  gpuQueue_tgfxlsthnd       permittedQueues;
+  unsigned int              imageCount;
 } swapchainDescription_tgfx;
 
 #define TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT 24
 #define TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT 64
 #define TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE 6
 typedef struct tgfx_window_gpu_support {
-  unsigned int             maxImageCount;
-  uvec2_tgfx               minExtent, maxExtent;
-  textureUsageFlag_tgfxhnd usageFlag;
-  windowpresentation_tgfx  presentationModes[TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE];
-  colorspace_tgfx          colorSpace[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
-  textureChannels_tgfx     channels[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
-  gpuQueue_tgfxhnd         queues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT];
+  unsigned int              maxImageCount;
+  uvec2_tgfx                minExtent, maxExtent;
+  textureUsageMask_tgfxflag usageFlag;
+  windowpresentation_tgfx   presentationModes[TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE];
+  colorspace_tgfx           colorSpace[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
+  textureChannels_tgfx      channels[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
+  gpuQueue_tgfxhnd          queues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT];
 } windowGPUsupport_tgfx;
 
 typedef struct tgfx_sampler_description {
@@ -95,26 +95,26 @@ typedef struct tgfx_sampler_description {
 } samplerDescription_tgfx;
 
 typedef struct tgfx_texture_description {
-  texture_dimensions_tgfx  dimension;
-  unsigned int             width, height;
-  textureChannels_tgfx     channelType;
-  unsigned char            mipCount;
-  textureUsageFlag_tgfxhnd usage;
-  textureOrder_tgfx        dataOrder;
-  gpuQueue_tgfxlsthnd      permittedQueues;
+  texture_dimensions_tgfx   dimension;
+  unsigned int              width, height;
+  textureChannels_tgfx      channelType;
+  unsigned char             mipCount;
+  textureUsageMask_tgfxflag usage;
+  textureOrder_tgfx         dataOrder;
+  gpuQueue_tgfxlsthnd       permittedQueues;
 } textureDescription_tgfx;
 
 typedef struct tgfx_buffer_description {
-  unsigned int            dataSize;
-  bufferUsageFlag_tgfxhnd usageFlag;
-  gpuQueue_tgfxlsthnd     permittedQueues;
-  extension_tgfxlsthnd    exts;
+  unsigned int             dataSize;
+  bufferUsageMask_tgfxflag usageFlag;
+  gpuQueue_tgfxlsthnd      permittedQueues;
+  extension_tgfxlsthnd     exts;
 } bufferDescription_tgfx;
 
 typedef struct tgfx_binding_table_description {
   shaderdescriptortype_tgfx DescriptorType;
   unsigned int              ElementCount;
-  shaderStageFlag_tgfxhnd   VisibleStages;
+  shaderStage_tgfxflag      visibleStagesMask;
   sampler_tgfxlsthnd        SttcSmplrs;
 } bindingTableDescription_tgfx;
 

@@ -114,18 +114,18 @@ void start() {
   glslToSpirvLimitTable.limits.generalVariableIndexing              = 1;
   glslToSpirvLimitTable.limits.generalConstantMatrixVectorIndexing  = 1;
 }
-static EShLanguage Find_EShShaderStage_byTGFXShaderStage(shaderstage_tgfx stage) {
+static EShLanguage Find_EShShaderStage_byTGFXShaderStage(shaderStage_tgfx stage) {
   switch (stage) {
-    case shaderstage_tgfx_VERTEXSHADER: return EShLangVertex;
-    case shaderstage_tgfx_FRAGMENTSHADER: return EShLangFragment;
-    case shaderstage_tgfx_COMPUTESHADER: return EShLangCompute;
+    case shaderStage_tgfx_VERTEXSHADER: return EShLangVertex;
+    case shaderStage_tgfx_FRAGMENTSHADER: return EShLangFragment;
+    case shaderStage_tgfx_COMPUTESHADER: return EShLangCompute;
     default:
       assert(0 && "Find_EShShaderStage_byTGFXShaderStage() doesn't support this type of stage!");
       return EShLangVertex;
   }
 }
 
-const void* compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, const void* i_DATA,
+const void* compile_shadersource_withglslang(shaderStage_tgfx tgfxstage, const void* i_DATA,
                                              unsigned int  i_DATA_SIZE,
                                              unsigned int* compiledbinary_datasize) {
   EShLanguage       stage = Find_EShShaderStage_byTGFXShaderStage(tgfxstage);
@@ -178,7 +178,7 @@ const void* compile_shadersource_withglslang(shaderstage_tgfx tgfxstage, const v
 }
 
 // If compile fails, *compiledbinary_datasize is set to 0 and function returns log string
-FUNC_DLIB_EXPORT const void* glslangCompile(shaderstage_tgfx tgfxstage, void* i_DATA,
+FUNC_DLIB_EXPORT const void* glslangCompile(shaderStage_tgfx tgfxstage, void* i_DATA,
                                             unsigned int  i_DATA_SIZE,
                                             unsigned int* compiledbinary_datasize) {
   return compile_shadersource_withglslang(tgfxstage, i_DATA, i_DATA_SIZE, compiledbinary_datasize);

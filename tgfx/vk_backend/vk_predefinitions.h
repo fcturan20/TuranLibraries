@@ -2,11 +2,11 @@
 // Vulkan Libs
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <assert.h>
 #include <stdint.h>
 #include <tgfx_core.h>
 #include <tgfx_forwarddeclarations.h>
 #include <virtualmemorysys_tapi.h>
-#include <assert.h>
 
 #include <atomic>
 #include <functional>
@@ -95,7 +95,7 @@ inline void assert_vk(bool status) {
     assert(0);
   }
 }
-void        pNext_addToLast(void* targetStruct, void* attachStruct);
+void pNext_addToLast(void* targetStruct, void* attachStruct);
 
 #define VK_PRIM_MIN(primType) std::numeric_limits<primType>::min()
 #define VK_PRIM_MAX(primType) std::numeric_limits<primType>::max()
@@ -103,7 +103,11 @@ void        pNext_addToLast(void* targetStruct, void* attachStruct);
 // Use this pre-processor in .cpp files to load extension functions
 // Backend is maintainly on Vulkan 1.0 because most of the extensions can be used in it
 // Search "Requires support for Vulkan 1.*" in VK Specification to learn minimum API Version
-#define loadVkExtFunc(funcName)                                                               \
+#define declareVkExtFunc(funcName)               \
+  PFN_##funcName        funcName##_loadVkFunc(); \
+  extern PFN_##funcName funcName##_loaded;
+
+#define defineVkExtFunc(funcName)                                                             \
   PFN_##funcName funcName##_loadVkFunc() {                                                    \
     auto func = ( PFN_##funcName )vkGetInstanceProcAddr(VKGLOBAL_INSTANCE, #funcName);        \
     if (func == nullptr) {                                                                    \
@@ -114,6 +118,8 @@ void        pNext_addToLast(void* targetStruct, void* attachStruct);
     return func;                                                                              \
   };                                                                                          \
   PFN_##funcName funcName##_loaded = nullptr;
+
+#define loadVkExtFunc(funcName) funcName##_loaded = funcName##_loadVkFunc()
 
 // <------------------------------------------------------------------------------------>
 //		CONSTANTS
@@ -188,7 +194,8 @@ void* operator new[](size_t size);
 void* operator new(size_t size, vk_virmem::dynamicmem* mem);
 void* operator new[](size_t size, vk_virmem::dynamicmem* mem);
 
-#define VK_MEMOFFSET_TO_POINTER(offset) (( void* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + (size_t)offset))
+#define VK_MEMOFFSET_TO_POINTER(offset) \
+  (( void* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + ( size_t )offset))
 #define VK_POINTER_TO_MEMOFFSET(ptr) \
   (uint32_t)(uintptr_t(ptr) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN))
 #define VK_ALLOCATE_AND_GETPTR(dynamicmem, size) \

@@ -50,7 +50,6 @@ typedef struct tgfx_stencilsettings_data*   stencilcnfg_tgfxnd;
 typedef struct tgfx_depthsettings_data*     depthsettings_tgfxhnd;
 typedef struct tgfx_memorytype_data*        memorytype_tgfx_handle;
 typedef struct tgfx_bindingtypeinfo_data*   bindingtypeinfo_tgfx_handle;
-typedef struct tgfx_blendinginfo_data*      blendinginfo_tgfx_handle;
 typedef struct tgfx_buffereddrawcall*       buffereddrawcall_tgfx_handle;
 typedef struct tgfx_buffereddispatchcall*   buffereddispatchcall_tgfx_handle;
 typedef struct tgfx_buffer_usage_flag_data* bufferUsageFlag_tgfxhnd;
@@ -65,7 +64,6 @@ typedef RTSlotDescription_tgfxhnd* RTSlotDescription_tgfxlsthnd;
 typedef rtslotusage_tgfx_handle*   RTSlotUsage_tgfxlsthnd;
 typedef memorytype_tgfx_handle*    memorytype_tgfxlsthnd;
 typedef shaderSource_tgfxhnd*      shaderSource_tgfxlsthnd;
-typedef blendinginfo_tgfx_handle*  blendingInfo_tgfxlsthnd;
 typedef sampler_tgfxhnd*           sampler_tgfxlsthnd;
 typedef bindingTableType_tgfxhnd*  bindingTableType_tgfxlsthnd;
 typedef bindingTable_tgfxhnd*      bindingTable_tgfxlsthnd;
@@ -169,13 +167,13 @@ typedef enum {
 } rasterpassStore_tgfx;
 
 typedef enum {
-  depthtest_tgfx_ALWAYS,
-  depthtest_tgfx_NEVER,
-  depthtest_tgfx_LESS,
-  depthtest_tgfx_LEQUAL,
-  depthtest_tgfx_GREATER,
-  depthtest_tgfx_GEQUAL
-} depthtest_tgfx;
+  compare_tgfx_ALWAYS,
+  compare_tgfx_NEVER,
+  compare_tgfx_LESS,
+  compare_tgfx_LEQUAL,
+  compare_tgfx_GREATER,
+  compare_tgfx_GEQUAL
+} compare_tgfx;
 
 typedef enum {
   depthmode_tgfx_READ_WRITE,
@@ -184,18 +182,6 @@ typedef enum {
 } depthmode_tgfx;
 
 typedef enum { cullmode_tgfx_OFF, cullmode_tgfx_BACK, cullmode_tgfx_FRONT } cullmode_tgfx;
-
-typedef enum {
-  stencilcompare_tgfx_OFF = 0,
-  stencilcompare_tgfx_NEVER_PASS,
-  stencilcompare_tgfx_LESS_PASS,
-  stencilcompare_tgfx_LESS_OR_EQUAL_PASS,
-  stencilcompare_tgfx_EQUAL_PASS,
-  stencilcompare_tgfx_NOTEQUAL_PASS,
-  stencilcompare_tgfx_GREATER_OR_EQUAL_PASS,
-  stencilcompare_tgfx_GREATER_PASS,
-  stencilcompare_tgfx_ALWAYS_PASS,
-} stencilcompare_tgfx;
 
 typedef enum {
   stencilop_tgfx_DONT_CHANGE = 0,
@@ -224,18 +210,6 @@ typedef enum {
   blendfactor_tgfx_CONST_ALPHA,
   blendfactor_tgfx_CONST_1MINUSALPHA
 } blendfactor_tgfx;
-
-typedef enum {
-  colorcomponents_tgfx_NONE = 0,
-  colorcomponents_tgfx_ALL  = 1,
-  colorcomponents_tgfx_R    = 2,
-  colorcomponents_tgfx_G    = 3,
-  colorcomponents_tgfx_B    = 4,
-  colorcomponents_tgfx_RG   = 5,
-  colorcomponents_tgfx_GB   = 6,
-  colorcomponents_tgfx_RB   = 7,
-  colorcomponents_tgfx_RGB  = 8,
-} colorcomponents_tgfx;
 
 typedef enum {
   blendmode_tgfx_ADDITIVE,
@@ -463,6 +437,31 @@ typedef enum windowpresentation_tgfx {
   windowpresentation_tgfx_IMMEDIATE,
   windowpresentation_tgfx_MAILBOX
 } windowpresentation_tgfx;
+
+typedef enum texture_component_mask_tgfx {
+  textureComponentMask_tgfx_R  = 1,
+  textureComponentMask_tgfx_G  = 1 << 1,
+  textureComponentMask_tgfx_B  = 1 << 2,
+  textureComponentMask_tgfx_A  = 1 << 3,
+  textureComponentMask_tgfx_RG = textureComponentMask_tgfx_R | textureComponentMask_tgfx_G,
+  textureComponentMask_tgfx_RB = textureComponentMask_tgfx_R | textureComponentMask_tgfx_B,
+  textureComponentMask_tgfx_RA = textureComponentMask_tgfx_R | textureComponentMask_tgfx_A,
+  textureComponentMask_tgfx_GB = textureComponentMask_tgfx_G | textureComponentMask_tgfx_B,
+  textureComponentMask_tgfx_GA = textureComponentMask_tgfx_G | textureComponentMask_tgfx_A,
+  textureComponentMask_tgfx_BA = textureComponentMask_tgfx_B | textureComponentMask_tgfx_A,
+  textureComponentMask_tgfx_RGB =
+    textureComponentMask_tgfx_R | textureComponentMask_tgfx_G | textureComponentMask_tgfx_B,
+  textureComponentMask_tgfx_RGA =
+    textureComponentMask_tgfx_R | textureComponentMask_tgfx_G | textureComponentMask_tgfx_A,
+  textureComponentMask_tgfx_RBA =
+    textureComponentMask_tgfx_R | textureComponentMask_tgfx_B | textureComponentMask_tgfx_A,
+  textureComponentMask_tgfx_GBA =
+    textureComponentMask_tgfx_G | textureComponentMask_tgfx_B | textureComponentMask_tgfx_A,
+  textureComponentMask_tgfx_RGBA = textureComponentMask_tgfx_R | textureComponentMask_tgfx_G |
+                                   textureComponentMask_tgfx_B | textureComponentMask_tgfx_A,
+  textureComponentMask_tgfx_ALL, // All possible values if texture's format is known
+  textureComponentMask_tgfx_NONE
+} textureComponentMask_tgfx;
 
 // CALLBACKS
 

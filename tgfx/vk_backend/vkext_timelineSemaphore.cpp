@@ -2,7 +2,13 @@
 
 #include "vk_core.h"
 #include "vk_queue.h"
-loadVkExtFunc(vkWaitSemaphoresKHR);
+
+declareVkExtFunc(vkWaitSemaphoresKHR);
+declareVkExtFunc(vkGetSemaphoreCounterValueKHR);
+declareVkExtFunc(vkSignalSemaphoreKHR);
+defineVkExtFunc(vkWaitSemaphoresKHR);
+defineVkExtFunc(vkGetSemaphoreCounterValueKHR);
+defineVkExtFunc(vkSignalSemaphoreKHR);
 
 vkext_timelineSemaphore::vkext_timelineSemaphore(GPU_VKOBJ* gpu)
   : vkext_interface(gpu, &props, &features) {
@@ -78,7 +84,6 @@ void vk_createSubmit_FenceWaitSignals(
   submit->vk_submit.pWaitDstStageMask  = vk_waitDstStageMask;
 }
 
-loadVkExtFunc(vkGetSemaphoreCounterValueKHR);
 #define findGPUfromFence(i_fence)                     \
   VKOBJHANDLE fenceHnd = *( VKOBJHANDLE* )&##i_fence; \
   GPU_VKOBJ*  gpu      = core_vk->getGPUs()[fenceHnd.EXTRA_FLAGs]
@@ -94,7 +99,6 @@ result_tgfx vk_getFenceValue(fence_tgfxhnd i_fence, unsigned long long* value) {
     "Failed to get fence value!", result_tgfx_FAIL);
   return result_tgfx_SUCCESS;
 }
-loadVkExtFunc(vkSignalSemaphoreKHR);
 result_tgfx vk_setFenceValue(fence_tgfxhnd i_fence, unsigned long long value) {
   findGPUfromFence(i_fence);
   getTimelineSemaphoreEXT(gpu, ext);
@@ -117,9 +121,9 @@ void vkext_timelineSemaphore::inspect() {
   }
 
   m_gpu->ext()->m_activeDevExtNames.push_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
-  vkWaitSemaphoresKHR_loaded           = vkWaitSemaphoresKHR_loadVkFunc();
-  vkGetSemaphoreCounterValueKHR_loaded = vkGetSemaphoreCounterValueKHR_loadVkFunc();
-  vkSignalSemaphoreKHR_loaded          = vkSignalSemaphoreKHR_loadVkFunc();
+  loadVkExtFunc(vkWaitSemaphoresKHR);
+  loadVkExtFunc(vkGetSemaphoreCounterValueKHR);
+  loadVkExtFunc(vkSignalSemaphoreKHR);
 }
 
 void vkext_timelineSemaphore::manage(VkStructureType structType, void* structPtr,

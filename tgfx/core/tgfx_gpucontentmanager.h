@@ -60,9 +60,7 @@ typedef struct tgfx_gpudatamanager {
                                      unsigned int          DATA_SIZE,
                                      shaderSource_tgfxhnd* ShaderSourceHandle);
   void (*deleteShaderSource)(shaderSource_tgfxhnd ShaderSourceHandle);
-  // AttribLayout can be NULL if GPU supports dynamic vertex buffer layout
-  // All objects should be created from the same GPU
-  // Extensions: CallBufferInfo
+  // Extensions: CallBufferInfo, Subpass, StaticRasterState
   result_tgfx (*createRasterPipeline)(const rasterPipelineDescription_tgfx* desc,
                                       extension_tgfxlsthnd exts, pipeline_tgfxhnd* hnd);
   // Extensions: Dynamic States, CallBufferInfo, Specialization Constants

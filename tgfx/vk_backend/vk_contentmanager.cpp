@@ -15,6 +15,7 @@
 #include "vk_queue.h"
 #include "vk_renderer.h"
 #include "vk_resource.h"
+#include "vkext_dynamicStates.h"
 
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_CONTENTMANAGER = nullptr;
 
@@ -604,52 +605,50 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     fragmentStage_ci.pName  = "main";
   }
 
-  VkPipelineVertexInputStateCreateInfo VertexInputState_ci = {};
+  VkPipelineVertexInputStateCreateInfo vertexInputState = {};
   {
-    VertexInputState_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     if (desc->attribLayout) {
       VERTEXATTRIBLAYOUT_VKOBJ* LAYOUT =
         hidden->vertexattributelayouts.getOBJfromHANDLE(desc->attribLayout);
-      VertexInputState_ci.pVertexBindingDescriptions      = &LAYOUT->BindingDesc;
-      VertexInputState_ci.vertexBindingDescriptionCount   = 1;
-      VertexInputState_ci.pVertexAttributeDescriptions    = LAYOUT->AttribDescs;
-      VertexInputState_ci.vertexAttributeDescriptionCount = LAYOUT->AttribDesc_Count;
+      vertexInputState.pVertexBindingDescriptions      = &LAYOUT->BindingDesc;
+      vertexInputState.vertexBindingDescriptionCount   = 1;
+      vertexInputState.pVertexAttributeDescriptions    = LAYOUT->AttribDescs;
+      vertexInputState.vertexAttributeDescriptionCount = LAYOUT->AttribDesc_Count;
     }
   }
 
-  VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
+  VkPipelineInputAssemblyStateCreateInfo IAState = {};
   {
-    InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    InputAssemblyState.topology =
-      Find_PrimitiveTopology_byGFXVertexListType(desc->mainStates->topology);
-    InputAssemblyState.primitiveRestartEnable = false;
-    InputAssemblyState.flags                  = 0;
-    InputAssemblyState.pNext                  = nullptr;
+    IAState.sType    = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    IAState.topology = Find_PrimitiveTopology_byGFXVertexListType(desc->mainStates->topology);
+    IAState.primitiveRestartEnable = false;
+    IAState.flags                  = 0;
+    IAState.pNext                  = nullptr;
   }
 
-  VkPipelineViewportStateCreateInfo RenderViewportState = {};
-  RenderViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  VkPipelineViewportStateCreateInfo viewportState = {};
+  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
   {
     VkRect2D   vk_scissors[VKCONST_MAXVIEWPORTCOUNT];
     VkViewport vk_viewports[VKCONST_MAXVIEWPORTCOUNT];
-    RenderViewportState.viewportCount = 1;
-    RenderViewportState.scissorCount  = 1;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount  = 1;
   }
-  VkPipelineRasterizationStateCreateInfo RasterizationState = {};
+  VkPipelineRasterizationStateCreateInfo rasterState = {};
   {
-    RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    RasterizationState.polygonMode =
-      Find_PolygonMode_byGFXPolygonMode(desc->mainStates->polygonmode);
-    RasterizationState.cullMode                = vk_findCullModeVk(desc->mainStates->culling);
-    RasterizationState.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    RasterizationState.lineWidth               = 1.0f;
-    RasterizationState.depthClampEnable        = VK_FALSE;
-    RasterizationState.rasterizerDiscardEnable = VK_FALSE;
+    rasterState.sType            = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterState.polygonMode      = vk_findPolygonModeVk(desc->mainStates->polygonmode);
+    rasterState.cullMode         = vk_findCullModeVk(desc->mainStates->culling);
+    rasterState.frontFace        = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterState.lineWidth        = 1.0f;
+    rasterState.depthClampEnable = VK_FALSE;
+    rasterState.rasterizerDiscardEnable = VK_FALSE;
 
-    RasterizationState.depthBiasEnable         = VK_FALSE;
-    RasterizationState.depthBiasClamp          = 0.0f;
-    RasterizationState.depthBiasConstantFactor = 0.0f;
-    RasterizationState.depthBiasSlopeFactor    = 0.0f;
+    rasterState.depthBiasEnable         = VK_FALSE;
+    rasterState.depthBiasClamp          = 0.0f;
+    rasterState.depthBiasConstantFactor = 0.0f;
+    rasterState.depthBiasSlopeFactor    = 0.0f;
   }
 
   // MSAA isn't supported for now
@@ -665,39 +664,43 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
   }
 
   // Blending isn't supported for now
-  VkPipelineColorBlendStateCreateInfo Pipeline_ColorBlendState                        = {};
+  VkPipelineColorBlendStateCreateInfo blendState                                      = {};
   VkPipelineColorBlendAttachmentState states[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
   {
-    Pipeline_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    Pipeline_ColorBlendState.attachmentCount = 1;
-    for (uint32_t i = 0; i < TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT; i++) {
-      states[i].blendEnable    = VK_FALSE;
-      states[i].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                 VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    while (blendState.attachmentCount <= TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT &&
+           desc->colorTextureFormats[blendState.attachmentCount] != texture_channels_tgfx_UNDEF &&
+           desc->colorTextureFormats[blendState.attachmentCount] != texture_channels_tgfx_UNDEF2) {
+      blendState.attachmentCount++;
     }
-    Pipeline_ColorBlendState.pAttachments      = states;
-    Pipeline_ColorBlendState.blendConstants[0] = 0.0f;
-    Pipeline_ColorBlendState.blendConstants[1] = 0.0f;
-    Pipeline_ColorBlendState.blendConstants[2] = 0.0f;
-    Pipeline_ColorBlendState.blendConstants[3] = 0.0f;
-    Pipeline_ColorBlendState.logicOpEnable     = VK_FALSE;
-    Pipeline_ColorBlendState.logicOp           = VK_LOGIC_OP_COPY;
+    for (uint32_t i = 0; i < TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT; i++) {
+      const blendState_tgfx& blendState = desc->mainStates->blendStates[i];
+      states[i].blendEnable             = blendState.blendEnabled;
+      states[i].colorWriteMask =
+        vk_findColorComponentsVk(blendState.blendComponents, desc->colorTextureFormats[i]);
+      states[i].alphaBlendOp        = Find_BlendOp_byGFXBlendMode(blendState.alphaMode);
+      states[i].colorBlendOp        = Find_BlendOp_byGFXBlendMode(blendState.colorMode);
+      states[i].dstAlphaBlendFactor = Find_BlendFactor_byGFXBlendFactor(blendState.dstAlphaFactor);
+      states[i].dstColorBlendFactor = Find_BlendFactor_byGFXBlendFactor(blendState.dstColorFactor);
+      states[i].srcAlphaBlendFactor = Find_BlendFactor_byGFXBlendFactor(blendState.srcAlphaFactor);
+      states[i].srcColorBlendFactor = Find_BlendFactor_byGFXBlendFactor(blendState.srcColorFactor);
+    }
+    blendState.pAttachments  = states;
+    blendState.logicOpEnable = VK_FALSE;
+    blendState.logicOp       = VK_LOGIC_OP_COPY;
   }
 
-  VkPipelineDynamicStateCreateInfo Dynamic_States = {};
-  VkDynamicState                   DynamicStatesList[64];
-  uint32_t                         DynamicStatesCount = 0;
+  VkPipelineDynamicStateCreateInfo dynamicStates = {};
+  VkDynamicState                   dynamicStatesList[64];
+  uint32_t                         dynamicStatesCount = 0;
   {
-    DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_VIEWPORT;
-    DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_SCISSOR;
-    /*
-    if (!LAYOUT && rendergpu->ext()->ISSUPPORTED_DYNAMICSTATE_VERTEXBINDING()) {
-      DynamicStatesList[DynamicStatesCount++] = VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE;
-    }*/
+    dynamicStatesList[dynamicStatesCount++] = VK_DYNAMIC_STATE_VIEWPORT;
+    dynamicStatesList[dynamicStatesCount++] = VK_DYNAMIC_STATE_SCISSOR;
+    dynamicStatesList[dynamicStatesCount++] = VK_DYNAMIC_STATE_DEPTH_BOUNDS;
 
-    Dynamic_States.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    Dynamic_States.dynamicStateCount = DynamicStatesCount;
-    Dynamic_States.pDynamicStates    = DynamicStatesList;
+    dynamicStates.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicStates.dynamicStateCount = dynamicStatesCount;
+    dynamicStates.pDynamicStates    = dynamicStatesList;
   }
 
   unsigned int typeSets[VKCONST_MAXDESCSET_PERLIST] = {};
@@ -709,44 +712,37 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     return result_tgfx_FAIL;
   }
 
-  VkPipelineDepthStencilStateCreateInfo depth_state = {};
-  if (true
-      // baseslotset->PERFRAME_SLOTSETs[0].DEPTHSTENCIL_SLOT
-  ) {
-    depth_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    if (desc->mainStates->depthtest) {
-      depthsettingsdesc_vk* depthsettings = ( depthsettingsdesc_vk* )desc->mainStates->depthtest;
-      depth_state.depthTestEnable         = VK_TRUE;
-      depth_state.depthCompareOp          = depthsettings->DepthCompareOP;
-      depth_state.depthWriteEnable        = depthsettings->ShouldWrite;
-      depth_state.depthBoundsTestEnable   = depthsettings->DepthBoundsEnable;
-      depth_state.maxDepthBounds          = depthsettings->DepthBoundsMax;
-      depth_state.minDepthBounds          = depthsettings->DepthBoundsMin;
-    } else {
-      depth_state.depthTestEnable       = VK_FALSE;
-      depth_state.depthBoundsTestEnable = VK_FALSE;
-    }
-    depth_state.flags = 0;
-    depth_state.pNext = nullptr;
+  VkPipelineDepthStencilStateCreateInfo depthState = {};
+  {
+    depthState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthState.flags = 0;
+    depthState.pNext = nullptr;
+    const depthStencilState_tgfx& state = desc->mainStates->depthStencilState;
 
-    if (desc->mainStates->StencilFrontFaced || desc->mainStates->StencilBackFaced) {
-      depth_state.stencilTestEnable    = VK_TRUE;
-      stencildesc_vk* frontfacestencil = ( stencildesc_vk* )desc->mainStates->StencilFrontFaced;
-      stencildesc_vk* backfacestencil  = ( stencildesc_vk* )desc->mainStates->StencilBackFaced;
-      if (backfacestencil) {
-        depth_state.back = backfacestencil->OPSTATE;
-      } else {
-        depth_state.back = {};
+    // Depth states
+    {
+      depthState.depthTestEnable       = state.depthTestEnabled;
+      depthState.depthCompareOp        = vk_findCompareOpVk(state.depthCompare);
+      depthState.depthWriteEnable      = state.depthWriteEnabled;
+      depthState.depthBoundsTestEnable = state.depthTestEnabled;
+      depthState.maxDepthBounds        = 1.0;
+      depthState.minDepthBounds        = 0.0;
+    }
+
+    // Stencil States
+    {
+      depthState.stencilTestEnable = state.stencilTestEnabled;
+      for (uint32_t i = 0; i < 2; i++) {
+        VkStencilOpState&         vkState   = (i == 0) ? depthState.front : depthState.back;
+        const tgfx_stencil_state& tgfxState = (i == 0) ? state.front : state.back;
+        vkState.compareMask                 = tgfxState.compareMask;
+        vkState.compareOp                   = vk_findCompareOpVk(tgfxState.compareOp);
+        vkState.depthFailOp                 = vk_findStencilOpVk(tgfxState.depthFail);
+        vkState.failOp                      = vk_findStencilOpVk(tgfxState.stencilFail);
+        vkState.passOp                      = vk_findStencilOpVk(tgfxState.pass);
+        vkState.reference                   = tgfxState.reference;
+        vkState.writeMask                   = tgfxState.writeMask;
       }
-      if (frontfacestencil) {
-        depth_state.front = frontfacestencil->OPSTATE;
-      } else {
-        depth_state.front = {};
-      }
-    } else {
-      depth_state.stencilTestEnable = VK_FALSE;
-      depth_state.back              = {};
-      depth_state.front             = {};
     }
   }
 
@@ -757,7 +753,8 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     dynCi.sType                            = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
     VkFormat VKCOLORATTACHMENTFORMATS[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
     while (dynCi.colorAttachmentCount <= TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT &&
-           desc->colorTextureFormats[dynCi.colorAttachmentCount] != texture_channels_tgfx_UNDEF) {
+           desc->colorTextureFormats[dynCi.colorAttachmentCount] != texture_channels_tgfx_UNDEF &&
+           desc->colorTextureFormats[blendState.attachmentCount] != texture_channels_tgfx_UNDEF2) {
       VKCOLORATTACHMENTFORMATS[dynCi.colorAttachmentCount] =
         vk_findFormatVk(desc->colorTextureFormats[dynCi.colorAttachmentCount]);
       dynCi.colorAttachmentCount++;
@@ -767,30 +764,31 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     dynCi.pNext                   = {};
 
     ci.sType            = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    ci.pColorBlendState = &Pipeline_ColorBlendState;
+    ci.pColorBlendState = &blendState;
     if (desc->depthStencilTextureFormat != texture_channels_tgfx_UNDEF &&
         desc->depthStencilTextureFormat != texture_channels_tgfx_UNDEF2) {
-      ci.pDepthStencilState         = &depth_state;
       dynCi.depthAttachmentFormat   = vk_findFormatVk(desc->depthStencilTextureFormat);
       dynCi.stencilAttachmentFormat = vk_findFormatVk(desc->depthStencilTextureFormat);
     } else {
       ci.pDepthStencilState = nullptr;
     }
-    ci.pDynamicState       = &Dynamic_States;
-    ci.pInputAssemblyState = &InputAssemblyState;
+    ci.pDynamicState       = &dynamicStates;
+    ci.pInputAssemblyState = &IAState;
     ci.pMultisampleState   = &MSAAState;
-    ci.pRasterizationState = &RasterizationState;
-    ci.pVertexInputState   = &VertexInputState_ci;
-    ci.pViewportState      = &RenderViewportState;
+    ci.pRasterizationState = &rasterState;
+    ci.pVertexInputState   = &vertexInputState;
+    ci.pViewportState      = &viewportState;
+    ci.pDepthStencilState  = &depthState;
     ci.layout              = layout;
     ci.stageCount          = 2;
     ci.pStages             = STAGEs;
     ci.basePipelineHandle  = VK_NULL_HANDLE; // Optional
     ci.basePipelineIndex   = -1;             // Optional
-    ci.flags               = 0;
+    ci.flags               = VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
     ci.pNext               = &dynCi;
     ci.renderPass          = VK_NULL_HANDLE;
     ci.subpass             = 0;
+    vk_fillRasterPipelineStateInfo(GPU, &ci, desc, exts);
     ThrowIfFailed(vkCreateGraphicsPipelines(GPU->vk_logical, nullptr, 1, &ci, nullptr, &pipeline),
                   "vkCreateGraphicsPipelines has failed!");
   }
@@ -1187,10 +1185,12 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
 }
 
 result_tgfx vk_mapHeap(heap_tgfxhnd i_heap, unsigned long long offset, unsigned long long size,
-                    extension_tgfxlsthnd exts, void** mappedRegion) {
-  HEAP_VKOBJ*    heap    = hidden->heaps.getOBJfromHANDLE(i_heap);
-  GPU_VKOBJ*     gpu     = core_vk->getGPUs()[heap->m_GPU];
-  THROW_RETURN_IF_FAIL(vkMapMemory(gpu->vk_logical, heap->vk_memoryHandle, offset, size, 0, mappedRegion), "VkMapMemory failed!", result_tgfx_FAIL);
+                       extension_tgfxlsthnd exts, void** mappedRegion) {
+  HEAP_VKOBJ* heap = hidden->heaps.getOBJfromHANDLE(i_heap);
+  GPU_VKOBJ*  gpu  = core_vk->getGPUs()[heap->m_GPU];
+  THROW_RETURN_IF_FAIL(
+    vkMapMemory(gpu->vk_logical, heap->vk_memoryHandle, offset, size, 0, mappedRegion),
+    "VkMapMemory failed!", result_tgfx_FAIL);
   return result_tgfx_SUCCESS;
 }
 
@@ -1276,42 +1276,6 @@ gpudatamanager_public::GETBINDINGTABLETYPE_ARRAY() {
 VK_LINEAR_OBJARRAY<SUBRASTERPASS_VKOBJ, subRasterpass_tgfxhnd, 1 << 16>&
 gpudatamanager_public::GETSUBRASTERPASS_ARRAY() {
   return hidden->subrasterpasses;
-}
-
-VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls) {
-  switch (chnnls) {
-    case texture_channels_tgfx_BGRA8UB:
-    case texture_channels_tgfx_BGRA8UNORM:
-    case texture_channels_tgfx_RGBA32F:
-    case texture_channels_tgfx_RGBA32UI:
-    case texture_channels_tgfx_RGBA32I:
-    case texture_channels_tgfx_RGBA8UB:
-    case texture_channels_tgfx_RGBA8B:
-      return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-             VK_COLOR_COMPONENT_A_BIT;
-    case texture_channels_tgfx_RGB32F:
-    case texture_channels_tgfx_RGB32UI:
-    case texture_channels_tgfx_RGB32I:
-    case texture_channels_tgfx_RGB8UB:
-    case texture_channels_tgfx_RGB8B:
-      return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
-    case texture_channels_tgfx_RA32F:
-    case texture_channels_tgfx_RA32UI:
-    case texture_channels_tgfx_RA32I:
-    case texture_channels_tgfx_RA8UB:
-    case texture_channels_tgfx_RA8B: return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT;
-    case texture_channels_tgfx_R32F:
-    case texture_channels_tgfx_R32UI:
-    case texture_channels_tgfx_R32I: return VK_COLOR_COMPONENT_R_BIT;
-    case texture_channels_tgfx_R8UB:
-    case texture_channels_tgfx_R8B: return VK_COLOR_COMPONENT_R_BIT;
-    case texture_channels_tgfx_D32:
-    case texture_channels_tgfx_D24S8:
-    default:
-      printer(result_tgfx_NOTCODED,
-              "Find_ColorWriteMask_byChannels() doesn't support this type of RTSlot channel!");
-      return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
-  }
 }
 
 unsigned int vk_calculateSizeOfVertexLayout(const datatype_tgfx* ATTRIBUTEs, unsigned int count) {

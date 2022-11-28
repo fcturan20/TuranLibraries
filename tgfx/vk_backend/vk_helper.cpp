@@ -145,39 +145,6 @@ static shaderStageFlag_tgfxhnd vk_createShaderStageFlag(unsigned char count, ...
   }
 }
 
-static depthsettings_tgfxhnd CreateDepthConfiguration(unsigned char        ShouldWrite,
-                                                      depthtest_tgfx       COMPAREOP,
-                                                      extension_tgfxlsthnd EXTENSIONS) {
-  
-  /*
-  depthsettingsdesc_vk* desc = new depthsettingsdesc_vk;
-  TGFXLISTCOUNT(core_tgfx_main, EXTENSIONS, extcount);
-  for (unsigned int ext_i = 0; ext_i < extcount; ext_i++) {
-    if (*( VKEXT_TYPES* )(EXTENSIONS[ext_i]) != VKEXT_DEPTHBOUNDS) {
-      VKEXT_DEPTHBOUNDS_STRUCT* ext = ( VKEXT_DEPTHBOUNDS_STRUCT* )EXTENSIONS[ext_i];
-      desc->DepthBoundsEnable       = ext->DepthBoundsEnable;
-      desc->DepthBoundsMax          = ext->DepthBoundsMax;
-      desc->DepthBoundsMin          = ext->DepthBoundsMin;
-    }
-  }
-  desc->ShouldWrite    = ShouldWrite;
-  desc->DepthCompareOP = Find_CompareOp_byGFXDepthTest(COMPAREOP);
-  return ( depthsettings_tgfxhnd )desc;*/
-  return nullptr;
-}
-static stencilcnfg_tgfxnd CreateStencilConfiguration(
-  unsigned char Reference, unsigned char WriteMask, unsigned char CompareMask,
-  stencilcompare_tgfx CompareOP, stencilop_tgfx DepthFailOP, stencilop_tgfx StencilFailOP,
-  stencilop_tgfx AllSuccessOP) {
-  return nullptr;
-}
-static blendinginfo_tgfx_handle CreateBlendingConfiguration(
-  unsigned char ColorSlotIndex, vec4_tgfx Constant, blendfactor_tgfx SRCFCTR_CLR,
-  blendfactor_tgfx SRCFCTR_ALPHA, blendfactor_tgfx DSTFCTR_CLR, blendfactor_tgfx DSTFCTR_ALPHA,
-  blendmode_tgfx BLENDOP_CLR, blendmode_tgfx BLENDOP_ALPHA, colorcomponents_tgfx WRITECHANNELs) {
-  return nullptr;
-}
-
 // EXTENSION HELPERS
 
 static void                  Destroy_ExtensionData(extension_tgfx_handle ExtensionToDestroy) {}

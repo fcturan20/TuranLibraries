@@ -960,14 +960,16 @@ vk_debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      Message_Severity,
   }
   return false;
 }
-loadVkExtFunc(vkCreateDebugUtilsMessengerEXT);
-loadVkExtFunc(vkDestroyDebugUtilsMessengerEXT);
+declareVkExtFunc(vkCreateDebugUtilsMessengerEXT);
+defineVkExtFunc(vkCreateDebugUtilsMessengerEXT);
+declareVkExtFunc(vkDestroyDebugUtilsMessengerEXT);
+defineVkExtFunc(vkDestroyDebugUtilsMessengerEXT);
 
 VkDebugUtilsMessengerEXT dbg_mssngr = VK_NULL_HANDLE;
 
 void vk_setupDebugging() {
-  vkCreateDebugUtilsMessengerEXT_loaded  = vkCreateDebugUtilsMessengerEXT_loadVkFunc();
-  vkDestroyDebugUtilsMessengerEXT_loaded = vkDestroyDebugUtilsMessengerEXT_loadVkFunc();
+  loadVkExtFunc(vkCreateDebugUtilsMessengerEXT);
+  loadVkExtFunc(vkDestroyDebugUtilsMessengerEXT);
 
   VkDebugUtilsMessengerCreateInfoEXT dbg_mssngr_ci = {};
   dbg_mssngr_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;

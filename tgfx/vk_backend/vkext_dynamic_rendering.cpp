@@ -8,6 +8,9 @@
 #include "vk_predefinitions.h"
 #include "vk_resource.h"
 
+defineVkExtFunc(vkCmdBeginRenderingKHR);
+defineVkExtFunc(vkCmdEndRenderingKHR);
+
 vkext_dynamicRendering::vkext_dynamicRendering(GPU_VKOBJ* gpu)
   : vkext_interface(gpu, nullptr, &features) {
   m_type         = dynamicRendering_vkExtEnum;
@@ -15,8 +18,8 @@ vkext_dynamicRendering::vkext_dynamicRendering(GPU_VKOBJ* gpu)
   features.pNext = nullptr;
 }
 
-loadVkExtFunc(vkCmdBeginRenderingKHR);
-loadVkExtFunc(vkCmdEndRenderingKHR);
+declareVkExtFunc(vkCmdBeginRenderingKHR);
+declareVkExtFunc(vkCmdEndRenderingKHR);
 void vkext_dynamicRendering::inspect() {
   if (features.dynamicRendering) {
     m_gpu->ext()->m_activeDevExtNames.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
@@ -24,16 +27,16 @@ void vkext_dynamicRendering::inspect() {
     m_gpu->ext()->m_activeDevExtNames.push_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
     m_gpu->ext()->m_activeDevExtNames.push_back(VK_KHR_MAINTENANCE2_EXTENSION_NAME);
     m_gpu->ext()->m_activeDevExtNames.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-    vkCmdBeginRenderingKHR_loaded = vkCmdBeginRenderingKHR_loadVkFunc();
-    vkCmdEndRenderingKHR_loaded = vkCmdEndRenderingKHR_loadVkFunc();
+    loadVkExtFunc(vkCmdBeginRenderingKHR);
+    loadVkExtFunc(vkCmdEndRenderingKHR);
   }
 }
 void vkext_dynamicRendering::manage(VkStructureType structType, void* structPtr,
                                     extension_tgfx_handle extData) {}
 
 void vkext_beginDynamicRenderPass(VkCommandBuffer cb, unsigned int colorAttachmentCount,
-                                 const rasterpassBeginSlotInfo_tgfx* colorAttachments,
-                                 rasterpassBeginSlotInfo_tgfx        depthAttachment) {
+                                  const rasterpassBeginSlotInfo_tgfx* colorAttachments,
+                                  rasterpassBeginSlotInfo_tgfx        depthAttachment) {
   TEXTURE_VKOBJ* baseTexture = nullptr;
   if (depthAttachment.texture) {
     baseTexture = contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(depthAttachment.texture);
@@ -79,6 +82,14 @@ void vkext_beginDynamicRenderPass(VkCommandBuffer cb, unsigned int colorAttachme
     attachmentInfos[colorSlotIndx].storeOp = vk_findStoreTypeVk(colorAttachment.storeOp);
   }
   if (depthAttachment.texture) {
+    attachmentInfos[colorAttachmentCount].imageView =
+      contentmanager->GETTEXTURES_ARRAY().getOBJfromHANDLE(depthAttachment.texture)->vk_imageView;
+    VkAccessFlags unused = {};
+    vk_findImageAccessPattern(depthAttachment.imageAccess, unused,
+                              attachmentInfos[colorAttachmentCount].imageLayout);
+    attachmentInfos[colorAttachmentCount].loadOp = vk_findLoadTypeVk(depthAttachment.loadOp);
+    attachmentInfos[colorAttachmentCount].storeOp = vk_findStoreTypeVk(depthAttachment.storeOp);
+    attachmentInfos[colorAttachmentCount].sType   = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfos[colorAttachmentCount].clearValue.depthStencil.depth =
       *( float* )depthAttachment.clearValue.data;
     attachmentInfos[colorAttachmentCount].clearValue.depthStencil.stencil =
@@ -92,27 +103,25 @@ void vkext_beginDynamicRenderPass(VkCommandBuffer cb, unsigned int colorAttachme
   ri.layerCount           = 1;
   ri.pColorAttachments    = attachmentInfos;
   ri.pDepthAttachment = depthAttachment.texture ? &attachmentInfos[colorAttachmentCount] : nullptr;
-  ri.pStencilAttachment =
-    depthAttachment.texture ? &attachmentInfos[colorAttachmentCount] : nullptr;
+  ri.pStencilAttachment = nullptr;
   ri.renderArea.extent.width  = baseTexture->m_width;
   ri.renderArea.extent.height = baseTexture->m_height;
   ri.renderArea.offset        = {};
   vkCmdBeginRenderingKHR_loaded(cb, &ri);
 }
 
-void vkext_beginStaticRenderPass(VkCommandBuffer cb, extension_tgfxlsthnd exts) {
+void vkext_beginStaticRenderPass(VkCommandBuffer cb, extension_tgfxlsthnd exts) {}
 
-}
-
-void vkext_dynamicRendering::vk_beginRenderpass(VkCommandBuffer cb, unsigned int colorAttachmentCount,
+void vkext_dynamicRendering::vk_beginRenderpass(
+  VkCommandBuffer cb, unsigned int colorAttachmentCount,
   const rasterpassBeginSlotInfo_tgfx* colorAttachments,
   rasterpassBeginSlotInfo_tgfx depthAttachment, extension_tgfxlsthnd exts) {
   if (features.dynamicRendering) {
     vkext_beginDynamicRenderPass(cb, colorAttachmentCount, colorAttachments, depthAttachment);
   } else {
     assert_vk(exts &&
-           "Your device doesn't support dynamic rendering, which means you have to use "
-           "TGFX_Subpass extension! Extension isn't supported for now.");
+              "Your device doesn't support dynamic rendering, which means you have to use "
+              "TGFX_Subpass extension! Extension isn't supported for now.");
 
     vkext_beginStaticRenderPass(cb, exts);
   }

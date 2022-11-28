@@ -46,6 +46,7 @@ enum class vk_cmdType : vkEnumType_cmdType(){
   bindBindingTables,
   bindVertexBuffer,
   bindIndexBuffer,
+  setDepthBounds,
   setViewport,
   setScissor,
   drawNonIndexedDirect,
@@ -144,6 +145,15 @@ struct vkCmdStruct_drawNonIndexedDirect {
   uint32_t vertexCount = {}, instanceCount = {}, firstVertex = {}, firstInstance = {};
 };
 
+struct vkCmdStruct_setDepthBounds {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::setDepthBounds;
+
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdSetDepthBounds(cb, min, max);
+  };
+  float min = 0.0f, max = 1.0f;
+};
+
 struct vk_cmd {
   vk_cmdType cmd_type = vk_cmdType::error_2;
 
@@ -160,7 +170,6 @@ struct vk_cmd {
   uint8_t                   cmd_data[maxCmdStructSize];
   vk_cmd() : cmd_type(vk_cmdType::error) {}
 };
-static constexpr uint32_t sdf = sizeof(vk_cmd);
 
 template <typename T>
 T* vk_createCmdStruct(vk_cmd* cmd) {
@@ -196,8 +205,11 @@ void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cm
     case vk_cmdType::drawNonIndexedDirect:
       (( vkCmdStruct_drawNonIndexedDirect* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
+    case vk_cmdType::setDepthBounds:
+      (( vkCmdStruct_setDepthBounds* )cmd.cmd_data)->cmd_execute(cb, bundle);
+      break;
     case vk_cmdType::error:
-    case vk_cmdType::error_2: printf(0 && "One of the cmds is not used!");
+    case vk_cmdType::error_2: printf("One of the cmds is not used!"); break;
     default: assert_vk(0 && "Don't forget to specify command execution in vk_executeCmd()!");
   }
 }
@@ -293,10 +305,10 @@ void vk_cmdBindPipeline(commandBundle_tgfxhnd i_bundle, unsigned long long sortK
                         pipeline_tgfxhnd pipeline) {
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
   auto*            cmd    = vk_createCmdStruct<vkCmdStruct_bindPipeline>(&bundle->m_cmds[sortKey]);
-  PIPELINE_VKOBJ* pipe   = contentmanager->GETPIPELINE_ARRAY().getOBJfromHANDLE(pipeline);
+  PIPELINE_VKOBJ*  pipe   = contentmanager->GETPIPELINE_ARRAY().getOBJfromHANDLE(pipeline);
 
   assert_vk(pipe->vk_type == bundle->vk_bindPoint &&
-         "You can't call this type of operation in this command bundle!");
+            "You can't call this type of operation in this command bundle!");
   cmd->vk_bindPoint      = pipe->vk_type;
   cmd->vk_pipeline       = pipe->vk_object;
   cmd->vk_pipelineLayout = pipe->vk_layout;
@@ -323,6 +335,14 @@ void vk_cmdSetScissor(commandBundle_tgfxhnd i_bundle, unsigned long long sortKey
   cmd->vk_rect.extent.width  = size.x;
   cmd->vk_rect.extent.height = size.y;
 }
+void vk_cmdSetDepthBounds(commandBundle_tgfxhnd i_bundle, unsigned long long sortKey, float min,
+                          float max) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
+  auto*            cmd    = vk_createCmdStruct<vkCmdStruct_setDepthBounds>(&bundle->m_cmds[sortKey]);
+
+  cmd->min = min;
+  cmd->max = max;
+};
 void vk_cmdBindVertexBuffer(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
                             buffer_tgfxhnd buffer, unsigned long long offset,
                             unsigned long long dataSize) {
@@ -477,11 +497,12 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUE
       bi.pInheritanceInfo = &secInfo;
 
       assert_vk(!ThrowIfFailed(vkBeginCommandBuffer(cmdBuffer, &bi),
-                            "vkBeginCommandBuffer() shouldn't fail!"));
+                               "vkBeginCommandBuffer() shouldn't fail!"));
       for (uint64_t cmdIndx = 0; cmdIndx < bundle->m_cmdCount; cmdIndx++) {
         vk_executeCmd(cmdBuffer, bundle, bundle->m_cmds[cmdIndx]);
       }
-      assert_vk(!ThrowIfFailed(vkEndCommandBuffer(cmdBuffer), "vkEndCommandBuffer() shouldn't fail!"));
+      assert_vk(
+        !ThrowIfFailed(vkEndCommandBuffer(cmdBuffer), "vkEndCommandBuffer() shouldn't fail!"));
 
       queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdBundle    = bundleHnd;
       queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdPool      = cmdPool;
@@ -504,6 +525,7 @@ void set_VkRenderer_funcPtrs() {
   core_tgfx_main->renderer->cmdDispatch               = vk_cmdDispatch;
   core_tgfx_main->renderer->cmdSetViewport            = vk_cmdSetViewport;
   core_tgfx_main->renderer->cmdSetScissor             = vk_cmdSetScissor;
+  core_tgfx_main->renderer->cmdSetDepthBounds         = vk_cmdSetDepthBounds;
 
   core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
   core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;

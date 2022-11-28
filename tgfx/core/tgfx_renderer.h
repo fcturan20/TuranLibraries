@@ -90,6 +90,8 @@ typedef struct tgfx_renderer {
                           ivec2_tgfx offset, uvec2_tgfx size);
   void (*cmdSetDynamicVertexLayout)(commandBundle_tgfxhnd bundle, unsigned long long key,
                                     vertexAttributeLayout_tgfxhnd layout);
+  void (*cmdSetDepthBounds)(commandBundle_tgfxhnd bundle, unsigned long long key, float min,
+                            float max);
   void (*cmdDrawNonIndexedDirect)(commandBundle_tgfxhnd bndl, unsigned long long key,
                                   unsigned int vertCount, unsigned int instanceCount,
                                   unsigned int frstVert, unsigned int frstInstance);

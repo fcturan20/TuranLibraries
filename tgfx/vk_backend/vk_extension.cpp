@@ -14,6 +14,7 @@
 #include "vkext_descIndexing.h"
 #include "vkext_timelineSemaphore.h"
 #include "vkext_dynamic_rendering.h"
+#include "vkext_dynamicStates.h"
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_EXTS = nullptr;
 
 vkext_interface::vkext_interface(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct) {
@@ -31,6 +32,9 @@ void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu) {
     // 4MB is fine i guess?
     VKGLOBAL_VIRMEM_EXTS = vk_virmem::allocate_dynamicmem(1 << 20);
   }
+  // %99.3 of all hardware supports, so why not
+  gpu->vk_featuresDev.features.independentBlend = VK_TRUE;
+
   gpu->vk_featuresDev.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
   gpu->vk_featuresDev.pNext = nullptr;
   gpu->vk_propsDev.sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
@@ -47,6 +51,8 @@ void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu) {
     new (VKGLOBAL_VIRMEM_EXTS) vkext_timelineSemaphore(gpu);
   mngr->m_exts[vkext_interface::dynamicRendering_vkExtEnum] =
     new (VKGLOBAL_VIRMEM_EXTS) vkext_dynamicRendering(gpu);
+  mngr->m_exts[vkext_interface::dynamicStates_vkExtEnum] =
+    new (VKGLOBAL_VIRMEM_EXTS) vkext_dynamicStates(gpu);
 
   gpu->ext() = mngr;
 }

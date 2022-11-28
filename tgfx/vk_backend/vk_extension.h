@@ -38,6 +38,7 @@ struct vkext_interface {
     descIndexing_vkExtEnum,
     timelineSemaphores_vkExtEnum,
     dynamicRendering_vkExtEnum,
+    dynamicStates_vkExtEnum,
     vkext_count
   };
 

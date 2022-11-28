@@ -125,7 +125,7 @@ gpuQueue_tgfxhnd           allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
 window_tgfxhnd             window;
 tgfx_swapchain_description swpchn_desc;
 static constexpr uint32_t  swapchainTextureCount = 2;
-static constexpr uint32_t  INIT_GPUINDEX         = 1;
+static constexpr uint32_t  INIT_GPUINDEX         = 0;
 
 void createGPU() {
   tgfx->load_backend(nullptr, backends_tgfx_VULKAN, nullptr);
@@ -140,7 +140,7 @@ void createGPU() {
 }
 
 static tgfx_window_gpu_support swapchainSupport                      = {};
-static textureChannels_tgfx    rtFormat                              = texture_channels_tgfx_UNDEF;
+static textureChannels_tgfx    depthRTFormat                         = texture_channels_tgfx_D24S8;
 texture_tgfxhnd                swpchnTextures[swapchainTextureCount] = {};
 
 void createFirstWindow() {
@@ -187,20 +187,19 @@ void createFirstWindow() {
     // Create swapchain
     tgfx->createSwapchain(gpu, &swpchn_desc, swpchnTextures);
   }
-  rtFormat = swapchainSupport.channels[0];
 #ifdef NDEBUG
   printf("createGPUandFirstWindow() finished!\n");
 #endif
 }
 
 // Create device local resources
-texture_tgfxhnd customRTs[2] = {};
-buffer_tgfxhnd  firstBuffer  = {};
-void*           mappedRegion = nullptr;
+texture_tgfxhnd customDepthRT = {};
+buffer_tgfxhnd  firstBuffer   = {};
+void*           mappedRegion  = nullptr;
 
 void createDeviceLocalResources() {
   static constexpr uint32_t heapSize           = 1 << 25;
-  uint32_t                  hostVisibleMemType = UINT32_MAX;
+  uint32_t                  deviceLocalMemType = UINT32_MAX, hostVisibleMemType = UINT32_MAX;
   for (uint32_t memTypeIndx = 0; memTypeIndx < gpuDesc.memRegionsCount; memTypeIndx++) {
     const memoryDescription_tgfx& memDesc = gpuDesc.memRegions[memTypeIndx];
     if (memDesc.allocationtype == memoryallocationtype_HOSTVISIBLE ||
@@ -212,24 +211,35 @@ void createDeviceLocalResources() {
       }
       hostVisibleMemType = memTypeIndx;
     }
+    if (memDesc.allocationtype == memoryallocationtype_DEVICELOCAL) {
+      // If there 2 different memory types with same allocation type, select the bigger one!
+      if (deviceLocalMemType != UINT32_MAX &&
+          gpuDesc.memRegions[deviceLocalMemType].max_allocationsize > memDesc.max_allocationsize) {
+        continue;
+      }
+      deviceLocalMemType = memTypeIndx;
+    }
   }
-  heap_tgfxhnd firstHeap = {};
-  assert(hostVisibleMemType != UINT32_MAX && "An appropriate memory region isn't found!");
+  heap_tgfxhnd hostVisibleHeap = {}, deviceLocalHeap = {};
+  assert(hostVisibleMemType != UINT32_MAX && deviceLocalMemType != UINT32_MAX &&
+         "An appropriate memory region isn't found!");
   contentManager->createHeap(gpu, gpuDesc.memRegions[hostVisibleMemType].memorytype_id, heapSize,
-                             nullptr, &firstHeap);
-  contentManager->mapHeap(firstHeap, 0, heapSize, nullptr, &mappedRegion);
+                             nullptr, &hostVisibleHeap);
+  contentManager->mapHeap(hostVisibleHeap, 0, heapSize, nullptr, &mappedRegion);
+
+  contentManager->createHeap(gpu, gpuDesc.memRegions[deviceLocalMemType].memorytype_id, heapSize,
+                             nullptr, &deviceLocalHeap);
 
   textureDescription_tgfx textureDesc = {};
-  textureDesc.channelType             = rtFormat;
+  textureDesc.channelType             = depthRTFormat;
   textureDesc.dataOrder               = textureOrder_tgfx_SWIZZLE;
   textureDesc.dimension               = texture_dimensions_tgfx_2D;
-  textureDesc.height                  = 256;
-  textureDesc.width                   = 256;
+  textureDesc.height                  = 720;
+  textureDesc.width                   = 1280;
   textureDesc.mipCount                = 1;
   textureDesc.permittedQueues         = allQueues;
   textureDesc.usage                   = textureAllUsages;
-  // contentManager->createTexture(gpu, &textureDesc, &customRTs[0]);
-  // contentManager->createTexture(gpu, &textureDesc, &customRTs[1]);
+  contentManager->createTexture(gpu, &textureDesc, &customDepthRT);
 
   bufferDescription_tgfx bufferDesc = {};
   bufferDesc.dataSize               = 1650;
@@ -244,21 +254,14 @@ void createDeviceLocalResources() {
   heapRequirementsInfo_tgfx bufferHeapReqs = {};
   contentManager->getHeapRequirement_Buffer(firstBuffer, nullptr, &bufferHeapReqs);
 
-  uint32_t lastMemPoint = 0;
-  /*auto& calculateHeapOffset =
-    [&lastMemPoint](const heapRequirementsInfo_tgfx& heapReq) -> void {
+  uint32_t lastMemPoint        = 0;
+  auto&    calculateHeapOffset = [&lastMemPoint](const heapRequirementsInfo_tgfx& heapReq) -> void {
     lastMemPoint = ((lastMemPoint / heapReq.offsetAlignment) +
                     ((lastMemPoint % heapReq.offsetAlignment) ? 1 : 0)) *
                    heapReq.offsetAlignment;
   };
-  contentManager->bindToHeap_Texture(firstHeap, lastMemPoint, customRTs[0], nullptr);
-  lastMemPoint += firstTextureReqs.size;
-  calculateHeapOffset(firstTextureReqs);
-  contentManager->bindToHeap_Texture(firstHeap, lastMemPoint, customRTs[1], nullptr);
-  lastMemPoint += firstTextureReqs.size;
-  calculateHeapOffset(bufferHeapReqs);*/
-  contentManager->bindToHeap_Buffer(firstHeap, lastMemPoint, firstBuffer, nullptr);
-  lastMemPoint += firstTextureReqs.size;
+  contentManager->bindToHeap_Texture(deviceLocalHeap, lastMemPoint, customDepthRT, nullptr);
+  contentManager->bindToHeap_Buffer(hostVisibleHeap, lastMemPoint, firstBuffer, nullptr);
 
 #ifdef NDEBUG
   printf("createDeviceLocalResources() finished!\n");
@@ -320,17 +323,29 @@ void compileShadersandPipelines() {
                                         // fragShaderBin, fragDataSize,
                                         &firstFragShader);
 
-    rasterStateDescription_tgfx stateDesc       = {};
-    stateDesc.culling                           = cullmode_tgfx_OFF;
-    stateDesc.polygonmode                       = polygonmode_tgfx_FILL;
-    stateDesc.topology                          = vertexlisttypes_tgfx_TRIANGLELIST;
-    rasterPipelineDescription_tgfx pipelineDesc = {};
-    pipelineDesc.colorTextureFormats[0]         = rtFormat;
-    pipelineDesc.mainStates                     = &stateDesc;
-    pipelineDesc.shaderSourceList               = shaderSources;
-    bindingTableType_tgfxhnd bindingTypes[2]    = {bindingType,
-                                                   ( bindingTableType_tgfxhnd )tgfx->INVALIDHANDLE};
-    pipelineDesc.typeTables                     = bindingTypes;
+    rasterStateDescription_tgfx stateDesc         = {};
+    stateDesc.culling                             = cullmode_tgfx_OFF;
+    stateDesc.polygonmode                         = polygonmode_tgfx_FILL;
+    stateDesc.topology                            = vertexlisttypes_tgfx_TRIANGLELIST;
+    stateDesc.depthStencilState.depthTestEnabled  = true;
+    stateDesc.depthStencilState.depthWriteEnabled = true;
+    stateDesc.depthStencilState.depthCompare      = compare_tgfx_ALWAYS;
+    stateDesc.blendStates[0].blendEnabled = true;
+    stateDesc.blendStates[0].blendComponents = textureComponentMask_tgfx_ALL;
+    stateDesc.blendStates[0].alphaMode = blendmode_tgfx_MAX;
+    stateDesc.blendStates[0].colorMode = blendmode_tgfx_ADDITIVE;
+    stateDesc.blendStates[0].dstAlphaFactor = blendfactor_tgfx_DST_ALPHA;
+    stateDesc.blendStates[0].srcAlphaFactor = blendfactor_tgfx_SRC_ALPHA;
+    stateDesc.blendStates[0].dstColorFactor = blendfactor_tgfx_DST_COLOR;
+    stateDesc.blendStates[0].srcColorFactor = blendfactor_tgfx_SRC_COLOR;
+    rasterPipelineDescription_tgfx pipelineDesc   = {};
+    pipelineDesc.colorTextureFormats[0]           = swpchn_desc.channels;
+    pipelineDesc.depthStencilTextureFormat        = depthRTFormat;
+    pipelineDesc.mainStates                       = &stateDesc;
+    pipelineDesc.shaderSourceList                 = shaderSources;
+    bindingTableType_tgfxhnd bindingTypes[2]      = {bindingType,
+                                                     ( bindingTableType_tgfxhnd )tgfx->INVALIDHANDLE};
+    pipelineDesc.typeTables                       = bindingTypes;
 
     contentManager->createRasterPipeline(&pipelineDesc, nullptr, &firstRasterPipeline);
   }
@@ -357,7 +372,7 @@ void recordCommandBundles() {
                               textureAllUsages, nullptr);
   renderer->finishCommandBundle(initBundle, nullptr);
   */
-  static constexpr uint32_t cmdCount = 5;
+  static constexpr uint32_t cmdCount = 7;
   // Record command bundle
   standardDrawBundle = renderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, nullptr);
   {
@@ -365,11 +380,12 @@ void recordCommandBundles() {
                                              ( bindingTable_tgfxhnd )tgfx->INVALIDHANDLE};
     uint32_t             cmdKey           = 0;
 
+    renderer->cmdSetDepthBounds(standardDrawBundle, cmdKey++, 0.0f, 1.0f);
+    renderer->cmdSetViewport(standardDrawBundle, cmdKey++, {0, 0, 1280, 720, 0.0f, 1.0f});
+    renderer->cmdSetScissor(standardDrawBundle, cmdKey++, {0, 0}, {1280, 720});
     renderer->cmdBindPipeline(standardDrawBundle, cmdKey++, firstRasterPipeline);
     renderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, bindingTables, 0,
                                    pipelineType_tgfx_RASTER);
-    renderer->cmdSetViewport(standardDrawBundle, cmdKey++, {0, 0, 1280, 720, 0.0f, 1.0f});
-    renderer->cmdSetScissor(standardDrawBundle, cmdKey++, {0, 0}, {1280, 720});
     renderer->cmdDrawNonIndexedDirect(standardDrawBundle, cmdKey++, 3, 1, 0, 0);
 
     assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
@@ -430,7 +446,7 @@ void load_systems() {
   renderer->queueSubmit(queue);
 
   // Color Attachment Info for Begin Render Pass
-  rasterpassBeginSlotInfo_tgfx colorAttachmentInfo    = {};
+  rasterpassBeginSlotInfo_tgfx colorAttachmentInfo = {}, depthAttachmentInfo = {};
   commandBundle_tgfxhnd        standardDrawBundles[2] = {standardDrawBundle,
                                                          ( commandBundle_tgfxhnd )tgfx->INVALIDHANDLE};
   {
@@ -439,11 +455,19 @@ void load_systems() {
     colorAttachmentInfo.storeOp     = rasterpassStore_tgfx_STORE;
     float cleardata[]               = {0.5, 0.5, 0.5, 1.0};
     memcpy(colorAttachmentInfo.clearValue.data, cleardata, sizeof(cleardata));
+
+    depthAttachmentInfo.imageAccess    = image_access_tgfx_DEPTHREADWRITE_STENCILWRITE;
+    depthAttachmentInfo.loadOp         = rasterpassLoad_tgfx_CLEAR;
+    depthAttachmentInfo.loadStencilOp  = rasterpassLoad_tgfx_CLEAR;
+    depthAttachmentInfo.storeOp        = rasterpassStore_tgfx_STORE;
+    depthAttachmentInfo.storeStencilOp = rasterpassStore_tgfx_STORE;
+    depthAttachmentInfo.texture        = customDepthRT;
   }
 
   // Initialization Command Buffer Recording
   commandBuffer_tgfxhnd initCmdBuffer = {};
-  /* {
+  /*
+  {
     initCmdBuffer = renderer->beginCommandBuffer(queue, nullptr);
     colorAttachmentInfo.texture          = customRTs[0];
     commandBundle_tgfxhnd initBundles[2] = {initBundle,
@@ -496,7 +520,7 @@ void load_systems() {
       commandBuffer_tgfxhnd& frameCmdBuffer = frameCmdBuffers[0];
       frameCmdBuffer                        = renderer->beginCommandBuffer(queue, nullptr);
       colorAttachmentInfo.texture           = swpchnTextures[i % 2];
-      renderer->beginRasterpass(frameCmdBuffer, 1, &colorAttachmentInfo, {}, {});
+      renderer->beginRasterpass(frameCmdBuffer, 1, &colorAttachmentInfo, depthAttachmentInfo, {});
       renderer->executeBundles(frameCmdBuffer, standardDrawBundles, nullptr);
       renderer->endRasterpass(frameCmdBuffer, {});
       renderer->endCommandBuffer(frameCmdBuffer);

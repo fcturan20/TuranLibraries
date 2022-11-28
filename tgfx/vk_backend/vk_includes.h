@@ -203,7 +203,9 @@ inline datatype_tgfx vk_findTextureDataType(VkFormat format) {
     case VK_FORMAT_R8G8B8A8_SINT:
     case VK_FORMAT_R8_SINT:
     case VK_FORMAT_R32G32B32A32_SINT: return datatype_tgfx_VAR_INT32;
-    default: printer(result_tgfx_FAIL, "vk_findTextureDataType() has failed!"); return datatype_tgfx_UNDEFINED;
+    default:
+      printer(result_tgfx_FAIL, "vk_findTextureDataType() has failed!");
+      return datatype_tgfx_UNDEFINED;
   }
 }
 inline VkDescriptorType vk_findDescTypeVk(shaderdescriptortype_tgfx desc) {
@@ -227,7 +229,7 @@ inline shaderdescriptortype_tgfx vk_findDescTypeTgfx(VkDescriptorType desc) {
     case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: return shaderdescriptortype_tgfx_EXT_UNIFORMBUFFER;
     default:
       printer(result_tgfx_FAIL, "vk_findDescTypeVk couldn't find descriptor type!");
-      return (shaderdescriptortype_tgfx)UINT64_MAX;
+      return ( shaderdescriptortype_tgfx )UINT64_MAX;
   }
 }
 inline VkSamplerAddressMode vk_findAddressModeVk(texture_wrapping_tgfx Wrapping) {
@@ -273,7 +275,7 @@ inline VkCullModeFlags vk_findCullModeVk(cullmode_tgfx mode) {
       break;
   }
 }
-inline VkPolygonMode Find_PolygonMode_byGFXPolygonMode(polygonmode_tgfx mode) {
+inline VkPolygonMode vk_findPolygonModeVk(polygonmode_tgfx mode) {
   switch (mode) {
     case polygonmode_tgfx_FILL: return VK_POLYGON_MODE_FILL; break;
     case polygonmode_tgfx_LINE: return VK_POLYGON_MODE_LINE; break;
@@ -296,6 +298,7 @@ inline VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(
       break;
   }
 }
+inline VkLogicOp   vk_findLogicOpVk() {}
 inline VkIndexType Find_IndexType_byGFXDATATYPE(datatype_tgfx datatype) {
   switch (datatype) {
     case datatype_tgfx_VAR_UINT32: return VK_INDEX_TYPE_UINT32;
@@ -306,17 +309,17 @@ inline VkIndexType Find_IndexType_byGFXDATATYPE(datatype_tgfx datatype) {
       return VK_INDEX_TYPE_MAX_ENUM;
   }
 }
-inline VkCompareOp Find_CompareOp_byGFXDepthTest(depthtest_tgfx test) {
+inline VkCompareOp vk_findCompareOpVk(compare_tgfx test) {
   switch (test) {
-    case depthtest_tgfx_NEVER: return VK_COMPARE_OP_NEVER;
-    case depthtest_tgfx_ALWAYS: return VK_COMPARE_OP_ALWAYS;
-    case depthtest_tgfx_GEQUAL: return VK_COMPARE_OP_GREATER_OR_EQUAL;
-    case depthtest_tgfx_GREATER: return VK_COMPARE_OP_GREATER;
-    case depthtest_tgfx_LEQUAL: return VK_COMPARE_OP_LESS_OR_EQUAL;
-    case depthtest_tgfx_LESS: return VK_COMPARE_OP_LESS;
+    case compare_tgfx_NEVER: return VK_COMPARE_OP_NEVER;
+    case compare_tgfx_ALWAYS: return VK_COMPARE_OP_ALWAYS;
+    case compare_tgfx_GEQUAL: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+    case compare_tgfx_GREATER: return VK_COMPARE_OP_GREATER;
+    case compare_tgfx_LEQUAL: return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case compare_tgfx_LESS: return VK_COMPARE_OP_LESS;
     default:
       printer(result_tgfx_INVALIDARGUMENT,
-              "Find_CompareOp_byGFXDepthTest() doesn't support this type of test!");
+              "vk_findCompareOpVk() doesn't support this type of test!");
       return VK_COMPARE_OP_MAX_ENUM;
   }
 }
@@ -364,24 +367,7 @@ inline VkAttachmentStoreOp vk_findStoreTypeVk(rasterpassStore_tgfx store) {
       return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
   }
 }
-inline VkCompareOp Find_CompareOp_byGFXStencilCompare(stencilcompare_tgfx op) {
-  switch (op) {
-    case stencilcompare_tgfx_NEVER_PASS: return VK_COMPARE_OP_NEVER;
-    case stencilcompare_tgfx_LESS_PASS: return VK_COMPARE_OP_LESS;
-    case stencilcompare_tgfx_LESS_OR_EQUAL_PASS: return VK_COMPARE_OP_LESS_OR_EQUAL;
-    case stencilcompare_tgfx_EQUAL_PASS: return VK_COMPARE_OP_EQUAL;
-    case stencilcompare_tgfx_NOTEQUAL_PASS: return VK_COMPARE_OP_NOT_EQUAL;
-    case stencilcompare_tgfx_GREATER_OR_EQUAL_PASS: return VK_COMPARE_OP_GREATER_OR_EQUAL;
-    case stencilcompare_tgfx_GREATER_PASS: return VK_COMPARE_OP_GREATER;
-    case stencilcompare_tgfx_OFF:
-    case stencilcompare_tgfx_ALWAYS_PASS: return VK_COMPARE_OP_ALWAYS;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "Find_CompareOp_byGFXStencilCompare() doesn't support this type of stencil compare!");
-      return VK_COMPARE_OP_ALWAYS;
-  }
-}
-inline VkStencilOp Find_StencilOp_byGFXStencilOp(stencilop_tgfx op) {
+inline VkStencilOp vk_findStencilOpVk(stencilop_tgfx op) {
   switch (op) {
     case stencilop_tgfx_DONT_CHANGE: return VK_STENCIL_OP_KEEP;
     case stencilop_tgfx_SET_ZERO: return VK_STENCIL_OP_ZERO;
@@ -796,6 +782,56 @@ inline VkColorSpaceKHR vk_findColorSpaceVk(colorspace_tgfx cs) {
       printer(result_tgfx_NOTCODED, "ColorSpace isn't supported by Find_VkColorSpace_byTGFX");
   }
   return VK_COLOR_SPACE_MAX_ENUM_KHR;
+}
+inline VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls) {
+  switch (chnnls) {
+    case texture_channels_tgfx_BGRA8UB:
+    case texture_channels_tgfx_BGRA8UNORM:
+    case texture_channels_tgfx_RGBA32F:
+    case texture_channels_tgfx_RGBA32UI:
+    case texture_channels_tgfx_RGBA32I:
+    case texture_channels_tgfx_RGBA8UB:
+    case texture_channels_tgfx_RGBA8B:
+      return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+             VK_COLOR_COMPONENT_A_BIT;
+    case texture_channels_tgfx_RGB32F:
+    case texture_channels_tgfx_RGB32UI:
+    case texture_channels_tgfx_RGB32I:
+    case texture_channels_tgfx_RGB8UB:
+    case texture_channels_tgfx_RGB8B:
+      return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+    case texture_channels_tgfx_RA32F:
+    case texture_channels_tgfx_RA32UI:
+    case texture_channels_tgfx_RA32I:
+    case texture_channels_tgfx_RA8UB:
+    case texture_channels_tgfx_RA8B: return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT;
+    case texture_channels_tgfx_R32F:
+    case texture_channels_tgfx_R32UI:
+    case texture_channels_tgfx_R32I: return VK_COLOR_COMPONENT_R_BIT;
+    case texture_channels_tgfx_R8UB:
+    case texture_channels_tgfx_R8B: return VK_COLOR_COMPONENT_R_BIT;
+    case texture_channels_tgfx_D32:
+    case texture_channels_tgfx_D24S8:
+    default:
+      printer(result_tgfx_NOTCODED,
+              "Find_ColorWriteMask_byChannels() doesn't support this type of RTSlot channel!");
+      return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
+  }
+}
+inline VkColorComponentFlags vk_findColorComponentsVk(textureComponentMask_tgfx mask,
+                                                      textureChannels_tgfx format) {
+  if (mask == textureComponentMask_tgfx_ALL && format != texture_channels_tgfx_UNDEF) {
+    return vk_findColorWriteMask(format);
+  }
+  if (mask == textureComponentMask_tgfx_NONE) {
+    return 0;
+  }
+  VkColorComponentFlags flag = {};
+  flag |= (mask & textureComponentMask_tgfx_R) ? VK_COLOR_COMPONENT_R_BIT : 0;
+  flag |= (mask & textureComponentMask_tgfx_G) ? VK_COLOR_COMPONENT_G_BIT : 0;
+  flag |= (mask & textureComponentMask_tgfx_B) ? VK_COLOR_COMPONENT_B_BIT : 0;
+  flag |= (mask & textureComponentMask_tgfx_A) ? VK_COLOR_COMPONENT_A_BIT : 0;
+  return flag;
 }
 inline colorspace_tgfx vk_findColorSpaceTgfx(VkColorSpaceKHR cs) {
   switch (cs) {

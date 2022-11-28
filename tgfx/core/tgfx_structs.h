@@ -118,13 +118,32 @@ typedef struct tgfx_binding_table_description {
   sampler_tgfxlsthnd        SttcSmplrs;
 } bindingTableDescription_tgfx;
 
+#define TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT 8
+typedef struct tgfx_stencil_state {
+  stencilop_tgfx stencilFail, pass, depthFail;
+  compare_tgfx   compareOp;
+  unsigned int   compareMask, writeMask, reference;
+} stencilState_tgfx;
+
+typedef struct tgfx_depth_stencil_state {
+  unsigned char      depthTestEnabled, depthWriteEnabled, stencilTestEnabled;
+  compare_tgfx       depthCompare;
+  tgfx_stencil_state front, back;
+} depthStencilState_tgfx;
+
+typedef struct tgfx_blend_state {
+  unsigned char             blendEnabled;
+  blendfactor_tgfx          srcColorFactor, dstColorFactor, srcAlphaFactor, dstAlphaFactor;
+  blendmode_tgfx            colorMode, alphaMode;
+  textureComponentMask_tgfx blendComponents;
+} blendState_tgfx;
+
 typedef struct tgfx_raster_state_description {
-  cullmode_tgfx           culling;
-  polygonmode_tgfx        polygonmode;
-  depthsettings_tgfxhnd   depthtest;
-  stencilcnfg_tgfxnd      StencilFrontFaced, StencilBackFaced;
-  blendingInfo_tgfxlsthnd BLENDINGs;
-  vertexlisttypes_tgfx    topology;
+  cullmode_tgfx          culling;
+  polygonmode_tgfx       polygonmode;
+  depthStencilState_tgfx depthStencilState;
+  blendState_tgfx        blendStates[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
+  vertexlisttypes_tgfx   topology;
 } rasterStateDescription_tgfx;
 
 typedef struct tgfx_heap_requirements_info {
@@ -154,15 +173,14 @@ typedef struct tgfx_viewport_info {
   vec2_tgfx topLeftCorner, size, depthMinMax;
 } viewportInfo_tgfx;
 
-#define TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT 8
 typedef struct tgfx_raster_pipeline_description {
-  shaderSource_tgfxlsthnd       shaderSourceList;
-  bindingTableType_tgfxlsthnd   typeTables;
-  vertexAttributeLayout_tgfxhnd attribLayout;
-  viewportInfo_tgfx                   viewportList;
-  const rasterStateDescription_tgfx*  mainStates;
-  textureChannels_tgfx                colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
-  textureChannels_tgfx                depthStencilTextureFormat;
+  shaderSource_tgfxlsthnd            shaderSourceList;
+  bindingTableType_tgfxlsthnd        typeTables;
+  vertexAttributeLayout_tgfxhnd      attribLayout;
+  viewportInfo_tgfx                  viewportList;
+  const rasterStateDescription_tgfx* mainStates;
+  textureChannels_tgfx               colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
+  textureChannels_tgfx               depthStencilTextureFormat;
 } rasterPipelineDescription_tgfx;
 
 typedef struct tgfx_rasterpass_begin_slot_info {

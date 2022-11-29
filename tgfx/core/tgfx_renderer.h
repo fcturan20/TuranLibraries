@@ -81,7 +81,7 @@ typedef struct tgfx_renderer {
                                const buffer_tgfxhnd* buffers, const unsigned long long* offsets);
   // @param indexDataTypeSize: Specify the byte size of index data type
   //   (most devices support only 2 and 4)
-  void (*cmdBindIndexBuffers)(commandBundle_tgfxhnd bundle, unsigned long long key,
+  void (*cmdBindIndexBuffer)(commandBundle_tgfxhnd bundle, unsigned long long key,
                               buffer_tgfxhnd buffer, unsigned long long offset,
                               unsigned char indexDataTypeSize);
   void (*cmdSetViewport)(commandBundle_tgfxhnd bundle, unsigned long long key,

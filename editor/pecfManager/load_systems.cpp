@@ -202,7 +202,8 @@ texture_tgfxhnd customDepthRT = {}, reiChikitaTexture = {};
 buffer_tgfxhnd  firstBuffer  = {};
 void*           mappedRegion = nullptr;
 struct firstUboStruct {
-  vec4_tgfx positions[6];
+  vec4_tgfx positions[4];
+  uint16_t  indices[6];
   vec4_tgfx translate;
 };
 
@@ -275,7 +276,8 @@ void createDeviceLocalResources() {
   bufferDesc.exts                   = nullptr;
   bufferDesc.permittedQueues        = allQueues;
   bufferDesc.usageFlag              = bufferUsageMask_tgfx_COPYFROM | bufferUsageMask_tgfx_COPYTO |
-                         bufferUsageMask_tgfx_STORAGEBUFFER | bufferUsageMask_tgfx_VERTEXBUFFER;
+                         bufferUsageMask_tgfx_STORAGEBUFFER | bufferUsageMask_tgfx_VERTEXBUFFER |
+                         bufferUsageMask_tgfx_INDEXBUFFER;
   contentManager->createBuffer(gpu, &bufferDesc, &firstBuffer);
 
   heapRequirementsInfo_tgfx bufferHeapReqs = {};
@@ -467,7 +469,7 @@ void recordCommandBundles() {
                               image_access_tgfx_SHADER_SAMPLEONLY, textureAllUsages,
                               textureAllUsages, nullptr);
   renderer->finishCommandBundle(initBundle, nullptr);
-  static constexpr uint32_t cmdCount = 7;
+  static constexpr uint32_t cmdCount = 8;
   // Record command bundle
   standardDrawBundle = renderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, nullptr);
   {
@@ -480,12 +482,13 @@ void recordCommandBundles() {
     renderer->cmdSetViewport(standardDrawBundle, cmdKey++, {0, 0, 1280, 720, 0.0f, 1.0f});
     renderer->cmdSetScissor(standardDrawBundle, cmdKey++, {0, 0}, {1280, 720});
     renderer->cmdBindPipeline(standardDrawBundle, cmdKey++, firstRasterPipeline);
-    uint64_t       offsets[2] = {0, 16 * 6};
+    uint64_t       offsets[2] = {0, (16 * 4) + (2 * 6)};
     buffer_tgfxhnd buffers[2] = {firstBuffer, firstBuffer};
     renderer->cmdBindVertexBuffers(standardDrawBundle, cmdKey++, 0, 2, buffers, offsets);
+    renderer->cmdBindIndexBuffer(standardDrawBundle, cmdKey++, firstBuffer, 16 * 4, 2);
     renderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, bindingTables, 0,
                                    pipelineType_tgfx_RASTER);
-    renderer->cmdDrawNonIndexedDirect(standardDrawBundle, cmdKey++, 6, 2, 0, 0);
+    renderer->cmdDrawIndexedDirect(standardDrawBundle, cmdKey++, 6, 2, 0, 0, 0);
 
     assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
   }
@@ -530,6 +533,19 @@ void load_systems() {
   compileShadersandPipelines();
 
   recordCommandBundles();
+
+  firstUboStruct& ubo = *( firstUboStruct* )mappedRegion;
+  ubo.positions[0]    = {-0.5, -0.5};
+  ubo.positions[1]    = {0.5, -0.5};
+  ubo.positions[2]    = {-0.5, 0.5};
+  ubo.positions[3]    = {0.5, 0.5};
+
+  ubo.indices[0] = 0;
+  ubo.indices[1] = 1;
+  ubo.indices[2] = 2;
+  ubo.indices[3] = 2;
+  ubo.indices[4] = 1;
+  ubo.indices[5] = 3;
 
   fence_tgfxhnd fence;
   renderer->createFences(gpu, 1, 15u, &fence);
@@ -617,13 +633,7 @@ void load_systems() {
       renderer->executeBundles(frameCmdBuffer, standardDrawBundles, nullptr);
       renderer->endRasterpass(frameCmdBuffer, {});
       renderer->endCommandBuffer(frameCmdBuffer);
-      firstUboStruct& ubo = *( firstUboStruct* )mappedRegion;
-      ubo.positions[0]    = {-0.5, -0.5};
-      ubo.positions[1]    = {0.5, -0.5};
-      ubo.positions[2]    = {-0.5, 0.5};
-      ubo.positions[3]    = {0.5, 0.5};
-      ubo.positions[4]    = {0.5, -0.5};
-      ubo.positions[5]    = {-0.5, 0.5};
+
       ubo.translate       = {sinf(i / 360.0), cosf(i / 360.0)};
 
       renderer->queueExecuteCmdBuffers(queue, frameCmdBuffers, nullptr);

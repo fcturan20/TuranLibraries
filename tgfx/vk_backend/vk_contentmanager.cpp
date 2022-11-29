@@ -67,8 +67,6 @@ struct SHADERSOURCE_VKOBJ {
 struct gpudatamanager_private {
   VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>   textures;
   VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24> pipelines;
-  VK_LINEAR_OBJARRAY<VERTEXATTRIBLAYOUT_VKOBJ, vertexAttributeLayout_tgfxhnd, 1 << 10>
-                                                                        vertexattributelayouts;
   VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, shaderSource_tgfxhnd, 1 << 24> shadersources;
   VK_LINEAR_OBJARRAY<SAMPLER_VKOBJ, sampler_tgfxhnd, 1 << 16>           samplers;
   VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>                      buffers;
@@ -128,39 +126,6 @@ result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* des
  */
 
 unsigned int vk_calculateSizeOfVertexLayout(const datatype_tgfx* ATTRIBUTEs, unsigned int count);
-result_tgfx  vk_createVertexAttribLayout(const datatype_tgfx*           Attributes,
-                                         vertexAttributeLayout_tgfxhnd* hnd) {
-   VERTEXATTRIBLAYOUT_VKOBJ* lay             = hidden->vertexattributelayouts.create_OBJ();
-   unsigned int              AttributesCount = 0;
-   while (Attributes[AttributesCount] != datatype_tgfx_UNDEFINED) {
-     AttributesCount++;
-  }
-   lay->AttribCount = AttributesCount;
-   lay->Attribs     = new datatype_tgfx[lay->AttribCount];
-   for (unsigned int i = 0; i < lay->AttribCount; i++) {
-     lay->Attribs[i] = Attributes[i];
-  }
-   unsigned int size_pervertex = vk_calculateSizeOfVertexLayout(lay->Attribs, lay->AttribCount);
-   lay->size_perVertex         = size_pervertex;
-   lay->BindingDesc.binding    = 0;
-   lay->BindingDesc.stride     = size_pervertex;
-   lay->BindingDesc.inputRate  = VK_VERTEX_INPUT_RATE_VERTEX;
-
-   lay->AttribDescs                       = new VkVertexInputAttributeDescription[lay->AttribCount];
-   lay->AttribDesc_Count                  = lay->AttribCount;
-   unsigned int stride_ofcurrentattribute = 0;
-   for (unsigned int i = 0; i < lay->AttribCount; i++) {
-     lay->AttribDescs[i].binding  = 0;
-     lay->AttribDescs[i].location = i;
-     lay->AttribDescs[i].offset   = stride_ofcurrentattribute;
-     lay->AttribDescs[i].format   = Find_VkFormat_byDataType(lay->Attribs[i]);
-     stride_ofcurrentattribute += vk_getDataTypeByteSizes(lay->Attribs[i]);
-  }
-
-   *hnd = hidden->vertexattributelayouts.returnHANDLEfromOBJ(lay);
-   return result_tgfx_SUCCESS;
-}
-void vk_destroyVertexAttribLayout(vertexAttributeLayout_tgfxhnd VertexAttributeLayoutHandle) {}
 
 result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* desc,
                              texture_tgfxhnd* TextureHandle) {
@@ -357,10 +322,10 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
   BINDINGTABLETYPE_VKOBJ* finalobj = hidden->bindingtabletypes.create_OBJ();
   finalobj->vk_descType            = bindngs[dynamicbinding_i].descriptorType;
   finalobj->m_elementCount = bindngs[dynamicbinding_i].descriptorCount + staticsamplerscount;
-  finalobj->m_gpu                  = GPU->gpuIndx();
-  finalobj->vk_layout              = DSL;
-  finalobj->vk_stages              = bindngs[dynamicbinding_i].stageFlags;
-  *bindingTableHandle              = hidden->bindingtabletypes.returnHANDLEfromOBJ(finalobj);
+  finalobj->m_gpu          = GPU->gpuIndx();
+  finalobj->vk_layout      = DSL;
+  finalobj->vk_stages      = bindngs[dynamicbinding_i].stageFlags;
+  *bindingTableHandle      = hidden->bindingtabletypes.returnHANDLEfromOBJ(finalobj);
   return result_tgfx_SUCCESS;
 }
 
@@ -598,17 +563,64 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     fragmentStage_ci.pName  = "main";
   }
 
-  VkPipelineVertexInputStateCreateInfo vertexInputState = {};
+  VkPipelineVertexInputStateCreateInfo vertexInputState                        = {};
+  VkVertexInputAttributeDescription    attribs[VKCONST_MAXVERTEXATTRIBCOUNT]   = {};
+  VkVertexInputBindingDescription      bindings[VKCONST_MAXVERTEXBINDINGCOUNT] = {};
   {
     vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    if (desc->attribLayout) {
-      VERTEXATTRIBLAYOUT_VKOBJ* LAYOUT =
-        hidden->vertexattributelayouts.getOBJfromHANDLE(desc->attribLayout);
-      vertexInputState.pVertexBindingDescriptions      = &LAYOUT->BindingDesc;
-      vertexInputState.vertexBindingDescriptionCount   = 1;
-      vertexInputState.pVertexAttributeDescriptions    = LAYOUT->AttribDescs;
-      vertexInputState.vertexAttributeDescriptionCount = LAYOUT->AttribDesc_Count;
+
+    if (desc->attribLayout.attribCount > VKCONST_MAXVERTEXATTRIBCOUNT ||
+        desc->attribLayout.attribCount >
+          GPU->vk_propsDev.properties.limits.maxVertexInputAttributes) {
+      printer(result_tgfx_FAIL, "Exceeded max supported attribute count");
+      return result_tgfx_FAIL;
     }
+    if (desc->attribLayout.attribCount > VKCONST_MAXVERTEXBINDINGCOUNT ||
+        desc->attribLayout.attribCount >
+          GPU->vk_propsDev.properties.limits.maxVertexInputBindings) {
+      printer(result_tgfx_FAIL, "Exceeded max supported attribute count");
+      return result_tgfx_FAIL;
+    }
+
+    for (uint32_t i = 0; i < desc->attribLayout.attribCount; i++) {
+      const vertexAttributeDescription_tgfx& attr     = desc->attribLayout.i_attributes[i];
+      uint32_t                               attrIndx = attr.attributeIndx;
+      if (attrIndx >= desc->attribLayout.attribCount) {
+        printer(result_tgfx_FAIL, "Attribute index is wrong!");
+        return result_tgfx_FAIL;
+      }
+      if (attr.offset > GPU->vk_propsDev.properties.limits.maxVertexInputAttributeOffset) {
+        printer(result_tgfx_FAIL, "Attribute offset is too large, device doesn't support this!");
+        return result_tgfx_FAIL;
+      }
+
+      attribs[attrIndx].binding  = attr.bindingIndx;
+      attribs[attrIndx].offset   = attr.offset;
+      attribs[attrIndx].location = attrIndx;
+      attribs[attrIndx].format   = vk_findDataType(attr.dataType);
+    }
+
+    for (uint32_t i = 0; i < desc->attribLayout.bindingCount; i++) {
+      const vertexBindingDescription_tgfx& binding     = desc->attribLayout.i_bindings[i];
+      uint32_t                             bindingIndx = binding.bindingIndx;
+      if (bindingIndx >= desc->attribLayout.bindingCount) {
+        printer(result_tgfx_FAIL, "Attribute index is wrong!");
+        return result_tgfx_FAIL;
+      }
+      if (binding.stride > GPU->vk_propsDev.properties.limits.maxVertexInputBindingStride) {
+        printer(result_tgfx_FAIL, "Stride is too large, device doesn't support this!");
+        return result_tgfx_FAIL;
+      }
+
+      bindings[bindingIndx].binding   = bindingIndx;
+      bindings[bindingIndx].stride    = binding.stride;
+      bindings[bindingIndx].inputRate = vk_findVertexInputRateVk(binding.inputRate);
+    }
+
+    vertexInputState.pVertexAttributeDescriptions    = attribs;
+    vertexInputState.vertexAttributeDescriptionCount = desc->attribLayout.attribCount;
+    vertexInputState.pVertexBindingDescriptions      = bindings;
+    vertexInputState.vertexBindingDescriptionCount   = desc->attribLayout.bindingCount;
   }
 
   VkPipelineInputAssemblyStateCreateInfo IAState = {};
@@ -876,16 +888,17 @@ result_tgfx vk_copyComputePipeline(pipeline_tgfxhnd src, extension_tgfxlsthnd ex
 static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
 // Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
 result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsigned int bindingCount,
-                               const unsigned int* bindingIndices, const sampler_tgfxlsthnd samplerHandles) {
+                                       const unsigned int*      bindingIndices,
+                                       const sampler_tgfxlsthnd samplerHandles) {
   BINDINGTABLEINST_VKOBJ* set     = hidden->bindingtableinsts.getOBJfromHANDLE(bindingtable);
   BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
 
-  VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
+  VkWriteDescriptorSet  writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   VkDescriptorImageInfo imageInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
-    SAMPLER_VKOBJ* sampler = hidden->samplers.getOBJfromHANDLE(samplerHandles[bindingIter]);
+    SAMPLER_VKOBJ* sampler     = hidden->samplers.getOBJfromHANDLE(samplerHandles[bindingIter]);
+    uint32_t       elementIndx = bindingIndices[bindingIter];
 #ifdef VULKAN_DEBUGGING
-    uint32_t elementIndx = bindingIndices[bindingIter];
     if (!set || !sampler || bindingIndices[bindingIter] >= setType->m_elementCount ||
         setType->vk_descType != VK_DESCRIPTOR_TYPE_SAMPLER) {
       printer(result_tgfx_INVALIDARGUMENT, "vk_setBindingTable_Buffer() has invalid input!");
@@ -900,11 +913,11 @@ result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsign
         "frame!");
     }
 #else
-    sampler_descVK& samplerDESC = (( sampler_descVK* )set->DescElements)[elementIndex];
+    sampler_descVK& samplerDESC = (( sampler_descVK* )set->m_descs)[elementIndx];
     samplerDESC.isUpdated.store(1);
 #endif
 
-    samplerDESC.sampler_obj = sampler->vk_sampler;
+    samplerDESC.sampler_obj         = sampler->vk_sampler;
     imageInfos[bindingIter].sampler = sampler->vk_sampler;
 
     writeInfos[bindingIter].descriptorCount  = 1;
@@ -1224,10 +1237,8 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->createComputePipeline    = vk_createComputePipeline;
   core_tgfx_main->contentmanager->createBuffer             = vk_createBuffer;
   core_tgfx_main->contentmanager->createTexture            = vk_createTexture;
-  core_tgfx_main->contentmanager->createVertexAttribLayout = vk_createVertexAttribLayout;
   // core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
   core_tgfx_main->contentmanager->deleteShaderSource         = vk_destroyShaderSource;
-  core_tgfx_main->contentmanager->destroyVertexAttribLayout  = vk_destroyVertexAttribLayout;
   core_tgfx_main->contentmanager->destroyAllResources        = vk_destroyAllResources;
   core_tgfx_main->contentmanager->createRasterPipeline       = vk_createRasterPipeline;
   core_tgfx_main->contentmanager->setBindingTable_Buffer     = vk_setBindingTable_Buffer;

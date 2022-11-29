@@ -10,11 +10,6 @@ typedef struct tgfx_gpudatamanager {
   result_tgfx (*createSampler)(gpu_tgfxhnd gpu, const samplerDescription_tgfx* desc,
                                sampler_tgfxhnd* hnd);
 
-  // Attributes list should end with UNDEFINED (one extra element at the end)
-  result_tgfx (*createVertexAttribLayout)(const datatype_tgfx*           attributes,
-                                          vertexAttributeLayout_tgfxhnd* hnd);
-  void (*destroyVertexAttribLayout)(vertexAttributeLayout_tgfxhnd hnd);
-
   // Extension can be UNIFORMBUFFER
   result_tgfx (*createBuffer)(gpu_tgfxhnd gpu, const bufferDescription_tgfx* desc,
                               buffer_tgfxhnd* handle);

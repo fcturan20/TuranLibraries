@@ -24,7 +24,6 @@ typedef struct tgfx_monitor_obj*               monitor_tgfxhnd;
 typedef struct tgfx_rtslotset_obj*             RTSlotset_tgfxhnd;
 typedef struct tgfx_buffer_obj*                buffer_tgfxhnd;
 typedef struct tgfx_samplingtype_obj*          sampler_tgfxhnd;
-typedef struct tgfx_vertexattributelayout_obj* vertexAttributeLayout_tgfxhnd;
 typedef struct tgfx_shadersource_obj*          shaderSource_tgfxhnd;
 typedef struct tgfx_inheritedrtslotset_obj*    inheritedRTSlotset_tgfxhnd;
 typedef struct tgfx_bindingtabletype_obj*      bindingTableType_tgfxhnd;
@@ -41,7 +40,6 @@ typedef struct tgfx_pipeline_obj*              pipeline_tgfxhnd;
 //////////////////////////////////////
 
 typedef struct tgfx_extension_data*         extension_tgfx_handle;
-typedef struct tgfx_vertexattributedata*    vertexattributetgfx_handle;
 typedef struct tgfx_rtslotdescription_data* RTSlotDescription_tgfxhnd;
 typedef struct tgfx_rtslotusage_data*       rtslotusage_tgfx_handle;
 typedef struct tgfx_stencilsettings_data*   stencilcnfg_tgfxnd;
@@ -482,6 +480,12 @@ typedef enum buffer_usage_mask_tgfx {
   bufferUsageMask_tgfx_accessByPointerInShader = 1 << 7
 } bufferUsageMask_tgfx;
 typedef int bufferUsageMask_tgfxflag;
+
+typedef enum vertex_binding_input_rate_tgfx {
+  vertexBindingInputRate_tgfx_UNDEF,
+  vertexBindingInputRate_tgfx_VERTEX,
+  vertexBindingInputRate_tgfx_INSTANCE
+} vertexBindingInputRate_tgfx;
 
 // CALLBACKS
 

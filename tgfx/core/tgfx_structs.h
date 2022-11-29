@@ -164,6 +164,16 @@ typedef struct tgfx_typelessColor {
   char data[32];
 } typelessColor_tgfx;
 
+typedef struct tgfx_vertex_attribute_description {
+  unsigned int  attributeIndx, bindingIndx, offset;
+  datatype_tgfx dataType;
+} vertexAttributeDescription_tgfx;
+
+typedef struct tgfx_vertex_binding_description {
+  unsigned int                bindingIndx, stride;
+  vertexBindingInputRate_tgfx inputRate;
+} vertexBindingDescription_tgfx;
+
 // TGFX_SUBPASS_EXTENSION
 typedef struct tgfx_subpass_slot_description {
   rasterpassStore_tgfx storeType;
@@ -177,14 +187,20 @@ typedef struct tgfx_viewport_info {
   vec2_tgfx topLeftCorner, size, depthMinMax;
 } viewportInfo_tgfx;
 
+typedef struct tgfx_raster_input_assembler_description {
+  unsigned int                           attribCount, bindingCount;
+  const vertexAttributeDescription_tgfx* i_attributes;
+  const vertexBindingDescription_tgfx*   i_bindings;
+} rasterInputAssemblerDescription_tgfx;
+
 typedef struct tgfx_raster_pipeline_description {
-  shaderSource_tgfxlsthnd            shaderSourceList;
-  bindingTableType_tgfxlsthnd        typeTables;
-  vertexAttributeLayout_tgfxhnd      attribLayout;
-  viewportInfo_tgfx                  viewportList;
-  const rasterStateDescription_tgfx* mainStates;
-  textureChannels_tgfx               colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
-  textureChannels_tgfx               depthStencilTextureFormat;
+  shaderSource_tgfxlsthnd              shaderSourceList;
+  bindingTableType_tgfxlsthnd          typeTables;
+  rasterInputAssemblerDescription_tgfx attribLayout;
+  viewportInfo_tgfx                    viewportList;
+  const rasterStateDescription_tgfx*   mainStates;
+  textureChannels_tgfx                 colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
+  textureChannels_tgfx                 depthStencilTextureFormat;
 } rasterPipelineDescription_tgfx;
 
 typedef struct tgfx_rasterpass_begin_slot_info {

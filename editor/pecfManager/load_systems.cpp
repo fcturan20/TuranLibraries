@@ -201,6 +201,10 @@ void createFirstWindow() {
 texture_tgfxhnd customDepthRT = {}, reiChikitaTexture = {};
 buffer_tgfxhnd  firstBuffer  = {};
 void*           mappedRegion = nullptr;
+struct firstUboStruct {
+  vec4_tgfx positions[6];
+  vec4_tgfx translate;
+};
 
 void createDeviceLocalResources() {
   static constexpr uint32_t heapSize           = 1 << 27;
@@ -271,7 +275,7 @@ void createDeviceLocalResources() {
   bufferDesc.exts                   = nullptr;
   bufferDesc.permittedQueues        = allQueues;
   bufferDesc.usageFlag              = bufferUsageMask_tgfx_COPYFROM | bufferUsageMask_tgfx_COPYTO |
-                         bufferUsageMask_tgfx_STORAGEBUFFER;
+                         bufferUsageMask_tgfx_STORAGEBUFFER | bufferUsageMask_tgfx_VERTEXBUFFER;
   contentManager->createBuffer(gpu, &bufferDesc, &firstBuffer);
 
   heapRequirementsInfo_tgfx bufferHeapReqs = {};
@@ -348,7 +352,7 @@ void compileShadersandPipelines() {
       desc.DescriptorType         = shaderdescriptortype_tgfx_SAMPLER;
       sampler_tgfxhnd samplers[2] = {firstSampler, ( sampler_tgfxhnd )tgfx->INVALIDHANDLE};
       desc.SttcSmplrs             = samplers;
-      desc.ElementCount = 0;
+      desc.ElementCount           = 0;
       contentManager->createBindingTableType(gpu, &desc, &samplerBindingType);
     }
 
@@ -379,6 +383,28 @@ void compileShadersandPipelines() {
                                         // fragShaderBin, fragDataSize,
                                         &firstFragShader);
 
+    vertexAttributeDescription_tgfx attribs[2];
+    vertexBindingDescription_tgfx   bindings[2];
+    {
+      attribs[0].attributeIndx = 0;
+      attribs[0].bindingIndx   = 0;
+      attribs[0].dataType      = datatype_tgfx_VAR_VEC4;
+      attribs[0].offset        = 0;
+
+      attribs[1].attributeIndx = 1;
+      attribs[1].bindingIndx   = 1;
+      attribs[1].dataType      = datatype_tgfx_VAR_VEC4;
+      attribs[1].offset        = 0;
+
+      bindings[0].bindingIndx = 0;
+      bindings[0].inputRate   = vertexBindingInputRate_tgfx_VERTEX;
+      bindings[0].stride      = 16;
+
+      bindings[1].bindingIndx = 1;
+      bindings[1].inputRate   = vertexBindingInputRate_tgfx_INSTANCE;
+      bindings[1].stride      = 16;
+    }
+
     rasterStateDescription_tgfx stateDesc         = {};
     stateDesc.culling                             = cullmode_tgfx_OFF;
     stateDesc.polygonmode                         = polygonmode_tgfx_FILL;
@@ -399,6 +425,10 @@ void compileShadersandPipelines() {
     pipelineDesc.depthStencilTextureFormat        = depthRTFormat;
     pipelineDesc.mainStates                       = &stateDesc;
     pipelineDesc.shaderSourceList                 = shaderSources;
+    pipelineDesc.attribLayout.attribCount         = 2;
+    pipelineDesc.attribLayout.bindingCount        = 2;
+    pipelineDesc.attribLayout.i_attributes        = attribs;
+    pipelineDesc.attribLayout.i_bindings          = bindings;
     bindingTableType_tgfxhnd bindingTypes[4]      = {bufferBindingType, textureBindingType,
                                                      samplerBindingType,
                                                      ( bindingTableType_tgfxhnd )tgfx->INVALIDHANDLE};
@@ -435,14 +465,14 @@ void recordCommandBundles() {
                                    image_access_tgfx_TRANSFER_DIST, nullptr);
   renderer->cmdBarrierTexture(initBundle, 2, reiChikitaTexture, image_access_tgfx_TRANSFER_DIST,
                               image_access_tgfx_SHADER_SAMPLEONLY, textureAllUsages,
-                              textureAllUsages,
-                              nullptr);
+                              textureAllUsages, nullptr);
   renderer->finishCommandBundle(initBundle, nullptr);
   static constexpr uint32_t cmdCount = 7;
   // Record command bundle
   standardDrawBundle = renderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, nullptr);
   {
-    bindingTable_tgfxhnd bindingTables[4] = {bufferBindingTable, textureBindingTable, samplerBindingTable,
+    bindingTable_tgfxhnd bindingTables[4] = {bufferBindingTable, textureBindingTable,
+                                             samplerBindingTable,
                                              ( bindingTable_tgfxhnd )tgfx->INVALIDHANDLE};
     uint32_t             cmdKey           = 0;
 
@@ -450,9 +480,12 @@ void recordCommandBundles() {
     renderer->cmdSetViewport(standardDrawBundle, cmdKey++, {0, 0, 1280, 720, 0.0f, 1.0f});
     renderer->cmdSetScissor(standardDrawBundle, cmdKey++, {0, 0}, {1280, 720});
     renderer->cmdBindPipeline(standardDrawBundle, cmdKey++, firstRasterPipeline);
+    uint64_t       offsets[2] = {0, 16 * 6};
+    buffer_tgfxhnd buffers[2] = {firstBuffer, firstBuffer};
+    renderer->cmdBindVertexBuffers(standardDrawBundle, cmdKey++, 0, 2, buffers, offsets);
     renderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, bindingTables, 0,
                                    pipelineType_tgfx_RASTER);
-    renderer->cmdDrawNonIndexedDirect(standardDrawBundle, cmdKey++, 6, 1, 0, 0);
+    renderer->cmdDrawNonIndexedDirect(standardDrawBundle, cmdKey++, 6, 2, 0, 0);
 
     assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
   }
@@ -584,21 +617,28 @@ void load_systems() {
       renderer->executeBundles(frameCmdBuffer, standardDrawBundles, nullptr);
       renderer->endRasterpass(frameCmdBuffer, {});
       renderer->endCommandBuffer(frameCmdBuffer);
-      *( vec2_tgfx* )mappedRegion = {sinf(i / 360.0), cosf(i / 360.0)};
-    }
+      firstUboStruct& ubo = *( firstUboStruct* )mappedRegion;
+      ubo.positions[0]    = {-0.5, -0.5};
+      ubo.positions[1]    = {0.5, -0.5};
+      ubo.positions[2]    = {-0.5, 0.5};
+      ubo.positions[3]    = {0.5, 0.5};
+      ubo.positions[4]    = {0.5, -0.5};
+      ubo.positions[5]    = {-0.5, 0.5};
+      ubo.translate       = {sinf(i / 360.0), cosf(i / 360.0)};
 
-    renderer->queueExecuteCmdBuffers(queue, frameCmdBuffers, nullptr);
-    renderer->queueSubmit(queue);
-
-    if (i % 2) {
-      renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
+      renderer->queueExecuteCmdBuffers(queue, frameCmdBuffers, nullptr);
       renderer->queueSubmit(queue);
+
+      if (i % 2) {
+        renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
+        renderer->queueSubmit(queue);
+      }
+      waitValue++;
+      signalValue++;
+      renderer->queuePresent(queue, windowlst);
+      renderer->queueSubmit(queue);
+      STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);
+      printf("Finished and index: %u\n", swpchnIndx);
     }
-    waitValue++;
-    signalValue++;
-    renderer->queuePresent(queue, windowlst);
-    renderer->queueSubmit(queue);
-    STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);
-    printf("Finished and index: %u\n", swpchnIndx);
   }
 }

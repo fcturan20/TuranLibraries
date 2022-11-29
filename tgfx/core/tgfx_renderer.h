@@ -76,9 +76,9 @@ typedef struct tgfx_renderer {
                           pipeline_tgfxhnd pipeline);
   // For devices that doesn't allow storage buffers to store vertex buffers,
   //   this function is needed
-  void (*cmdBindVertexBuffer)(commandBundle_tgfxhnd bundle, unsigned long long key,
-                              buffer_tgfxhnd buffer, unsigned long long offset,
-                              unsigned long long boundSize);
+  void (*cmdBindVertexBuffers)(commandBundle_tgfxhnd bundle, unsigned long long key,
+                               unsigned int firstBinding, unsigned int bindingCount,
+                               const buffer_tgfxhnd* buffers, const unsigned long long* offsets);
   // @param indexDataTypeSize: Specify the byte size of index data type
   //   (most devices support only 2 and 4)
   void (*cmdBindIndexBuffers)(commandBundle_tgfxhnd bundle, unsigned long long key,
@@ -88,8 +88,6 @@ typedef struct tgfx_renderer {
                          viewportInfo_tgfx viewport);
   void (*cmdSetScissor)(commandBundle_tgfxhnd bundle, unsigned long long key, ivec2_tgfx offset,
                         uvec2_tgfx size);
-  void (*cmdSetDynamicVertexLayout)(commandBundle_tgfxhnd bundle, unsigned long long key,
-                                    vertexAttributeLayout_tgfxhnd layout);
   void (*cmdSetDepthBounds)(commandBundle_tgfxhnd bundle, unsigned long long key, float min,
                             float max);
   void (*cmdDrawNonIndexedDirect)(commandBundle_tgfxhnd bndl, unsigned long long key,

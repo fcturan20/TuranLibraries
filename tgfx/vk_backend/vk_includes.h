@@ -127,7 +127,7 @@ inline unsigned char GetByteSizeOf_TextureChannels(textureChannels_tgfx channelt
     default: assert_vk(0 && "GetSizeOf_TextureChannels() doesn't support this type!"); break;
   }
 }
-inline VkFormat Find_VkFormat_byDataType(datatype_tgfx datatype) {
+inline VkFormat vk_findDataType(datatype_tgfx datatype) {
   switch (datatype) {
     case datatype_tgfx_VAR_VEC2: return VK_FORMAT_R32G32_SFLOAT;
     case datatype_tgfx_VAR_VEC3: return VK_FORMAT_R32G32B32_SFLOAT;
@@ -900,4 +900,12 @@ inline textureUsageMask_tgfxflag vk_findTextureUsageFlagTgfx(VkImageUsageFlags m
       ? textureUsageMask_tgfx_RENDERATTACHMENT
       : 0;
   return flag;
+}
+inline VkVertexInputRate vk_findVertexInputRateVk(vertexBindingInputRate_tgfx rate) {
+  switch (rate) {
+    case vertexBindingInputRate_tgfx_VERTEX: return VK_VERTEX_INPUT_RATE_VERTEX;
+    case vertexBindingInputRate_tgfx_INSTANCE: return VK_VERTEX_INPUT_RATE_INSTANCE;
+    default: assert(0 && "Vertex Input Rate is invalid!");
+  }
+  return VK_VERTEX_INPUT_RATE_MAX_ENUM;
 }

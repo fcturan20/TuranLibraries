@@ -95,20 +95,20 @@ struct BUFFER_VKOBJ {
 // Framebuffer RT Slot Management
 
 struct colorslot_vk {
-  TEXTURE_VKOBJ*     RT;
-  rasterpassLoad_tgfx  LOADSTATE;
-  bool               IS_USED_LATER;
-  operationtype_tgfx RT_OPERATIONTYPE;
-  glm::vec4          CLEAR_COLOR;
-  std::atomic_bool   IsChanged = false;
+  TEXTURE_VKOBJ*      RT;
+  rasterpassLoad_tgfx LOADSTATE;
+  bool                IS_USED_LATER;
+  operationtype_tgfx  RT_OPERATIONTYPE;
+  glm::vec4           CLEAR_COLOR;
+  std::atomic_bool    IsChanged = false;
 };
 struct depthstencilslot_vk {
-  TEXTURE_VKOBJ*     RT;
-  rasterpassLoad_tgfx  DEPTH_LOAD, STENCIL_LOAD;
-  bool               IS_USED_LATER;
-  operationtype_tgfx DEPTH_OPTYPE, STENCIL_OPTYPE;
-  glm::vec2          CLEAR_COLOR;
-  std::atomic_bool   IsChanged = false;
+  TEXTURE_VKOBJ*      RT;
+  rasterpassLoad_tgfx DEPTH_LOAD, STENCIL_LOAD;
+  bool                IS_USED_LATER;
+  operationtype_tgfx  DEPTH_OPTYPE, STENCIL_OPTYPE;
+  glm::vec2           CLEAR_COLOR;
+  std::atomic_bool    IsChanged = false;
 };
 struct rtslots_vk {
   colorslot_vk*        COLOR_SLOTs      = nullptr;
@@ -213,7 +213,7 @@ struct PIPELINE_VKOBJ {
   VkPipelineBindPoint vk_type   = VK_PIPELINE_BIND_POINT_MAX_ENUM;
 
   VkFormat vk_colorAttachmentFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
-  VkFormat vk_depthAttachmentFormat                                            = {};
+  VkFormat vk_depthAttachmentFormat                                           = {};
 };
 struct depthsettingsdesc_vk {
   VkBool32    ShouldWrite    = VK_FALSE;
@@ -231,27 +231,15 @@ struct blendinginfo_vk {
   VkPipelineColorBlendAttachmentState BlendState        = {};
 };
 
+vk_uint32c VKCONST_MAXVERTEXATTRIBCOUNT = 8, VKCONST_MAXVERTEXBINDINGCOUNT = 8;
 struct VERTEXATTRIBLAYOUT_VKOBJ {
   std::atomic_bool isALIVE    = false;
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::VERTEXATTRIB;
   static uint16_t  GET_EXTRAFLAGS(VERTEXATTRIBLAYOUT_VKOBJ* obj) { return 0; }
 
-  void operator=(const VERTEXATTRIBLAYOUT_VKOBJ& src) {
-    isALIVE.store(true);
-    Attribs          = src.Attribs;
-    AttribCount      = src.AttribCount;
-    size_perVertex   = src.size_perVertex;
-    BindingDesc      = src.BindingDesc;
-    AttribDescs      = src.AttribDescs;
-    AttribDesc_Count = src.AttribDesc_Count;
-  }
-  datatype_tgfx* Attribs;
-  unsigned int   AttribCount, size_perVertex;
-
-  // Currently, only one binding is supported because I didn't understand bindings properly.
-  VkVertexInputBindingDescription    BindingDesc;
-  VkVertexInputAttributeDescription* AttribDescs;
-  unsigned char                      AttribDesc_Count;
+  VkVertexInputBindingDescription   bindingDescs[VKCONST_MAXVERTEXBINDINGCOUNT];
+  VkVertexInputAttributeDescription attribDescs[VKCONST_MAXVERTEXATTRIBCOUNT];
+  unsigned char                     attribDescsCount, bindingDescsCount;
 };
 
 struct HEAP_VKOBJ {

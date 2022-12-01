@@ -91,7 +91,7 @@ void load_plugins() {
   }
 
   supermemoryblock_tapi* superMemBlock =
-    allocatorSys->createSuperMemoryBlock(1 << 30, "Vector Perf Test");
+    allocatorSys->createSuperMemoryBlock(1ull << 30, "Vector Perf Test");
   pluginElement* v_pluginElements = nullptr;
   {
     unsigned long long duration = 0;
@@ -201,10 +201,14 @@ void createFirstWindow() {
 texture_tgfxhnd customDepthRT = {}, reiChikitaTexture = {};
 buffer_tgfxhnd  firstBuffer  = {};
 void*           mappedRegion = nullptr;
+struct vertex {
+  vec2_tgfx position;
+  vec2_tgfx textCoord;
+};
 struct firstUboStruct {
-  vec4_tgfx positions[4];
-  uint16_t  indices[6];
-  vec4_tgfx translate;
+  vertex vertices[6];
+  // uint16_t  indices[6];
+  vec4_tgfx translate[2];
 };
 
 void createDeviceLocalResources() {
@@ -277,7 +281,7 @@ void createDeviceLocalResources() {
   bufferDesc.permittedQueues        = allQueues;
   bufferDesc.usageFlag              = bufferUsageMask_tgfx_COPYFROM | bufferUsageMask_tgfx_COPYTO |
                          bufferUsageMask_tgfx_STORAGEBUFFER | bufferUsageMask_tgfx_VERTEXBUFFER |
-                         bufferUsageMask_tgfx_INDEXBUFFER;
+                         bufferUsageMask_tgfx_INDEXBUFFER | bufferUsageMask_tgfx_INDIRECTBUFFER;
   contentManager->createBuffer(gpu, &bufferDesc, &firstBuffer);
 
   heapRequirementsInfo_tgfx bufferHeapReqs = {};
@@ -288,7 +292,7 @@ void createDeviceLocalResources() {
   ivec3_tgfx reiChikitaWHC  = {};
   void*      reiChikitaData = stbi_load(SOURCE_DIR "/shaders/reiChikita.jpg", &reiChikitaWHC.x,
                                         &reiChikitaWHC.y, &reiChikitaWHC.z, 4);
-  memcpy((( char* )mappedRegion) + 2048, reiChikitaData, 3000 * 3000 * 4);
+  memcpy((( char* )mappedRegion) + 2048, reiChikitaData, 3000 * 3000ull * 4ull);
 
   uint32_t reiChikitaSupportedMemTypes = {};
   tgfx->helpers->getTextureSupportedMemTypes(reiChikitaTexture, &reiChikitaSupportedMemTypes);
@@ -385,18 +389,23 @@ void compileShadersandPipelines() {
                                         // fragShaderBin, fragDataSize,
                                         &firstFragShader);
 
-    vertexAttributeDescription_tgfx attribs[2];
+    vertexAttributeDescription_tgfx attribs[3];
     vertexBindingDescription_tgfx   bindings[2];
     {
       attribs[0].attributeIndx = 0;
       attribs[0].bindingIndx   = 0;
-      attribs[0].dataType      = datatype_tgfx_VAR_VEC4;
+      attribs[0].dataType      = datatype_tgfx_VAR_VEC2;
       attribs[0].offset        = 0;
 
       attribs[1].attributeIndx = 1;
-      attribs[1].bindingIndx   = 1;
-      attribs[1].dataType      = datatype_tgfx_VAR_VEC4;
-      attribs[1].offset        = 0;
+      attribs[1].bindingIndx   = 0;
+      attribs[1].dataType      = datatype_tgfx_VAR_VEC2;
+      attribs[1].offset        = 8;
+
+      attribs[2].attributeIndx = 2;
+      attribs[2].bindingIndx   = 1;
+      attribs[2].dataType      = datatype_tgfx_VAR_VEC4;
+      attribs[2].offset        = 0;
 
       bindings[0].bindingIndx = 0;
       bindings[0].inputRate   = vertexBindingInputRate_tgfx_VERTEX;
@@ -427,7 +436,7 @@ void compileShadersandPipelines() {
     pipelineDesc.depthStencilTextureFormat        = depthRTFormat;
     pipelineDesc.mainStates                       = &stateDesc;
     pipelineDesc.shaderSourceList                 = shaderSources;
-    pipelineDesc.attribLayout.attribCount         = 2;
+    pipelineDesc.attribLayout.attribCount         = 3;
     pipelineDesc.attribLayout.bindingCount        = 2;
     pipelineDesc.attribLayout.i_attributes        = attribs;
     pipelineDesc.attribLayout.i_bindings          = bindings;
@@ -469,7 +478,7 @@ void recordCommandBundles() {
                               image_access_tgfx_SHADER_SAMPLEONLY, textureAllUsages,
                               textureAllUsages, nullptr);
   renderer->finishCommandBundle(initBundle, nullptr);
-  static constexpr uint32_t cmdCount = 8;
+  static constexpr uint32_t cmdCount = 9;
   // Record command bundle
   standardDrawBundle = renderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, nullptr);
   {
@@ -482,13 +491,16 @@ void recordCommandBundles() {
     renderer->cmdSetViewport(standardDrawBundle, cmdKey++, {0, 0, 1280, 720, 0.0f, 1.0f});
     renderer->cmdSetScissor(standardDrawBundle, cmdKey++, {0, 0}, {1280, 720});
     renderer->cmdBindPipeline(standardDrawBundle, cmdKey++, firstRasterPipeline);
-    uint64_t       offsets[2] = {0, (16 * 4) + (2 * 6)};
+    uint64_t       offsets[2] = {0, offsetof(firstUboStruct, translate)};
     buffer_tgfxhnd buffers[2] = {firstBuffer, firstBuffer};
     renderer->cmdBindVertexBuffers(standardDrawBundle, cmdKey++, 0, 2, buffers, offsets);
-    renderer->cmdBindIndexBuffer(standardDrawBundle, cmdKey++, firstBuffer, 16 * 4, 2);
+    // renderer->cmdBindIndexBuffer(standardDrawBundle, cmdKey++, firstBuffer,
+    // offsetof(firstUboStruct, indices), 2);
     renderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, bindingTables, 0,
                                    pipelineType_tgfx_RASTER);
-    renderer->cmdDrawIndexedDirect(standardDrawBundle, cmdKey++, 6, 2, 0, 0, 0);
+    indirectOperationType_tgfx firstOp = indirectOperationType_tgfx_DRAWNONINDEXED;
+    renderer->cmdExecuteIndirect(standardDrawBundle, cmdKey++, 1, &firstOp, firstBuffer,
+                                 sizeof(firstUboStruct), 0);
 
     assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
   }
@@ -535,17 +547,28 @@ void load_systems() {
   recordCommandBundles();
 
   firstUboStruct& ubo = *( firstUboStruct* )mappedRegion;
-  ubo.positions[0]    = {-0.5, -0.5};
-  ubo.positions[1]    = {0.5, -0.5};
-  ubo.positions[2]    = {-0.5, 0.5};
-  ubo.positions[3]    = {0.5, 0.5};
+  ubo.vertices[0]     = {{-0.5, -0.5}, {1.0, 1.0}};
+  ubo.vertices[1]     = {{-0.5, 0.5}, {0.0, 1.0}};
+  ubo.vertices[2]     = {{0.5, -0.5}, {1.0, 0.0}};
+  ubo.vertices[3]     = {{0.5, 0.5}, {0.0, 0.0}};
+  ubo.vertices[4]     = {{0.5, -0.5}, {1.0, 0.0}};
+  ubo.vertices[5]     = {{-0.5, 0.5}, {0.0, 1.0}};
 
+  /*
   ubo.indices[0] = 0;
   ubo.indices[1] = 1;
   ubo.indices[2] = 2;
-  ubo.indices[3] = 2;
-  ubo.indices[4] = 1;
-  ubo.indices[5] = 3;
+  ubo.indices[3] = 3;
+  ubo.indices[4] = 2;
+  ubo.indices[5] = 1;
+  */
+
+  drawNonIndexedIndirectArgument_tgfx& firstArgument =
+    *( drawNonIndexedIndirectArgument_tgfx* )(( firstUboStruct* )mappedRegion + 1);
+  firstArgument.firstVertex            = 0;
+  firstArgument.firstInstance          = 0;
+  firstArgument.vertexCountPerInstance = 6;
+  firstArgument.instanceCount          = 2;
 
   fence_tgfxhnd fence;
   renderer->createFences(gpu, 1, 15u, &fence);
@@ -634,7 +657,7 @@ void load_systems() {
       renderer->endRasterpass(frameCmdBuffer, {});
       renderer->endCommandBuffer(frameCmdBuffer);
 
-      ubo.translate       = {sinf(i / 360.0), cosf(i / 360.0)};
+      ubo.translate[0] = {sinf(i / 360.0), cosf(i / 360.0)};
 
       renderer->queueExecuteCmdBuffers(queue, frameCmdBuffers, nullptr);
       renderer->queueSubmit(queue);

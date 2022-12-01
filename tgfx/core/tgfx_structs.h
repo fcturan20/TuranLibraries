@@ -210,3 +210,22 @@ typedef struct tgfx_rasterpass_begin_slot_info {
   rasterpassStore_tgfx storeOp, storeStencilOp;
   typelessColor_tgfx   clearValue;
 } rasterpassBeginSlotInfo_tgfx;
+
+typedef struct tgfx_indirect_argument_draw_indexed {
+  unsigned int indexCountPerInstance;
+  unsigned int instanceCount;
+  unsigned int firstIndex;
+  int vertexOffset;
+  unsigned int firstInstance;
+} drawIndexedIndirectArgument_tgfx;
+
+typedef struct tgfx_indirect_argument_draw_nonindexed {
+  unsigned int vertexCountPerInstance;
+  unsigned int instanceCount;
+  unsigned int firstVertex;
+  unsigned int firstInstance;
+} drawNonIndexedIndirectArgument_tgfx;
+
+typedef struct tgfx_indirect_argument_dispatch {
+  uvec3_tgfx threadGroupCount;
+} dispatchIndirectArgument_tgfx;

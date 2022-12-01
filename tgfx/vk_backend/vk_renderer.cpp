@@ -51,8 +51,7 @@ enum class vk_cmdType : vkEnumType_cmdType(){
   setScissor,
   drawNonIndexedDirect,
   drawIndexedDirect,
-  drawNonIndexedIndirect,
-  drawIndexedIndirect,
+  executeIndirect,
   barrierTexture,
   barrierBuffer,
   bindPipeline,
@@ -199,6 +198,44 @@ struct vkCmdStruct_bindVertexBuffers {
   uint32_t     firstBinding, bindingCount;
 };
 
+VkDeviceSize vk_findIndirectOperationDataSize(indirectOperationType_tgfx opType) {
+  switch (opType) {
+    case indirectOperationType_tgfx_DRAWNONINDEXED: return sizeof(VkDrawIndirectCommand);
+    case indirectOperationType_tgfx_DRAWINDEXED: return sizeof(VkDrawIndexedIndirectCommand);
+    case indirectOperationType_tgfx_DISPATCH: return sizeof(VkDispatchIndirectCommand);
+  }
+  return UINT64_MAX;
+}
+vk_uint32c VKCONST_MAXINDIRECTOPERATIONCOUNT = 128;
+struct vkCmdStruct_executeIndirect {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::executeIndirect;
+
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    VkDeviceSize activeOffset = vk_bufferOffset;
+    for (uint32_t i = 0;
+         i < VKCONST_MAXINDIRECTOPERATIONCOUNT && opTypes[i] != indirectOperationType_tgfx_UNDEF;
+         i++) {
+      switch (opTypes[i]) {
+        case indirectOperationType_tgfx_DRAWNONINDEXED:
+          vkCmdDrawIndirect(cb, vk_buffer, activeOffset, 1, 0);
+          break;
+        case indirectOperationType_tgfx_DRAWINDEXED:
+          vkCmdDrawIndexedIndirect(cb, vk_buffer, activeOffset, 1, 0);
+          break;
+        case indirectOperationType_tgfx_DISPATCH:
+          vkCmdDispatchIndirect(cb, vk_buffer, activeOffset);
+          break;
+        default: printer(result_tgfx_NOTCODED, "Indirect Operation Type isn't supported!"); return;
+      }
+
+      activeOffset += vk_findIndirectOperationDataSize(opTypes[i]);
+    }
+  };
+  indirectOperationType_tgfx opTypes[VKCONST_MAXINDIRECTOPERATIONCOUNT] = {};
+  VkBuffer                   vk_buffer;
+  VkDeviceSize               vk_bufferOffset;
+};
+
 struct vk_cmd {
   vk_cmdType cmd_type = vk_cmdType::error_2;
 
@@ -208,9 +245,10 @@ struct vk_cmd {
     return std::max({sizeof(T)...});
   }
 
-#define vkCmdStructsLists                                                         \
-  vkCmdStruct_example, vkCmdStruct_barrierTexture, vkCmdStruct_bindBindingTables, \
-    vkCmdStruct_bindPipeline, vkCmdStruct_dispatch, vkCmdStruct_bindVertexBuffers
+#define vkCmdStructsLists                                                          \
+  vkCmdStruct_example, vkCmdStruct_barrierTexture, vkCmdStruct_bindBindingTables,  \
+    vkCmdStruct_bindPipeline, vkCmdStruct_dispatch, vkCmdStruct_bindVertexBuffers, \
+    vkCmdStruct_executeIndirect
   static constexpr uint32_t maxCmdStructSize = max_sizeof<vkCmdStructsLists>();
   uint8_t                   cmd_data[maxCmdStructSize];
   vk_cmd() : cmd_type(vk_cmdType::error) {}
@@ -264,6 +302,9 @@ void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cm
       break;
     case vk_cmdType::drawIndexedDirect:
       (( vkCmdStruct_drawIndexedDirect* )cmd.cmd_data)->cmd_execute(cb, bundle);
+      break;
+    case vk_cmdType::executeIndirect:
+      (( vkCmdStruct_executeIndirect* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
     case vk_cmdType::error:
     case vk_cmdType::error_2: printf("One of the cmds is not used!"); break;
@@ -417,7 +458,7 @@ void vk_cmdBindIndexBuffer(commandBundle_tgfxhnd i_bundle, unsigned long long so
                            buffer_tgfxhnd buffer, unsigned long long offset,
                            unsigned char IndexTypeSize) {
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
-  auto* cmd = vk_createCmdStruct<vkCmdStruct_bindIndexBuffer>(&bundle->m_cmds[sortKey]);
+  auto*            cmd = vk_createCmdStruct<vkCmdStruct_bindIndexBuffer>(&bundle->m_cmds[sortKey]);
 
   cmd->vk_buffer = contentmanager->GETBUFFER_ARRAY().getOBJfromHANDLE(buffer)->vk_buffer;
   switch (IndexTypeSize) {
@@ -443,24 +484,34 @@ void vk_cmdDrawIndexedDirect(commandBundle_tgfxhnd i_bundle, unsigned long long 
                              unsigned int firstIndex, int vertexOffset,
                              unsigned int firstInstance) {
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
-  auto*            cmd = vk_createCmdStruct<vkCmdStruct_drawIndexedDirect>(&bundle->m_cmds[sortKey]);
+  auto* cmd = vk_createCmdStruct<vkCmdStruct_drawIndexedDirect>(&bundle->m_cmds[sortKey]);
 
-  cmd->firstIndx = firstIndex;
+  cmd->firstIndx     = firstIndex;
   cmd->firstInstance = firstInstance;
   cmd->indxCount     = indexCount;
   cmd->instanceCount = instanceCount;
   cmd->vertexOffset  = vertexOffset;
 }
-void vk_cmdDrawNonIndexedIndirect(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
-                                  buffer_tgfxhnd       drawDataBuffer,
-                                  unsigned long long   drawDataBufferOffset,
-                                  buffer_tgfxhnd       drawCountBuffer,
-                                  unsigned long long   drawCountBufferOffset,
-                                  extension_tgfxlsthnd exts) {}
-void vk_cmdDrawIndexedIndirect(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
-                               buffer_tgfxhnd       drawCountBuffer,
-                               unsigned long long   drawCountBufferOffset,
-                               extension_tgfxlsthnd exts) {}
+void vk_cmdExecuteIndirect(commandBundle_tgfxhnd i_bundle, unsigned long long sortKey,
+                           unsigned int                      operationCount,
+                           const indirectOperationType_tgfx* operationTypes,
+                           buffer_tgfxhnd dataBffr, unsigned long long drawDataBufferOffset,
+                           extension_tgfxlsthnd exts) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
+  auto*            cmd = vk_createCmdStruct<vkCmdStruct_executeIndirect>(&bundle->m_cmds[sortKey]);
+
+  if (operationCount > VKCONST_MAXINDIRECTOPERATIONCOUNT) {
+    printer(
+      result_tgfx_FAIL,
+      "Exceeding Vulkan backend's limit of operationCount in a single cmdExecuteIndirect call!");
+    return;
+  }
+  for (uint32_t i = 0; i < operationCount; i++) {
+    cmd->opTypes[i] = operationTypes[i];
+  }
+  cmd->vk_buffer       = contentmanager->GETBUFFER_ARRAY().getOBJfromHANDLE(dataBffr)->vk_buffer;
+  cmd->vk_bufferOffset = drawDataBufferOffset;
+}
 void vk_cmdBarrierTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
                           texture_tgfxhnd i_texture, image_access_tgfx lastAccess,
                           image_access_tgfx nextAccess, textureUsageMask_tgfxflag lastUsage,
@@ -631,20 +682,19 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUE
 }
 
 void set_VkRenderer_funcPtrs() {
-  core_tgfx_main->renderer->cmdBindBindingTables      = vk_cmdBindBindingTables;
-  core_tgfx_main->renderer->cmdBindIndexBuffer        = vk_cmdBindIndexBuffer;
-  core_tgfx_main->renderer->cmdBindVertexBuffers      = vk_cmdBindVertexBuffers;
-  core_tgfx_main->renderer->cmdDrawIndexedDirect      = vk_cmdDrawIndexedDirect;
-  core_tgfx_main->renderer->cmdDrawIndexedIndirect    = vk_cmdDrawIndexedIndirect;
-  core_tgfx_main->renderer->cmdDrawNonIndexedDirect   = vk_cmdDrawNonIndexedDirect;
-  core_tgfx_main->renderer->cmdDrawNonIndexedIndirect = vk_cmdDrawNonIndexedIndirect;
-  core_tgfx_main->renderer->cmdBarrierTexture         = vk_cmdBarrierTexture;
-  core_tgfx_main->renderer->cmdBindPipeline           = vk_cmdBindPipeline;
-  core_tgfx_main->renderer->cmdDispatch               = vk_cmdDispatch;
-  core_tgfx_main->renderer->cmdSetViewport            = vk_cmdSetViewport;
-  core_tgfx_main->renderer->cmdSetScissor             = vk_cmdSetScissor;
-  core_tgfx_main->renderer->cmdSetDepthBounds         = vk_cmdSetDepthBounds;
-  core_tgfx_main->renderer->cmdCopyBufferToTexture    = vk_cmdCopyBufferToTexture;
+  core_tgfx_main->renderer->cmdBindBindingTables    = vk_cmdBindBindingTables;
+  core_tgfx_main->renderer->cmdBindIndexBuffer      = vk_cmdBindIndexBuffer;
+  core_tgfx_main->renderer->cmdBindVertexBuffers    = vk_cmdBindVertexBuffers;
+  core_tgfx_main->renderer->cmdDrawIndexedDirect    = vk_cmdDrawIndexedDirect;
+  core_tgfx_main->renderer->cmdExecuteIndirect      = vk_cmdExecuteIndirect;
+  core_tgfx_main->renderer->cmdDrawNonIndexedDirect = vk_cmdDrawNonIndexedDirect;
+  core_tgfx_main->renderer->cmdBarrierTexture       = vk_cmdBarrierTexture;
+  core_tgfx_main->renderer->cmdBindPipeline         = vk_cmdBindPipeline;
+  core_tgfx_main->renderer->cmdDispatch             = vk_cmdDispatch;
+  core_tgfx_main->renderer->cmdSetViewport          = vk_cmdSetViewport;
+  core_tgfx_main->renderer->cmdSetScissor           = vk_cmdSetScissor;
+  core_tgfx_main->renderer->cmdSetDepthBounds       = vk_cmdSetDepthBounds;
+  core_tgfx_main->renderer->cmdCopyBufferToTexture  = vk_cmdCopyBufferToTexture;
 
   core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
   core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;

@@ -487,6 +487,15 @@ typedef enum vertex_binding_input_rate_tgfx {
   vertexBindingInputRate_tgfx_INSTANCE
 } vertexBindingInputRate_tgfx;
 
+typedef enum indirect_operation_type_tgfx {
+  indirectOperationType_tgfx_UNDEF,
+  indirectOperationType_tgfx_DRAWNONINDEXED,
+  indirectOperationType_tgfx_DRAWINDEXED,
+  indirectOperationType_tgfx_DISPATCH,
+  indirectOperationType_tgfx_BINDINDEXBUFFER_TGFXEXT_EXTENDEDINDIRECT,
+  indirectOperationType_tgfx_UNDEF2
+} indirectOperationType_tgfx;
+
 // CALLBACKS
 
 typedef void (*tgfx_windowResizeCallback)(window_tgfxhnd WindowHandle, void* UserPointer,

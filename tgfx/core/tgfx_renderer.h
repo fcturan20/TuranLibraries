@@ -82,8 +82,8 @@ typedef struct tgfx_renderer {
   // @param indexDataTypeSize: Specify the byte size of index data type
   //   (most devices support only 2 and 4)
   void (*cmdBindIndexBuffer)(commandBundle_tgfxhnd bundle, unsigned long long key,
-                              buffer_tgfxhnd buffer, unsigned long long offset,
-                              unsigned char indexDataTypeSize);
+                             buffer_tgfxhnd buffer, unsigned long long offset,
+                             unsigned char indexDataTypeSize);
   void (*cmdSetViewport)(commandBundle_tgfxhnd bundle, unsigned long long key,
                          viewportInfo_tgfx viewport);
   void (*cmdSetScissor)(commandBundle_tgfxhnd bundle, unsigned long long key, ivec2_tgfx offset,
@@ -101,19 +101,13 @@ typedef struct tgfx_renderer {
                                  buffer_tgfxhnd srcBuffer, unsigned long long bufferOffset,
                                  texture_tgfxhnd dstTexture, image_access_tgfx lastAccess,
                                  extension_tgfxlsthnd exts);
-  // @param Note: If your GPU doesn't support draw_count_indirect;
-  //   drawCountBuffer should be NULL & bufferOffset should be drawCount
-  void (*cmdDrawNonIndexedIndirect)(commandBundle_tgfxhnd bndl, unsigned long long key,
-                                    buffer_tgfxhnd       dataBffr,
-                                    unsigned long long   drawDataBufferOffset,
-                                    buffer_tgfxhnd       drawCountBuffer,
-                                    unsigned long long   drawCountBufferOffset,
-                                    extension_tgfxlsthnd exts);
-  // @param Note: If your GPU doesn't support draw_count_indirect;
-  //   drawCountBuffer should be NULL & bufferOffset should be drawCount
-  void (*cmdDrawIndexedIndirect)(commandBundle_tgfxhnd bndl, unsigned long long key,
-                                 buffer_tgfxhnd dataBffr, unsigned long long drawCountBufferOffset,
-                                 extension_tgfxlsthnd exts);
+
+  // EXT: TGFX_OperationCountBuffer
+  void (*cmdExecuteIndirect)(commandBundle_tgfxhnd bndl, unsigned long long key,
+                             unsigned int                      operationCount,
+                             const indirectOperationType_tgfx* operationTypes,
+                             buffer_tgfxhnd dataBffr, unsigned long long drawDataBufferOffset,
+                             extension_tgfxlsthnd exts);
   // Extensions: TransferQueueOwnership
   void (*cmdBarrierTexture)(commandBundle_tgfxhnd bndl, unsigned long long key,
                             texture_tgfxhnd texture, image_access_tgfx lastAccess,

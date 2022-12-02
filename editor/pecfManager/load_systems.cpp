@@ -293,6 +293,7 @@ void createDeviceLocalResources() {
   void*      reiChikitaData = stbi_load(SOURCE_DIR "/shaders/reiChikita.jpg", &reiChikitaWHC.x,
                                         &reiChikitaWHC.y, &reiChikitaWHC.z, 4);
   memcpy((( char* )mappedRegion) + 2048, reiChikitaData, 3000 * 3000ull * 4ull);
+  STBI_FREE(reiChikitaData);
 
   uint32_t reiChikitaSupportedMemTypes = {};
   tgfx->helpers->getTextureSupportedMemTypes(reiChikitaTexture, &reiChikitaSupportedMemTypes);

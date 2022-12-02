@@ -6,7 +6,7 @@ find_package(directx-headers CONFIG REQUIRED)
 
 ##file(GLOB_RECURSE d3d12backendfiles "*.cpp" "*.h" "*.c")
 ##add_library(TGFXD3D12 SHARED ${d3d12backendfiles})
-##target_include_directories(TGFXD3D12 PRIVATE ${CMAKE_SOURCE_DIR}/turanapi/turanapi ${CMAKE_SOURCE_DIR}/tgfx/core)
+##target_include_directories(TGFXD3D12 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../turanapi/turanapi ${CMAKE_CURRENT_SOURCE_DIR}/../core)
 ##set_target_properties(TGFXD3D12 PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 ##set_target_properties(TGFXD3D12 PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
 ##set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DTD3D12_DEBUGGING")

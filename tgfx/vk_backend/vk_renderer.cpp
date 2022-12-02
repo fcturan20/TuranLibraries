@@ -379,7 +379,7 @@ void vk_finishCommandBundle(commandBundle_tgfxhnd i_bundle, extension_tgfxlsthnd
   // MOVE THIS RECORDING STAGE BECAUSE FRAMEBUFFER WILL RECORD ALREADY!
 }
 void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
-  CMDBUNDLE_VKOBJ* bundle    = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(hnd);
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(hnd);
   /*
   auto&            queueFams = bundle->m_gpu->manager()->m_queueFams;
   for (uint32_t queueFamIndx = 0; queueFamIndx < queueFams.size(); queueFamIndx++) {

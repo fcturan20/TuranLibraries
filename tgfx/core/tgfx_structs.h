@@ -215,7 +215,7 @@ typedef struct tgfx_indirect_argument_draw_indexed {
   unsigned int indexCountPerInstance;
   unsigned int instanceCount;
   unsigned int firstIndex;
-  int vertexOffset;
+  int          vertexOffset;
   unsigned int firstInstance;
 } drawIndexedIndirectArgument_tgfx;
 

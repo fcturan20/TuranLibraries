@@ -8,8 +8,8 @@
 #include "vulkan/vulkan.h"
 
 struct core_public {
-  VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT>&            GETWINDOWs();
-  VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT>& getGPUs();
+  VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT>& GETWINDOWs();
+  VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT>&          getGPUs();
 };
 
 static uint32_t gpuCounter = 0;
@@ -32,7 +32,7 @@ struct GPU_VKOBJ {
  private:
   extManager_vkDevice* m_extensions;
   manager_vk*          m_manager = nullptr;
-  uint8_t m_gpuIndx = 255;
+  uint8_t              m_gpuIndx = 255;
 
  public:
   const extManager_vkDevice* ext() const { return m_extensions; }

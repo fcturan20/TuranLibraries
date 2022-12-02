@@ -12,9 +12,9 @@
 // Extensions
 #include "vkext_depthstencil.h"
 #include "vkext_descIndexing.h"
-#include "vkext_timelineSemaphore.h"
-#include "vkext_dynamic_rendering.h"
 #include "vkext_dynamicStates.h"
+#include "vkext_dynamic_rendering.h"
+#include "vkext_timelineSemaphore.h"
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_EXTS = nullptr;
 
 vkext_interface::vkext_interface(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct) {

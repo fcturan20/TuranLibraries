@@ -17,24 +17,24 @@
 // OBJECT HANDLES
 ///////////////////////////////////////
 
-typedef struct tgfx_gpu_obj*                   gpu_tgfxhnd;
-typedef struct tgfx_window_obj*                window_tgfxhnd;
-typedef struct tgfx_texture_obj*               texture_tgfxhnd;
-typedef struct tgfx_monitor_obj*               monitor_tgfxhnd;
-typedef struct tgfx_rtslotset_obj*             RTSlotset_tgfxhnd;
-typedef struct tgfx_buffer_obj*                buffer_tgfxhnd;
-typedef struct tgfx_samplingtype_obj*          sampler_tgfxhnd;
-typedef struct tgfx_shadersource_obj*          shaderSource_tgfxhnd;
-typedef struct tgfx_inheritedrtslotset_obj*    inheritedRTSlotset_tgfxhnd;
-typedef struct tgfx_bindingtabletype_obj*      bindingTableType_tgfxhnd;
-typedef struct tgfx_bindingtable_obj*          bindingTable_tgfxhnd;
-typedef struct tgfx_commandbuffer_obj*         commandBuffer_tgfxhnd;
-typedef struct tgfx_commandbundle_obj*         commandBundle_tgfxhnd;
-typedef struct tgfx_gpuqueue_obj*              gpuQueue_tgfxhnd;
-typedef struct tgfx_subrasterpass_obj*         subRasterpass_tgfxhnd;
-typedef struct tgfx_fence_obj*                 fence_tgfxhnd;
-typedef struct tgfx_heap_obj*                  heap_tgfxhnd;
-typedef struct tgfx_pipeline_obj*              pipeline_tgfxhnd;
+typedef struct tgfx_gpu_obj*                gpu_tgfxhnd;
+typedef struct tgfx_window_obj*             window_tgfxhnd;
+typedef struct tgfx_texture_obj*            texture_tgfxhnd;
+typedef struct tgfx_monitor_obj*            monitor_tgfxhnd;
+typedef struct tgfx_rtslotset_obj*          RTSlotset_tgfxhnd;
+typedef struct tgfx_buffer_obj*             buffer_tgfxhnd;
+typedef struct tgfx_samplingtype_obj*       sampler_tgfxhnd;
+typedef struct tgfx_shadersource_obj*       shaderSource_tgfxhnd;
+typedef struct tgfx_inheritedrtslotset_obj* inheritedRTSlotset_tgfxhnd;
+typedef struct tgfx_bindingtabletype_obj*   bindingTableType_tgfxhnd;
+typedef struct tgfx_bindingtable_obj*       bindingTable_tgfxhnd;
+typedef struct tgfx_commandbuffer_obj*      commandBuffer_tgfxhnd;
+typedef struct tgfx_commandbundle_obj*      commandBundle_tgfxhnd;
+typedef struct tgfx_gpuqueue_obj*           gpuQueue_tgfxhnd;
+typedef struct tgfx_subrasterpass_obj*      subRasterpass_tgfxhnd;
+typedef struct tgfx_fence_obj*              fence_tgfxhnd;
+typedef struct tgfx_heap_obj*               heap_tgfxhnd;
+typedef struct tgfx_pipeline_obj*           pipeline_tgfxhnd;
 
 // DATA HANDLES
 //////////////////////////////////////

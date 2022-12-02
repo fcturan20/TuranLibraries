@@ -26,7 +26,6 @@ defineVkExtFunc(vkCmdSetPrimitiveTopologyEXT);
 defineVkExtFunc(vkCmdSetStencilOpEXT);
 defineVkExtFunc(vkCmdSetStencilTestEnableEXT);
 
-
 vk_fillRasterPipelineStateInfoFnc vk_fillRasterPipelineStateInfo = {};
 void vk_fillRasterPipelineStateInfo_dynamicState(GPU_VKOBJ* gpu, VkGraphicsPipelineCreateInfo* ci,
                                                  const rasterPipelineDescription_tgfx* desc,
@@ -70,7 +69,7 @@ void vkext_dynamicStates::inspect() {
   if (!features1.extendedDynamicState) {
     return;
   }
-  
+
   vk_fillRasterPipelineStateInfo = vk_fillRasterPipelineStateInfo_dynamicState;
   loadVkExtFunc(vkCmdSetCullModeEXT);
   loadVkExtFunc(vkCmdSetDepthCompareOpEXT);

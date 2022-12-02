@@ -1,9 +1,9 @@
 #pragma once
 #include <float.h>
 
+#include "tgfx_structs.h"
 #include "vk_extension.h"
 #include "vk_predefinitions.h"
-#include "tgfx_structs.h"
 
 struct vkext_dynamicRendering : public vkext_interface {
   vkext_dynamicRendering(GPU_VKOBJ* gpu);

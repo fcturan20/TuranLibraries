@@ -326,11 +326,9 @@ class VK_LINEAR_OBJARRAY {
     printer(result_tgfx_FAIL, "Reaching the VK_LINEAR_OBJARRAY limit isn't supported for now!");
     return nullptr;
   }
-  void destroyOBJfromHANDLE(TGFXHND hnd) {
-    getOBJfromHANDLE(hnd)->isALIVE = (0);
-  }
-  T* getOBJfromHANDLE(TGFXHND hnd) {
-    VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
+  void destroyOBJfromHANDLE(TGFXHND hnd) { getOBJfromHANDLE(hnd)->isALIVE = (0); }
+  T*   getOBJfromHANDLE(TGFXHND hnd) {
+      VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
 #ifdef VULKAN_DEBUGGING
     if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX ||
         (handle.OBJ_memoffset + uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) - uintptr_t(data)) %

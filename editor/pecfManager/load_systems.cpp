@@ -688,9 +688,9 @@ void load_systems() {
   contentManager->destroyBindingTableType(bufferBindingType);
   contentManager->destroyBindingTable(textureBindingTable);
   contentManager->destroyBindingTableType(textureBindingType);
-  //renderer->destroyCommandBundle(perSwpchnCmdBundles[0]);
-  //renderer->destroyCommandBundle(perSwpchnCmdBundles[1]);
-  //renderer->destroyCommandBundle(standardDrawBundle);
-  //renderer->destroyCommandBundle(initBundle);
+  // renderer->destroyCommandBundle(perSwpchnCmdBundles[0]);
+  // renderer->destroyCommandBundle(perSwpchnCmdBundles[1]);
+  // renderer->destroyCommandBundle(standardDrawBundle);
+  // renderer->destroyCommandBundle(initBundle);
   renderer->destroyFence(fence);
 }

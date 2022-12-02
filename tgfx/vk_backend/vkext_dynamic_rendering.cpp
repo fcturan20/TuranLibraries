@@ -87,7 +87,7 @@ void vkext_beginDynamicRenderPass(VkCommandBuffer cb, unsigned int colorAttachme
     VkAccessFlags unused = {};
     vk_findImageAccessPattern(depthAttachment.imageAccess, unused,
                               attachmentInfos[colorAttachmentCount].imageLayout);
-    attachmentInfos[colorAttachmentCount].loadOp = vk_findLoadTypeVk(depthAttachment.loadOp);
+    attachmentInfos[colorAttachmentCount].loadOp  = vk_findLoadTypeVk(depthAttachment.loadOp);
     attachmentInfos[colorAttachmentCount].storeOp = vk_findStoreTypeVk(depthAttachment.storeOp);
     attachmentInfos[colorAttachmentCount].sType   = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfos[colorAttachmentCount].clearValue.depthStencil.depth =
@@ -103,7 +103,7 @@ void vkext_beginDynamicRenderPass(VkCommandBuffer cb, unsigned int colorAttachme
   ri.layerCount           = 1;
   ri.pColorAttachments    = attachmentInfos;
   ri.pDepthAttachment = depthAttachment.texture ? &attachmentInfos[colorAttachmentCount] : nullptr;
-  ri.pStencilAttachment = nullptr;
+  ri.pStencilAttachment       = nullptr;
   ri.renderArea.extent.width  = baseTexture->m_width;
   ri.renderArea.extent.height = baseTexture->m_height;
   ri.renderArea.offset        = {};

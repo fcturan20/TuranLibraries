@@ -935,7 +935,8 @@ result_tgfx vk_copyComputePipeline(pipeline_tgfxhnd src, extension_tgfxlsthnd ex
 void vk_destroyPipeline(pipeline_tgfxhnd pipe) {
   PIPELINE_VKOBJ* vkPipe = hidden->pipelines.getOBJfromHANDLE(pipe);
   assert(vkPipe && "Invalid pipeline!");
-  vkDestroyPipelineLayout(core_vk->getGPUs()[vkPipe->m_gpu]->vk_logical, vkPipe->vk_layout, nullptr);
+  vkDestroyPipelineLayout(core_vk->getGPUs()[vkPipe->m_gpu]->vk_logical, vkPipe->vk_layout,
+                          nullptr);
   vkDestroyPipeline(core_vk->getGPUs()[vkPipe->m_gpu]->vk_logical, vkPipe->vk_object, nullptr);
   hidden->pipelines.destroyOBJfromHANDLE(pipe);
 }
@@ -1314,7 +1315,7 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->destroySampler             = vk_destroySampler;
   core_tgfx_main->contentmanager->destroyBindingTableType    = vk_destroyBindingTableType;
   core_tgfx_main->contentmanager->destroyBindingTable        = vk_destroyBindingTable;
-  core_tgfx_main->contentmanager->destroyPipeline        = vk_destroyPipeline;
+  core_tgfx_main->contentmanager->destroyPipeline            = vk_destroyPipeline;
 }
 
 void initGlslang() {

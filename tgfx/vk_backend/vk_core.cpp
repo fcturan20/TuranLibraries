@@ -824,10 +824,6 @@ void vk_printfLog(result_tgfx result, const char* text) {
   printf("TGFX %u: %s\n", ( unsigned int )result, text);
 }
 
-#ifndef NO_IMGUI
-// extern void Create_IMGUI();
-#endif // !NO_IMGUI
-
 extern void vk_createBackendAllocator();
 extern void vk_createContentManager();
 // extern void Create_SyncSystems();
@@ -881,6 +877,7 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallbac
     core->api->helpers->getGPUInfo_Queues      = &vk_getGPUInfoQueues;
     core->api->helpers->getWindow_GPUSupport   = &vk_getWindow_GPUSupport;
     core->api->getCurrentSwapchainTextureIndex = &vk_getCurrentSwapchainTextureIndex;
+    core->api->takeInputs                      = &vk_takeInputs;
     // core->api->change_window_resolution = &change_window_resolution;
     // core->api->debugcallback = &debugcallback;
     // core->api->debugcallback_threaded = &debugcallback_threaded;

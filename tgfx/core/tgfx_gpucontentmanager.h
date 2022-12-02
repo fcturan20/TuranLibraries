@@ -9,11 +9,13 @@ typedef struct tgfx_gpudatamanager {
   //	DX12 limits bordercolor to be vec4(0), vec4(0,0,0,1) and vec4(1)
   result_tgfx (*createSampler)(gpu_tgfxhnd gpu, const samplerDescription_tgfx* desc,
                                sampler_tgfxhnd* hnd);
+  void (*destroySampler)(sampler_tgfxhnd sampler);
 
   // Extension can be UNIFORMBUFFER
   result_tgfx (*createBuffer)(gpu_tgfxhnd gpu, const bufferDescription_tgfx* desc,
                               buffer_tgfxhnd* handle);
-  void (*destroyBuffer)(buffer_tgfxhnd BUFFER_ID);
+  void (*destroyBuffer)(buffer_tgfxhnd bufferHnd);
+
   //	If your GPU supports buffer_GPUaddress_pointers, you can use this.
   //		Otherwise this function pointer is NULL
   //	You can pass pointers to buffers (call buffer data or classic GPU buffers)
@@ -22,7 +24,7 @@ typedef struct tgfx_gpudatamanager {
 
   result_tgfx (*createTexture)(gpu_tgfxhnd gpu, const textureDescription_tgfx* desc,
                                texture_tgfxhnd* textureHnd);
-  void (*deleteTexture)(texture_tgfxhnd TEXTUREHANDLE);
+  void (*destroyTexture)(texture_tgfxhnd textureHnd);
 
   // BINDING TABLES
   ////////////////////////////////////
@@ -31,8 +33,10 @@ typedef struct tgfx_gpudatamanager {
   // If your GPU supports VariableDescCount, you set ElementCount to UINT32_MAX
   result_tgfx (*createBindingTableType)(gpu_tgfxhnd gpu, const bindingTableDescription_tgfx* desc,
                                         bindingTableType_tgfxhnd* bindingTableHandle);
+  void (*destroyBindingTableType)(bindingTableType_tgfxhnd bindingTableType);
   result_tgfx (*instantiateBindingTable)(bindingTableType_tgfxhnd type, unsigned char isStatic,
                                          bindingTable_tgfxhnd* table);
+  void (*destroyBindingTable)(bindingTable_tgfxhnd bindingTable);
   result_tgfx (*setBindingTable_Texture)(bindingTable_tgfxhnd table, unsigned int bindingCount,
                                          const unsigned int*      bindingIndices,
                                          const texture_tgfxlsthnd textures);
@@ -54,14 +58,13 @@ typedef struct tgfx_gpudatamanager {
                                      shaderStage_tgfx shaderstage, const void* DATA,
                                      unsigned int          DATA_SIZE,
                                      shaderSource_tgfxhnd* ShaderSourceHandle);
-  void (*deleteShaderSource)(shaderSource_tgfxhnd ShaderSourceHandle);
+  void (*destroyShaderSource)(shaderSource_tgfxhnd ShaderSourceHandle);
   // Extensions: CallBufferInfo, Subpass, StaticRasterState
   result_tgfx (*createRasterPipeline)(const rasterPipelineDescription_tgfx* desc,
                                       extension_tgfxlsthnd exts, pipeline_tgfxhnd* hnd);
   // Extensions: Dynamic States, CallBufferInfo, Specialization Constants
   result_tgfx (*copyRasterPipeline)(pipeline_tgfxhnd basePipeline, extension_tgfxlsthnd exts,
                                     pipeline_tgfxhnd* derivedPipeline);
-  void (*destroyRasterPipeline)(pipeline_tgfxhnd hnd);
 
   result_tgfx (*createComputePipeline)(shaderSource_tgfxhnd        Source,
                                        bindingTableType_tgfxlsthnd TypeBindingTables,

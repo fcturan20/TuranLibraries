@@ -35,6 +35,7 @@ typedef struct tgfx_core {
   void (*debugcallback)(result_tgfx result, const char* Text);
   // You can set this if TGFX is started with threaded call
   void (*debugcallback_threaded)(unsigned char ThreadIndex, result_tgfx Result, const char* Text);
+  void (*takeInputs)();
 
   // Destroy all resources created by GFX API systems
   void (*destroy_tgfx_resources)();

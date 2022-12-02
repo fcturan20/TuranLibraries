@@ -326,9 +326,8 @@ class VK_LINEAR_OBJARRAY {
     printer(result_tgfx_FAIL, "Reaching the VK_LINEAR_OBJARRAY limit isn't supported for now!");
     return nullptr;
   }
-  void destroyOBJfromHANDLE(VKOBJHANDLE handle) {
-    getOBJfromHANDLE(hnd);
-    obj->isALIVE = (0);
+  void destroyOBJfromHANDLE(TGFXHND hnd) {
+    getOBJfromHANDLE(hnd)->isALIVE = (0);
   }
   T* getOBJfromHANDLE(TGFXHND hnd) {
     VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;

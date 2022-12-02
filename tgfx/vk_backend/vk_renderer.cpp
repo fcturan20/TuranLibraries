@@ -333,6 +333,19 @@ void vk_createFences(gpu_tgfxhnd gpu, unsigned int fenceCount, uint32_t isSignal
     fenceList[i] = vk_createTGFXFence(GPU, isSignaled);
   }
 }
+void vk_destroyFence(fence_tgfxhnd fence) {
+  for (uint8_t gpuIndx = 0; gpuIndx < core_vk->getGPUs().size(); gpuIndx++) {
+    vkext_timelineSemaphore* ext = ( vkext_timelineSemaphore* )core_vk->getGPUs()[gpuIndx]
+                                     ->ext()
+                                     ->m_exts[vkext_interface::timelineSemaphores_vkExtEnum];
+    FENCE_VKOBJ* vkFence = ext->fences.getOBJfromHANDLE(fence);
+    if (vkFence) {
+      vkDestroySemaphore(core_vk->getGPUs()[gpuIndx]->vk_logical, vkFence->vk_timelineSemaphore,
+                         nullptr);
+      vkFence->isALIVE = false;
+    }
+  }
+}
 
 // Command Bundle Functions
 ////////////////////////////
@@ -366,11 +379,24 @@ void vk_finishCommandBundle(commandBundle_tgfxhnd i_bundle, extension_tgfxlsthnd
   // MOVE THIS RECORDING STAGE BECAUSE FRAMEBUFFER WILL RECORD ALREADY!
 }
 void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
-  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(hnd);
+  CMDBUNDLE_VKOBJ* bundle    = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(hnd);
   /*
-  for (framebuffer_vk : hidden->framebuffers) {
-    if (framebuffer_vk->m_cmdBundleRefs[i] == hnd) {
-      vk_freeCmdBuffer(Ref->cmdPool, Ref->cmdBuffer);
+  auto&            queueFams = bundle->m_gpu->manager()->m_queueFams;
+  for (uint32_t queueFamIndx = 0; queueFamIndx < queueFams.size(); queueFamIndx++) {
+    // Check if queue family supports this bundle
+    if ((bundle->vk_bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
+         !queueFams[queueFamIndx]->m_supportFlag.is_GRAPHICSsupported) ||
+        (bundle->vk_bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE &&
+         !queueFams[queueFamIndx]->m_supportFlag.is_COMPUTEsupported)) {
+      continue;
+    }
+    for (uint32_t threadIndx = 0; threadIndx < threadcount; threadIndx++) {
+      cmdBundleRef_vk& cmdBundleRef = queueFams[queueFamIndx]->m_cmdBundleRefs[threadIndx];
+      if (cmdBundleRef.m_cmdBundle == hnd) {
+        vkFreeCommandBuffers(bundle->m_gpu->vk_logical,
+                             cmdBundleRef.m_cmdPool, 1,
+                             &cmdBundleRef.vk_cmdBuffer);
+      }
     }
   }*/
   hiddenRenderer->m_cmdBundles.erase(hiddenRenderer->m_cmdBundles.getINDEX_byOBJ(bundle));
@@ -702,6 +728,7 @@ void set_VkRenderer_funcPtrs() {
   core_tgfx_main->renderer->destroyCommandBundle = vk_destroyCommandBundle;
   core_tgfx_main->renderer->getFenceValue        = vk_getFenceValue;
   core_tgfx_main->renderer->setFence             = vk_setFenceValue;
+  core_tgfx_main->renderer->destroyFence         = vk_destroyFence;
 }
 
 void vk_initRenderer() {

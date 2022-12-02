@@ -65,11 +65,11 @@ struct SHADERSOURCE_VKOBJ {
 };
 
 struct gpudatamanager_private {
-  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>   textures;
-  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24> pipelines;
-  VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, shaderSource_tgfxhnd, 1 << 24> shadersources;
-  VK_LINEAR_OBJARRAY<SAMPLER_VKOBJ, sampler_tgfxhnd, 1 << 16>           samplers;
-  VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>                      buffers;
+  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>                   textures;
+  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>                 pipelines;
+  VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, shaderSource_tgfxhnd, 1 << 24>         shadersources;
+  VK_LINEAR_OBJARRAY<SAMPLER_VKOBJ, sampler_tgfxhnd, 1 << 16>                   samplers;
+  VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>                              buffers;
   VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10> bindingtabletypes;
   VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>     bindingtableinsts;
   VK_LINEAR_OBJARRAY<HEAP_VKOBJ, heap_tgfxhnd, 1 << 10>                         heaps;
@@ -116,8 +116,17 @@ result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* des
 
   SAMPLER_VKOBJ* SAMPLER = hidden->samplers.create_OBJ();
   SAMPLER->vk_sampler    = sampler;
+  SAMPLER->m_gpu         = GPU->gpuIndx();
   *hnd                   = hidden->samplers.returnHANDLEfromOBJ(SAMPLER);
   return result_tgfx_SUCCESS;
+}
+void vk_destroySampler(sampler_tgfxhnd sampler) {
+  SAMPLER_VKOBJ* vkSampler = hidden->samplers.getOBJfromHANDLE(sampler);
+#ifdef VULKAN_DEBUGGING
+  assert(vkSampler && "Invalid sampler!");
+#endif // VULKAN_DEBUGGING
+  vkDestroySampler(core_vk->getGPUs()[vkSampler->m_gpu]->vk_logical, vkSampler->vk_sampler,
+                   nullptr);
 }
 
 /*Attributes are ordered as the same order of input vector
@@ -209,6 +218,14 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
   *TextureHandle = contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(texture);
   return result_tgfx_SUCCESS;
 }
+void vk_destroyTexture(texture_tgfxhnd texture) {
+  TEXTURE_VKOBJ* vkTexture = hidden->textures.getOBJfromHANDLE(texture);
+  assert(vkTexture && "Invalid texture");
+  vkDestroyImage(core_vk->getGPUs()[vkTexture->m_GPU]->vk_logical, vkTexture->vk_image, nullptr);
+  vkDestroyImageView(core_vk->getGPUs()[vkTexture->m_GPU]->vk_logical, vkTexture->vk_imageView,
+                     nullptr);
+  hidden->textures.destroyOBJfromHANDLE(texture);
+}
 
 result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* desc,
                             buffer_tgfxhnd* buffer) {
@@ -255,6 +272,12 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
 
   *buffer = hidden->buffers.returnHANDLEfromOBJ(o_buffer);
   return result_tgfx_SUCCESS;
+}
+void vk_destroyBuffer(buffer_tgfxhnd buffer) {
+  BUFFER_VKOBJ* vkBuffer = hidden->buffers.getOBJfromHANDLE(buffer);
+  assert(vkBuffer && "Invalid texture");
+  vkDestroyBuffer(core_vk->getGPUs()[vkBuffer->m_GPU]->vk_logical, vkBuffer->vk_buffer, nullptr);
+  hidden->buffers.destroyOBJfromHANDLE(buffer);
 }
 
 vk_uint32c  VKCONST_MAXSTATICSAMPLERCOUNT = 128;
@@ -328,6 +351,22 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
   *bindingTableHandle      = hidden->bindingtabletypes.returnHANDLEfromOBJ(finalobj);
   return result_tgfx_SUCCESS;
 }
+void vk_destroyBindingTableType(bindingTableType_tgfxhnd bindingTableType) {
+  BINDINGTABLETYPE_VKOBJ* type = hidden->bindingtabletypes.getOBJfromHANDLE(bindingTableType);
+  assert(type && "Invalid binding table type!");
+#ifdef VULKAN_DEBUGGING
+  for (uint32_t i = 0; i < hidden->bindingtableinsts.size(); i++) {
+    if (!hidden->bindingtableinsts[i]) {
+      break;
+    }
+    assert(hidden->bindingtableinsts[i]->m_type != bindingTableType &&
+           "BindingTable Type has living instances, this is invalid!");
+  }
+#endif
+  vkDestroyDescriptorSetLayout(core_vk->getGPUs()[type->m_gpu]->vk_logical, type->vk_layout,
+                               nullptr);
+  hidden->bindingtabletypes.destroyOBJfromHANDLE(bindingTableType);
+}
 
 result_tgfx vk_instantiateBindingTable(bindingTableType_tgfxhnd tableType, unsigned char isStatic,
                                        bindingTable_tgfxhnd* table) {
@@ -390,6 +429,15 @@ result_tgfx vk_instantiateBindingTable(bindingTableType_tgfxhnd tableType, unsig
   }
   *table = hidden->bindingtableinsts.returnHANDLEfromOBJ(finalobj);
   return result_tgfx_SUCCESS;
+}
+void vk_destroyBindingTable(bindingTable_tgfxhnd bindingTable) {
+  BINDINGTABLEINST_VKOBJ* vkDescSet = hidden->bindingtableinsts.getOBJfromHANDLE(bindingTable);
+  assert(vkDescSet && "Invalid binding table");
+  vkDestroyDescriptorPool(
+    core_vk->getGPUs()[hidden->bindingtabletypes.getOBJfromHANDLE(vkDescSet->m_type)->m_gpu]
+      ->vk_logical,
+    vkDescSet->vk_pool, nullptr);
+  hidden->bindingtableinsts.destroyOBJfromHANDLE(bindingTable);
 }
 
 // Don't call this if there is no binding table & call buffer!
@@ -884,6 +932,13 @@ result_tgfx vk_copyComputePipeline(pipeline_tgfxhnd src, extension_tgfxlsthnd ex
                                    pipeline_tgfxhnd* dst) {
   return result_tgfx_NOTCODED;
 }
+void vk_destroyPipeline(pipeline_tgfxhnd pipe) {
+  PIPELINE_VKOBJ* vkPipe = hidden->pipelines.getOBJfromHANDLE(pipe);
+  assert(vkPipe && "Invalid pipeline!");
+  vkDestroyPipelineLayout(core_vk->getGPUs()[vkPipe->m_gpu]->vk_logical, vkPipe->vk_layout, nullptr);
+  vkDestroyPipeline(core_vk->getGPUs()[vkPipe->m_gpu]->vk_logical, vkPipe->vk_object, nullptr);
+  hidden->pipelines.destroyOBJfromHANDLE(pipe);
+}
 
 static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
 // Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
@@ -1230,15 +1285,15 @@ result_tgfx vk_unmapHeap(heap_tgfxhnd i_heap) {
 /////////////////////////////////////////////////////
 
 inline void set_functionpointers() {
-  core_tgfx_main->contentmanager->compileShaderSource      = vk_compileShaderSource;
-  core_tgfx_main->contentmanager->createBindingTableType   = vk_createBindingTableType;
-  core_tgfx_main->contentmanager->instantiateBindingTable  = vk_instantiateBindingTable;
-  core_tgfx_main->contentmanager->copyComputePipeline      = vk_copyComputePipeline;
-  core_tgfx_main->contentmanager->createComputePipeline    = vk_createComputePipeline;
-  core_tgfx_main->contentmanager->createBuffer             = vk_createBuffer;
-  core_tgfx_main->contentmanager->createTexture            = vk_createTexture;
+  core_tgfx_main->contentmanager->compileShaderSource     = vk_compileShaderSource;
+  core_tgfx_main->contentmanager->createBindingTableType  = vk_createBindingTableType;
+  core_tgfx_main->contentmanager->instantiateBindingTable = vk_instantiateBindingTable;
+  core_tgfx_main->contentmanager->copyComputePipeline     = vk_copyComputePipeline;
+  core_tgfx_main->contentmanager->createComputePipeline   = vk_createComputePipeline;
+  core_tgfx_main->contentmanager->createBuffer            = vk_createBuffer;
+  core_tgfx_main->contentmanager->createTexture           = vk_createTexture;
   // core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
-  core_tgfx_main->contentmanager->deleteShaderSource         = vk_destroyShaderSource;
+  core_tgfx_main->contentmanager->destroyShaderSource        = vk_destroyShaderSource;
   core_tgfx_main->contentmanager->destroyAllResources        = vk_destroyAllResources;
   core_tgfx_main->contentmanager->createRasterPipeline       = vk_createRasterPipeline;
   core_tgfx_main->contentmanager->setBindingTable_Buffer     = vk_setBindingTable_Buffer;
@@ -1253,6 +1308,13 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->unmapHeap                  = vk_unmapHeap;
   core_tgfx_main->contentmanager->createSampler              = vk_createSampler;
   core_tgfx_main->contentmanager->setBindingTable_Sampler    = vk_setBindingTable_Sampler;
+  core_tgfx_main->contentmanager->destroyBuffer              = vk_destroyBuffer;
+  core_tgfx_main->contentmanager->destroyTexture             = vk_destroyTexture;
+  core_tgfx_main->contentmanager->destroyShaderSource        = vk_destroyShaderSource;
+  core_tgfx_main->contentmanager->destroySampler             = vk_destroySampler;
+  core_tgfx_main->contentmanager->destroyBindingTableType    = vk_destroyBindingTableType;
+  core_tgfx_main->contentmanager->destroyBindingTable        = vk_destroyBindingTable;
+  core_tgfx_main->contentmanager->destroyPipeline        = vk_destroyPipeline;
 }
 
 void initGlslang() {

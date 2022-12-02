@@ -133,7 +133,7 @@ gpuQueue_tgfxhnd           allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
 window_tgfxhnd             window;
 tgfx_swapchain_description swpchn_desc;
 static constexpr uint32_t  swapchainTextureCount = 2;
-static constexpr uint32_t  INIT_GPUINDEX         = 0;
+static constexpr uint32_t  INIT_GPUINDEX         = 1;
 
 void createGPU() {
   tgfx->load_backend(nullptr, backends_tgfx_VULKAN, nullptr);
@@ -446,6 +446,8 @@ void compileShadersandPipelines() {
     pipelineDesc.typeTables                       = bindingTypes;
 
     contentManager->createRasterPipeline(&pipelineDesc, nullptr, &firstRasterPipeline);
+    contentManager->destroyShaderSource(shaderSources[0]);
+    contentManager->destroyShaderSource(shaderSources[1]);
   }
 
   // Instantiate binding tables
@@ -571,14 +573,14 @@ void load_systems() {
   firstArgument.instanceCount          = 2;
 
   fence_tgfxhnd fence;
-  renderer->createFences(gpu, 1, 15u, &fence);
+  renderer->createFences(gpu, 1, 0u, &fence);
   gpuQueue_tgfxlsthnd queuesPerFam;
   tgfx->helpers->getGPUInfo_Queues(gpu, 0, &queuesPerFam);
 
   gpuQueue_tgfxhnd queue    = queuesPerFam[0];
   uint64_t         duration = 0;
   TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "queueSignal", &duration);
-  static uint64_t waitValue = 15, signalValue = 25;
+  static uint64_t waitValue = 0, signalValue = 1;
   fence_tgfxhnd   waitFences[2] = {fence, ( fence_tgfxhnd )tgfx->INVALIDHANDLE};
   renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
   renderer->queueSubmit(queue);
@@ -632,7 +634,7 @@ void load_systems() {
   signalValue++;
 
   int i = 0;
-  while (++i) {
+  while (++i && i < 10000) {
     TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "presentation", &duration);
     uint64_t currentFenceValue = 0;
     while (currentFenceValue < signalValue - 2) {
@@ -669,6 +671,26 @@ void load_systems() {
       renderer->queueSubmit(queue);
       STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);
       printf("Finished and index: %u\n", swpchnIndx);
+      tgfx->takeInputs();
     }
   }
+  uint64_t fenceVal = 0;
+  while (fenceVal != waitValue) {
+    renderer->getFenceValue(fence, &fenceVal);
+  }
+  contentManager->destroyTexture(customDepthRT);
+  contentManager->destroyTexture(reiChikitaTexture);
+  contentManager->destroyPipeline(firstRasterPipeline);
+  contentManager->destroyPipeline(firstComputePipeline);
+  contentManager->destroySampler(firstSampler);
+  contentManager->destroyBuffer(firstBuffer);
+  contentManager->destroyBindingTable(bufferBindingTable);
+  contentManager->destroyBindingTableType(bufferBindingType);
+  contentManager->destroyBindingTable(textureBindingTable);
+  contentManager->destroyBindingTableType(textureBindingType);
+  //renderer->destroyCommandBundle(perSwpchnCmdBundles[0]);
+  //renderer->destroyCommandBundle(perSwpchnCmdBundles[1]);
+  //renderer->destroyCommandBundle(standardDrawBundle);
+  //renderer->destroyCommandBundle(initBundle);
+  renderer->destroyFence(fence);
 }

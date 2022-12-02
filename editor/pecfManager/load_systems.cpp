@@ -660,12 +660,9 @@ void load_systems() {
       ubo.translate[0] = {sinf(i / 360.0), cosf(i / 360.0)};
 
       renderer->queueExecuteCmdBuffers(queue, frameCmdBuffers, nullptr);
+      renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
       renderer->queueSubmit(queue);
 
-      if (i % 2) {
-        renderer->queueFenceSignalWait(queue, {}, &waitValue, waitFences, &signalValue);
-        renderer->queueSubmit(queue);
-      }
       waitValue++;
       signalValue++;
       renderer->queuePresent(queue, windowlst);

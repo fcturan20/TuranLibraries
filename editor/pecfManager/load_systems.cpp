@@ -151,6 +151,12 @@ static tgfx_window_gpu_support swapchainSupport                      = {};
 static textureChannels_tgfx    depthRTFormat                         = texture_channels_tgfx_D24S8;
 texture_tgfxhnd                swpchnTextures[swapchainTextureCount] = {};
 
+void keyCB(window_tgfxhnd windowHnd, void* userPointer, key_tgfx key, int scanCode,
+           key_action_tgfx action, keyMod_tgfx mode) {
+  if (key == key_tgfx_A) {
+    exit(-1);
+  }
+};
 void createFirstWindow() {
   // Create window and the swapchain
   monitor_tgfxlsthnd monitors;
@@ -169,6 +175,7 @@ void createFirstWindow() {
     windowDesc.monitor                 = monitors[0];
     windowDesc.NAME                    = gpuDesc.name;
     windowDesc.ResizeCB                = nullptr;
+    windowDesc.keyCB                   = keyCB;
     tgfx->createWindow(&windowDesc, nullptr, &window);
   }
 

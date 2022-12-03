@@ -174,7 +174,7 @@ void vk_createInstance() {
   // Extensions
   InstCreation_Info.enabledExtensionCount   = ( uint32_t )activeInstanceExts.size();
   InstCreation_Info.ppEnabledExtensionNames = activeInstanceExts.data();
-  
+
   // Validation Layers
   const char* Validation_Layers[1]      = {"VK_LAYER_KHRONOS_validation"};
   InstCreation_Info.enabledLayerCount   = 1;
@@ -186,8 +186,8 @@ void vk_createInstance() {
 
 void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
   VkPhysicalDeviceMemoryBudgetPropertiesEXT budgetProps;
-  budgetProps.pNext = nullptr;
-  budgetProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
+  budgetProps.pNext           = nullptr;
+  budgetProps.sType           = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
   VKGPU->vk_propsMemory.pNext = &budgetProps;
   VKGPU->vk_propsMemory.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
   vkGetPhysicalDeviceMemoryProperties2(VKGPU->vk_physical, &VKGPU->vk_propsMemory);
@@ -295,10 +295,160 @@ inline void vk_checkComputerSpecs() {
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
 
-void GLFWwindowresizecallback(GLFWwindow* glfwwindow, int width, int height) {
+void glfwWindowResizeCallback(GLFWwindow* glfwwindow, int width, int height) {
   WINDOW_VKOBJ* vkwindow = ( WINDOW_VKOBJ* )glfwGetWindowUserPointer(glfwwindow);
   vkwindow->m_resizeFnc(( window_tgfxhnd )vkwindow, vkwindow->m_userData, width, height,
                         ( texture_tgfxhnd* )vkwindow->m_swapchainTextures);
+}
+key_tgfx getKeyTgfx(int glfwKey) {
+  switch (glfwKey) {
+    case GLFW_KEY_UNKNOWN: return key_tgfx_UNKNOWN;
+    case GLFW_KEY_SPACE: return key_tgfx_SPACE;
+    case GLFW_KEY_APOSTROPHE: return key_tgfx_APOSTROPHE;
+    case GLFW_KEY_COMMA: return key_tgfx_COMMA;
+    case GLFW_KEY_MINUS: return key_tgfx_MINUS;
+    case GLFW_KEY_PERIOD: return key_tgfx_PERIOD;
+    case GLFW_KEY_SLASH: return key_tgfx_SLASH;
+    case GLFW_KEY_0: return key_tgfx_0;
+    case GLFW_KEY_1: return key_tgfx_1;
+    case GLFW_KEY_2: return key_tgfx_2;
+    case GLFW_KEY_3: return key_tgfx_3;
+    case GLFW_KEY_4: return key_tgfx_4;
+    case GLFW_KEY_5: return key_tgfx_5;
+    case GLFW_KEY_6: return key_tgfx_6;
+    case GLFW_KEY_7: return key_tgfx_7;
+    case GLFW_KEY_8: return key_tgfx_8;
+    case GLFW_KEY_9: return key_tgfx_9;
+    case GLFW_KEY_SEMICOLON: return key_tgfx_SEMICOLON;
+    case GLFW_KEY_EQUAL: return key_tgfx_EQUAL;
+    case GLFW_KEY_A: return key_tgfx_A;
+    case GLFW_KEY_B: return key_tgfx_B;
+    case GLFW_KEY_C: return key_tgfx_C;
+    case GLFW_KEY_D: return key_tgfx_D;
+    case GLFW_KEY_E: return key_tgfx_E;
+    case GLFW_KEY_F: return key_tgfx_F;
+    case GLFW_KEY_G: return key_tgfx_G;
+    case GLFW_KEY_H: return key_tgfx_H;
+    case GLFW_KEY_I: return key_tgfx_I;
+    case GLFW_KEY_J: return key_tgfx_J;
+    case GLFW_KEY_K: return key_tgfx_K;
+    case GLFW_KEY_L: return key_tgfx_L;
+    case GLFW_KEY_M: return key_tgfx_M;
+    case GLFW_KEY_N: return key_tgfx_N;
+    case GLFW_KEY_O: return key_tgfx_O;
+    case GLFW_KEY_P: return key_tgfx_P;
+    case GLFW_KEY_Q: return key_tgfx_Q;
+    case GLFW_KEY_R: return key_tgfx_R;
+    case GLFW_KEY_S: return key_tgfx_S;
+    case GLFW_KEY_T: return key_tgfx_T;
+    case GLFW_KEY_U: return key_tgfx_U;
+    case GLFW_KEY_V: return key_tgfx_V;
+    case GLFW_KEY_W: return key_tgfx_W;
+    case GLFW_KEY_X: return key_tgfx_X;
+    case GLFW_KEY_Y: return key_tgfx_Y;
+    case GLFW_KEY_Z: return key_tgfx_Z;
+    case GLFW_KEY_LEFT_BRACKET: return key_tgfx_LEFT_BRACKET;
+    case GLFW_KEY_BACKSLASH: return key_tgfx_BACKSLASH;
+    case GLFW_KEY_RIGHT_BRACKET: return key_tgfx_RIGHT_BRACKET;
+    case GLFW_KEY_GRAVE_ACCENT: return key_tgfx_GRAVE_ACCENT;
+    case GLFW_KEY_WORLD_1: return key_tgfx_WORLD_1;
+    case GLFW_KEY_WORLD_2: return key_tgfx_WORLD_2;
+    case GLFW_KEY_ESCAPE: return key_tgfx_ESCAPE;
+    case GLFW_KEY_ENTER: return key_tgfx_ENTER;
+    case GLFW_KEY_TAB: return key_tgfx_TAB;
+    case GLFW_KEY_BACKSPACE: return key_tgfx_BACKSPACE;
+    case GLFW_KEY_INSERT: return key_tgfx_INSERT;
+    case GLFW_KEY_DELETE: return key_tgfx_DELETE;
+    case GLFW_KEY_RIGHT: return key_tgfx_RIGHT;
+    case GLFW_KEY_LEFT: return key_tgfx_LEFT;
+    case GLFW_KEY_DOWN: return key_tgfx_DOWN;
+    case GLFW_KEY_UP: return key_tgfx_UP;
+    case GLFW_KEY_PAGE_UP: return key_tgfx_PAGE_UP;
+    case GLFW_KEY_PAGE_DOWN: return key_tgfx_PAGE_DOWN;
+    case GLFW_KEY_HOME: return key_tgfx_HOME;
+    case GLFW_KEY_END: return key_tgfx_END;
+    case GLFW_KEY_CAPS_LOCK: return key_tgfx_CAPS_LOCK;
+    case GLFW_KEY_SCROLL_LOCK: return key_tgfx_SCROLL_LOCK;
+    case GLFW_KEY_NUM_LOCK: return key_tgfx_NUM_LOCK;
+    case GLFW_KEY_PRINT_SCREEN: return key_tgfx_PRINT_SCREEN;
+    case GLFW_KEY_PAUSE: return key_tgfx_PAUSE;
+    case GLFW_KEY_F1: return key_tgfx_F1;
+    case GLFW_KEY_F2: return key_tgfx_F2;
+    case GLFW_KEY_F3: return key_tgfx_F3;
+    case GLFW_KEY_F4: return key_tgfx_F4;
+    case GLFW_KEY_F5: return key_tgfx_F5;
+    case GLFW_KEY_F6: return key_tgfx_F6;
+    case GLFW_KEY_F7: return key_tgfx_F7;
+    case GLFW_KEY_F8: return key_tgfx_F8;
+    case GLFW_KEY_F9: return key_tgfx_F9;
+    case GLFW_KEY_F10: return key_tgfx_F10;
+    case GLFW_KEY_F11: return key_tgfx_F11;
+    case GLFW_KEY_F12: return key_tgfx_F12;
+    case GLFW_KEY_F13: return key_tgfx_F13;
+    case GLFW_KEY_F14: return key_tgfx_F14;
+    case GLFW_KEY_F15: return key_tgfx_F15;
+    case GLFW_KEY_F16: return key_tgfx_F16;
+    case GLFW_KEY_F17: return key_tgfx_F17;
+    case GLFW_KEY_F18: return key_tgfx_F18;
+    case GLFW_KEY_F19: return key_tgfx_F19;
+    case GLFW_KEY_F20: return key_tgfx_F20;
+    case GLFW_KEY_F21: return key_tgfx_F21;
+    case GLFW_KEY_F22: return key_tgfx_F22;
+    case GLFW_KEY_F23: return key_tgfx_F23;
+    case GLFW_KEY_F24: return key_tgfx_F24;
+    case GLFW_KEY_F25: return key_tgfx_F25;
+    case GLFW_KEY_KP_0: return key_tgfx_KP_0;
+    case GLFW_KEY_KP_1: return key_tgfx_KP_1;
+    case GLFW_KEY_KP_2: return key_tgfx_KP_2;
+    case GLFW_KEY_KP_3: return key_tgfx_KP_3;
+    case GLFW_KEY_KP_4: return key_tgfx_KP_4;
+    case GLFW_KEY_KP_5: return key_tgfx_KP_5;
+    case GLFW_KEY_KP_6: return key_tgfx_KP_6;
+    case GLFW_KEY_KP_7: return key_tgfx_KP_7;
+    case GLFW_KEY_KP_8: return key_tgfx_KP_8;
+    case GLFW_KEY_KP_9: return key_tgfx_KP_9;
+    case GLFW_KEY_KP_DECIMAL: return key_tgfx_KP_DECIMAL;
+    case GLFW_KEY_KP_DIVIDE: return key_tgfx_KP_DIVIDE;
+    case GLFW_KEY_KP_MULTIPLY: return key_tgfx_KP_MULTIPLY;
+    case GLFW_KEY_KP_SUBTRACT: return key_tgfx_KP_SUBTRACT;
+    case GLFW_KEY_KP_ADD: return key_tgfx_KP_ADD;
+    case GLFW_KEY_KP_ENTER: return key_tgfx_KP_ENTER;
+    case GLFW_KEY_KP_EQUAL: return key_tgfx_KP_EQUAL;
+    case GLFW_KEY_LEFT_SHIFT: return key_tgfx_LEFT_SHIFT;
+    case GLFW_KEY_LEFT_CONTROL: return key_tgfx_LEFT_CONTROL;
+    case GLFW_KEY_LEFT_ALT: return key_tgfx_LEFT_ALT;
+    case GLFW_KEY_LEFT_SUPER: return key_tgfx_LEFT_SUPER;
+    case GLFW_KEY_RIGHT_SHIFT: return key_tgfx_RIGHT_SHIFT;
+    case GLFW_KEY_RIGHT_CONTROL: return key_tgfx_RIGHT_CONTROL;
+    case GLFW_KEY_RIGHT_ALT: return key_tgfx_RIGHT_ALT;
+    case GLFW_KEY_RIGHT_SUPER: return key_tgfx_RIGHT_SUPER;
+    case GLFW_KEY_MENU: return key_tgfx_MENU;
+  }
+  return ( key_tgfx )INT32_MAX;
+}
+keyAction_tgfx getKeyActionTgfx(int glfwAction) {
+  switch (glfwAction) {
+    case GLFW_PRESS: return keyAction_tgfx_PRESS;
+    case GLFW_RELEASE: return keyAction_tgfx_RELEASE;
+    case GLFW_REPEAT: return keyAction_tgfx_REPEAT;
+  }
+  return ( keyAction_tgfx )INT32_MAX;
+}
+keyMod_tgfx getKeyModTgfx(int glfwMod) {
+  switch (glfwMod) {
+    case GLFW_MOD_SHIFT: return keyMod_tgfx_SHIFT;
+    case GLFW_MOD_ALT: return keyMod_tgfx_ALT;
+    case GLFW_MOD_CAPS_LOCK: return keyMod_tgfx_CAPSLOCK;
+    case GLFW_MOD_CONTROL: return keyMod_tgfx_CONTROL;
+    case GLFW_MOD_NUM_LOCK: return keyMod_tgfx_NUMLOCK;
+    case GLFW_MOD_SUPER: return keyMod_tgfx_SUPER;
+  }
+  return ( keyMod_tgfx )INT32_MAX;
+}
+void glfwWindowKeyCallback(GLFWwindow* glfwWindow, int key, int scan, int action, int mode) {
+  WINDOW_VKOBJ* vkwindow = ( WINDOW_VKOBJ* )glfwGetWindowUserPointer(glfwWindow);
+  vkwindow->m_keyFnc(( window_tgfxhnd )vkwindow, vkwindow->m_userData, getKeyTgfx(key), scan,
+                     getKeyActionTgfx(action), getKeyModTgfx(mode));
 }
 void vk_createWindow(const windowDescription_tgfx* desc, void* user_ptr, window_tgfxhnd* window) {
   if (desc->ResizeCB) {
@@ -338,12 +488,16 @@ void vk_createWindow(const windowDescription_tgfx* desc, void* user_ptr, window_
   vkWindow->vk_glfwWindow            = glfw_window;
   vkWindow->vk_swapchainTextureUsage = 0; // This will be set while creating swapchain
   vkWindow->m_resizeFnc              = desc->ResizeCB;
+  vkWindow->m_keyFnc                 = desc->keyCB;
   vkWindow->m_userData               = user_ptr;
   vkWindow->vk_surface               = Window_Surface;
 
+  glfwSetWindowUserPointer(vkWindow->vk_glfwWindow, vkWindow);
   if (desc->ResizeCB) {
-    glfwSetWindowUserPointer(vkWindow->vk_glfwWindow, vkWindow->m_userData);
-    glfwSetWindowSizeCallback(vkWindow->vk_glfwWindow, GLFWwindowresizecallback);
+    glfwSetWindowSizeCallback(vkWindow->vk_glfwWindow, glfwWindowResizeCallback);
+  }
+  if (desc->keyCB) {
+    glfwSetKeyCallback(vkWindow->vk_glfwWindow, glfwWindowKeyCallback);
   }
 
   *window = hidden->WINDOWs.returnHANDLEfromOBJ(vkWindow);
@@ -905,7 +1059,6 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallbac
 }
 
 TGFX_BACKEND_ENTRY() { return vk_load(ecsSys, core, printCallback); }
-
 
 ////////////////////////////////////////////////
 ////////////////////////////////////////////////

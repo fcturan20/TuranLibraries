@@ -68,6 +68,7 @@ struct WINDOW_VKOBJ {
   GPU_VKOBJ*                m_gpu         = nullptr;
   const char*               m_name        = nullptr;
   tgfx_windowResizeCallback m_resizeFnc   = nullptr;
+  tgfx_windowKeyCallback    m_keyFnc      = nullptr;
   void*                     m_userData    = nullptr;
   texture_tgfxhnd           m_swapchainTextures[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
   unsigned char             m_swapchainTextureCount = 0, m_swapchainCurrentTextureIndx = 0;

@@ -63,6 +63,7 @@ typedef struct tgfx_window_description {
   windowmode_tgfx           Mode;
   const char*               NAME;
   tgfx_windowResizeCallback ResizeCB;
+  tgfx_windowKeyCallback    keyCB;
 } windowDescription_tgfx;
 
 typedef enum windowpresentation_tgfx windowpresentation_tgfx;

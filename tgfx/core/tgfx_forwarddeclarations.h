@@ -496,12 +496,159 @@ typedef enum indirect_operation_type_tgfx {
   indirectOperationType_tgfx_UNDEF2
 } indirectOperationType_tgfx;
 
+typedef enum key_tgfx {
+  /* The unknown key */
+  key_tgfx_UNKNOWN,
+
+  /* Printable keys */
+  key_tgfx_SPACE,
+  key_tgfx_APOSTROPHE, /* ' */
+  key_tgfx_COMMA,      /* , */
+  key_tgfx_MINUS,      /* - */
+  key_tgfx_PERIOD,     /* . */
+  key_tgfx_SLASH,      /* / */
+  key_tgfx_0,
+  key_tgfx_1,
+  key_tgfx_2,
+  key_tgfx_3,
+  key_tgfx_4,
+  key_tgfx_5,
+  key_tgfx_6,
+  key_tgfx_7,
+  key_tgfx_8,
+  key_tgfx_9,
+  key_tgfx_SEMICOLON, /* ; */
+  key_tgfx_EQUAL,     /* = */
+  key_tgfx_A,
+  key_tgfx_B,
+  key_tgfx_C,
+  key_tgfx_D,
+  key_tgfx_E,
+  key_tgfx_F,
+  key_tgfx_G,
+  key_tgfx_H,
+  key_tgfx_I,
+  key_tgfx_J,
+  key_tgfx_K,
+  key_tgfx_L,
+  key_tgfx_M,
+  key_tgfx_N,
+  key_tgfx_O,
+  key_tgfx_P,
+  key_tgfx_Q,
+  key_tgfx_R,
+  key_tgfx_S,
+  key_tgfx_T,
+  key_tgfx_U,
+  key_tgfx_V,
+  key_tgfx_W,
+  key_tgfx_X,
+  key_tgfx_Y,
+  key_tgfx_Z,
+  key_tgfx_LEFT_BRACKET,  /* [ */
+  key_tgfx_BACKSLASH,     /* \ */
+  key_tgfx_RIGHT_BRACKET, /* ] */
+  key_tgfx_GRAVE_ACCENT,  /* ` */
+  key_tgfx_WORLD_1,       /* non-US # */
+  key_tgfx_WORLD_2,       /* non-US #2 */
+
+  /* Function keys */
+  key_tgfx_ESCAPE,
+  key_tgfx_ENTER,
+  key_tgfx_TAB,
+  key_tgfx_BACKSPACE,
+  key_tgfx_INSERT,
+  key_tgfx_DELETE,
+  key_tgfx_RIGHT,
+  key_tgfx_LEFT,
+  key_tgfx_DOWN,
+  key_tgfx_UP,
+  key_tgfx_PAGE_UP,
+  key_tgfx_PAGE_DOWN,
+  key_tgfx_HOME,
+  key_tgfx_END,
+  key_tgfx_CAPS_LOCK,
+  key_tgfx_SCROLL_LOCK,
+  key_tgfx_NUM_LOCK,
+  key_tgfx_PRINT_SCREEN,
+  key_tgfx_PAUSE,
+  key_tgfx_F1,
+  key_tgfx_F2,
+  key_tgfx_F3,
+  key_tgfx_F4,
+  key_tgfx_F5,
+  key_tgfx_F6,
+  key_tgfx_F7,
+  key_tgfx_F8,
+  key_tgfx_F9,
+  key_tgfx_F10,
+  key_tgfx_F11,
+  key_tgfx_F12,
+  key_tgfx_F13,
+  key_tgfx_F14,
+  key_tgfx_F15,
+  key_tgfx_F16,
+  key_tgfx_F17,
+  key_tgfx_F18,
+  key_tgfx_F19,
+  key_tgfx_F20,
+  key_tgfx_F21,
+  key_tgfx_F22,
+  key_tgfx_F23,
+  key_tgfx_F24,
+  key_tgfx_F25,
+  key_tgfx_KP_0,
+  key_tgfx_KP_1,
+  key_tgfx_KP_2,
+  key_tgfx_KP_3,
+  key_tgfx_KP_4,
+  key_tgfx_KP_5,
+  key_tgfx_KP_6,
+  key_tgfx_KP_7,
+  key_tgfx_KP_8,
+  key_tgfx_KP_9,
+  key_tgfx_KP_DECIMAL,
+  key_tgfx_KP_DIVIDE,
+  key_tgfx_KP_MULTIPLY,
+  key_tgfx_KP_SUBTRACT,
+  key_tgfx_KP_ADD,
+  key_tgfx_KP_ENTER,
+  key_tgfx_KP_EQUAL,
+  key_tgfx_LEFT_SHIFT,
+  key_tgfx_LEFT_CONTROL,
+  key_tgfx_LEFT_ALT,
+  key_tgfx_LEFT_SUPER,
+  key_tgfx_RIGHT_SHIFT,
+  key_tgfx_RIGHT_CONTROL,
+  key_tgfx_RIGHT_ALT,
+  key_tgfx_RIGHT_SUPER,
+  key_tgfx_MENU
+} key_tgfx;
+
+typedef enum key_action_tgfx {
+  keyAction_tgfx_PRESS,
+  keyAction_tgfx_RELEASE,
+  keyAction_tgfx_REPEAT
+} keyAction_tgfx;
+
+typedef enum key_modifier_tgfx {
+  keyMod_tgfx_SHIFT,
+  keyMod_tgfx_CONTROL,
+  keyMod_tgfx_ALT,
+  keyMod_tgfx_SUPER,
+  keyMod_tgfx_CAPSLOCK,
+  keyMod_tgfx_NUMLOCK
+} keyMod_tgfx;
+
 // CALLBACKS
 
 typedef void (*tgfx_windowResizeCallback)(window_tgfxhnd WindowHandle, void* UserPointer,
                                           unsigned int WIDTH, unsigned int HEIGHT,
                                           texture_tgfxhnd* SwapchainTextureHandles);
 typedef void (*tgfx_PrintLogCallback)(result_tgfx result, const char* text);
+// @param scanCode: System-specific scan code
+typedef void (*tgfx_windowKeyCallback)(window_tgfxhnd windowHnd, void* userPointer, key_tgfx key,
+                                       int scanCode, key_action_tgfx action, keyMod_tgfx mode);
 
 // SYSTEMS
 typedef struct tgfx_helper         helper_tgfx;

@@ -317,7 +317,7 @@ typedef enum shaderlanguages_tgfx {
   shaderlanguages_tgfx_SPIRV = 2
 } shaderlanguages_tgfx;
 
-typedef enum shaderStage_tgfxflag {
+typedef enum shaderStage_tgfx {
   shaderStage_tgfx_VERTEXSHADER   = 1,
   shaderStage_tgfx_FRAGMENTSHADER = 1 << 1,
   shaderStage_tgfx_COMPUTESHADER  = 1 << 2

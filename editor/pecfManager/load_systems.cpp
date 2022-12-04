@@ -133,7 +133,7 @@ gpuQueue_tgfxhnd           allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
 window_tgfxhnd             window;
 tgfx_swapchain_description swpchn_desc;
 static constexpr uint32_t  swapchainTextureCount = 2;
-static constexpr uint32_t  INIT_GPUINDEX         = 1;
+static constexpr uint32_t  INIT_GPUINDEX         = 0;
 
 void createGPU() {
   tgfx->load_backend(nullptr, backends_tgfx_VULKAN, nullptr);
@@ -508,8 +508,14 @@ void recordCommandBundles() {
     // offsetof(firstUboStruct, indices), 2);
     renderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, bindingTables, 0,
                                    pipelineType_tgfx_RASTER);
-    indirectOperationType_tgfx firstOp = indirectOperationType_tgfx_DRAWNONINDEXED;
-    renderer->cmdExecuteIndirect(standardDrawBundle, cmdKey++, 1, &firstOp, firstBuffer,
+    indirectOperationType_tgfx firstOp[5] = {
+      indirectOperationType_tgfx_DRAWNONINDEXED,
+      indirectOperationType_tgfx_DRAWNONINDEXED,
+      indirectOperationType_tgfx_DRAWINDEXED,
+      indirectOperationType_tgfx_DRAWNONINDEXED,
+      indirectOperationType_tgfx_DRAWNONINDEXED
+    };
+    renderer->cmdExecuteIndirect(standardDrawBundle, cmdKey++, 5, firstOp, firstBuffer,
                                  sizeof(firstUboStruct), 0);
 
     assert(cmdKey <= cmdCount && "Cmd count doesn't match!");

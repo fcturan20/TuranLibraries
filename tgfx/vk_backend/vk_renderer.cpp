@@ -206,34 +206,53 @@ VkDeviceSize vk_findIndirectOperationDataSize(indirectOperationType_tgfx opType)
   }
   return UINT64_MAX;
 }
-vk_uint32c VKCONST_MAXINDIRECTOPERATIONCOUNT = 128;
+vk_uint32c VKCONST_MAXINDIRECTOPERATIONSTATECOUNT = 128;
 struct vkCmdStruct_executeIndirect {
   static constexpr vk_cmdType cmd_type = vk_cmdType::executeIndirect;
 
   void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
     VkDeviceSize activeOffset = vk_bufferOffset;
-    for (uint32_t i = 0;
-         i < VKCONST_MAXINDIRECTOPERATIONCOUNT && opTypes[i] != indirectOperationType_tgfx_UNDEF;
-         i++) {
-      switch (opTypes[i]) {
-        case indirectOperationType_tgfx_DRAWNONINDEXED:
-          vkCmdDrawIndirect(cb, vk_buffer, activeOffset, 1, 0);
-          break;
-        case indirectOperationType_tgfx_DRAWINDEXED:
-          vkCmdDrawIndexedIndirect(cb, vk_buffer, activeOffset, 1, 0);
-          break;
-        case indirectOperationType_tgfx_DISPATCH:
-          vkCmdDispatchIndirect(cb, vk_buffer, activeOffset);
-          break;
-        default: printer(result_tgfx_NOTCODED, "Indirect Operation Type isn't supported!"); return;
+    for (uint32_t stateIndx = 0; stateIndx < VKCONST_MAXINDIRECTOPERATIONSTATECOUNT &&
+                                 opStates[stateIndx].opType != indirectOperationType_tgfx_UNDEF;
+         stateIndx++) {
+      uint64_t                   loopCount = 1, drawCount = opStates[stateIndx].opCount;
+      indirectOperationType_tgfx opType = opStates[stateIndx].opType;
+      uint64_t                   indirectArgumentDataSize =
+        vk_findIndirectOperationDataSize(opStates[stateIndx].opType);
+      // If GPU doesn't support multiDrawIndirect or execute type is compute, call same VkCmd*
+      // multiple times with incrementing offsets
+      if (!cmdBundle->m_gpu->vk_featuresDev.features.multiDrawIndirect ||
+          opType == indirectOperationType_tgfx_DISPATCH) {
+        loopCount = opStates[stateIndx].opCount;
+        drawCount = 1;
       }
-
-      activeOffset += vk_findIndirectOperationDataSize(opTypes[i]);
+      for (uint32_t loopIndx = 0; loopIndx < loopCount; loopIndx++) {
+        switch (opType) {
+          case indirectOperationType_tgfx_DRAWNONINDEXED:
+            vkCmdDrawIndirect(cb, vk_buffer, activeOffset, drawCount, indirectArgumentDataSize);
+            break;
+          case indirectOperationType_tgfx_DRAWINDEXED:
+            vkCmdDrawIndexedIndirect(cb, vk_buffer, activeOffset, drawCount,
+                                     indirectArgumentDataSize);
+            break;
+          case indirectOperationType_tgfx_DISPATCH:
+            vkCmdDispatchIndirect(cb, vk_buffer, activeOffset);
+            break;
+          default:
+            printer(result_tgfx_NOTCODED, "Indirect Operation Type isn't supported!");
+            return;
+        }
+        activeOffset += indirectArgumentDataSize * drawCount;
+      }
     }
   };
-  indirectOperationType_tgfx opTypes[VKCONST_MAXINDIRECTOPERATIONCOUNT] = {};
-  VkBuffer                   vk_buffer;
-  VkDeviceSize               vk_bufferOffset;
+  struct vk_indirectOperationState {
+    uint32_t                   opCount;
+    indirectOperationType_tgfx opType;
+  };
+  vk_indirectOperationState opStates[VKCONST_MAXINDIRECTOPERATIONSTATECOUNT] = {};
+  VkBuffer                  vk_buffer;
+  VkDeviceSize              vk_bufferOffset;
 };
 
 struct vk_cmd {
@@ -526,14 +545,28 @@ void vk_cmdExecuteIndirect(commandBundle_tgfxhnd i_bundle, unsigned long long so
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
   auto*            cmd = vk_createCmdStruct<vkCmdStruct_executeIndirect>(&bundle->m_cmds[sortKey]);
 
-  if (operationCount > VKCONST_MAXINDIRECTOPERATIONCOUNT) {
+  if (operationCount > VKCONST_MAXINDIRECTOPERATIONSTATECOUNT) {
     printer(
       result_tgfx_FAIL,
       "Exceeding Vulkan backend's limit of operationCount in a single cmdExecuteIndirect call!");
     return;
   }
-  for (uint32_t i = 0; i < operationCount; i++) {
-    cmd->opTypes[i] = operationTypes[i];
+  uint32_t stateIndx = 0;
+  for (uint32_t i = 0; i < operationCount && stateIndx < VKCONST_MAXINDIRECTOPERATIONSTATECOUNT;) {
+    indirectOperationType_tgfx opType = operationTypes[i];
+    cmd->opStates[stateIndx].opType   = opType;
+    cmd->opStates[stateIndx].opCount  = 0;
+    for (; i < operationCount && opType == operationTypes[i];
+         i++, cmd->opStates[stateIndx].opCount++) {
+    }
+    stateIndx++;
+  }
+  if (stateIndx == VKCONST_MAXINDIRECTOPERATIONSTATECOUNT) {
+    printer(result_tgfx_FAIL,
+            "Exceeding Vulkan backend's limit of operationState (operation type change point "
+            "count) in a single cmdExecuteIndirect call!");
+    cmd->opStates[0].opType = indirectOperationType_tgfx_UNDEF;
+    return;
   }
   cmd->vk_buffer       = contentmanager->GETBUFFER_ARRAY().getOBJfromHANDLE(dataBffr)->vk_buffer;
   cmd->vk_bufferOffset = drawDataBufferOffset;

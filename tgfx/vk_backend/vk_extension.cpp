@@ -32,8 +32,6 @@ void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu) {
     // 4MB is fine i guess?
     VKGLOBAL_VIRMEM_EXTS = vk_virmem::allocate_dynamicmem(1 << 20);
   }
-  // %99.3 of all hardware supports, so why not
-  gpu->vk_featuresDev.features.independentBlend = VK_TRUE;
 
   gpu->vk_featuresDev.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
   gpu->vk_featuresDev.pNext = nullptr;

@@ -20,8 +20,6 @@
 #include "vk_queue.h"
 #include "vk_renderer.h"
 
-struct device_features_chainedstructs;
-
 struct core_private {
  public:
   // These are VK_VECTORs, instead of VK_LINEAROBJARRAYs, because they won't change at run-time so
@@ -42,15 +40,6 @@ VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT>& core_publ
 VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT>& core_public::getGPUs() {
   return hidden->DEVICE_GPUs;
 }
-
-// While enabling features, some struct should be chained. This struct is to keep data object
-// lifetimes optimal
-struct device_features_chainedstructs {
-  VkPhysicalDeviceDescriptorIndexingFeatures          DescIndxingFtrs     = {};
-  VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures DepthStncl_Seperate = {};
-  VkPhysicalDeviceBufferDeviceAddressFeatures         BufferDeviceAddress = {};
-  VkPhysicalDeviceTimelineSemaphoreFeatures           timelineSemaphore   = {};
-};
 
 result_tgfx vk_initGPU(gpu_tgfxhnd gpu) {
   // Create Logical Device

@@ -99,7 +99,7 @@ typedef struct tgfx_window_gpu_support        windowGPUsupport_tgfx;
 typedef struct tgfx_typelessColor             typelessColor_tgfx;
 
 // ENUMS
-typedef enum {
+typedef enum result_tgfx {
   result_tgfx_SUCCESS         = 0,
   result_tgfx_FAIL            = 1,
   result_tgfx_NOTCODED        = 2,
@@ -110,7 +110,7 @@ typedef enum {
 } result_tgfx;
 
 // Variable Types!
-typedef enum {
+typedef enum datatype_tgfx{
   datatype_tgfx_UNDEFINED  = 0,
   datatype_tgfx_VAR_UBYTE8 = 1,
   datatype_tgfx_VAR_BYTE8  = 2,
@@ -125,7 +125,7 @@ typedef enum {
   datatype_tgfx_VAR_MAT4x4
 } datatype_tgfx;
 
-typedef enum {
+typedef enum cubeface_tgfx{
   cubeface_tgfx_FRONT = 0,
   cubeface_tgfx_BACK  = 1,
   cubeface_tgfx_LEFT,
@@ -135,14 +135,14 @@ typedef enum {
   cubeface_tgfx_ALL
 } cubeface_tgfx;
 
-typedef enum {
+typedef enum operationtype_tgfx{
   operationtype_tgfx_READ_ONLY,
   operationtype_tgfx_WRITE_ONLY,
   operationtype_tgfx_READ_AND_WRITE,
   operationtype_tgfx_UNUSED
 } operationtype_tgfx;
 
-typedef enum {
+typedef enum rasterpassLoad_tgfx {
   // All values will be cleared to a certain value
   rasterpassLoad_tgfx_CLEAR,
   // Loaded data is random (undef or current value) & driver probably clear
@@ -153,7 +153,7 @@ typedef enum {
   rasterpassLoad_tgfx_NONE
 } rasterpassLoad_tgfx;
 
-typedef enum {
+typedef enum rasterpassStore_tgfx {
   // Driver do whatever it wants with the data (either write or ignores it)
   rasterpassStore_tgfx_DISCARD,
   // Driver should write the data to memory
@@ -162,7 +162,7 @@ typedef enum {
   rasterpassStore_tgfx_NONE
 } rasterpassStore_tgfx;
 
-typedef enum {
+typedef enum compare_tgfx{
   compare_tgfx_ALWAYS,
   compare_tgfx_NEVER,
   compare_tgfx_LESS,
@@ -171,15 +171,15 @@ typedef enum {
   compare_tgfx_GEQUAL
 } compare_tgfx;
 
-typedef enum {
+typedef enum depthmode_tgfx{
   depthmode_tgfx_READ_WRITE,
   depthmode_tgfx_READ_ONLY,
   depthmode_tgfx_OFF
 } depthmode_tgfx;
 
-typedef enum { cullmode_tgfx_OFF, cullmode_tgfx_BACK, cullmode_tgfx_FRONT } cullmode_tgfx;
+typedef enum cullmode_tgfx{ cullmode_tgfx_OFF, cullmode_tgfx_BACK, cullmode_tgfx_FRONT } cullmode_tgfx;
 
-typedef enum {
+typedef enum stencilop_tgfx {
   stencilop_tgfx_DONT_CHANGE = 0,
   stencilop_tgfx_SET_ZERO    = 1,
   stencilop_tgfx_CHANGE      = 2,
@@ -190,7 +190,7 @@ typedef enum {
   stencilop_tgfx_BITWISE_INVERT
 } stencilop_tgfx;
 
-typedef enum {
+typedef enum blendfactor_tgfx {
   blendfactor_tgfx_ONE  = 0,
   blendfactor_tgfx_ZERO = 1,
   blendfactor_tgfx_SRC_COLOR,
@@ -207,7 +207,7 @@ typedef enum {
   blendfactor_tgfx_CONST_1MINUSALPHA
 } blendfactor_tgfx;
 
-typedef enum {
+typedef enum blendmode_tgfx {
   blendmode_tgfx_ADDITIVE,
   blendmode_tgfx_SUBTRACTIVE,
   blendmode_tgfx_SUBTRACTIVE_SWAPPED,
@@ -215,13 +215,13 @@ typedef enum {
   blendmode_tgfx_MAX
 } blendmode_tgfx;
 
-typedef enum {
+typedef enum polygonmode_tgfx {
   polygonmode_tgfx_FILL,
   polygonmode_tgfx_LINE,
   polygonmode_tgfx_POINT
 } polygonmode_tgfx;
 
-typedef enum {
+typedef enum vertexlisttypes_tgfx{
   vertexlisttypes_tgfx_TRIANGLELIST,
   vertexlisttypes_tgfx_TRIANGLESTRIP,
   vertexlisttypes_tgfx_LINELIST,
@@ -229,28 +229,31 @@ typedef enum {
   vertexlisttypes_tgfx_POINTLIST
 } vertexlisttypes_tgfx;
 
-typedef enum {
+typedef enum texture_dimensions_tgfx {
   texture_dimensions_tgfx_2D     = 0,
   texture_dimensions_tgfx_3D     = 1,
   texture_dimensions_tgfx_2DCUBE = 2
 } texture_dimensions_tgfx;
 
-typedef enum {
+typedef enum texture_mipmapfilter_tgfx {
   texture_mipmapfilter_tgfx_NEAREST_FROM_1MIP,
   texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP,
   texture_mipmapfilter_tgfx_NEAREST_FROM_2MIP,
   texture_mipmapfilter_tgfx_LINEAR_FROM_2MIP
 } texture_mipmapfilter_tgfx;
 
-typedef enum { textureOrder_tgfx_SWIZZLE = 0, textureOrder_tgfx_LINEAR = 1 } textureOrder_tgfx;
+typedef enum textureOrder_tgfx {
+  textureOrder_tgfx_SWIZZLE = 0,
+  textureOrder_tgfx_LINEAR  = 1
+} textureOrder_tgfx;
 
-typedef enum {
+typedef enum texture_wrapping_tgfx {
   texture_wrapping_tgfx_REPEAT,
   texture_wrapping_tgfx_MIRRORED_REPEAT,
   texture_wrapping_tgfx_CLAMP_TO_EDGE
 } texture_wrapping_tgfx;
 
-typedef enum {
+typedef enum textureChannels_tgfx {
   texture_channels_tgfx_UNDEF,
   texture_channels_tgfx_BGRA8UB,    // Unsigned but non-normalized char
   texture_channels_tgfx_BGRA8UNORM, // Unsigned and normalized char
@@ -289,39 +292,45 @@ typedef enum {
   texture_channels_tgfx_UNDEF2
 } textureChannels_tgfx;
 
-typedef enum {
+typedef enum texture_access_tgfx {
   texture_access_tgfx_SAMPLER_OPERATION,
   texture_access_tgfx_IMAGE_OPERATION,
 } texture_access_tgfx;
 
-typedef enum { gpu_type_tgfx_DISCRETE_GPU, gpu_type_tgfx_INTEGRATED_GPU } gpu_type_tgfx;
+typedef enum gpu_type_tgfx {
+  gpu_type_tgfx_DISCRETE_GPU,
+  gpu_type_tgfx_INTEGRATED_GPU
+} gpu_type_tgfx;
 
-typedef enum { VSYNC_OFF, VSYNC_DOUBLEBUFFER, VSYNC_TRIPLEBUFFER } vsync_tgfx;
+typedef enum vsync_tgfx { VSYNC_OFF, VSYNC_DOUBLEBUFFER, VSYNC_TRIPLEBUFFER } vsync_tgfx;
 
-typedef enum { windowmode_tgfx_FULLSCREEN, windowmode_tgfx_WINDOWED } windowmode_tgfx;
+typedef enum windowmode_tgfx {
+  windowmode_tgfx_FULLSCREEN,
+  windowmode_tgfx_WINDOWED
+} windowmode_tgfx;
 
-typedef enum { backends_tgfx_VULKAN = 1, backends_tgfx_D3D12 = 2 } backends_tgfx;
+typedef enum backends_tgfx { backends_tgfx_VULKAN = 1, backends_tgfx_D3D12 = 2 } backends_tgfx;
 
-typedef enum {
+typedef enum shaderlanguages_tgfx {
   shaderlanguages_tgfx_GLSL  = 0,
   shaderlanguages_tgfx_HLSL  = 1,
   shaderlanguages_tgfx_SPIRV = 2
 } shaderlanguages_tgfx;
 
-typedef enum {
+typedef enum shaderStage_tgfxflag {
   shaderStage_tgfx_VERTEXSHADER   = 1,
   shaderStage_tgfx_FRAGMENTSHADER = 1 << 1,
   shaderStage_tgfx_COMPUTESHADER  = 1 << 2
 } shaderStage_tgfx;
 typedef int shaderStage_tgfxflag;
 
-typedef enum {
+typedef enum pipelineType_tgfx {
   pipelineType_tgfx_RASTER     = 0,
   pipelineType_tgfx_COMPUTE    = 1,
   pipelineType_tgfx_RAYTRACING = 2
 } pipelineType_tgfx;
 
-typedef enum {
+typedef enum barrierplace_tgfx {
   // Barrier is used only at the start of the pass
   barrierplace_tgfx_ONLYSTART = 0,
   // Barrier is used before everycall (So, at the start of the pass too)
@@ -333,14 +342,14 @@ typedef enum {
   // Barrier is used only at the end the pass
   barrierplace_tgfx_ONLYEND = 4
 } barrierplace_tgfx;
-typedef enum {
+typedef enum transferpasstype_tgfx {
   transferpasstype_tgfx_BARRIER = 0,
   transferpasstype_tgfx_COPY    = 1
 } transferpasstype_tgfx;
 
 // Don't forget that TGFX stores how you access them in shaders
 // So backend'll probably cull some unnecessary transitions
-typedef enum {
+typedef enum image_access_tgfx {
   image_access_tgfx_NO_ACCESS,
   image_access_tgfx_RTCOLOR_READONLY,
   image_access_tgfx_RTCOLOR_WRITEONLY,
@@ -365,7 +374,7 @@ typedef enum {
   image_access_tgfx_DEPTHREADWRITE_STENCILWRITE
 } image_access_tgfx;
 
-typedef enum {
+typedef enum subdrawpassaccess_tgfx {
   subdrawpassaccess_tgfx_ALLCOMMANDS,
   subdrawpassaccess_tgfx_INDEX_READ,
   subdrawpassaccess_tgfx_VERTEXATTRIB_READ,
@@ -401,7 +410,7 @@ typedef enum {
   subdrawpassaccess_tgfx_FRAGMENTRT_WRITEONLY
 } subdrawpassaccess_tgfx;
 
-typedef enum {
+typedef enum shaderdescriptortype_tgfx {
   shaderdescriptortype_tgfx_SAMPLER = 0,
   shaderdescriptortype_tgfx_SAMPLEDTEXTURE,
   shaderdescriptortype_tgfx_STORAGEIMAGE,
@@ -411,22 +420,26 @@ typedef enum {
   shaderdescriptortype_tgfx_VKEXT_UNIFORMBLOCK
 } shaderdescriptortype_tgfx;
 
-typedef enum {
+typedef enum memoryallocationtype_tgfx {
   memoryallocationtype_DEVICELOCAL     = 0,
   memoryallocationtype_HOSTVISIBLE     = 1,
   memoryallocationtype_FASTHOSTVISIBLE = 2,
   memoryallocationtype_READBACK        = 3
 } memoryallocationtype_tgfx;
 
-typedef enum { BLACK_ALPHA0 = 0, BLACK_ALPHA1 = 1, WHITE_ALPHA1 = 2 } constantsampler_color;
+typedef enum constantsampler_color {
+  BLACK_ALPHA0 = 0,
+  BLACK_ALPHA1 = 1,
+  WHITE_ALPHA1 = 2
+} constantsampler_color;
 
-typedef enum {
+typedef enum colorspace_tgfx {
   colorspace_tgfx_sRGB_NONLINEAR,
   colorspace_tgfx_EXTENDED_sRGB_LINEAR,
   colorspace_tgfx_HDR10_ST2084
 } colorspace_tgfx;
 
-typedef enum { windowcomposition_tgfx_OPAQUE } windowcomposition_tgfx;
+typedef enum windowcomposition_tgfx { windowcomposition_tgfx_OPAQUE } windowcomposition_tgfx;
 
 typedef enum windowpresentation_tgfx {
   windowpresentation_tgfx_FIFO,

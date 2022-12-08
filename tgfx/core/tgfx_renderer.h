@@ -101,6 +101,10 @@ typedef struct tgfx_renderer {
                                  buffer_tgfxhnd srcBuffer, unsigned long long bufferOffset,
                                  texture_tgfxhnd dstTexture, image_access_tgfx lastAccess,
                                  extension_tgfxlsthnd exts);
+  void (*cmdCopyBufferToBuffer)(commandBundle_tgfxhnd bndl, unsigned long long key,
+                                unsigned long long copySize, buffer_tgfxhnd srcBuffer,
+                                unsigned long long srcOffset, buffer_tgfxhnd dstBuffer,
+                                unsigned long long dstOffset);
 
   // EXT: TGFX_OperationCountBuffer
   void (*cmdExecuteIndirect)(commandBundle_tgfxhnd bndl, unsigned long long key,

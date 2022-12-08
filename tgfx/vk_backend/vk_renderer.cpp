@@ -57,6 +57,7 @@ enum class vk_cmdType : vkEnumType_cmdType(){
   bindPipeline,
   dispatch,
   copyBufferToTexture,
+  copyBufferToBuffer,
   error_2 = VK_PRIM_MAX(vkEnumType_cmdType())};
 // Template struct for new cmd structs
 // Then specify the struct in vkCmdStructsLists
@@ -255,6 +256,17 @@ struct vkCmdStruct_executeIndirect {
   VkDeviceSize              vk_bufferOffset;
 };
 
+struct vkCmdStruct_copyBufferToBuffer {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::copyBufferToBuffer;
+
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdCopyBuffer(cb, vk_srcBuffer, vk_dstBuffer, 1, &vk_bufCopy);
+  };
+
+  VkBuffer     vk_srcBuffer = {}, vk_dstBuffer = {};
+  VkBufferCopy vk_bufCopy = {};
+};
+
 struct vk_cmd {
   vk_cmdType cmd_type = vk_cmdType::error_2;
 
@@ -324,6 +336,9 @@ void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cm
       break;
     case vk_cmdType::executeIndirect:
       (( vkCmdStruct_executeIndirect* )cmd.cmd_data)->cmd_execute(cb, bundle);
+      break;
+    case vk_cmdType::copyBufferToBuffer:
+      (( vkCmdStruct_copyBufferToBuffer* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
     case vk_cmdType::error:
     case vk_cmdType::error_2: printf("One of the cmds is not used!"); break;
@@ -631,6 +646,20 @@ void vk_cmdCopyBufferToTexture(commandBundle_tgfxhnd bndl, unsigned long long ke
   cmd->vk_copy.imageSubresource.mipLevel       = 0;
 }
 
+void vk_cmdCopyBufferToBuffer(commandBundle_tgfxhnd bndl, unsigned long long key,
+                              unsigned long long size, buffer_tgfxhnd srcBuffer,
+                              unsigned long long srcOffset, buffer_tgfxhnd dstBuffer,
+                              unsigned long long dstOffset) {
+  CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(bndl);
+  auto*            cmd = vk_createCmdStruct<vkCmdStruct_copyBufferToBuffer>(&bundle->m_cmds[key]);
+
+  cmd->vk_bufCopy.dstOffset = dstOffset;
+  cmd->vk_bufCopy.size      = size;
+  cmd->vk_bufCopy.srcOffset = srcOffset;
+  cmd->vk_dstBuffer = contentmanager->GETBUFFER_ARRAY().getOBJfromHANDLE(dstBuffer)->vk_buffer;
+  cmd->vk_srcBuffer = contentmanager->GETBUFFER_ARRAY().getOBJfromHANDLE(srcBuffer)->vk_buffer;
+}
+
 // Helper functions
 
 void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxlsthnd i_exts,
@@ -754,6 +783,7 @@ void set_VkRenderer_funcPtrs() {
   core_tgfx_main->renderer->cmdSetScissor           = vk_cmdSetScissor;
   core_tgfx_main->renderer->cmdSetDepthBounds       = vk_cmdSetDepthBounds;
   core_tgfx_main->renderer->cmdCopyBufferToTexture  = vk_cmdCopyBufferToTexture;
+  core_tgfx_main->renderer->cmdCopyBufferToBuffer   = vk_cmdCopyBufferToBuffer;
 
   core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
   core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;

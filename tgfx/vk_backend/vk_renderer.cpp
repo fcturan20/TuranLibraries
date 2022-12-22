@@ -31,11 +31,13 @@ struct CMDBUNDLE_VKOBJ {
   VkDescriptorSetLayout vk_activeDescSets[VKCONST_MAXDESCSET_PERLIST] = {};
   uint8_t               vk_callBuffer[128] = {}; // CallBuffer = Push Constants = 128 byte
 
-  GPU_VKOBJ*          m_gpu             = {};
-  vk_cmd*             m_cmds            = {};
-  uint64_t            m_cmdCount        = 0;
-  pipeline_tgfxhnd    m_defaultPipeline = {};
-  VkPipelineBindPoint vk_bindPoint      = {};
+  GPU_VKOBJ*             m_gpu                                          = {};
+  vk_cmd*                m_cmds                                         = {};
+  uint64_t               m_cmdCount                                     = 0;
+  pipeline_tgfxhnd       m_defaultPipeline                              = {};
+  VkPipelineBindPoint    vk_bindPoint                                   = {};
+  vk_virmem::dynamicmem* m_virmem                                       = {};
+  VkCommandBuffer        vk_cmdBuffers[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
 
   void createCmdBuffer(uint64_t cmdCount);
 };
@@ -351,6 +353,7 @@ void CMDBUNDLE_VKOBJ::createCmdBuffer(uint64_t cmdCount) {
   // I don't want to bother with commit operations for now, commit all cmds
   m_cmds     = new (cmdVirMem) vk_cmd[cmdCount];
   m_cmdCount = cmdCount;
+  m_virmem   = cmdVirMem;
 }
 
 struct vk_renderer_private {
@@ -394,7 +397,9 @@ commandBundle_tgfxhnd vk_beginCommandBundle(gpu_tgfxhnd gpu, unsigned long long 
     return nullptr;
   }
   CMDBUNDLE_VKOBJ* cmdBundle = hiddenRenderer->m_cmdBundles.add();
-
+  for (uint32_t i = 0; i < VKCONST_MAXQUEUEFAMCOUNT_PERGPU; i++) {
+    cmdBundle->vk_cmdBuffers[i] = {};
+  }
   cmdBundle->m_gpu = GPU;
   cmdBundle->createCmdBuffer(maxCmdCount);
   cmdBundle->m_defaultPipeline = defaultPipeline;
@@ -433,6 +438,8 @@ void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
       }
     }
   }*/
+  vk_virmem::free_dynamicmem(bundle->m_virmem);
+  *bundle = {};
   hiddenRenderer->m_cmdBundles.erase(hiddenRenderer->m_cmdBundles.getINDEX_byOBJ(bundle));
 }
 
@@ -448,10 +455,8 @@ void vk_cmdBindBindingTables(commandBundle_tgfxhnd i_bundle, unsigned long long 
       BINDINGTABLEINST_VKOBJ* bindingTable =
         contentmanager->GETBINDINGTABLE_ARRAY().getOBJfromHANDLE(bindingTables[i]);
       if (bindingTable) {
-        cmd->vk_sets[cmd->m_setCount] = bindingTable->vk_set;
-        BINDINGTABLETYPE_VKOBJ* type =
-          contentmanager->GETBINDINGTABLETYPE_ARRAY().getOBJfromHANDLE(bindingTable->m_type);
-        cmd->vk_setLayouts[cmd->m_setCount++] = type->vk_layout;
+        cmd->vk_sets[cmd->m_setCount]         = bindingTable->vk_set;
+        cmd->vk_setLayouts[cmd->m_setCount++] = bindingTable->vk_layout;
       }
     }
   }
@@ -711,19 +716,12 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUE
       continue;
     }
 
-    bool isFound = false;
-    for (uint32_t i = 0; i < queueFam->m_cmdBundleCount && !isFound; i++) {
-      if (queueFam->m_cmdBundleRefs[i].m_cmdBundle == commandBundleList[bundleListIndx]) {
-        secondaryCmdBuffers[bundleCount++] = queueFam->m_cmdBundleRefs[i].vk_cmdBuffer;
-        isFound                            = true;
-      }
-    }
+    VkCommandBuffer& vkCmdBuffer = bundle->vk_cmdBuffers[queueFam->vk_queueFamIndex];
 
-    // There is room to create a new cmdBundle reference, so create it
-    if (!isFound) {
-      cmdPool_vk*     cmdPool   = {};
-      VkCommandBuffer cmdBuffer = {};
-      vk_allocateCmdBuffer(queueFam, VK_COMMAND_BUFFER_LEVEL_SECONDARY, cmdPool, &cmdBuffer, 1);
+    // Command bundle isn't used in this queue fam, so use it
+    if (vkCmdBuffer == VK_NULL_HANDLE) {
+      cmdPool_vk* cmdPool = {};
+      vk_allocateCmdBuffer(queueFam, VK_COMMAND_BUFFER_LEVEL_SECONDARY, cmdPool, &vkCmdBuffer, 1);
 
       VkCommandBufferInheritanceRenderingInfo rInfo = {};
 
@@ -752,19 +750,16 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUE
       bi.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
       bi.pInheritanceInfo = &secInfo;
 
-      assert_vk(!ThrowIfFailed(vkBeginCommandBuffer(cmdBuffer, &bi),
+      assert_vk(!ThrowIfFailed(vkBeginCommandBuffer(vkCmdBuffer, &bi),
                                "vkBeginCommandBuffer() shouldn't fail!"));
       for (uint64_t cmdIndx = 0; cmdIndx < bundle->m_cmdCount; cmdIndx++) {
-        vk_executeCmd(cmdBuffer, bundle, bundle->m_cmds[cmdIndx]);
+        vk_executeCmd(vkCmdBuffer, bundle, bundle->m_cmds[cmdIndx]);
       }
       assert_vk(
-        !ThrowIfFailed(vkEndCommandBuffer(cmdBuffer), "vkEndCommandBuffer() shouldn't fail!"));
-
-      queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdBundle    = bundleHnd;
-      queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount].m_cmdPool      = cmdPool;
-      queueFam->m_cmdBundleRefs[queueFam->m_cmdBundleCount++].vk_cmdBuffer = cmdBuffer;
-      secondaryCmdBuffers[bundleCount++]                                   = cmdBuffer;
+        !ThrowIfFailed(vkEndCommandBuffer(vkCmdBuffer), "vkEndCommandBuffer() shouldn't fail!"));
     }
+
+    secondaryCmdBuffers[bundleCount++] = vkCmdBuffer;
   }
   *cmdBufferCount = bundleCount;
 }

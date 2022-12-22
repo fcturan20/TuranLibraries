@@ -21,6 +21,10 @@ static ecs_tapi*       core_regsys;
 
 void defaultPrintCallback(result_tgfx result, const char* text) {
   printf("TGFX Result: %u, Message: %s\n", result, text);
+  if (result == result_tgfx_NOTCODED || result == result_tgfx_INVALIDARGUMENT ||
+      result == result_tgfx_FAIL) {
+    printf("\n\n");
+  }
 }
 
 result_tgfx load_backend(core_tgfx* parent, backends_tgfx backend,

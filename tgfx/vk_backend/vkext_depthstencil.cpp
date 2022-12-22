@@ -154,10 +154,6 @@ void Fill_DepthAttachmentDescription_NOSeperated(VkAttachmentDescription& Desc,
 vkext_depthStencil::vkext_depthStencil(GPU_VKOBJ* gpu) : vkext_interface(gpu, nullptr, &features) {
   features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES;
   features.pNext = nullptr;
-  if (!m_gpu->vk_featuresDev.features.depthBounds) {
-    printer(result_tgfx_WARNING,
-            "One of your GPUs doesn't support depth bounds testing");
-  }
 }
 void vkext_depthStencil::inspect() {
   if (features.separateDepthStencilLayouts) {
@@ -170,6 +166,9 @@ void vkext_depthStencil::inspect() {
             (std::string(m_gpu->desc.name) + " doesn't support seperated depth stencil layouts, so "
                                              "layout transitions isn't gonna be precise!")
               .c_str());
+  }
+  if (!m_gpu->vk_featuresDev.features.depthBounds) {
+    printer(result_tgfx_WARNING, "One of your GPUs doesn't support depth bounds testing");
   }
 }
 void vkext_depthStencil::manage(VkStructureType structType, void* structPtr,

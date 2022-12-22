@@ -41,6 +41,8 @@ extern unsigned int              threadcount;
 struct gpuallocatorsys_vk;
 extern gpuallocatorsys_vk*    gpu_allocator;
 extern virtualmemorysys_tapi* virmemsys;
+typedef struct profiler_tapi  profiler_tapi;
+extern profiler_tapi*         profilerSys;
 
 result_tgfx                  printer(unsigned int error_code);
 result_tgfx                  printer(result_tgfx failresult, const char* output);
@@ -195,7 +197,7 @@ void* operator new(size_t size, vk_virmem::dynamicmem* mem);
 void* operator new[](size_t size, vk_virmem::dynamicmem* mem);
 
 #define VK_MEMOFFSET_TO_POINTER(offset) \
-  (( void* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + ( size_t )offset))
+  (( void* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + uint32_t(offset)))
 #define VK_POINTER_TO_MEMOFFSET(ptr) \
   (uint32_t)(uintptr_t(ptr) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN))
 #define VK_ALLOCATE_AND_GETPTR(dynamicmem, size) \
@@ -465,7 +467,7 @@ class VK_STATICVECTOR {
     handle.EXTRA_FLAGs   = T::GET_EXTRAFLAGS(obj);
     return *( TGFXHND* )&handle;
   }
-  uint32_t getINDEX_byOBJ(T* obj) { return uintptr_t(obj - datas) / sizeof(T); }
+  uint32_t getINDEX_byOBJ(T* obj) { return uintptr_t(obj - datas); }
 
   T* add() {
     uint32_t indx = currentelement_i.fetch_add(1);

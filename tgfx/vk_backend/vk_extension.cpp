@@ -33,13 +33,14 @@ void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu) {
     VKGLOBAL_VIRMEM_EXTS = vk_virmem::allocate_dynamicmem(1 << 20);
   }
 
+  extManager_vkDevice* mngr = new (VKGLOBAL_VIRMEM_EXTS) extManager_vkDevice;
+  mngr->m_exts = new (VKGLOBAL_VIRMEM_EXTS) vkext_interface*[vkext_interface::vkext_count];
+  mngr->m_GPU  = gpu;
+
   gpu->vk_featuresDev.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
   gpu->vk_featuresDev.pNext = nullptr;
   gpu->vk_propsDev.sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
   gpu->vk_propsDev.pNext    = nullptr;
-  extManager_vkDevice* mngr = new (VKGLOBAL_VIRMEM_EXTS) extManager_vkDevice;
-  mngr->m_exts = new (VKGLOBAL_VIRMEM_EXTS) vkext_interface*[vkext_interface::vkext_count];
-  mngr->m_GPU  = gpu;
 
   mngr->m_exts[vkext_interface::depthStencil_vkExtEnum] =
     new (VKGLOBAL_VIRMEM_EXTS) vkext_depthStencil(gpu);
@@ -66,4 +67,5 @@ void extManager_vkDevice::inspect() {
     }
   }
   m_activeDevExtNames.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+  m_activeDevExtNames.push_back(VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME);
 }

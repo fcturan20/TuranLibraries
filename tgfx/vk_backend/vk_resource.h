@@ -206,7 +206,6 @@ struct PIPELINE_VKOBJ {
   static uint16_t  GET_EXTRAFLAGS(PIPELINE_VKOBJ* obj) { return obj->vk_type; }
 
   uint8_t  m_gpu;
-  uint32_t m_typeSETs[VKCONST_MAXDESCSET_PERLIST];
 
   VkPipelineLayout    vk_layout = VK_NULL_HANDLE;
   VkPipeline          vk_object = VK_NULL_HANDLE;

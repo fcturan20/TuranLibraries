@@ -26,6 +26,9 @@ struct GPU_VKOBJ {
   VkPhysicalDeviceFeatures2         vk_featuresDev       = {};
   VkPhysicalDeviceMemoryProperties2 vk_propsMemory       = {};
   memoryDescription_tgfx            m_memoryDescTGFX[32] = {};
+  texture_tgfxhnd                   m_invalidStorageTexture = {}, m_invalidShaderReadTexture = {};
+  sampler_tgfxhnd                   m_invalidSampler = {};
+  buffer_tgfxhnd                    m_invalidBuffer  = {};
 
   VkQueueFamilyProperties2 vk_propsQueue[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
 

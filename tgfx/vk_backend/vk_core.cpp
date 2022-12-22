@@ -1,6 +1,7 @@
 #include "vk_core.h"
 
 #include <ecs_tapi.h>
+#include <profiler_tapi.h>
 #include <stdio.h>
 #include <tgfx_core.h>
 #include <tgfx_gpucontentmanager.h>
@@ -19,6 +20,7 @@
 #include "vk_predefinitions.h"
 #include "vk_queue.h"
 #include "vk_renderer.h"
+// #define VK_VALIDATION_LAYER
 
 struct core_private {
  public:
@@ -165,9 +167,11 @@ void vk_createInstance() {
   InstCreation_Info.ppEnabledExtensionNames = activeInstanceExts.data();
 
   // Validation Layers
-  const char* Validation_Layers[1]      = {"VK_LAYER_KHRONOS_validation"};
+  #ifdef VK_VALIDATION_LAYER
+  const char* Validation_Layers[]       = {"VK_LAYER_KHRONOS_validation"};
   InstCreation_Info.enabledLayerCount   = 1;
   InstCreation_Info.ppEnabledLayerNames = Validation_Layers;
+  #endif
 
   ThrowIfFailed(vkCreateInstance(&InstCreation_Info, nullptr, &VKGLOBAL_INSTANCE),
                 "Failed to create a Vulkan Instance!");
@@ -975,7 +979,7 @@ void        vk_initRenderer();
 void        vk_setHelperFuncPtrs();
 extern void vk_setQueueFuncPtrs();
 void        vk_errorCallback(int error_code, const char* description) {
-         printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
+  printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
 }
 result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallback printcallback) {
   if (!regsys->getSystem(TGFX_PLUGIN_NAME)) return result_tgfx_FAIL;
@@ -998,6 +1002,12 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallbac
   if (threadsysloaded) {
     threadingsys = threadsysloaded->funcs;
     threadcount  = threadingsys->thread_count();
+  }
+
+  PROFILER_TAPI_PLUGIN_LOAD_TYPE profilerLoaded =
+    ( PROFILER_TAPI_PLUGIN_LOAD_TYPE )regsys->getSystem(PROFILER_TAPI_PLUGIN_NAME);
+  if (profilerLoaded) {
+    profilerSys = profilerLoaded->funcs;
   }
 
   core_tgfx_main = core->api;
@@ -1060,20 +1070,20 @@ VKAPI_ATTR VkBool32 VKAPI_CALL
 vk_debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      Message_Severity,
                  VkDebugUtilsMessageTypeFlagsEXT             Message_Type,
                  const VkDebugUtilsMessengerCallbackDataEXT* pCallback_Data, void* pUserData) {
-  const char* Callback_Type = "";
+  const char* callbackType = "";
   switch (Message_Type) {
     case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-      Callback_Type =
+      callbackType =
         "VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT : Some event has happened that "
         "is unrelated to the specification or performance\n";
       break;
     case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-      Callback_Type =
+      callbackType =
         "VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT: Something has happened that "
         "violates the specification or indicates a possible mistake\n";
       break;
     case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-      Callback_Type =
+      callbackType =
         "VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT: Potential non-optimal use of Vulkan\n";
       break;
     default:
@@ -1107,6 +1117,7 @@ defineVkExtFunc(vkDestroyDebugUtilsMessengerEXT);
 VkDebugUtilsMessengerEXT dbg_mssngr = VK_NULL_HANDLE;
 
 void vk_setupDebugging() {
+#ifdef VK_VALIDATION_LAYER
   loadVkExtFunc(vkCreateDebugUtilsMessengerEXT);
   loadVkExtFunc(vkDestroyDebugUtilsMessengerEXT);
 
@@ -1124,4 +1135,5 @@ void vk_setupDebugging() {
   ThrowIfFailed(
     vkCreateDebugUtilsMessengerEXT_loaded(VKGLOBAL_INSTANCE, &dbg_mssngr_ci, nullptr, &dbg_mssngr),
     "Vulkan's Debug Callback system failed to start!");
+#endif
 }

@@ -127,9 +127,6 @@ struct QUEUEFAM_VK {
   cmdPool_vk*  m_pools          = nullptr;
 
   VK_STATICVECTOR<QUEUE_VKOBJ, gpuQueue_tgfxhnd, VKCONST_MAXQUEUECOUNT_PERFAM> m_queues;
-  static constexpr uint32_t MAXCMDBUNDLECOUNT = 1024;
-  uint32_t                  m_cmdBundleCount  = 0;
-  cmdBundleRef_vk           m_cmdBundleRefs[MAXCMDBUNDLECOUNT];
 
   QUEUEFAM_VK& operator=(const QUEUEFAM_VK& src) {
     isALIVE = true;

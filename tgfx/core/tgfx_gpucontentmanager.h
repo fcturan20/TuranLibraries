@@ -30,12 +30,9 @@ typedef struct tgfx_gpudatamanager {
   ////////////////////////////////////
 
   // If descType is sampler, SttcSmplrs can be used at binding index 0
-  // If your GPU supports VariableDescCount, you set ElementCount to UINT32_MAX
-  result_tgfx (*createBindingTableType)(gpu_tgfxhnd gpu, const bindingTableDescription_tgfx* desc,
-                                        bindingTableType_tgfxhnd* bindingTableHandle);
-  void (*destroyBindingTableType)(bindingTableType_tgfxhnd bindingTableType);
-  result_tgfx (*instantiateBindingTable)(bindingTableType_tgfxhnd type, unsigned char isStatic,
-                                         bindingTable_tgfxhnd* table);
+  result_tgfx (*createBindingTable)(gpu_tgfxhnd gpu,
+                                    const bindingTableDescription_tgfx const* const desc,
+                                    bindingTable_tgfxhnd* table);
   void (*destroyBindingTable)(bindingTable_tgfxhnd bindingTable);
   result_tgfx (*setBindingTable_Texture)(bindingTable_tgfxhnd table, unsigned int bindingCount,
                                          const unsigned int*      bindingIndices,
@@ -60,14 +57,14 @@ typedef struct tgfx_gpudatamanager {
                                      shaderSource_tgfxhnd* ShaderSourceHandle);
   void (*destroyShaderSource)(shaderSource_tgfxhnd ShaderSourceHandle);
   // Extensions: CallBufferInfo, Subpass, StaticRasterState
-  result_tgfx (*createRasterPipeline)(const rasterPipelineDescription_tgfx* desc,
+  result_tgfx (*createRasterPipeline)(const rasterPipelineDescription_tgfx const* desc,
                                       extension_tgfxlsthnd exts, pipeline_tgfxhnd* hnd);
   // Extensions: Dynamic States, CallBufferInfo, Specialization Constants
   result_tgfx (*copyRasterPipeline)(pipeline_tgfxhnd basePipeline, extension_tgfxlsthnd exts,
                                     pipeline_tgfxhnd* derivedPipeline);
 
-  result_tgfx (*createComputePipeline)(shaderSource_tgfxhnd        Source,
-                                       bindingTableType_tgfxlsthnd TypeBindingTables,
+  result_tgfx (*createComputePipeline)(shaderSource_tgfxhnd Source, unsigned int bindingTableCount,
+                                       const bindingTableDescription_tgfx const* const bindingTableDescs,
                                        unsigned char isCallBufferSupported, pipeline_tgfxhnd* hnd);
   // Extensions: CallBufferInfo, Specialization Constants
   result_tgfx (*copyComputePipeline)(pipeline_tgfxhnd src, extension_tgfxlsthnd exts,

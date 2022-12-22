@@ -15,6 +15,7 @@ unsigned int           threadcount       = 1;
 gpuallocatorsys_vk*    gpu_allocator     = nullptr;
 manager_vk*            queuesys          = nullptr;
 virtualmemorysys_tapi* virmemsys         = nullptr;
+profiler_tapi*         profilerSys       = nullptr;
 VkInstance             VKGLOBAL_INSTANCE = VK_NULL_HANDLE;
 VkApplicationInfo      VKGLOBAL_APPINFO;
 tgfx_PrintLogCallback  printer_cb                   = nullptr;
@@ -196,11 +197,13 @@ void vk_virmem::free_page(uint32_t suballocation_startoffset) {
     search_page_sum += allocator_main->suballocations_list[search_alloc_i].PAGECOUNT;
     search_alloc_i++;
   }
+  VK_PAGEINFO& alloc = allocator_main->suballocations_list[search_alloc_i];
   void* free_address =
     ( void* )(uintptr_t(VKCONST_VIRMEM_MAXALLOCCOUNT) + (VKCONST_VIRMEMPAGESIZE * page_i));
   virmemsys->virtual_decommit(
-    free_address,
-    VKCONST_VIRMEMPAGESIZE * allocator_main->suballocations_list[search_alloc_i].PAGECOUNT);
+    free_address, VKCONST_VIRMEMPAGESIZE * alloc.PAGECOUNT);
+  alloc.isALIVE = false;
+  alloc.isMERGED = false;
 }
 struct vk_virmem::dynamicmem {
   uint32_t             all_space       = 0;
@@ -246,13 +249,12 @@ uint32_t vk_virmem::allocate_from_dynamicmem(dynamicmem* mem, uint32_t size, boo
     return NULL;
   }
 #endif
+  uintptr_t loc_of_base_mem = uintptr_t(mem);
+  uintptr_t location = (loc_of_base_mem + sizeof(dynamicmem) + mem->all_space - remaining);
   if (shouldcommit) {
-    uintptr_t loc_of_base_mem = uintptr_t(mem);
-    uintptr_t location        = (loc_of_base_mem + sizeof(dynamicmem) + mem->all_space - remaining);
     virmemsys->virtual_commit(( void* )location, size);
   }
-  return uintptr_t(mem) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + sizeof(dynamicmem) +
-         mem->all_space - remaining;
+  return location - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN);
 }
 void vk_virmem::free_dynamicmem(dynamicmem* mem) {
   free_page(uintptr_t(mem) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN));

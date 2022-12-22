@@ -121,6 +121,7 @@ typedef struct tgfx_binding_table_description {
   unsigned int              ElementCount;
   shaderStage_tgfxflag      visibleStagesMask;
   sampler_tgfxlsthnd        SttcSmplrs;
+  unsigned char             isDynamic;
 } bindingTableDescription_tgfx;
 
 #define TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT 8
@@ -196,12 +197,13 @@ typedef struct tgfx_raster_input_assembler_description {
 
 typedef struct tgfx_raster_pipeline_description {
   shaderSource_tgfxlsthnd              shaderSourceList;
-  bindingTableType_tgfxlsthnd          typeTables;
   rasterInputAssemblerDescription_tgfx attribLayout;
   viewportInfo_tgfx                    viewportList;
   const rasterStateDescription_tgfx*   mainStates;
   textureChannels_tgfx                 colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
-  textureChannels_tgfx                 depthStencilTextureFormat;
+  const bindingTableDescription_tgfx const* tables;
+  unsigned int                              tableCount;
+  textureChannels_tgfx                      depthStencilTextureFormat;
 } rasterPipelineDescription_tgfx;
 
 typedef struct tgfx_rasterpass_begin_slot_info {

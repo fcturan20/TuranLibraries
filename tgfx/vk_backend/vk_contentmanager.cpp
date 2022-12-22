@@ -16,6 +16,7 @@
 #include "vk_renderer.h"
 #include "vk_resource.h"
 #include "vkext_dynamicStates.h"
+#include "profiler_tapi.h"
 
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_CONTENTMANAGER = nullptr;
 
@@ -30,18 +31,15 @@ VkBuffer       defaultBuffer;
 TEXTURE_VKOBJ* defaultTexture;
 
 struct sampler_descVK {
-  VkSampler         sampler_obj = defaultSampler;
-  std::atomic_uchar isUpdated   = 0;
+  VkSampler sampler_obj = defaultSampler;
 };
 
 struct buffer_descVK { // Both for BUFFER and EXT_UNIFORMBUFFER
-  VkDescriptorBufferInfo info      = {};
-  std::atomic_uchar      isUpdated = 0;
+  VkDescriptorBufferInfo info = {};
 };
 
 struct texture_descVK { // Both for SAMPLEDTEXTURE and STORAGEIMAGE
-  VkDescriptorImageInfo info      = {};
-  std::atomic_uchar     isUpdated = 0;
+  VkDescriptorImageInfo info = {};
 };
 
 struct SHADERSOURCE_VKOBJ {
@@ -65,15 +63,14 @@ struct SHADERSOURCE_VKOBJ {
 };
 
 struct gpudatamanager_private {
-  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>                   textures;
-  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>                 pipelines;
-  VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, shaderSource_tgfxhnd, 1 << 24>         shadersources;
-  VK_LINEAR_OBJARRAY<SAMPLER_VKOBJ, sampler_tgfxhnd, 1 << 16>                   samplers;
-  VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>                              buffers;
-  VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10> bindingtabletypes;
-  VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>     bindingtableinsts;
-  VK_LINEAR_OBJARRAY<HEAP_VKOBJ, heap_tgfxhnd, 1 << 10>                         heaps;
-  VK_LINEAR_OBJARRAY<SUBRASTERPASS_VKOBJ, subRasterpass_tgfxhnd, 1 << 16>       subrasterpasses;
+  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>               textures;
+  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>             pipelines;
+  VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, shaderSource_tgfxhnd, 1 << 24>     shadersources;
+  VK_LINEAR_OBJARRAY<SAMPLER_VKOBJ, sampler_tgfxhnd, 1 << 16>               samplers;
+  VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>                          buffers;
+  VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16> bindingtableinsts;
+  VK_LINEAR_OBJARRAY<HEAP_VKOBJ, heap_tgfxhnd, 1 << 10>                     heaps;
+  VK_LINEAR_OBJARRAY<SUBRASTERPASS_VKOBJ, subRasterpass_tgfxhnd, 1 << 16>   subrasterpasses;
 
   // These are the textures that will be deleted after waiting for 2 frames ago's command buffer
   VK_VECTOR_ADDONLY<TEXTURE_VKOBJ*, 1 << 16> DeleteTextureList;
@@ -280,19 +277,20 @@ void vk_destroyBuffer(buffer_tgfxhnd buffer) {
   hidden->buffers.destroyOBJfromHANDLE(buffer);
 }
 
-vk_uint32c  VKCONST_MAXSTATICSAMPLERCOUNT = 128;
-result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescription_tgfx* desc,
-                                      bindingTableType_tgfxhnd* bindingTableHandle) {
-#ifdef VULKAN_DEBUGGING
-  // Check if pool has enough space for the desc set and if there is, then decrease the amount of
-  // available descs in the pool for other checks
-  if (!desc->ElementCount && !desc->SttcSmplrs) {
-    printer(result_tgfx_FAIL, "You shouldn't create a binding table with ElementCount = 0");
-    return result_tgfx_FAIL;
-  }
-#endif
-  GPU_VKOBJ* GPU = core_vk->getGPUs().getOBJfromHANDLE(gpu);
+vk_uint32c VKCONST_MAXSTATICSAMPLERCOUNT = 128;
 
+void* getInvalidResourceByType(GPU_VKOBJ* gpu, VkDescriptorType descType) {
+  switch (descType) {
+    case VK_DESCRIPTOR_TYPE_SAMPLER: return gpu->m_invalidSampler;
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: return gpu->m_invalidBuffer;
+    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER: return gpu->m_invalidShaderReadTexture;
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: return gpu->m_invalidStorageTexture;
+    default: assert(0 && "Invalid descriptor type"); return nullptr;
+  }
+}
+VkDescriptorSetLayout createDescriptorSetLayout(
+  GPU_VKOBJ* gpu, const bindingTableDescription_tgfx const* const desc) {
   // Static Immutable Sampler binding
   VkDescriptorSetLayoutBinding bindngs[2] = {};
   VkSampler                    staticSamplers[VKCONST_MAXSTATICSAMPLERCOUNT];
@@ -304,7 +302,7 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
       if (!hidden->samplers.getOBJfromHANDLE(desc->SttcSmplrs[i])) {
         printer(result_tgfx_FAIL,
                 "You shouldn't give NULL or invalid handles to StaticSamplers list!");
-        return result_tgfx_WARNING;
+        return nullptr;
       }
 
       i++;
@@ -330,49 +328,42 @@ result_tgfx vk_createBindingTableType(gpu_tgfxhnd gpu, const bindingTableDescrip
     bindngs[dynamicbinding_i].stageFlags         = vk_findShaderStageVk(desc->visibleStagesMask);
   }
 
-  VkDescriptorSetLayout DSL;
+  VkDescriptorSetLayout dsl = {};
   {
+    VkDescriptorSetLayoutBindingFlagsCreateInfo dynCi = {};
+    if (desc->isDynamic) {
+      dynCi.bindingCount            = 1;
+      VkDescriptorBindingFlags flag = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
+                                      VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT |
+                                      VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT_EXT |
+                                      VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT;
+      dynCi.pBindingFlags = &flag;
+      dynCi.pNext         = nullptr;
+      dynCi.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+    }
     VkDescriptorSetLayoutCreateInfo ci = {};
     ci.sType                           = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    ci.flags                           = 0;
-    ci.pNext                           = nullptr;
-    ci.bindingCount                    = dynamicbinding_i + 1;
-    ci.pBindings                       = bindngs;
-    ThrowIfFailed(vkCreateDescriptorSetLayout(GPU->vk_logical, &ci, nullptr, &DSL),
+    ci.flags = desc->isDynamic ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT_EXT : 0;
+    ci.pNext = desc->isDynamic ? &dynCi : nullptr;
+    ci.bindingCount = dynamicbinding_i + 1;
+    ci.pBindings    = bindngs;
+    ThrowIfFailed(vkCreateDescriptorSetLayout(gpu->vk_logical, &ci, nullptr, &dsl),
                   "Descriptor Set Layout creation has failed!");
   }
-
-  BINDINGTABLETYPE_VKOBJ* finalobj = hidden->bindingtabletypes.create_OBJ();
-  finalobj->vk_descType            = bindngs[dynamicbinding_i].descriptorType;
-  finalobj->m_elementCount = bindngs[dynamicbinding_i].descriptorCount + staticsamplerscount;
-  finalobj->m_gpu          = GPU->gpuIndx();
-  finalobj->vk_layout      = DSL;
-  finalobj->vk_stages      = bindngs[dynamicbinding_i].stageFlags;
-  *bindingTableHandle      = hidden->bindingtabletypes.returnHANDLEfromOBJ(finalobj);
-  return result_tgfx_SUCCESS;
+  return dsl;
 }
-void vk_destroyBindingTableType(bindingTableType_tgfxhnd bindingTableType) {
-  BINDINGTABLETYPE_VKOBJ* type = hidden->bindingtabletypes.getOBJfromHANDLE(bindingTableType);
-  assert(type && "Invalid binding table type!");
+result_tgfx vk_createBindingTable(gpu_tgfxhnd                                     i_gpu,
+                                  const bindingTableDescription_tgfx const* const desc,
+                                  bindingTable_tgfxhnd*                           table) {
 #ifdef VULKAN_DEBUGGING
-  for (uint32_t i = 0; i < hidden->bindingtableinsts.size(); i++) {
-    if (!hidden->bindingtableinsts[i]) {
-      break;
-    }
-    assert(hidden->bindingtableinsts[i]->m_type != bindingTableType &&
-           "BindingTable Type has living instances, this is invalid!");
+  // Check if pool has enough space for the desc set and if there is, then decrease the amount of
+  // available descs in the pool for other checks
+  if (!desc->ElementCount && !desc->SttcSmplrs) {
+    printer(result_tgfx_FAIL, "You shouldn't create a binding table with ElementCount = 0");
+    return result_tgfx_FAIL;
   }
 #endif
-  vkDestroyDescriptorSetLayout(core_vk->getGPUs()[type->m_gpu]->vk_logical, type->vk_layout,
-                               nullptr);
-  hidden->bindingtabletypes.destroyOBJfromHANDLE(bindingTableType);
-}
-
-result_tgfx vk_instantiateBindingTable(bindingTableType_tgfxhnd tableType, unsigned char isStatic,
-                                       bindingTable_tgfxhnd* table) {
-  BINDINGTABLETYPE_VKOBJ* vkTableType = hidden->bindingtabletypes.getOBJfromHANDLE(tableType);
-
-  GPU_VKOBJ* gpu = core_vk->getGPUs()[vkTableType->m_gpu];
+  GPU_VKOBJ* gpu = core_vk->getGPUs().getOBJfromHANDLE(i_gpu);
 
   // Create Descriptor Pool
   VkDescriptorPool pool;
@@ -383,22 +374,33 @@ result_tgfx vk_instantiateBindingTable(bindingTableType_tgfxhnd tableType, unsig
     ci.pNext                      = nullptr;
     ci.poolSizeCount              = 1;
     VkDescriptorPoolSize size     = {};
-    size.descriptorCount          = vkTableType->m_elementCount;
-    size.type                     = vkTableType->vk_descType;
+    size.descriptorCount          = desc->ElementCount;
+    size.type                     = vk_findDescTypeVk(desc->DescriptorType);
     ci.pPoolSizes                 = &size;
-    ci.flags                      = isStatic ? 0 : VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+    ci.flags = desc->isDynamic ? VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT : 0;
     THROW_RETURN_IF_FAIL(vkCreateDescriptorPool(gpu->vk_logical, &ci, nullptr, &pool),
                          "VkCreateDescriptorPool failed!", result_tgfx_FAIL);
   }
 
+  // Create DescriptorSet Layout
+  VkDescriptorSetLayout DSL = createDescriptorSetLayout(gpu, desc);
+
   VkDescriptorSet set;
   // Allocate Descriptor Set
   {
+    VkDescriptorSetVariableDescriptorCountAllocateInfo descIndexing = {};
+    {
+      descIndexing.descriptorSetCount = 1;
+      descIndexing.pDescriptorCounts  = &desc->ElementCount;
+      descIndexing.pNext              = nullptr;
+      descIndexing.sType =
+        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
+    }
     VkDescriptorSetAllocateInfo ai = {};
     ai.descriptorPool              = pool;
     ai.descriptorSetCount          = 1;
-    ai.pNext                       = nullptr;
-    ai.pSetLayouts                 = &vkTableType->vk_layout;
+    ai.pNext                       = desc->isDynamic ? &descIndexing : nullptr;
+    ai.pSetLayouts                 = &DSL;
     ai.sType                       = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     if (ThrowIfFailed(vkAllocateDescriptorSets(gpu->vk_logical, &ai, &set),
                       "vkAllocateDescriptorSets() failed!")) {
@@ -410,55 +412,89 @@ result_tgfx vk_instantiateBindingTable(bindingTableType_tgfxhnd tableType, unsig
   BINDINGTABLEINST_VKOBJ* finalobj = hidden->bindingtableinsts.create_OBJ();
   finalobj->vk_pool                = pool;
   finalobj->vk_set                 = set;
-  finalobj->m_isStatic             = isStatic;
-  finalobj->m_type                 = tableType;
-  switch (vkTableType->vk_descType) {
+  finalobj->m_isStatic             = !desc->isDynamic;
+  finalobj->vk_layout              = DSL;
+  finalobj->vk_descType            = vk_findDescTypeVk(desc->DescriptorType);
+  finalobj->vk_stages              = vk_findShaderStageVk(desc->visibleStagesMask);
+  finalobj->m_gpu                  = gpu->gpuIndx();
+  finalobj->m_elementCount         = desc->ElementCount;
+  switch (finalobj->vk_descType) {
     case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
     case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-      finalobj->m_descs =
-        new (VKGLOBAL_VIRMEM_CONTENTMANAGER) texture_descVK[vkTableType->m_elementCount];
+      finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) texture_descVK[desc->ElementCount];
       break;
     case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
     case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-      finalobj->m_descs =
-        new (VKGLOBAL_VIRMEM_CONTENTMANAGER) buffer_descVK[vkTableType->m_elementCount];
+      finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) buffer_descVK[desc->ElementCount];
+      break;
     case VK_DESCRIPTOR_TYPE_SAMPLER:
-      finalobj->m_descs =
-        new (VKGLOBAL_VIRMEM_CONTENTMANAGER) sampler_descVK[vkTableType->m_elementCount];
+      finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) sampler_descVK[desc->ElementCount];
       break;
   }
   *table = hidden->bindingtableinsts.returnHANDLEfromOBJ(finalobj);
+  /*
+  // If descriptor set is static, zero initialize all of the descs
+  if (isStatic) {
+    static constexpr uint32_t batchSize  = 1 << 12;
+    static const uint32_t     batchCount = (vkTableType->m_elementCount / batchSize) + 1;
+    for (uint32_t batchIndx = 0; batchIndx < batchCount; batchIndx++) {
+      void*          resourceHnd[batchSize]    = {};
+      uint32_t       bindingIndices[batchSize] = {};
+      const uint32_t bindingCount =
+        (batchIndx == batchCount - 1) ? (batchSize) : (vkTableType->m_elementCount % batchSize);
+      if (bindingCount == 0) {
+        continue;
+      }
+
+      void* invalidResource = getInvalidResourceByType(gpu, vkTableType->vk_descType);
+      for (uint32_t iterIndx = 0; iterIndx < bindingCount; iterIndx++) {
+        bindingIndices[iterIndx] = (batchSize * batchIndx) + iterIndx;
+        resourceHnd[iterIndx]    = invalidResource;
+      }
+
+      switch (vkTableType->vk_descType) {
+        case VK_DESCRIPTOR_TYPE_SAMPLER:
+          core_tgfx_main->contentmanager->setBindingTable_Sampler(
+            *table, bindingCount, bindingIndices, ( sampler_tgfxlsthnd )resourceHnd);
+          break;
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+          core_tgfx_main->contentmanager->setBindingTable_Buffer(
+            *table, bindingCount, bindingIndices, ( buffer_tgfxlsthnd )resourceHnd, {}, {}, {});
+          break;
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+          core_tgfx_main->contentmanager->setBindingTable_Texture(
+            *table, bindingCount, bindingIndices, ( texture_tgfxlsthnd )resourceHnd);
+          break;
+      }
+    }
+  }*/
+
   return result_tgfx_SUCCESS;
 }
 void vk_destroyBindingTable(bindingTable_tgfxhnd bindingTable) {
   BINDINGTABLEINST_VKOBJ* vkDescSet = hidden->bindingtableinsts.getOBJfromHANDLE(bindingTable);
   assert(vkDescSet && "Invalid binding table");
-  vkDestroyDescriptorPool(
-    core_vk->getGPUs()[hidden->bindingtabletypes.getOBJfromHANDLE(vkDescSet->m_type)->m_gpu]
-      ->vk_logical,
-    vkDescSet->vk_pool, nullptr);
+  vkDestroyDescriptorPool(core_vk->getGPUs()[vkDescSet->m_gpu]->vk_logical, vkDescSet->vk_pool,
+                          nullptr);
   hidden->bindingtableinsts.destroyOBJfromHANDLE(bindingTable);
 }
 
 // Don't call this if there is no binding table & call buffer!
-bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, bindingTableType_tgfxhnd* descs,
-                              unsigned int descsCount, bool isCallBufferSupported,
-                              VkPipelineLayout* layout) {
+bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, unsigned int descSetCount,
+                              const bindingTableDescription_tgfx const* const descSets,
+                              bool isCallBufferSupported, VkPipelineLayout* layout) {
   VkPipelineLayoutCreateInfo pl_ci = {};
   pl_ci.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
   pl_ci.pNext                      = nullptr;
   pl_ci.flags                      = 0;
 
   VkDescriptorSetLayout DESCLAYOUTs[VKCONST_MAXDESCSET_PERLIST] = {};
-  for (unsigned int typeSets_i = 0; typeSets_i < descsCount; typeSets_i++) {
-    BINDINGTABLETYPE_VKOBJ* type = hidden->bindingtabletypes.getOBJfromHANDLE(descs[typeSets_i]);
-    if (type->m_gpu != GPU->gpuIndx()) {
-      printer(result_tgfx_FAIL, "Binding table doesn't match with the GPU!");
-      return false;
-    }
-    DESCLAYOUTs[typeSets_i] = type->vk_layout;
+  for (unsigned int setIndx = 0; setIndx < descSetCount; setIndx++) {
+    DESCLAYOUTs[setIndx] = createDescriptorSetLayout(GPU, &descSets[setIndx]);
   }
-  pl_ci.setLayoutCount      = descsCount;
+  pl_ci.setLayoutCount      = descSetCount;
   pl_ci.pSetLayouts         = DESCLAYOUTs;
   VkPushConstantRange range = {};
   // Don't support for now!
@@ -475,6 +511,10 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, bindingTableType_tgfxhnd* descs,
 
   ThrowIfFailed(vkCreatePipelineLayout(GPU->vk_logical, &pl_ci, nullptr, layout),
                 "Link_MaterialType() failed at vkCreatePipelineLayout()!");
+
+  for (uint32_t i = 0; i < descSetCount; i++) {
+    vkDestroyDescriptorSetLayout(GPU->vk_logical, DESCLAYOUTs[i], nullptr);
+  }
 
   return true;
 }
@@ -531,28 +571,7 @@ result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx languag
 void                  vk_destroyShaderSource(shaderSource_tgfxhnd ShaderSourceHandle) {}
 VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls);
 
-inline void CountDescSets(bindingTableType_tgfxlsthnd descset, unsigned int* finaldesccount,
-                          unsigned int finaldescs[VKCONST_MAXDESCSET_PERLIST]) {
-  TGFXLISTCOUNT(core_tgfx_main, descset, listsize);
-  unsigned int valid_descset_i = 0;
-  for (unsigned int i = 0; i < listsize; i++) {
-    bindingTableType_tgfxhnd b_table = descset[i];
-    if (!b_table) {
-      continue;
-    }
-    BINDINGTABLETYPE_VKOBJ* descset = hidden->bindingtabletypes.getOBJfromHANDLE(b_table);
-    if (!descset) {
-      printer(10);
-    }
-    if (valid_descset_i >= VKCONST_MAXDESCSET_PERLIST) {
-      printer(11);
-    }
-    finaldescs[valid_descset_i++] = hidden->bindingtabletypes.getINDEXbyOBJ(descset);
-  }
-  *finaldesccount = valid_descset_i;
-}
-
-result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
+result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx const* desc,
                                     extension_tgfxlsthnd exts, pipeline_tgfxhnd* hnd) {
   GPU_VKOBJ* GPU = nullptr;
 
@@ -756,11 +775,8 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     dynamicStates.pDynamicStates    = dynamicStatesList;
   }
 
-  unsigned int typeSets[VKCONST_MAXDESCSET_PERLIST] = {};
-  uint32_t     typesetscount                        = 0;
-  CountDescSets(desc->typeTables, &typesetscount, typeSets);
   VkPipelineLayout layout = {};
-  if (!VKPipelineLayoutCreation(GPU, desc->typeTables, typesetscount, false, &layout)) {
+  if (!VKPipelineLayoutCreation(GPU, desc->tableCount, desc->tables, false, &layout)) {
     printer(result_tgfx_FAIL, "Compile_RasterPipeline() has failed at VKPipelineLayoutCreation!");
     return result_tgfx_FAIL;
   }
@@ -844,10 +860,9 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
 
   PIPELINE_VKOBJ* pipelineObj = hidden->pipelines.create_OBJ();
   pipelineObj->m_gpu          = GPU->gpuIndx();
-  memcpy(pipelineObj->m_typeSETs, typeSets, sizeof(pipelineObj->m_typeSETs));
-  pipelineObj->vk_layout = layout;
-  pipelineObj->vk_object = pipeline;
-  pipelineObj->vk_type   = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  pipelineObj->vk_layout      = layout;
+  pipelineObj->vk_object      = pipeline;
+  pipelineObj->vk_type        = VK_PIPELINE_BIND_POINT_GRAPHICS;
   for (uint32_t i = 0; i < TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT; i++) {
     pipelineObj->vk_colorAttachmentFormats[i] = vk_findFormatVk(desc->colorTextureFormats[i]);
   }
@@ -877,20 +892,16 @@ void vk_destroyRasterPipeline(rasterPipeline_tgfxhnd hnd) {
   printer(result_tgfx_NOTCODED, "Delete_MaterialType() isn't implemented!");
 }
 */
-result_tgfx vk_createComputePipeline(shaderSource_tgfxhnd        Source,
-                                     bindingTableType_tgfxlsthnd TypeBindingTables,
-                                     unsigned char               isCallBufferSupported,
-                                     pipeline_tgfxhnd*           ComputeTypeHandle) {
+result_tgfx vk_createComputePipeline(
+  shaderSource_tgfxhnd Source, unsigned int bindingTableCount,
+  const bindingTableDescription_tgfx const* const bindingTableDescs,
+  unsigned char isCallBufferSupported, pipeline_tgfxhnd* hnd) {
   VkComputePipelineCreateInfo cp_ci  = {};
   SHADERSOURCE_VKOBJ*         SHADER = hidden->shadersources.getOBJfromHANDLE(Source);
   GPU_VKOBJ*                  GPU    = core_vk->getGPUs().getOBJfromHANDLE(SHADER->m_gpu);
 
-  unsigned int typeSets[VKCONST_MAXDESCSET_PERLIST] = {};
-  uint32_t     typesetscount                        = 0;
-  CountDescSets(TypeBindingTables, &typesetscount, typeSets);
-
   VkPipelineLayout layout = {};
-  if (!VKPipelineLayoutCreation(GPU, TypeBindingTables, typesetscount, isCallBufferSupported,
+  if (!VKPipelineLayoutCreation(GPU, bindingTableCount, bindingTableDescs, isCallBufferSupported,
                                 &layout)) {
     printer(result_tgfx_FAIL,
             "Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
@@ -920,11 +931,10 @@ result_tgfx vk_createComputePipeline(shaderSource_tgfxhnd        Source,
 
   PIPELINE_VKOBJ* obj = hidden->pipelines.create_OBJ();
   obj->m_gpu          = GPU->gpuIndx();
-  memcpy(obj->m_typeSETs, typeSets, sizeof(obj->m_typeSETs));
-  obj->vk_layout     = layout;
-  obj->vk_object     = pipelineObj;
-  obj->vk_type       = VK_PIPELINE_BIND_POINT_COMPUTE;
-  *ComputeTypeHandle = hidden->pipelines.returnHANDLEfromOBJ(obj);
+  obj->vk_layout      = layout;
+  obj->vk_object      = pipelineObj;
+  obj->vk_type        = VK_PIPELINE_BIND_POINT_COMPUTE;
+  *hnd                = hidden->pipelines.returnHANDLEfromOBJ(obj);
   return result_tgfx_SUCCESS;
 }
 
@@ -946,38 +956,25 @@ static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
 result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsigned int bindingCount,
                                        const unsigned int*      bindingIndices,
                                        const sampler_tgfxlsthnd samplerHandles) {
-  BINDINGTABLEINST_VKOBJ* set     = hidden->bindingtableinsts.getOBJfromHANDLE(bindingtable);
-  BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
+  BINDINGTABLEINST_VKOBJ* set = hidden->bindingtableinsts.getOBJfromHANDLE(bindingtable);
 
   VkWriteDescriptorSet  writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   VkDescriptorImageInfo imageInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
     SAMPLER_VKOBJ* sampler     = hidden->samplers.getOBJfromHANDLE(samplerHandles[bindingIter]);
     uint32_t       elementIndx = bindingIndices[bindingIter];
-#ifdef VULKAN_DEBUGGING
-    if (!set || !sampler || bindingIndices[bindingIter] >= setType->m_elementCount ||
-        setType->vk_descType != VK_DESCRIPTOR_TYPE_SAMPLER) {
+    if (!set || !sampler || bindingIndices[bindingIter] >= set->m_elementCount ||
+        set->vk_descType != VK_DESCRIPTOR_TYPE_SAMPLER) {
       printer(result_tgfx_INVALIDARGUMENT, "vk_setBindingTable_Buffer() has invalid input!");
       return result_tgfx_INVALIDARGUMENT;
     }
-    sampler_descVK& samplerDESC         = (( sampler_descVK* )set->m_descs)[elementIndx];
-    unsigned char   elementUpdateStatus = 0;
-    if (!samplerDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
-      printer(
-        result_tgfx_FAIL,
-        "SetDescriptor_Sampler() failed because you already changed the descriptor in the same "
-        "frame!");
-    }
-#else
     sampler_descVK& samplerDESC = (( sampler_descVK* )set->m_descs)[elementIndx];
-    samplerDESC.isUpdated.store(1);
-#endif
 
     samplerDESC.sampler_obj         = sampler->vk_sampler;
     imageInfos[bindingIter].sampler = sampler->vk_sampler;
 
     writeInfos[bindingIter].descriptorCount  = 1;
-    writeInfos[bindingIter].descriptorType   = setType->vk_descType;
+    writeInfos[bindingIter].descriptorType   = set->vk_descType;
     writeInfos[bindingIter].dstArrayElement  = elementIndx;
     writeInfos[bindingIter].dstBinding       = 0;
     writeInfos[bindingIter].pTexelBufferView = nullptr;
@@ -986,8 +983,8 @@ result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsign
     writeInfos[bindingIter].pImageInfo       = &imageInfos[bindingIter];
     writeInfos[bindingIter].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   }
-  vkUpdateDescriptorSets(core_vk->getGPUs()[setType->m_gpu]->vk_logical, bindingCount, writeInfos,
-                         0, nullptr);
+  vkUpdateDescriptorSets(core_vk->getGPUs()[set->m_gpu]->vk_logical, bindingCount, writeInfos, 0,
+                         nullptr);
   return result_tgfx_SUCCESS;
 }
 
@@ -1001,11 +998,14 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
     printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable!");
     return result_tgfx_INVALIDARGUMENT;
   }
-  BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
-  if (setType->vk_descType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER &&
-      setType->vk_descType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
+  if (set->vk_descType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER &&
+      set->vk_descType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
     printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable type!");
     return result_tgfx_INVALIDARGUMENT;
+  }
+  if (bindingCount > VKCONST_MAXDESCCHANGE_PERCALL) {
+    printer(result_tgfx_FAIL, "Binding count is exceeded");
+    return result_tgfx_FAIL;
   }
 
   VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
@@ -1013,29 +1013,18 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
     BUFFER_VKOBJ*  buffer      = hidden->buffers.getOBJfromHANDLE(buffers[bindingIter]);
     uint32_t       elementIndx = bindingIndices[bindingIter];
     buffer_descVK& bufferDESC  = (( buffer_descVK* )set->m_descs)[elementIndx];
-#ifdef VULKAN_DEBUGGING
-    BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
-    if (!buffer || elementIndx >= setType->m_elementCount) {
+
+    if (!buffer || elementIndx >= set->m_elementCount) {
       printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Buffer() has invalid input!");
       return result_tgfx_FAIL;
     }
-    unsigned char elementUpdateStatus = 0;
-    if (!bufferDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
-      printer(
-        result_tgfx_FAIL,
-        "SetDescriptor_Buffer() failed because you already changed the descriptor in the same "
-        "frame!");
-      return result_tgfx_FAIL;
-    }
-#else
-    bufferDESC.isUpdated.store(1);
-#endif
+
     bufferDESC.info.buffer = buffer->vk_buffer;
     bufferDESC.info.offset = (offsets == nullptr) ? (0) : (offsets[bindingIter]);
     bufferDESC.info.range  = (sizes == nullptr) ? (buffer->m_intendedSize) : (sizes[bindingIter]);
 
     writeInfos[bindingIter].descriptorCount  = 1;
-    writeInfos[bindingIter].descriptorType   = setType->vk_descType;
+    writeInfos[bindingIter].descriptorType   = set->vk_descType;
     writeInfos[bindingIter].dstArrayElement  = elementIndx;
     writeInfos[bindingIter].dstBinding       = 0;
     writeInfos[bindingIter].pTexelBufferView = nullptr;
@@ -1044,8 +1033,13 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
     writeInfos[bindingIter].pBufferInfo      = &bufferDESC.info;
     writeInfos[bindingIter].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   }
-  vkUpdateDescriptorSets(core_vk->getGPUs()[setType->m_gpu]->vk_logical, bindingCount, writeInfos,
-                         0, nullptr);
+  uint64_t duration = 0;
+  {
+    TURAN_PROFILE_SCOPE_MCS(profilerSys, "BindingTableSet", &duration);
+    vkUpdateDescriptorSets(core_vk->getGPUs()[set->m_gpu]->vk_logical, bindingCount, writeInfos, 0,
+                           nullptr);
+    STOP_PROFILE_PRINTFUL_TAPI(profilerSys);
+  }
 
   return result_tgfx_SUCCESS;
 }
@@ -1057,9 +1051,8 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
     printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable!");
     return result_tgfx_INVALIDARGUMENT;
   }
-  BINDINGTABLETYPE_VKOBJ* setType = hidden->bindingtabletypes.getOBJfromHANDLE(set->m_type);
-  if (setType->vk_descType != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE &&
-      setType->vk_descType != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
+  if (set->vk_descType != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE &&
+      set->vk_descType != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
     printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable type!");
     return result_tgfx_INVALIDARGUMENT;
   }
@@ -1072,31 +1065,19 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
     TEXTURE_VKOBJ*  texture     = hidden->textures.getOBJfromHANDLE(textures[bindingIter]);
     uint32_t        elementIndx = bindingIndices[bindingIter];
     texture_descVK& textureDESC = (( texture_descVK* )set->m_descs)[elementIndx];
-#ifdef VULKAN_DEBUGGING
-    if (!texture || elementIndx >= setType->m_elementCount) {
+    if (!texture || elementIndx >= set->m_elementCount) {
       printer(result_tgfx_INVALIDARGUMENT,
               "setBindingTable_Texture() has invalid input! Either texture is invalid or index");
       return result_tgfx_INVALIDARGUMENT;
     }
-    unsigned char elementUpdateStatus = 0;
-    if (!textureDESC.isUpdated.compare_exchange_weak(elementUpdateStatus, 1)) {
-      printer(
-        result_tgfx_FAIL,
-        "vk_setBindingTable_Texture() failed because you already changed the descriptor in the "
-        "same frame!");
-      return result_tgfx_FAIL;
-    }
-#else
-    textureDESC.isUpdated.store(1);
-#endif
-    textureDESC.info.imageLayout = (setType->vk_descType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+    textureDESC.info.imageLayout = (set->vk_descType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
                                      ? VK_IMAGE_LAYOUT_GENERAL
                                      : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     textureDESC.info.imageView   = texture->vk_imageView;
     textureDESC.info.sampler     = VK_NULL_HANDLE;
 
     writeInfos[bindingIter].descriptorCount  = 1;
-    writeInfos[bindingIter].descriptorType   = setType->vk_descType;
+    writeInfos[bindingIter].descriptorType   = set->vk_descType;
     writeInfos[bindingIter].dstArrayElement  = elementIndx;
     writeInfos[bindingIter].dstBinding       = 0;
     writeInfos[bindingIter].pTexelBufferView = nullptr;
@@ -1105,8 +1086,8 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
     writeInfos[bindingIter].pImageInfo       = &textureDESC.info;
     writeInfos[bindingIter].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   }
-  vkUpdateDescriptorSets(core_vk->getGPUs()[setType->m_gpu]->vk_logical, bindingCount, writeInfos,
-                         0, nullptr);
+  vkUpdateDescriptorSets(core_vk->getGPUs()[set->m_gpu]->vk_logical, bindingCount, writeInfos, 0,
+                         nullptr);
   return result_tgfx_SUCCESS;
 }
 
@@ -1286,13 +1267,12 @@ result_tgfx vk_unmapHeap(heap_tgfxhnd i_heap) {
 /////////////////////////////////////////////////////
 
 inline void set_functionpointers() {
-  core_tgfx_main->contentmanager->compileShaderSource     = vk_compileShaderSource;
-  core_tgfx_main->contentmanager->createBindingTableType  = vk_createBindingTableType;
-  core_tgfx_main->contentmanager->instantiateBindingTable = vk_instantiateBindingTable;
-  core_tgfx_main->contentmanager->copyComputePipeline     = vk_copyComputePipeline;
-  core_tgfx_main->contentmanager->createComputePipeline   = vk_createComputePipeline;
-  core_tgfx_main->contentmanager->createBuffer            = vk_createBuffer;
-  core_tgfx_main->contentmanager->createTexture           = vk_createTexture;
+  core_tgfx_main->contentmanager->compileShaderSource   = vk_compileShaderSource;
+  core_tgfx_main->contentmanager->createBindingTable    = vk_createBindingTable;
+  core_tgfx_main->contentmanager->copyComputePipeline   = vk_copyComputePipeline;
+  core_tgfx_main->contentmanager->createComputePipeline = vk_createComputePipeline;
+  core_tgfx_main->contentmanager->createBuffer          = vk_createBuffer;
+  core_tgfx_main->contentmanager->createTexture         = vk_createTexture;
   // core_tgfx_main->contentmanager->destroyRasterPipeline      = vk_destroyRasterPipeline;
   core_tgfx_main->contentmanager->destroyShaderSource        = vk_destroyShaderSource;
   core_tgfx_main->contentmanager->destroyAllResources        = vk_destroyAllResources;
@@ -1313,7 +1293,6 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->destroyTexture             = vk_destroyTexture;
   core_tgfx_main->contentmanager->destroyShaderSource        = vk_destroyShaderSource;
   core_tgfx_main->contentmanager->destroySampler             = vk_destroySampler;
-  core_tgfx_main->contentmanager->destroyBindingTableType    = vk_destroyBindingTableType;
   core_tgfx_main->contentmanager->destroyBindingTable        = vk_destroyBindingTable;
   core_tgfx_main->contentmanager->destroyPipeline            = vk_destroyPipeline;
 }
@@ -1328,8 +1307,8 @@ void initGlslang() {
   initGlslangFnc();
 }
 void vk_createContentManager() {
-  VKGLOBAL_VIRMEM_CONTENTMANAGER =
-    vk_virmem::allocate_dynamicmem(sizeof(gpudatamanager_public) + sizeof(gpudatamanager_private));
+  VKGLOBAL_VIRMEM_CONTENTMANAGER = vk_virmem::allocate_dynamicmem(
+    sizeof(gpudatamanager_public) + sizeof(gpudatamanager_private) + (10ull << 20));
   contentmanager         = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) gpudatamanager_public;
   contentmanager->hidden = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) gpudatamanager_private;
   hidden                 = contentmanager->hidden;
@@ -1355,10 +1334,6 @@ VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>& gpudatamanager_public::GETBUFF
 VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
 gpudatamanager_public::GETBINDINGTABLE_ARRAY() {
   return hidden->bindingtableinsts;
-}
-VK_LINEAR_OBJARRAY<BINDINGTABLETYPE_VKOBJ, bindingTableType_tgfxhnd, 1 << 10>&
-gpudatamanager_public::GETBINDINGTABLETYPE_ARRAY() {
-  return hidden->bindingtabletypes;
 }
 VK_LINEAR_OBJARRAY<SUBRASTERPASS_VKOBJ, subRasterpass_tgfxhnd, 1 << 16>&
 gpudatamanager_public::GETSUBRASTERPASS_ARRAY() {

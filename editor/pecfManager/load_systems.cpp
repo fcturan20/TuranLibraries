@@ -322,9 +322,10 @@ void createDeviceLocalResources() {
 #endif
 }
 
-bindingTableType_tgfxhnd bufferBindingType = {}, textureBindingType = {}, samplerBindingType = {};
-pipeline_tgfxhnd         firstComputePipeline = {};
-pipeline_tgfxhnd         firstRasterPipeline  = {};
+bindingTableDescription_tgfx bufferBindingType = {}, textureBindingType = {},
+                             samplerBindingType = {};
+pipeline_tgfxhnd     firstComputePipeline       = {};
+pipeline_tgfxhnd     firstRasterPipeline        = {};
 bindingTable_tgfxhnd bufferBindingTable = {}, textureBindingTable = {}, samplerBindingTable = {};
 sampler_tgfxhnd      firstSampler = {};
 
@@ -358,21 +359,19 @@ void compileShadersandPipelines() {
       desc.SttcSmplrs                     = nullptr;
       desc.visibleStagesMask = shaderStage_tgfx_COMPUTESHADER | shaderStage_tgfx_VERTEXSHADER |
                                shaderStage_tgfx_FRAGMENTSHADER;
-      contentManager->createBindingTableType(gpu, &desc, &bufferBindingType);
+      bufferBindingType = desc;
 
       desc.DescriptorType = shaderdescriptortype_tgfx_SAMPLEDTEXTURE;
-      contentManager->createBindingTableType(gpu, &desc, &textureBindingType);
+      textureBindingType  = desc;
 
       desc.DescriptorType         = shaderdescriptortype_tgfx_SAMPLER;
       sampler_tgfxhnd samplers[2] = {firstSampler, ( sampler_tgfxhnd )tgfx->INVALIDHANDLE};
       desc.SttcSmplrs             = samplers;
-      desc.ElementCount           = 0;
-      contentManager->createBindingTableType(gpu, &desc, &samplerBindingType);
+      desc.ElementCount           = 1;
+      samplerBindingType          = desc;
     }
 
-    bindingTableType_tgfxhnd bindingTypes[2] = {bufferBindingType,
-                                                ( bindingTableType_tgfxhnd )tgfx->INVALIDHANDLE};
-    contentManager->createComputePipeline(firstComputeShader, bindingTypes, false,
+    contentManager->createComputePipeline(firstComputeShader, 1, &bufferBindingType, false,
                                           &firstComputePipeline);
   }
 
@@ -448,10 +447,10 @@ void compileShadersandPipelines() {
     pipelineDesc.attribLayout.bindingCount        = 2;
     pipelineDesc.attribLayout.i_attributes        = attribs;
     pipelineDesc.attribLayout.i_bindings          = bindings;
-    bindingTableType_tgfxhnd bindingTypes[4]      = {bufferBindingType, textureBindingType,
-                                                     samplerBindingType,
-                                                     ( bindingTableType_tgfxhnd )tgfx->INVALIDHANDLE};
-    pipelineDesc.typeTables                       = bindingTypes;
+    bindingTableDescription_tgfx bindingTypes[3]  = {bufferBindingType, textureBindingType,
+                                                     samplerBindingType};
+    pipelineDesc.tableCount                       = 3;
+    pipelineDesc.tables                           = bindingTypes;
 
     contentManager->createRasterPipeline(&pipelineDesc, nullptr, &firstRasterPipeline);
     contentManager->destroyShaderSource(shaderSources[0]);
@@ -460,16 +459,16 @@ void compileShadersandPipelines() {
 
   // Instantiate binding tables
   {
-    contentManager->instantiateBindingTable(bufferBindingType, true, &bufferBindingTable);
+    contentManager->createBindingTable(gpu, &bufferBindingType, &bufferBindingTable);
     uint32_t bindingIndex = 0;
     contentManager->setBindingTable_Buffer(bufferBindingTable, 1, &bindingIndex, &firstBuffer,
                                            nullptr, nullptr, nullptr);
 
-    contentManager->instantiateBindingTable(textureBindingType, true, &textureBindingTable);
+    contentManager->createBindingTable(gpu, &textureBindingType, &textureBindingTable);
     contentManager->setBindingTable_Texture(textureBindingTable, 1, &bindingIndex,
                                             &reiChikitaTexture);
 
-    contentManager->instantiateBindingTable(samplerBindingType, true, &samplerBindingTable);
+    contentManager->createBindingTable(gpu, &samplerBindingType, &samplerBindingTable);
     /*contentManager->setBindingTable_Sampler(samplerBindingTable, 1, &bindingIndex,
                                             &firstSampler);*/
   }
@@ -509,12 +508,9 @@ void recordCommandBundles() {
     renderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, bindingTables, 0,
                                    pipelineType_tgfx_RASTER);
     indirectOperationType_tgfx firstOp[5] = {
-      indirectOperationType_tgfx_DRAWNONINDEXED,
-      indirectOperationType_tgfx_DRAWNONINDEXED,
-      indirectOperationType_tgfx_DRAWINDEXED,
-      indirectOperationType_tgfx_DRAWNONINDEXED,
-      indirectOperationType_tgfx_DRAWNONINDEXED
-    };
+      indirectOperationType_tgfx_DRAWNONINDEXED, indirectOperationType_tgfx_DRAWNONINDEXED,
+      indirectOperationType_tgfx_DRAWNONINDEXED, indirectOperationType_tgfx_DRAWNONINDEXED,
+      indirectOperationType_tgfx_DRAWNONINDEXED};
     renderer->cmdExecuteIndirect(standardDrawBundle, cmdKey++, 5, firstOp, firstBuffer,
                                  sizeof(firstUboStruct), 0);
 
@@ -699,9 +695,7 @@ void load_systems() {
   contentManager->destroySampler(firstSampler);
   contentManager->destroyBuffer(firstBuffer);
   contentManager->destroyBindingTable(bufferBindingTable);
-  contentManager->destroyBindingTableType(bufferBindingType);
   contentManager->destroyBindingTable(textureBindingTable);
-  contentManager->destroyBindingTableType(textureBindingType);
   // renderer->destroyCommandBundle(perSwpchnCmdBundles[0]);
   // renderer->destroyCommandBundle(perSwpchnCmdBundles[1]);
   // renderer->destroyCommandBundle(standardDrawBundle);

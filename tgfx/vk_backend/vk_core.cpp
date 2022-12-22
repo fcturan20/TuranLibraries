@@ -20,7 +20,7 @@
 #include "vk_predefinitions.h"
 #include "vk_queue.h"
 #include "vk_renderer.h"
-// #define VK_VALIDATION_LAYER
+#define VK_VALIDATION_LAYER
 
 struct core_private {
  public:
@@ -166,12 +166,12 @@ void vk_createInstance() {
   InstCreation_Info.enabledExtensionCount   = ( uint32_t )activeInstanceExts.size();
   InstCreation_Info.ppEnabledExtensionNames = activeInstanceExts.data();
 
-  // Validation Layers
-  #ifdef VK_VALIDATION_LAYER
+// Validation Layers
+#ifdef VK_VALIDATION_LAYER
   const char* Validation_Layers[]       = {"VK_LAYER_KHRONOS_validation"};
   InstCreation_Info.enabledLayerCount   = 1;
   InstCreation_Info.ppEnabledLayerNames = Validation_Layers;
-  #endif
+#endif
 
   ThrowIfFailed(vkCreateInstance(&InstCreation_Info, nullptr, &VKGLOBAL_INSTANCE),
                 "Failed to create a Vulkan Instance!");

@@ -7,6 +7,7 @@
 
 #include <mutex>
 
+#include "profiler_tapi.h"
 #include "vk_core.h"
 #include "vk_extension.h"
 #include "vk_helper.h"
@@ -16,7 +17,6 @@
 #include "vk_renderer.h"
 #include "vk_resource.h"
 #include "vkext_dynamicStates.h"
-#include "profiler_tapi.h"
 
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_CONTENTMANAGER = nullptr;
 
@@ -362,11 +362,16 @@ result_tgfx vk_createBindingTable(gpu_tgfxhnd                                   
     printer(result_tgfx_FAIL, "You shouldn't create a binding table with ElementCount = 0");
     return result_tgfx_FAIL;
   }
+  if (desc->SttcSmplrs && desc->DescriptorType != shaderdescriptortype_tgfx_SAMPLER) {
+    printer(result_tgfx_FAIL, "Static sampler should only be used in sampler binding table!");
+    return result_tgfx_FAIL;
+  }
 #endif
   GPU_VKOBJ* gpu = core_vk->getGPUs().getOBJfromHANDLE(i_gpu);
 
   // Create Descriptor Pool
   VkDescriptorPool pool;
+  TGFXLISTCOUNT(core_tgfx_main, desc->SttcSmplrs, staticSamplerCount);
   {
     VkDescriptorPoolCreateInfo ci = {};
     ci.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -374,7 +379,7 @@ result_tgfx vk_createBindingTable(gpu_tgfxhnd                                   
     ci.pNext                      = nullptr;
     ci.poolSizeCount              = 1;
     VkDescriptorPoolSize size     = {};
-    size.descriptorCount          = desc->ElementCount;
+    size.descriptorCount          = desc->ElementCount + staticSamplerCount;
     size.type                     = vk_findDescTypeVk(desc->DescriptorType);
     ci.pPoolSizes                 = &size;
     ci.flags = desc->isDynamic ? VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT : 0;

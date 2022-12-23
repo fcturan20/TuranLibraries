@@ -155,9 +155,9 @@ uint32_t vk_virmem::allocatePage(uint32_t requestedSize, uint32_t* roundedUpSize
       if (!nextpage.isALIVE && nextpage.isMERGED && current_page.PAGECOUNT - requestedPageCount) {
         nextpage.isMERGED      = false;
         nextpage.PAGECOUNT     = current_page.PAGECOUNT - requestedPageCount;
-        current_page.PAGECOUNT = requestedPageCount;
-        current_page.isALIVE   = true;
       }
+      current_page.PAGECOUNT = requestedPageCount;
+      current_page.isALIVE   = true;
       return VKCONST_VIRMEMPAGESIZE * page_i;
     }
     if (!current_page.PAGECOUNT) {
@@ -199,7 +199,7 @@ void vk_virmem::free_page(uint32_t suballocation_startoffset) {
   }
   VK_PAGEINFO& alloc = allocator_main->suballocations_list[search_alloc_i];
   void* free_address =
-    ( void* )(uintptr_t(VKCONST_VIRMEM_MAXALLOCCOUNT) + (VKCONST_VIRMEMPAGESIZE * page_i));
+    ( void* )((VKCONST_VIRMEMPAGESIZE * page_i) + uintptr_t(VKCONST_VIRMEMSPACE_BEGIN));
   virmemsys->virtual_decommit(
     free_address, VKCONST_VIRMEMPAGESIZE * alloc.PAGECOUNT);
   alloc.isALIVE = false;

@@ -372,23 +372,31 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
         }
         submission->vk_cbs[cbIndx]->isALIVE = false;
       }
+      for (uint32_t binarySemaphoreIndx = 0;
+           binarySemaphoreIndx < VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT; binarySemaphoreIndx++) {
+        if (submission->vk_binarySemaphores[binarySemaphoreIndx] == nullptr) {
+          break;
+        }
+        vkDestroySemaphore(m_gpu->vk_logical, submission->vk_binarySemaphores[binarySemaphoreIndx],
+                           nullptr);
+      }
       vkDestroyFence(queue->m_gpu->vk_logical, submission->vk_fence, nullptr);
       // Index is int, so this works fine
       queue->vk_submitTracker.erase(i--);
     }
+  }
+  VkFence submitFence = {};
+  {
+    VkFenceCreateInfo f_ci = {};
+    f_ci.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    ThrowIfFailed(vkCreateFence(m_gpu->vk_logical, &f_ci, nullptr, &submitFence),
+                  "Submission tracker fence creation failed!");
   }
   switch (queue->m_activeQueueOp) {
     case QUEUE_VKOBJ::ERROR_QUEUEOPTYPE: queue->m_activeQueueOp = QUEUE_VKOBJ::CMDBUFFER;
     case QUEUE_VKOBJ::CMDBUFFER: {
       VkSubmitInfo    infos[VKCONST_MAXSUBMITCOUNT]                                           = {};
       VkCommandBuffer cmdBuffers[VKCONST_MAXSUBMITCOUNT][VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
-      VkFence         submitFence                                                             = {};
-      {
-        VkFenceCreateInfo f_ci = {};
-        f_ci.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        ThrowIfFailed(vkCreateFence(m_gpu->vk_logical, &f_ci, nullptr, &submitFence),
-                      "Submission tracker fence creation failed!");
-      }
       for (uint32_t submitIndx = 0; submitIndx < queue->m_submitInfos.size(); submitIndx++) {
         submit_vk* submit                   = queue->m_submitInfos[submitIndx];
         submit->vk_submit.pWaitDstStageMask = VKCONST_PRESENTWAITSTAGEs;
@@ -485,10 +493,6 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
         }
       }
 
-      VkSemaphore binAcquireSemaphores[VKCONST_MAXSWPCHNCOUNT_PERSUBMIT] = {};
-      for (uint32_t i = 0; i < swpchnCount; i++) {
-        binAcquireSemaphores[i] = windows[i]->vk_acquireSemaphore;
-      }
 
       VkSemaphore binarySignalSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
       // Submit for timeline -> binary conversion
@@ -544,6 +548,11 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
 
       // Send a submit to signal timeline semaphore when all binary semaphore are signaled
       {
+        VkSemaphore binAcquireSemaphores[VKCONST_MAXSWPCHNCOUNT_PERSUBMIT] = {};
+        for (uint32_t i = 0; i < swpchnCount; i++) {
+          binAcquireSemaphores[i] = windows[i]->vk_acquireSemaphore;
+        }
+
         VkTimelineSemaphoreSubmitInfo temSignalSemaphoresInfo = {};
         temSignalSemaphoresInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
         temSignalSemaphoresInfo.pWaitSemaphoreValues      = nullptr;
@@ -562,8 +571,24 @@ void manager_vk::queueSubmit(QUEUE_VKOBJ* queue) {
         acquireSubmit.pWaitDstStageMask                   = VKCONST_PRESENTWAITSTAGEs;
         acquireSubmit.sType                               = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         ThrowIfFailed(
-          vkQueueSubmit(m_internalQueue->vk_queue, 1, &acquireSubmit, VK_NULL_HANDLE),
+          vkQueueSubmit(m_internalQueue->vk_queue, 1, &acquireSubmit, submitFence),
           "Internal queue submission for binary -> timeline semaphore conversion has failed!");
+      }
+
+      // Add this submit call to tracker
+      submission_vk* tracker  = queue->vk_submitTracker.add();
+      tracker->vk_fence       = submitFence;
+      uint32_t cmdBufferCount = 0;
+      for (uint32_t submitIndx = 0; submitIndx < queue->m_submitInfos.size(); submitIndx++) {
+        submit_vk* submit = queue->m_submitInfos[submitIndx];
+        for (uint32_t cmdBufferIndx = 0; cmdBufferIndx < submit->vk_submit.commandBufferCount;
+             cmdBufferIndx++) {
+          tracker->vk_cbs[cmdBufferCount++] = submit->cmdBuffers[cmdBufferIndx];
+        }
+        for (uint32_t i = 0; i < waitSemCount; i++) {
+          tracker->vk_binarySemaphores[i] = binarySignalSemaphores[i];
+        }
+        tracker->vk_binarySemaphores[glm::min(waitSemCount, VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT)] = VK_NULL_HANDLE;
       }
     } break;
     default:

@@ -133,7 +133,7 @@ void pNext_addToLast(void* targetStruct, void* attachStruct);
 #define vk_handleType static constexpr VKHANDLETYPEs
 #define vk_uint8c static constexpr uint8_t
 // User can pass lots of descriptor sets in a list, this defines the max size
-vk_uint32c VKCONST_MAXDESCSET_PERLIST          = 16;
+vk_uint32c VKCONST_MAXDESCSET_PERLIST          = 12;
 vk_uint32c VKCONST_MAXWINDOWCOUNT              = 16;
 vk_uint32c VKCONST_MAXVIEWPORTCOUNT            = 16;
 vk_uint32c VKCONST_MAXGPUCOUNT                 = 4;
@@ -145,7 +145,6 @@ vk_uint32c VKCONST_MAXSWPCHNCOUNT_PERSUBMIT    = 8; // Max count of swapchain co
 
 // VIRMEM RELATED
 
-vk_uint8c  VKCONST_isPointerContainVKFLAG         = (sizeof(void*) >= sizeof(VkFlags));
 vk_uint32c VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW = 4;
 // Memory manager reserves some of the first virtual memory pages for its own use
 vk_uint8c  VKCONST_VIRMEM_MANAGERONLYPAGECOUNT = 2;
@@ -318,7 +317,7 @@ class VK_LINEAR_OBJARRAY {
   }
   T* create_OBJ() {
     if (MAX_OBJECT_INDEX.load() % ELEMENTCOUNT_PERPAGE == ELEMENTCOUNT_PERPAGE - 1) {
-      virmemsys->virtual_commit(&data[ELEMENTCOUNT_PERPAGE], VKCONST_VIRMEMPAGESIZE);
+      virmemsys->virtual_commit(&data[MAX_OBJECT_INDEX.load()], VKCONST_VIRMEMPAGESIZE);
     }
     if (MAX_OBJECT_INDEX.load() != OBJCOUNT) {
       unsigned int i  = MAX_OBJECT_INDEX.fetch_add(1);

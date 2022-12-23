@@ -259,6 +259,7 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
 
   // Get buffer requirements and fill BUFFER_VKOBJ
   BUFFER_VKOBJ* o_buffer = hidden->buffers.create_OBJ();
+  uint32_t      isd      = hidden->buffers.getINDEXbyOBJ(o_buffer);
   {
     o_buffer->vk_buffer      = vkBufObj;
     o_buffer->m_GPU          = gpu->gpuIndx();
@@ -1039,12 +1040,8 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
     writeInfos[bindingIter].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   }
   uint64_t duration = 0;
-  {
-    TURAN_PROFILE_SCOPE_MCS(profilerSys, "BindingTableSet", &duration);
-    vkUpdateDescriptorSets(core_vk->getGPUs()[set->m_gpu]->vk_logical, bindingCount, writeInfos, 0,
-                           nullptr);
-    STOP_PROFILE_PRINTFUL_TAPI(profilerSys);
-  }
+  vkUpdateDescriptorSets(core_vk->getGPUs()[set->m_gpu]->vk_logical, bindingCount, writeInfos, 0,
+                         nullptr);
 
   return result_tgfx_SUCCESS;
 }

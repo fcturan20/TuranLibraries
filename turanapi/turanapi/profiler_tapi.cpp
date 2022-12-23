@@ -82,7 +82,7 @@ void finish_profiling(profiledscope_handle_tapi* handle, unsigned char ShouldPri
         printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " nanoseconds!\n")
                  .c_str());
       }
-      return;
+      break;
     case 1:
       *profil->DURATION = std::chrono::time_point_cast<std::chrono::microseconds>(
                             std::chrono::high_resolution_clock::now())
@@ -93,7 +93,7 @@ void finish_profiling(profiledscope_handle_tapi* handle, unsigned char ShouldPri
         printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " microseconds!\n")
                  .c_str());
       }
-      return;
+      break;
     case 2:
       *profil->DURATION = std::chrono::time_point_cast<std::chrono::milliseconds>(
                             std::chrono::high_resolution_clock::now())
@@ -104,7 +104,7 @@ void finish_profiling(profiledscope_handle_tapi* handle, unsigned char ShouldPri
         printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " milliseconds!\n")
                  .c_str());
       }
-      return;
+      break;
     case 3:
       *profil->DURATION = std::chrono::time_point_cast<std::chrono::seconds>(
                             std::chrono::high_resolution_clock::now())
@@ -114,7 +114,7 @@ void finish_profiling(profiledscope_handle_tapi* handle, unsigned char ShouldPri
         printf(
           (profil->NAME + " took: " + std::to_string(*profil->DURATION) + " seconds!\n").c_str());
       }
-      return;
+      break;
   }
   delete profil;
 }

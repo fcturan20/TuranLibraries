@@ -36,8 +36,8 @@ struct CMDBUNDLE_VKOBJ {
   uint64_t               m_cmdCount                                     = 0;
   pipeline_tgfxhnd       m_defaultPipeline                              = {};
   VkPipelineBindPoint    vk_bindPoint                                   = {};
-  vk_virmem::dynamicmem* m_virmem                                       = {};
   VkCommandBuffer        vk_cmdBuffers[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
+  cmdPool_vk*            vk_cmdPools[VKCONST_MAXQUEUEFAMCOUNT_PERGPU]   = {};
 
   void createCmdBuffer(uint64_t cmdCount);
 };
@@ -86,16 +86,19 @@ struct vkCmdStruct_bindBindingTables {
   static constexpr vk_cmdType cmd_type = vk_cmdType::bindBindingTables;
 
   void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
-    vkCmdBindDescriptorSets(cb, vk_bindPoint, cmdBundle->vk_activePipelineLayout, m_firstSetIndx,
-                            m_setCount, vk_sets, 0, nullptr);
-    for (uint32_t i = m_firstSetIndx; i < VKCONST_MAXDESCSET_PERLIST; i++) {
-      cmdBundle->vk_activeDescSets[i] = vk_setLayouts[i - m_firstSetIndx];
+    VkDescriptorSet sets[VKCONST_MAXDESCSET_PERLIST] = {};
+    for (uint32_t i = 0; i < m_setCount; i++) {
+      BINDINGTABLEINST_VKOBJ* table =
+        contentmanager->GETBINDINGTABLE_ARRAY().getOBJfromHANDLE(tables[i]);
+      sets[i]                         = table->vk_set;
+      cmdBundle->vk_activeDescSets[i] = table->vk_layout;
     }
+    vkCmdBindDescriptorSets(cb, vk_bindPoint, cmdBundle->vk_activePipelineLayout, m_firstSetIndx,
+                            m_setCount, sets, 0, nullptr);
   }
-  VkPipelineBindPoint   vk_bindPoint                              = VK_PIPELINE_BIND_POINT_MAX_ENUM;
-  VkDescriptorSet       vk_sets[VKCONST_MAXDESCSET_PERLIST]       = {};
-  VkDescriptorSetLayout vk_setLayouts[VKCONST_MAXDESCSET_PERLIST] = {};
-  uint32_t              m_setCount = 0, m_firstSetIndx = 0;
+  VkPipelineBindPoint  vk_bindPoint                       = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+  bindingTable_tgfxhnd tables[VKCONST_MAXDESCSET_PERLIST] = {};
+  uint32_t             m_setCount = 0, m_firstSetIndx = 0;
 };
 
 struct vkCmdStruct_bindPipeline {
@@ -209,15 +212,12 @@ VkDeviceSize vk_findIndirectOperationDataSize(indirectOperationType_tgfx opType)
   }
   return UINT64_MAX;
 }
-vk_uint32c VKCONST_MAXINDIRECTOPERATIONSTATECOUNT = 128;
 struct vkCmdStruct_executeIndirect {
   static constexpr vk_cmdType cmd_type = vk_cmdType::executeIndirect;
 
   void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
     VkDeviceSize activeOffset = vk_bufferOffset;
-    for (uint32_t stateIndx = 0; stateIndx < VKCONST_MAXINDIRECTOPERATIONSTATECOUNT &&
-                                 opStates[stateIndx].opType != indirectOperationType_tgfx_UNDEF;
-         stateIndx++) {
+    for (uint32_t stateIndx = 0; stateIndx < opStateCount; stateIndx++) {
       uint64_t                   loopCount = 1, drawCount = opStates[stateIndx].opCount;
       indirectOperationType_tgfx opType = opStates[stateIndx].opType;
       uint64_t                   indirectArgumentDataSize =
@@ -249,13 +249,15 @@ struct vkCmdStruct_executeIndirect {
       }
     }
   };
+  void cmd_destroy() { vk_virmem::free_page(VK_POINTER_TO_MEMOFFSET(opStates)); }
   struct vk_indirectOperationState {
     uint32_t                   opCount;
     indirectOperationType_tgfx opType;
   };
-  vk_indirectOperationState opStates[VKCONST_MAXINDIRECTOPERATIONSTATECOUNT] = {};
-  VkBuffer                  vk_buffer;
-  VkDeviceSize              vk_bufferOffset;
+  vk_indirectOperationState* opStates     = {};
+  uint32_t                   opStateCount = 0;
+  VkBuffer                   vk_buffer;
+  VkDeviceSize               vk_bufferOffset;
 };
 
 struct vkCmdStruct_copyBufferToBuffer {
@@ -281,9 +283,9 @@ struct vk_cmd {
 #define vkCmdStructsLists                                                          \
   vkCmdStruct_example, vkCmdStruct_barrierTexture, vkCmdStruct_bindBindingTables,  \
     vkCmdStruct_bindPipeline, vkCmdStruct_dispatch, vkCmdStruct_bindVertexBuffers, \
-    vkCmdStruct_executeIndirect
+    vkCmdStruct_executeIndirect, vkCmdStruct_copyBufferToTexture
   static constexpr uint32_t maxCmdStructSize = max_sizeof<vkCmdStructsLists>();
-  uint8_t                   cmd_data[maxCmdStructSize];
+  uint8_t                   cmd_data[maxCmdStructSize] = {};
   vk_cmd() : cmd_type(vk_cmdType::error) {}
 };
 
@@ -347,13 +349,22 @@ void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cm
     default: assert_vk(0 && "Don't forget to specify command execution in vk_executeCmd()!");
   }
 }
+void vk_destroyCmd(vk_cmd& cmd) {
+  switch (cmd.cmd_type) {
+    case vk_cmdType::executeIndirect:
+      (( vkCmdStruct_executeIndirect* )cmd.cmd_data)->cmd_destroy();
+      break;
+  }
+}
 
 void CMDBUNDLE_VKOBJ::createCmdBuffer(uint64_t cmdCount) {
-  vk_virmem::dynamicmem* cmdVirMem = vk_virmem::allocate_dynamicmem(sizeof(vk_cmd) * cmdCount);
-  // I don't want to bother with commit operations for now, commit all cmds
-  m_cmds     = new (cmdVirMem) vk_cmd[cmdCount];
+  uint32_t allocSize = sizeof(vk_cmd) * cmdCount;
+  m_cmds = (vk_cmd*)VK_MEMOFFSET_TO_POINTER(vk_virmem::allocatePage(allocSize));
+  virmemsys->virtual_commit(m_cmds, allocSize);
+  for (uint32_t i = 0; i < cmdCount; i++) {
+    m_cmds[i] = {};
+  }
   m_cmdCount = cmdCount;
-  m_virmem   = cmdVirMem;
 }
 
 struct vk_renderer_private {
@@ -438,7 +449,17 @@ void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
       }
     }
   }*/
-  vk_virmem::free_dynamicmem(bundle->m_virmem);
+  for (uint32_t i = 0; i < bundle->m_cmdCount; i++) {
+    vk_destroyCmd(bundle->m_cmds[i]);
+  }
+  vk_virmem::free_page(VK_POINTER_TO_MEMOFFSET(bundle->m_cmds));
+  const uint32_t cmdBufferCount = sizeof(bundle->vk_cmdBuffers) / sizeof(bundle->vk_cmdBuffers[0]);
+  for (uint32_t i = 0; i < cmdBufferCount; i++) {
+    VkCommandBuffer cmdBuffer = bundle->vk_cmdBuffers[i];
+    if (cmdBuffer != VK_NULL_HANDLE) {
+      vk_freeCmdBuffer(bundle->vk_cmdPools[i], VK_COMMAND_BUFFER_LEVEL_SECONDARY, cmdBuffer);
+    }
+  }
   *bundle = {};
   hiddenRenderer->m_cmdBundles.erase(hiddenRenderer->m_cmdBundles.getINDEX_byOBJ(bundle));
 }
@@ -451,13 +472,18 @@ void vk_cmdBindBindingTables(commandBundle_tgfxhnd i_bundle, unsigned long long 
 
   {
     TGFXLISTCOUNT(core_tgfx_main, bindingTables, bindingTableListSize);
+    uint32_t descSetLimit =
+      glm::min(VKCONST_MAXDESCSET_PERLIST,
+               bundle->m_gpu->vk_propsDev.properties.limits.maxBoundDescriptorSets);
+    if (bindingTableListSize > descSetLimit) {
+      printer(result_tgfx_FAIL, "Max binding table count is exceeded!");
+      return;
+    }
     for (uint32_t i = 0; i < bindingTableListSize; i++) {
       BINDINGTABLEINST_VKOBJ* bindingTable =
         contentmanager->GETBINDINGTABLE_ARRAY().getOBJfromHANDLE(bindingTables[i]);
-      if (bindingTable) {
-        cmd->vk_sets[cmd->m_setCount]         = bindingTable->vk_set;
-        cmd->vk_setLayouts[cmd->m_setCount++] = bindingTable->vk_layout;
-      }
+      assert(bindingTable && "Binding table isn't found!");
+      cmd->tables[cmd->m_setCount++] = bindingTables[i];
     }
   }
 
@@ -565,14 +591,20 @@ void vk_cmdExecuteIndirect(commandBundle_tgfxhnd i_bundle, unsigned long long so
   CMDBUNDLE_VKOBJ* bundle = hiddenRenderer->m_cmdBundles.getOBJfromHANDLE(i_bundle);
   auto*            cmd = vk_createCmdStruct<vkCmdStruct_executeIndirect>(&bundle->m_cmds[sortKey]);
 
-  if (operationCount > VKCONST_MAXINDIRECTOPERATIONSTATECOUNT) {
-    printer(
-      result_tgfx_FAIL,
-      "Exceeding Vulkan backend's limit of operationCount in a single cmdExecuteIndirect call!");
-    return;
+  // Find operation state count
+  for (uint32_t i = 0; i < operationCount;) {
+    indirectOperationType_tgfx opType = operationTypes[i];
+    for (; i < operationCount && opType == operationTypes[i]; i++) {
+    }
+    cmd->opStateCount++;
   }
-  uint32_t stateIndx = 0;
-  for (uint32_t i = 0; i < operationCount && stateIndx < VKCONST_MAXINDIRECTOPERATIONSTATECOUNT;) {
+  uint32_t allocSize =
+    sizeof(vkCmdStruct_executeIndirect::vk_indirectOperationState) * cmd->opStateCount;
+  cmd->opStates =
+    ( vkCmdStruct_executeIndirect::vk_indirectOperationState* )VK_MEMOFFSET_TO_POINTER(
+      vk_virmem::allocatePage(allocSize, &allocSize));
+  virmemsys->virtual_commit(cmd->opStates, allocSize);
+  for (uint32_t i = 0, stateIndx = 0; i < operationCount;) {
     indirectOperationType_tgfx opType = operationTypes[i];
     cmd->opStates[stateIndx].opType   = opType;
     cmd->opStates[stateIndx].opCount  = 0;
@@ -580,13 +612,6 @@ void vk_cmdExecuteIndirect(commandBundle_tgfxhnd i_bundle, unsigned long long so
          i++, cmd->opStates[stateIndx].opCount++) {
     }
     stateIndx++;
-  }
-  if (stateIndx == VKCONST_MAXINDIRECTOPERATIONSTATECOUNT) {
-    printer(result_tgfx_FAIL,
-            "Exceeding Vulkan backend's limit of operationState (operation type change point "
-            "count) in a single cmdExecuteIndirect call!");
-    cmd->opStates[0].opType = indirectOperationType_tgfx_UNDEF;
-    return;
   }
   cmd->vk_buffer       = contentmanager->GETBUFFER_ARRAY().getOBJfromHANDLE(dataBffr)->vk_buffer;
   cmd->vk_bufferOffset = drawDataBufferOffset;
@@ -720,8 +745,8 @@ void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUE
 
     // Command bundle isn't used in this queue fam, so use it
     if (vkCmdBuffer == VK_NULL_HANDLE) {
-      cmdPool_vk* cmdPool = {};
-      vk_allocateCmdBuffer(queueFam, VK_COMMAND_BUFFER_LEVEL_SECONDARY, cmdPool, &vkCmdBuffer, 1);
+      vk_allocateCmdBuffer(queueFam, VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+                           bundle->vk_cmdPools[queueFam->vk_queueFamIndex], &vkCmdBuffer, 1);
 
       VkCommandBufferInheritanceRenderingInfo rInfo = {};
 

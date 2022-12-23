@@ -230,7 +230,7 @@ struct blendinginfo_vk {
   VkPipelineColorBlendAttachmentState BlendState        = {};
 };
 
-vk_uint32c VKCONST_MAXVERTEXATTRIBCOUNT = 8, VKCONST_MAXVERTEXBINDINGCOUNT = 8;
+vk_uint32c VKCONST_MAXVERTEXATTRIBCOUNT = 16, VKCONST_MAXVERTEXBINDINGCOUNT = 4;
 struct VERTEXATTRIBLAYOUT_VKOBJ {
   std::atomic_bool isALIVE    = false;
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::VERTEXATTRIB;

@@ -20,7 +20,7 @@
 #include "vk_predefinitions.h"
 #include "vk_queue.h"
 #include "vk_renderer.h"
-#define VK_VALIDATION_LAYER
+//#define VK_VALIDATION_LAYER
 
 struct core_private {
  public:

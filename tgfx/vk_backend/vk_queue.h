@@ -81,6 +81,7 @@ struct submission_vk {
 
   VkFence          vk_fence                                                             = {};
   CMDBUFFER_VKOBJ* vk_cbs[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT * VKCONST_MAXSUBMITCOUNT] = {};
+  VkSemaphore      vk_binarySemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]             = {};
 };
 
 // Handle both has GPU's ID & QueueFamily's ID

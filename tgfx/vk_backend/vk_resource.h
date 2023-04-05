@@ -38,12 +38,11 @@ struct memoryRequirements_vk {
 // Classic Memory Resources
 
 struct TEXTURE_VKOBJ {
-  std::atomic_bool isALIVE    = false;
+
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::TEXTURE;
   static uint16_t  GET_EXTRAFLAGS(TEXTURE_VKOBJ* obj) { return 0; }
 
   void operator=(const TEXTURE_VKOBJ& src) {
-    isALIVE.store(true);
     m_width       = src.m_width;
     m_height      = src.m_height;
     m_mips        = src.m_mips;
@@ -70,12 +69,11 @@ struct TEXTURE_VKOBJ {
   VkImageUsageFlags vk_imageUsage = {};
 };
 struct BUFFER_VKOBJ {
-  std::atomic_bool isALIVE    = false;
+
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::BUFFER;
   static uint16_t  GET_EXTRAFLAGS(BUFFER_VKOBJ* obj) { return 0; }
 
   void operator=(const BUFFER_VKOBJ& src) {
-    isALIVE.store(true);
     vk_usage   = src.vk_usage;
     vk_buffer  = src.vk_buffer;
     m_memBlock = src.m_memBlock;
@@ -130,7 +128,7 @@ struct rtslots_vk {
 
 /*
 struct RTSLOTSET_VKOBJ {
-  std::atomic_bool isALIVE    = false;
+
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::RTSLOTSET;
   static uint16_t  GET_EXTRAFLAGS(RTSLOTSET_VKOBJ* obj) { return 0; }
 
@@ -146,7 +144,7 @@ struct RTSLOTSET_VKOBJ {
   VkFramebufferCreateInfo FB_ci[2];
 };
 struct IRTSLOTSET_VKOBJ {
-  std::atomic_bool isALIVE    = false;
+
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::IRTSLOTSET;
   static uint16_t  GET_EXTRAFLAGS(IRTSLOTSET_VKOBJ* obj) { return 0; }
 
@@ -187,7 +185,7 @@ struct SUBRASTERPASS_VKOBJ {
   // Extra information to check raster pipeline compilations without relying on validation layer
 };
 struct SAMPLER_VKOBJ {
-  std::atomic_bool isALIVE    = false;
+
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::SAMPLER;
   static uint16_t  GET_EXTRAFLAGS(SAMPLER_VKOBJ* obj) { return obj->m_flags.load(); }
 
@@ -201,7 +199,6 @@ struct SAMPLER_VKOBJ {
 /////////////////////////////////////////////
 
 struct PIPELINE_VKOBJ {
-  std::atomic_bool isALIVE    = false;
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::PIPELINE;
   static uint16_t  GET_EXTRAFLAGS(PIPELINE_VKOBJ* obj) { return obj->vk_type; }
 
@@ -232,7 +229,7 @@ struct blendinginfo_vk {
 
 vk_uint32c VKCONST_MAXVERTEXATTRIBCOUNT = 16, VKCONST_MAXVERTEXBINDINGCOUNT = 4;
 struct VERTEXATTRIBLAYOUT_VKOBJ {
-  std::atomic_bool isALIVE    = false;
+
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::VERTEXATTRIB;
   static uint16_t  GET_EXTRAFLAGS(VERTEXATTRIBLAYOUT_VKOBJ* obj) { return 0; }
 
@@ -242,7 +239,7 @@ struct VERTEXATTRIBLAYOUT_VKOBJ {
 };
 
 struct HEAP_VKOBJ {
-  std::atomic_bool isALIVE    = false;
+
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::HEAP;
 
   static uint16_t GET_EXTRAFLAGS(HEAP_VKOBJ* obj) {
@@ -250,7 +247,6 @@ struct HEAP_VKOBJ {
     return 0;
   }
   void operator=(const HEAP_VKOBJ& src) {
-    isALIVE.store(true);
     vk_memoryHandle    = src.vk_memoryHandle;
     vk_memoryTypeIndex = src.vk_memoryTypeIndex;
     m_size             = src.m_size;
@@ -271,7 +267,7 @@ struct cmdBundleRef_vk {
 };
 
 struct FRAMEBUFFER_VKOBJ {
-  std::atomic_bool isALIVE    = false;
+
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::INTERNAL;
   static uint16_t  GET_EXTRAFLAGS(FRAMEBUFFER_VKOBJ* obj) { return 0; }
 

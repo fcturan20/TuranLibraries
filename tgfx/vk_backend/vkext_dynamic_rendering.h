@@ -8,12 +8,13 @@
 struct vkext_dynamicRendering : public vkext_interface {
   vkext_dynamicRendering(GPU_VKOBJ* gpu);
   virtual void inspect() override;
-  virtual void manage(VkStructureType structType, void* structPtr,
-                      extension_tgfx_handle extData) override;
+  virtual void manage(VkStructureType structType, void* structPtr, unsigned int extCount,
+                      const extension_tgfxhnd* exts) override;
   void         vk_beginRenderpass(VkCommandBuffer cb, unsigned int colorAttachmentCount,
                                   const rasterpassBeginSlotInfo_tgfx* colorAttachments,
-                                  rasterpassBeginSlotInfo_tgfx depthAttachment, extension_tgfxlsthnd exts);
-  void         vk_endRenderpass(VkCommandBuffer cb, extension_tgfxlsthnd exts);
+                                  rasterpassBeginSlotInfo_tgfx depthAttachment, unsigned int extCount,
+                                  const extension_tgfxhnd* exts);
+  void vk_endRenderpass(VkCommandBuffer cb, unsigned int extCount, const extension_tgfxhnd* exts);
 
   VkPhysicalDeviceDynamicRenderingFeatures features;
 };

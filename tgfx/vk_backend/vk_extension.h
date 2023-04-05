@@ -8,9 +8,10 @@
 struct vkext_interface;
 extern vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_EXTS;
 struct extManager_vkDevice {
-  GPU_VKOBJ*                                         m_GPU;
-  vkext_interface**                                  m_exts;
-  VK_STATICVECTOR<const char*, const char*, 1 << 15> m_activeDevExtNames;
+  GPU_VKOBJ*        m_GPU;
+  vkext_interface** m_exts;
+  const char**      m_activeDevExtNames;
+  uint32_t          m_devExtCount = 0;
 
  private:
   // Swapchain
@@ -23,6 +24,7 @@ struct extManager_vkDevice {
   // Find features GPU supports and limitations (properties)
   // Then each extension inspects GPU itself
   void inspect();
+  const char** getEnabledExtensionNames(uint32_t* count);
 };
 
 // Create a header for the extension you want to support
@@ -45,8 +47,8 @@ struct vkext_interface {
   vkext_interface(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct);
   virtual void inspect() = 0;
   // If functionality is TGFX Extension, then handle it in this function
-  virtual void manage(VkStructureType structType, void* structPtr,
-                      extension_tgfx_handle extData) = 0;
+  virtual void manage(VkStructureType structType, void* structPtr, unsigned int extCount,
+                      const extension_tgfxhnd* exts) = 0;
   vkext_types  m_type = vkext_count; // Derived classes should change this
   GPU_VKOBJ*   m_gpu  = nullptr;
 };

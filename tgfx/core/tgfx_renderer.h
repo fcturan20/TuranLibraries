@@ -9,18 +9,22 @@ typedef struct tgfx_renderer {
   // Command buffers are one-time only buffers
   //  so when you submit for execution, they'll be freed after their execution
   // Extensions: Storage command buffers
-  commandBuffer_tgfxhnd (*beginCommandBuffer)(gpuQueue_tgfxhnd queue, extension_tgfxlsthnd exts);
+  commandBuffer_tgfxhnd (*beginCommandBuffer)(gpuQueue_tgfxhnd queue, unsigned int extCount,
+                                              const extension_tgfxhnd* exts);
   void (*endCommandBuffer)(commandBuffer_tgfxhnd commandBuffer);
   // In a Rendersubpass: All bundles should be created with the rendersubpass' handle
   // Outside: All bundles should be created with rendersubpass as NULL.
   // All bundles should be from the compatible queue with the cmdBuffer's queue
-  void (*executeBundles)(commandBuffer_tgfxhnd commandBuffer, commandBundle_tgfxlsthnd bundles,
-                         extension_tgfxlsthnd exts);
+  void (*executeBundles)(commandBuffer_tgfxhnd commandBuffer, unsigned int bundleCount,
+                         const commandBundle_tgfxhnd* bundles, unsigned int extCount,
+                         const extension_tgfxhnd* exts);
   void (*beginRasterpass)(commandBuffer_tgfxhnd commandBuffer, unsigned int colorAttachmentCount,
                           const rasterpassBeginSlotInfo_tgfx* colorAttachments,
-                          rasterpassBeginSlotInfo_tgfx depthAttachment, extension_tgfxlsthnd exts);
+                          rasterpassBeginSlotInfo_tgfx depthAttachment, unsigned int extCount,
+                          const extension_tgfxhnd* exts);
   void (*nextSubRasterpass)(commandBuffer_tgfxhnd commandBuffer);
-  void (*endRasterpass)(commandBuffer_tgfxhnd commandBuffer, extension_tgfxlsthnd exts);
+  void (*endRasterpass)(commandBuffer_tgfxhnd commandBuffer, unsigned int extCount,
+                        const extension_tgfxhnd* exts);
 
   // Synchronization Functions
 
@@ -29,7 +33,7 @@ typedef struct tgfx_renderer {
   // @param fenceList: User should create the array of fence_tgfx_handles.
   //    So array isn't created by backend
   void (*createFences)(gpu_tgfxhnd gpu, unsigned int count, unsigned int initValue,
-                       fence_tgfxlsthnd fenceList);
+                       fence_tgfxhnd* fenceList);
   void (*destroyFence)(fence_tgfxhnd fence);
   // CPU side fence value change
   result_tgfx (*setFence)(fence_tgfxhnd fence, unsigned long long value);
@@ -40,13 +44,15 @@ typedef struct tgfx_renderer {
   ///////////////////////////
 
   // All command buffers should be from the same queue
-  void (*queueFenceSignalWait)(gpuQueue_tgfxhnd queue, fence_tgfxlsthnd waitFences,
-                               const unsigned long long* waitValues, fence_tgfxlsthnd signalFences,
+  void (*queueFenceSignalWait)(gpuQueue_tgfxhnd queue, unsigned int waitsCount,
+                               const fence_tgfxhnd*      waitFences,
+                               const unsigned long long* waitValues, unsigned int signalsCount,
+                               const fence_tgfxhnd*      signalFences,
                                const unsigned long long* signalValues);
-  void (*queueExecuteCmdBuffers)(gpuQueue_tgfxhnd         queue,
-                                 commandBuffer_tgfxlsthnd commandBuffersList,
-                                 extension_tgfxlsthnd     exts);
-  void (*queuePresent)(gpuQueue_tgfxhnd queue, const window_tgfxlsthnd windowlist);
+  void (*queueExecuteCmdBuffers)(gpuQueue_tgfxhnd queue, unsigned int cmdBufferCount,
+                                 const commandBuffer_tgfxhnd* cmdBuffers, unsigned int extCount,
+                                 const extension_tgfxhnd* exts);
+  void (*queuePresent)(gpuQueue_tgfxhnd queue, unsigned int windowCount, const window_tgfxhnd* windowlist);
   // Submit queue operations to GPU.
   // You should call this right before changing Queue Operation type.
   // Queue Operation Types: ExecuteCmdBuffers, Present, BindSparse (optional, in future)
@@ -63,15 +69,17 @@ typedef struct tgfx_renderer {
   // raster pipeline. Compute bundles doesn't need this to be set.
   // Every cmdXXX call's "key" argument should be [0,maxCmdCount-1].
   commandBundle_tgfxhnd (*beginCommandBundle)(gpu_tgfxhnd gpu, unsigned long long maxCmdCount,
-                                              pipeline_tgfxhnd     defaultPipeline,
-                                              extension_tgfxlsthnd exts);
-  void (*finishCommandBundle)(commandBundle_tgfxhnd bundle, extension_tgfxlsthnd exts);
+                                              pipeline_tgfxhnd defaultPipeline,
+                                              unsigned int extCount, const extension_tgfxhnd* exts);
+  void (*finishCommandBundle)(commandBundle_tgfxhnd bundle, unsigned int extCount,
+                              const extension_tgfxhnd* exts);
   // If you won't execute same bundle later, destroy to allow backend
   //   implementation to optimize memory usage
   void (*destroyCommandBundle)(commandBundle_tgfxhnd hnd);
   void (*cmdBindBindingTables)(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
-                               bindingTable_tgfxlsthnd bindingtables, unsigned int firstSetIndx,
-                               pipelineType_tgfx pipelineType);
+                               unsigned int firstSetIndx, unsigned int bindingTableCount,
+                               const bindingTable_tgfxhnd* bindingTables,
+                               pipelineType_tgfx           pipelineType);
   void (*cmdBindPipeline)(commandBundle_tgfxhnd bundle, unsigned long long sortKey,
                           pipeline_tgfxhnd pipeline);
   // For devices that doesn't allow storage buffers to store vertex buffers,
@@ -100,7 +108,7 @@ typedef struct tgfx_renderer {
   void (*cmdCopyBufferToTexture)(commandBundle_tgfxhnd bndl, unsigned long long key,
                                  buffer_tgfxhnd srcBuffer, unsigned long long bufferOffset,
                                  texture_tgfxhnd dstTexture, image_access_tgfx lastAccess,
-                                 extension_tgfxlsthnd exts);
+                                 unsigned int extCount, const extension_tgfxhnd* exts);
   void (*cmdCopyBufferToBuffer)(commandBundle_tgfxhnd bndl, unsigned long long key,
                                 unsigned long long copySize, buffer_tgfxhnd srcBuffer,
                                 unsigned long long srcOffset, buffer_tgfxhnd dstBuffer,
@@ -111,12 +119,13 @@ typedef struct tgfx_renderer {
                              unsigned int                      operationCount,
                              const indirectOperationType_tgfx* operationTypes,
                              buffer_tgfxhnd dataBffr, unsigned long long drawDataBufferOffset,
-                             extension_tgfxlsthnd exts);
+                             unsigned int extCount, const extension_tgfxhnd* exts);
   // Extensions: TransferQueueOwnership
   void (*cmdBarrierTexture)(commandBundle_tgfxhnd bndl, unsigned long long key,
                             texture_tgfxhnd texture, image_access_tgfx lastAccess,
                             image_access_tgfx nextAccess, textureUsageMask_tgfxflag lastUsage,
-                            textureUsageMask_tgfxflag nextUsage, extension_tgfxlsthnd exts);
+                            textureUsageMask_tgfxflag nextUsage, unsigned int extCount,
+                            const extension_tgfxhnd* exts);
 
   void (*cmdDispatch)(commandBundle_tgfxhnd bndl, unsigned long long key, uvec3_tgfx dispatchSize);
 } renderer_tgfx;

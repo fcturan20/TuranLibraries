@@ -8,11 +8,10 @@
 #include "vulkan/vulkan.h"
 
 struct core_public {
-  VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT>& GETWINDOWs();
-  VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT>&          getGPUs();
+  GPU_VKOBJ* getGPU(uint32_t i);
+  uint32_t   gpuCount();
 };
 
-static uint32_t gpuCounter = 0;
 struct GPU_VKOBJ {
   bool            isALIVE    = 1;
   vk_handleType   HANDLETYPE = VKHANDLETYPEs::GPU;
@@ -20,28 +19,27 @@ struct GPU_VKOBJ {
 
   tgfx_gpu_description desc;
 
-  VkPhysicalDevice                  vk_physical          = {};
-  VkDevice                          vk_logical           = {};
-  VkPhysicalDeviceProperties2       vk_propsDev          = {};
-  VkPhysicalDeviceFeatures2         vk_featuresDev       = {};
-  VkPhysicalDeviceMemoryProperties2 vk_propsMemory       = {};
-  memoryDescription_tgfx            m_memoryDescTGFX[32] = {};
+  VkPhysicalDevice                  vk_physical             = {};
+  VkDevice                          vk_logical              = {};
+  VkPhysicalDeviceProperties2       vk_propsDev             = {};
+  VkPhysicalDeviceFeatures2         vk_featuresDev          = {};
+  VkPhysicalDeviceMemoryProperties2 vk_propsMemory          = {};
+  memoryDescription_tgfx            m_memoryDescTGFX[32]    = {};
   texture_tgfxhnd                   m_invalidStorageTexture = {}, m_invalidShaderReadTexture = {};
   sampler_tgfxhnd                   m_invalidSampler = {};
   buffer_tgfxhnd                    m_invalidBuffer  = {};
 
   VkQueueFamilyProperties2 vk_propsQueue[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
+  uint32_t                 m_queueFamPtrs[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
+  gpuQueue_tgfxhnd         m_internalQueue                                = {};
 
  private:
   extManager_vkDevice* m_extensions;
-  manager_vk*          m_manager = nullptr;
   uint8_t              m_gpuIndx = 255;
 
  public:
   const extManager_vkDevice* ext() const { return m_extensions; }
   extManager_vkDevice*&      ext() { return m_extensions; }
-  const manager_vk*          manager() const { return m_manager; }
-  manager_vk*&               manager() { return m_manager; }
   uint8_t                    gpuIndx() const { return m_gpuIndx; }
   void                       setGPUINDX(uint8_t v) { m_gpuIndx = v; }
 };
@@ -77,8 +75,9 @@ struct WINDOW_VKOBJ {
   unsigned char             m_swapchainTextureCount = 0, m_swapchainCurrentTextureIndx = 0;
   bool                      m_isResized = false, m_isSwapped = false;
   // Presentation Fences should only be used for CPU to wait
-  fence_tgfxlsthnd m_presentationFences;
-  VkSemaphore      vk_acquireSemaphore = {};
+  fence_tgfxhnd m_presentationFences[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW];
+  VkSemaphore   vk_acquireSemaphore = {};
+  bool          m_isMouseButtonPressed[3] = {};
 
   VkSurfaceKHR    vk_surface    = {};
   VkSwapchainKHR  vk_swapchain  = {};

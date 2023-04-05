@@ -15,8 +15,10 @@ void vkext_descIndexing::inspect() {
     return;
   }
 
-  m_gpu->ext()->m_activeDevExtNames.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
-  m_gpu->ext()->m_activeDevExtNames.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+  m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] = (
+    VK_KHR_MAINTENANCE3_EXTENSION_NAME);
+  m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] = (
+    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 }
-void vkext_descIndexing::manage(VkStructureType structType, void* structPtr,
-                                extension_tgfx_handle extData) {}
+void vkext_descIndexing::manage(VkStructureType structType, void* structPtr, unsigned int extCount,
+                                const extension_tgfxhnd* exts) {}

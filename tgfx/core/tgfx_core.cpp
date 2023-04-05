@@ -19,8 +19,11 @@ extern "C" {
 static core_tgfx_type* core_type_ptr;
 static ecs_tapi*       core_regsys;
 
+static constexpr char* resultTexts[] = {"Success",          "Fail",         "Not coded",
+                                        "Invalid Argument", "Wrong Timing", "Warning"};
+
 void defaultPrintCallback(result_tgfx result, const char* text) {
-  printf("TGFX Result: %u, Message: %s\n", result, text);
+  printf("TGFX %s: %s\n", resultTexts[result], text);
   if (result == result_tgfx_NOTCODED || result == result_tgfx_INVALIDARGUMENT ||
       result == result_tgfx_FAIL) {
     printf("\n\n");
@@ -28,7 +31,7 @@ void defaultPrintCallback(result_tgfx result, const char* text) {
 }
 
 result_tgfx load_backend(core_tgfx* parent, backends_tgfx backend,
-                         tgfx_PrintLogCallback printcallback) {
+                         tgfx_logCallback printcallback) {
   const char* path = nullptr;
   switch (backend) {
     case backends_tgfx_VULKAN: path = "TGFXVulkan.dll"; break;

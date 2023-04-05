@@ -5,7 +5,6 @@
 #include "vk_predefinitions.h"
 #include "vk_resource.h"
 
-vk_uint32c                    VKCONST_MAXSUBMITCOUNT = 32, VKCONST_MAXQUEUEFENCECOUNT = 32;
 extern vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER;
 // Initializes as everything is false (same as CreateInvalidNullFlag)
 struct queueflag_vk {
@@ -52,90 +51,10 @@ struct queueflag_vk {
 struct CMDBUFFER_VKOBJ;
 struct cmdPool_vk;
 
-struct submit_vk {
-  bool            isALIVE    = false;
-  vk_handleType   HANDLETYPE = VKHANDLETYPEs::INTERNAL;
-  static uint16_t GET_EXTRAFLAGS(submit_vk* obj) { return 0; }
-
-  VkSubmitInfo                  vk_submit        = {};
-  VkTimelineSemaphoreSubmitInfo vk_semaphoreInfo = {};
-  VkPresentInfoKHR              vk_present       = {};
-  VkBindSparseInfo              vk_bindSparse    = {};
-
-  CMDBUFFER_VKOBJ* cmdBuffers[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT] = {};
-  uint32_t         cmdBufferCount                                  = 0;
-
-  VkSemaphore vk_signalSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {},
-              vk_waitSemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]   = {};
-
-  uint64_t vk_signalSemaphoreValues[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {},
-           vk_waitSemaphoreValues[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]   = {};
-
-  WINDOW_VKOBJ* m_windows[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT] = {};
-};
-
-struct submission_vk {
-  bool            isALIVE    = false;
-  vk_handleType   HANDLETYPE = VKHANDLETYPEs::INTERNAL;
-  static uint16_t GET_EXTRAFLAGS(submit_vk* obj) { return 0; }
-
-  VkFence          vk_fence                                                             = {};
-  CMDBUFFER_VKOBJ* vk_cbs[VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT * VKCONST_MAXSUBMITCOUNT] = {};
-  VkSemaphore      vk_binarySemaphores[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT]             = {};
-};
-
+typedef void (*vk_submissionCallback)(GPU_VKOBJ* gpu, VkFence fence, void* userData);
 // Handle both has GPU's ID & QueueFamily's ID
 struct QUEUEFAM_VK;
-struct QUEUE_VKOBJ {
-  bool            isALIVE    = false;
-  vk_handleType   HANDLETYPE = VKHANDLETYPEs::GPUQUEUE;
-  static uint16_t GET_EXTRAFLAGS(QUEUE_VKOBJ* obj) {
-    return (obj->m_gpu->gpuIndx() << 8) | (obj->vk_queueFamIndex);
-  }
-  static GPU_VKOBJ*   getGPUfromHandle(gpuQueue_tgfxhnd hnd);
-  static QUEUEFAM_VK* getFAMfromHandle(gpuQueue_tgfxhnd hnd);
-
-  uint32_t vk_queueFamIndex = 0;
-  VkQueue  vk_queue;
-
-  enum vk_queueOpType : uint8_t { ERROR_QUEUEOPTYPE = 0, CMDBUFFER = 1, PRESENT = 2, SPARSE = 3 };
-  vk_queueOpType m_activeQueueOp = ERROR_QUEUEOPTYPE, m_prevQueueOp = ERROR_QUEUEOPTYPE;
-  GPU_VKOBJ*     m_gpu = nullptr;
-  // Operations that wait to be sent to GPU
-  VK_STATICVECTOR<submit_vk, void*, VKCONST_MAXSUBMITCOUNT> m_submitInfos;
-  // This is a binary semaphore to sync sequential executeCmdBufferList calls in the same queue
-  // (DX12 way)
-  VkSemaphore                                                       vk_callSynchronizer = {};
-  VK_STATICVECTOR<submission_vk, void*, VKCONST_MAXQUEUEFENCECOUNT> vk_submitTracker;
-
-  QUEUE_VKOBJ& operator=(const QUEUE_VKOBJ& src) {
-    vk_queue         = src.vk_queue;
-    vk_queueFamIndex = src.vk_queueFamIndex;
-    return *this;
-  }
-};
-
-struct QUEUEFAM_VK {
-  bool            isALIVE    = false;
-  vk_handleType   HANDLETYPE = VKHANDLETYPEs::INTERNAL;
-  static uint16_t GET_EXTRAFLAGS(QUEUEFAM_VK* obj) {
-    return (obj->m_gpu->gpuIndx() << 8) | (obj->m_supportFlag);
-  }
-
-  queueflag_vk m_supportFlag    = {};
-  uint32_t     vk_queueFamIndex = 0;
-  GPU_VKOBJ*   m_gpu            = nullptr;
-  cmdPool_vk*  m_pools          = nullptr;
-
-  VK_STATICVECTOR<QUEUE_VKOBJ, gpuQueue_tgfxhnd, VKCONST_MAXQUEUECOUNT_PERFAM> m_queues;
-
-  QUEUEFAM_VK& operator=(const QUEUEFAM_VK& src) {
-    isALIVE = true;
-    m_gpu   = src.m_gpu;
-    m_queues.clear();
-    return *this;
-  }
-};
+struct QUEUE_VKOBJ;
 /*
 This class manages queues and command buffer allocations per GPU
   This is important in multi-threaded cases because;
@@ -157,11 +76,9 @@ struct manager_vk {
     VkDeviceQueueCreateInfo list[VKCONST_MAXQUEUEFAMCOUNT_PERGPU];
   };
   // While creating VK Logical Device, we need which queues to create. Get that info from here.
-  queueCreateInfoList get_queue_cis() const;
+  queueCreateInfoList get_queue_cis(GPU_VKOBJ* gpu) const;
   // Get VkQueue objects from logical device
-  void get_queue_objects();
-  // Searches for an available command buffer; if not found -> create one
-  VkCommandBuffer getPrimaryCmdBuffer(QUEUEFAM_VK* family);
+  void get_queue_objects(GPU_VKOBJ* gpu);
   // Submit queue operations to GPU
   // Adds the queue's binary semaphore to the first&last submit to synchronize queue submissions.
   // This is because some queue operations are not synchronized by Vulkan (present and sparse).
@@ -170,20 +87,22 @@ struct manager_vk {
   //  Present 1 signals QueueBinSem. SubmitA waits (un-signals) QBS. SubmitC signals QBS. Present 2
   //  both waits then signals QBS. With this way, we're
 
-  void               queueSubmit(QUEUE_VKOBJ* family);
-  uint32_t           get_queuefam_index(QUEUE_VKOBJ* fam);
-  bool               does_queuefamily_support(QUEUE_VKOBJ* family, const queueflag_vk& flag);
-  static manager_vk* createManager(GPU_VKOBJ* gpu);
-
- public:
-  GPU_VKOBJ* m_gpu;
-  // Internal queue will be used to implement timeline <-> binary semaphore conversions
-  QUEUE_VKOBJ* m_internalQueue;
-
-  VK_STATICVECTOR<QUEUEFAM_VK, gpuQueue_tgfxhnd, VKCONST_MAXQUEUEFAMCOUNT_PERGPU> m_queueFams;
-  VK_STATICVECTOR<FRAMEBUFFER_VKOBJ, void*, 10>                                   m_framebuffers;
+  void     queueSubmit(QUEUE_VKOBJ* family);
+  uint32_t get_queuefam_index(QUEUE_VKOBJ* fam);
+  bool     does_queuefamily_support(QUEUE_VKOBJ* family, const queueflag_vk& flag);
 };
 
 void vk_allocateCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, cmdPool_vk*& cmdPool,
                           VkCommandBuffer* cbs, uint32_t count);
-void vk_freeCmdBuffer(cmdPool_vk* cmdPool, VkCommandBufferLevel level, VkCommandBuffer cb);
+void vk_freeCmdBuffer(cmdPool_vk* cmdPool, VkCommandBuffer cb);
+VkQueue      getQueueVkObj(QUEUE_VKOBJ* queue);
+QUEUE_VKOBJ* getQueue(gpuQueue_tgfxhnd hnd);
+QUEUEFAM_VK* getQueueFam(GPU_VKOBJ* gpu, unsigned int queueFamIndx);
+QUEUE_VKOBJ* getQueue(QUEUEFAM_VK* queueFam, uint32_t queueIndx);
+// Extension: QueueOwnershipTransfer
+// Use o_ params with uint32_t queueFamList[VKCONST_MAXQUEUEFAMCOUNT] etc.
+void VK_getQueueAndSharingInfos(unsigned int queueList, const gpuQueue_tgfxhnd* i_queueList,
+                                unsigned int extCount, const extension_tgfxhnd* i_exts,
+                                uint32_t* o_famList, uint32_t* o_famListSize,
+                                VkSharingMode* o_sharingMode);
+void vk_getWindowSupportedQueues(GPU_VKOBJ* GPU, WINDOW_VKOBJ* window, windowGPUsupport_tgfx* info);

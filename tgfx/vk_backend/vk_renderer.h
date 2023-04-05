@@ -25,7 +25,7 @@ other systems
 
 #include "vk_includes.h"
 
-vk_uint32c VKCONST_MAXCMDBUNDLE_PERCALL = 128;
+vk_uint32c VKCONST_MAXCMDBUNDLE_PERCALL = 256;
 
 // Renderer data that other parts of the backend can access
 struct renderer_funcs;
@@ -36,16 +36,15 @@ struct renderer_public {
 struct FRAMEBUFFER_VKOBJ;
 struct SUBRASTERPASS_VKOBJ;
 struct QUEUEFAM_VK;
-// Extension: QueueOwnershipTransfer
-// Use o_ params with uint32_t queueFamList[VKCONST_MAXQUEUEFAMCOUNT] etc.
-void VK_getQueueAndSharingInfos(gpuQueue_tgfxlsthnd i_queueList, extension_tgfxlsthnd i_exts,
-                                uint32_t* o_famList, uint32_t* o_famListSize,
-                                VkSharingMode* o_sharingMode);
 
-void vk_getSecondaryCmdBuffers(commandBundle_tgfxlsthnd commandBundleList, QUEUEFAM_VK* queueFam,
-                               VkCommandBuffer* secondaryCmdBuffers, uint32_t* cmdBufferCount);
-
+void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount, const commandBundle_tgfxhnd* cmdBundles,
+                               uint32_t queueFamIndx, VkCommandBuffer* secondaryCmdBuffers);
+/*
 #define getGPUfromQueueHnd(i_queue)                            \
   GPU_VKOBJ*   gpu   = QUEUE_VKOBJ::getGPUfromHandle(i_queue); \
   QUEUEFAM_VK* fam   = QUEUE_VKOBJ::getFAMfromHandle(i_queue); \
-  QUEUE_VKOBJ* queue = fam->m_queues.getOBJfromHANDLE(i_queue)
+  QUEUE_VKOBJ* queue = getOBJ<QUEUE_VKOBJ>(i_queue);*/
+#define getGPUfromQueueHnd(i_queue)                            \
+  GPU_VKOBJ*   gpu   = QUEUE_VKOBJ::getGPUfromHandle(i_queue); \
+  QUEUEFAM_VK* fam   = QUEUE_VKOBJ::getFAMfromHandle(i_queue); \
+  QUEUE_VKOBJ* queue = getOBJ<QUEUE_VKOBJ>(i_queue);

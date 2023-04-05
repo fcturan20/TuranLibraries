@@ -41,7 +41,7 @@ void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu) {
   gpu->vk_featuresDev.pNext = nullptr;
   gpu->vk_propsDev.sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
   gpu->vk_propsDev.pNext    = nullptr;
-
+  
   mngr->m_exts[vkext_interface::depthStencil_vkExtEnum] =
     new (VKGLOBAL_VIRMEM_EXTS) vkext_depthStencil(gpu);
   mngr->m_exts[vkext_interface::descIndexing_vkExtEnum] =
@@ -57,15 +57,30 @@ void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu) {
 }
 
 void extManager_vkDevice::inspect() {
+  uint32_t extCount = 0;
+  vkEnumerateDeviceExtensionProperties(m_GPU->vk_physical, nullptr, &extCount, nullptr);
+  uint32_t allocSize  = sizeof(const char*) * extCount;
+  m_activeDevExtNames = ( const char** )VK_MEMOFFSET_TO_POINTER(
+    vk_virmem::allocatePage(allocSize));
+  virmemsys->virtual_commit(m_activeDevExtNames, sizeof(allocSize));
+
   vkGetPhysicalDeviceFeatures2(m_GPU->vk_physical, &m_GPU->vk_featuresDev);
   vkGetPhysicalDeviceProperties2(m_GPU->vk_physical, &m_GPU->vk_propsDev);
-
+  
   for (size_t extIndx = 0; extIndx < vkext_interface::vkext_count; extIndx++) {
     vkext_interface* ext = m_exts[extIndx];
     if (ext) {
       ext->inspect();
     }
   }
-  m_activeDevExtNames.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-  m_activeDevExtNames.push_back(VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME);
+
+  m_activeDevExtNames[m_devExtCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+  m_activeDevExtNames[m_devExtCount++] = VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME;
+}
+const char** extManager_vkDevice::getEnabledExtensionNames(uint32_t* count) {
+  *count = m_devExtCount;
+  for (uint32_t i = 0; i < *count; i++) {
+    printf("Extension: %s\n", m_activeDevExtNames[i]);
+  }
+  return m_activeDevExtNames;
 }

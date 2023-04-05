@@ -29,7 +29,8 @@ defineVkExtFunc(vkCmdSetStencilTestEnableEXT);
 vk_fillRasterPipelineStateInfoFnc vk_fillRasterPipelineStateInfo = {};
 void vk_fillRasterPipelineStateInfo_dynamicState(GPU_VKOBJ* gpu, VkGraphicsPipelineCreateInfo* ci,
                                                  const rasterPipelineDescription_tgfx* desc,
-                                                 extension_tgfxlsthnd                  exts) {
+                                                 unsigned int                          extCount,
+                                                 const extension_tgfxhnd*              exts) {
   /*
   auto* ext = ( vkext_dynamicStates* )gpu->ext()->m_exts[vkext_interface::dynamicStates_vkExtEnum];
   VkDynamicState* states     = *( VkDynamicState** )&ci->pDynamicState->pDynamicStates;
@@ -57,10 +58,12 @@ void vk_fillRasterPipelineStateInfo_dynamicState(GPU_VKOBJ* gpu, VkGraphicsPipel
 vkext_dynamicStates::vkext_dynamicStates(GPU_VKOBJ* gpu)
   : vkext_interface(gpu, &props3, &features1) {
   features1.pNext = &features2;
-  features2.pNext = &features3;
+  features2.pNext = &featuresMaintenance4;
+  // features2.pNext = &features3;
   features1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
   features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
   features3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+  featuresMaintenance4.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES;
 
   props3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_PROPERTIES_EXT;
   props3.pNext = nullptr;
@@ -76,13 +79,15 @@ void vkext_dynamicStates::inspect() {
   loadVkExtFunc(vkCmdSetDepthBoundsTestEnableEXT);
   loadVkExtFunc(vkCmdSetDepthTestEnableEXT);
   loadVkExtFunc(vkCmdSetDepthWriteEnableEXT);
-  m_gpu->ext()->m_activeDevExtNames.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+  m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] =
+    (VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
 
   if (features2.extendedDynamicState2) {
     loadVkExtFunc(vkCmdSetDepthBiasEnableEXT);
-    m_gpu->ext()->m_activeDevExtNames.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME);
+    m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] =
+      (VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME);
   }
-
+  /*
   if (features3.extendedDynamicState3DepthClampEnable &&
       features3.extendedDynamicState3DepthClipEnable &&
       features3.extendedDynamicState3PolygonMode && props3.dynamicPrimitiveTopologyUnrestricted) {
@@ -92,8 +97,13 @@ void vkext_dynamicStates::inspect() {
     loadVkExtFunc(vkCmdSetPrimitiveTopologyEXT);
     loadVkExtFunc(vkCmdSetStencilOpEXT);
     loadVkExtFunc(vkCmdSetStencilTestEnableEXT);
-    m_gpu->ext()->m_activeDevExtNames.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
+    m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] =
+      (VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
+  }*/
+  if (featuresMaintenance4.maintenance4) {
+    m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] =
+      VK_KHR_MAINTENANCE_4_EXTENSION_NAME;
   }
 }
-void vkext_dynamicStates::manage(VkStructureType structType, void* structPtr,
-                                 extension_tgfx_handle extData) {}
+void vkext_dynamicStates::manage(VkStructureType structType, void* structPtr, unsigned int extCount,
+                                 const extension_tgfxhnd* exts) {}

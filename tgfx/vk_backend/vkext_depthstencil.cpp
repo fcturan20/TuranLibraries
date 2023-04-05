@@ -1,7 +1,5 @@
 #include "vkext_depthstencil.h"
 
-#include <string>
-
 #include "vk_core.h"
 #include "vk_includes.h"
 #include "vk_predefinitions.h"
@@ -163,13 +161,13 @@ void vkext_depthStencil::inspect() {
     fillDepthAttachDesc = Fill_DepthAttachmentDescription_NOSeperated;
     fillDepthAttachRef  = Fill_DepthAttachmentReference_NOSeperated;
     printer(result_tgfx_WARNING,
-            (std::string(m_gpu->desc.name) + " doesn't support seperated depth stencil layouts, so "
-                                             "layout transitions isn't gonna be precise!")
-              .c_str());
+            "%s doesn't support seperated depth stencil layouts, so layout transitions isn't gonna "
+            "be precise!",
+            m_gpu->desc.name);
   }
   if (!m_gpu->vk_featuresDev.features.depthBounds) {
-    printer(result_tgfx_WARNING, "One of your GPUs doesn't support depth bounds testing");
+    printer(result_tgfx_WARNING, "GPU: %s doesn't support depth bounds testing", m_gpu->desc.name);
   }
 }
-void vkext_depthStencil::manage(VkStructureType structType, void* structPtr,
-                                extension_tgfx_handle extData) {}
+void vkext_depthStencil::manage(VkStructureType structType, void* structPtr, unsigned int extCount,
+                                const extension_tgfxhnd* exts) {}

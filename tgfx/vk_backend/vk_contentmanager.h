@@ -3,7 +3,6 @@
 #include "vk_resource.h"
 
 struct BINDINGTABLEINST_VKOBJ {
-  std::atomic_bool isALIVE    = false;
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::BINDINGTABLEINST;
 
   static uint16_t GET_EXTRAFLAGS(BINDINGTABLEINST_VKOBJ* obj) { return UINT16_MAX; }
@@ -28,5 +27,4 @@ struct gpudatamanager_public {
   VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>& GETPIPELINE_ARRAY();
   VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
                                                                            GETBINDINGTABLE_ARRAY();
-  VK_LINEAR_OBJARRAY<SUBRASTERPASS_VKOBJ, subRasterpass_tgfxhnd, 1 << 16>& GETSUBRASTERPASS_ARRAY();
 };

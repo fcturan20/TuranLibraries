@@ -20,57 +20,53 @@
 #include "vk_predefinitions.h"
 #include "vk_queue.h"
 #include "vk_renderer.h"
-//#define VK_VALIDATION_LAYER
+#define VK_VALIDATION_LAYER
 
 struct core_private {
  public:
   // These are VK_VECTORs, instead of VK_LINEAROBJARRAYs, because they won't change at run-time so
   // frequently
-  VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT> DEVICE_GPUs;
+  VK_ARRAY<GPU_VKOBJ, gpu_tgfxhnd> m_gpus;
   // Window Operations
-  VK_STATICVECTOR<MONITOR_VKOBJ, monitor_tgfxhnd, 16>                   MONITORs;
-  VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT> WINDOWs;
+  VK_LINEAR_OBJARRAY<MONITOR_VKOBJ, monitor_tgfxhnd, 1 << 10> MONITORs;
+  VK_LINEAR_OBJARRAY<WINDOW_VKOBJ, window_tgfxhnd, 1 << 16>   WINDOWs;
 
   bool isAnyWindowResized = false, // Instead of checking each window each frame, just check this
     isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = true;
 };
 static core_private* hidden = nullptr;
 
-VK_STATICVECTOR<WINDOW_VKOBJ, window_tgfxhnd, VKCONST_MAXWINDOWCOUNT>& core_public::GETWINDOWs() {
-  return hidden->WINDOWs;
-}
-VK_STATICVECTOR<GPU_VKOBJ, gpu_tgfxhnd, VKCONST_MAXGPUCOUNT>& core_public::getGPUs() {
-  return hidden->DEVICE_GPUs;
-}
+GPU_VKOBJ* core_public::getGPU(uint32_t i) { return hidden->m_gpus[i]; }
+uint32_t   core_public::gpuCount() { return hidden->m_gpus.size(); }
 
 result_tgfx vk_initGPU(gpu_tgfxhnd gpu) {
   // Create Logical Device
-  GPU_VKOBJ* GPU       = hidden->DEVICE_GPUs.getOBJfromHANDLE(gpu);
-  auto&      queueFams = GPU->manager()->get_queue_cis();
+  GPU_VKOBJ* GPU       = getOBJ<GPU_VKOBJ>(gpu);
+  auto&      queueFams = manager->get_queue_cis(GPU);
 
   VkDeviceCreateInfo logicdevic_ci{};
   logicdevic_ci.sType                = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   logicdevic_ci.flags                = 0;
   logicdevic_ci.pQueueCreateInfos    = queueFams.list;
-  logicdevic_ci.queueCreateInfoCount = GPU->manager()->m_queueFams.size();
+  logicdevic_ci.queueCreateInfoCount = GPU->desc.queueFamilyCount;
   logicdevic_ci.pNext                = &GPU->vk_featuresDev;
-
-  logicdevic_ci.enabledExtensionCount   = GPU->ext()->m_activeDevExtNames.size();
-  logicdevic_ci.ppEnabledExtensionNames = GPU->ext()->m_activeDevExtNames.data();
-  logicdevic_ci.pEnabledFeatures        = nullptr;
-  logicdevic_ci.enabledLayerCount       = 0;
+  logicdevic_ci.ppEnabledExtensionNames =
+    GPU->ext()->getEnabledExtensionNames(&logicdevic_ci.enabledExtensionCount);
+  logicdevic_ci.pEnabledFeatures  = nullptr;
+  logicdevic_ci.enabledLayerCount = 0;
   if (ThrowIfFailed(vkCreateDevice(GPU->vk_physical, &logicdevic_ci, nullptr, &GPU->vk_logical),
                     "Vulkan failed to create a Logical Device!")) {
     printer(result_tgfx_FAIL, "Vulkan failed to create a Logical Device!");
     return result_tgfx_FAIL;
   }
-  GPU->manager()->get_queue_objects();
+  manager->get_queue_objects(GPU);
   return result_tgfx_SUCCESS;
 }
 
-vk_uint32c VKGLOBAL_MAX_INSTANCE_EXT_COUNT = 256;
-VK_STATICVECTOR<const char*, const char*, VKGLOBAL_MAX_INSTANCE_EXT_COUNT> activeInstanceExts;
+vk_uint32c            VKGLOBAL_MAX_INSTANCE_EXT_COUNT = 256;
+const char*           activeInstanceExts[VKGLOBAL_MAX_INSTANCE_EXT_COUNT];
 VkExtensionProperties supportedInstanceExts[VKGLOBAL_MAX_INSTANCE_EXT_COUNT] = {};
+uint32_t              instanceExtCount                                       = 0;
 
 inline bool vk_checkInstExtSupported(const char* extName) {
   bool Is_Found = false;
@@ -89,6 +85,7 @@ inline bool vk_checkInstExtSupported(const char* extName) {
   return false;
 }
 bool vk_checkInstanceExts() {
+  instanceExtCount                = 0;
   uint32_t     glfwExtensionCount = 0;
   const char** glfwExtensions;
   glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -99,12 +96,12 @@ bool vk_checkInstanceExts() {
               "situation is not tested, so report your device to the author!");
       return false;
     }
-    activeInstanceExts.push_back(glfwExtensions[i]);
+    activeInstanceExts[instanceExtCount++] = glfwExtensions[i];
   }
 
   if (vk_checkInstExtSupported(VK_KHR_SURFACE_EXTENSION_NAME)) {
-    hidden->isActive_SurfaceKHR = true;
-    activeInstanceExts.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+    hidden->isActive_SurfaceKHR            = true;
+    activeInstanceExts[instanceExtCount++] = (VK_KHR_SURFACE_EXTENSION_NAME);
   } else {
     printer(result_tgfx_WARNING,
             "Your Vulkan instance doesn't support to display a window, so you shouldn't use any "
@@ -121,12 +118,13 @@ bool vk_checkInstanceExts() {
               "so Vulkan device creation has failed!");
       return false;
     } else {
-      activeInstanceExts.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+      activeInstanceExts[instanceExtCount++] =
+        (VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
     }
   }
 
   if (vk_checkInstExtSupported(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
-    activeInstanceExts.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    activeInstanceExts[instanceExtCount++] = (VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   }
   return true;
 }
@@ -137,7 +135,7 @@ void vk_createInstance() {
   VKGLOBAL_APPINFO.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   VKGLOBAL_APPINFO.pEngineName        = "GFX API";
   VKGLOBAL_APPINFO.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
-  VKGLOBAL_APPINFO.apiVersion         = VK_API_VERSION_1_0;
+  VKGLOBAL_APPINFO.apiVersion         = VK_API_VERSION_1_3;
 
   // CHECK SUPPORTED EXTENSIONs
   uint32_t extCount = 0;
@@ -163,8 +161,8 @@ void vk_createInstance() {
   InstCreation_Info.sType                = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   InstCreation_Info.pApplicationInfo     = &VKGLOBAL_APPINFO;
   // Extensions
-  InstCreation_Info.enabledExtensionCount   = ( uint32_t )activeInstanceExts.size();
-  InstCreation_Info.ppEnabledExtensionNames = activeInstanceExts.data();
+  InstCreation_Info.enabledExtensionCount   = instanceExtCount;
+  InstCreation_Info.ppEnabledExtensionNames = activeInstanceExts;
 
 // Validation Layers
 #ifdef VK_VALIDATION_LAYER
@@ -240,35 +238,36 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
   VKGPU->desc.memRegionsCount = VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount;
 }
 
+extern void vk_createManager();
 inline void vk_checkComputerSpecs() {
   // CHECK GPUs
-  uint32_t GPU_NUMBER = 0;
-  vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &GPU_NUMBER, nullptr);
-  if (GPU_NUMBER > VKCONST_MAXGPUCOUNT) {
+  uint32_t gpuCount = 0;
+  vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &gpuCount, nullptr);
+  if (gpuCount > VKCONST_MAXGPUCOUNT) {
     printer(result_tgfx_FAIL, "Your device has more GPUs than supported!");
     return;
   }
-  VkPhysicalDevice PhysicalGPUs[VKCONST_MAXGPUCOUNT] = {};
-  vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &GPU_NUMBER, PhysicalGPUs);
+  hidden->m_gpus.init(gpuCount);
 
-  if (GPU_NUMBER == 0) {
+  vk_uint32c       maxGPUcount = 1024;
+  VkPhysicalDevice tempDevices[maxGPUcount];
+  assert_vk(maxGPUcount > gpuCount);
+  vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &gpuCount, tempDevices);
+
+  if (gpuCount == 0) {
     printer(result_tgfx_FAIL, "There is no Vulkan GPU!");
     return;
   }
 
   // GET GPU INFORMATIONs, QUEUE FAMILIES etc
-  for (unsigned int i = 0; i < GPU_NUMBER; i++) {
+  for (unsigned int i = 0; i < gpuCount; i++) {
     // GPU initializer handles everything else
-    GPU_VKOBJ* vkgpu   = hidden->DEVICE_GPUs.add();
-    vkgpu->vk_physical = PhysicalGPUs[i];
+    GPU_VKOBJ* vkgpu   = hidden->m_gpus[i];
+    vkgpu->vk_physical = tempDevices[i];
     vkgpu->setGPUINDX(i);
 
     // Analize GPU memory & extensions
     vk_analizeGPUmemory(vkgpu);
-    if (!manager_vk::createManager(vkgpu)) {
-      hidden->DEVICE_GPUs.erase(hidden->DEVICE_GPUs.size() - 1);
-      continue;
-    }
     extManager_vkDevice::createExtManager(vkgpu);
 
     // SAVE BASIC INFOs TO THE GPU DESC
@@ -280,6 +279,8 @@ inline void vk_checkComputerSpecs() {
 
     vkgpu->ext()->inspect();
   }
+
+  vk_createManager();
 }
 
 ////////////////////////////////////////////////////////
@@ -290,7 +291,8 @@ inline void vk_checkComputerSpecs() {
 
 void glfwWindowResizeCallback(GLFWwindow* glfwwindow, int width, int height) {
   WINDOW_VKOBJ* vkwindow = ( WINDOW_VKOBJ* )glfwGetWindowUserPointer(glfwwindow);
-  vkwindow->m_resizeFnc(( window_tgfxhnd )vkwindow, vkwindow->m_userData, width, height,
+  tgfx_uvec2    res      = {width, height};
+  vkwindow->m_resizeFnc(( window_tgfxhnd )vkwindow, vkwindow->m_userData, res,
                         ( texture_tgfxhnd* )vkwindow->m_swapchainTextures);
 }
 key_tgfx getKeyTgfx(int glfwKey) {
@@ -416,6 +418,9 @@ key_tgfx getKeyTgfx(int glfwKey) {
     case GLFW_KEY_RIGHT_ALT: return key_tgfx_RIGHT_ALT;
     case GLFW_KEY_RIGHT_SUPER: return key_tgfx_RIGHT_SUPER;
     case GLFW_KEY_MENU: return key_tgfx_MENU;
+    case GLFW_MOUSE_BUTTON_LEFT: return key_tgfx_MOUSE_LEFT;
+    case GLFW_MOUSE_BUTTON_MIDDLE: return key_tgfx_MOUSE_MIDDLE;
+    case GLFW_MOUSE_BUTTON_RIGHT: return key_tgfx_MOUSE_RIGHT;
   }
   return ( key_tgfx )INT32_MAX;
 }
@@ -443,18 +448,26 @@ void glfwWindowKeyCallback(GLFWwindow* glfwWindow, int key, int scan, int action
   vkwindow->m_keyFnc(( window_tgfxhnd )vkwindow, vkwindow->m_userData, getKeyTgfx(key), scan,
                      getKeyActionTgfx(action), getKeyModTgfx(mode));
 }
+int vk_findMouseButton(key_tgfx key) {
+  switch (key) {
+    case key_tgfx_MOUSE_LEFT: return GLFW_MOUSE_BUTTON_LEFT;
+    case key_tgfx_MOUSE_RIGHT: return GLFW_MOUSE_BUTTON_RIGHT;
+    case key_tgfx_MOUSE_MIDDLE: return GLFW_MOUSE_BUTTON_MIDDLE;
+    default: printer(result_tgfx_NOTCODED, "Invalid key to vk_findMouseButton()!"); assert(0);
+  }
+}
 void vk_createWindow(const windowDescription_tgfx* desc, void* user_ptr, window_tgfxhnd* window) {
-  if (desc->ResizeCB) {
+  if (desc->resizeCb) {
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
   } else {
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
   }
   GLFWmonitor* monitor = nullptr;
-  if (desc->monitor && desc->Mode == windowmode_tgfx_FULLSCREEN) {
-    monitor = hidden->MONITORs.getOBJfromHANDLE(desc->monitor)->monitorobj;
+  if (desc->monitor && desc->mode == windowmode_tgfx_FULLSCREEN) {
+    monitor = getOBJ<MONITOR_VKOBJ>(desc->monitor)->monitorobj;
   }
   GLFWwindow* glfw_window =
-    glfwCreateWindow(desc->size.x, desc->size.y, desc->NAME, monitor, nullptr);
+    glfwCreateWindow(desc->size.x, desc->size.y, desc->name, monitor, nullptr);
 
   // Check and Report if GLFW fails
   if (glfw_window == NULL) {
@@ -470,35 +483,35 @@ void vk_createWindow(const windowDescription_tgfx* desc, void* user_ptr, window_
     return;
   }
 
-  WINDOW_VKOBJ* vkWindow             = hidden->WINDOWs.add();
+  WINDOW_VKOBJ* vkWindow             = hidden->WINDOWs.create_OBJ();
   vkWindow->m_lastWidth              = desc->size.x;
   vkWindow->m_newWidth               = desc->size.x;
   vkWindow->m_lastHeight             = desc->size.y;
   vkWindow->m_newHeight              = desc->size.y;
-  vkWindow->m_displayMode            = desc->Mode;
+  vkWindow->m_displayMode            = desc->mode;
   vkWindow->m_monitor                = nullptr;
-  vkWindow->m_name                   = desc->NAME;
+  vkWindow->m_name                   = desc->name;
   vkWindow->vk_glfwWindow            = glfw_window;
   vkWindow->vk_swapchainTextureUsage = 0; // This will be set while creating swapchain
-  vkWindow->m_resizeFnc              = desc->ResizeCB;
-  vkWindow->m_keyFnc                 = desc->keyCB;
+  vkWindow->m_resizeFnc              = desc->resizeCb;
+  vkWindow->m_keyFnc                 = desc->keyCb;
   vkWindow->m_userData               = user_ptr;
   vkWindow->vk_surface               = Window_Surface;
 
   glfwSetWindowUserPointer(vkWindow->vk_glfwWindow, vkWindow);
-  if (desc->ResizeCB) {
+  if (desc->resizeCb) {
     glfwSetWindowSizeCallback(vkWindow->vk_glfwWindow, glfwWindowResizeCallback);
   }
-  if (desc->keyCB) {
+  if (desc->keyCb) {
     glfwSetKeyCallback(vkWindow->vk_glfwWindow, glfwWindowKeyCallback);
   }
 
-  *window = hidden->WINDOWs.returnHANDLEfromOBJ(vkWindow);
+  *window = getHANDLE<window_tgfxhnd>(vkWindow);
 }
 result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description* desc,
                                texture_tgfxhnd* textures) {
-  WINDOW_VKOBJ* window = hidden->WINDOWs.getOBJfromHANDLE(desc->window);
-  GPU_VKOBJ*    GPU    = hidden->DEVICE_GPUs.getOBJfromHANDLE(gpu);
+  WINDOW_VKOBJ* window = getOBJ<WINDOW_VKOBJ>(desc->window);
+  GPU_VKOBJ*    GPU    = getOBJ<GPU_VKOBJ>(gpu);
 
   // Create VkSwapchainKHR object
   VkSwapchainCreateInfoKHR swpchn_ci = {};
@@ -531,8 +544,9 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
     }
 
     uint32_t queueFamIndxLst[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {UINT32_MAX};
-    VK_getQueueAndSharingInfos(desc->permittedQueues, nullptr, queueFamIndxLst,
-                               &swpchn_ci.queueFamilyIndexCount, &swpchn_ci.imageSharingMode);
+    VK_getQueueAndSharingInfos(desc->permittedQueueCount, desc->permittedQueues, 0, nullptr,
+                               queueFamIndxLst, &swpchn_ci.queueFamilyIndexCount,
+                               &swpchn_ci.imageSharingMode);
     swpchn_ci.pQueueFamilyIndices = queueFamIndxLst;
 
     THROW_RETURN_IF_FAIL(
@@ -598,14 +612,13 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
 
   uint32_t queueFamListIterIndx = 0;
   while (swpchn_ci.pQueueFamilyIndices[queueFamListIterIndx] != UINT32_MAX) {
-    QUEUEFAM_VK* queueFam =
-      GPU->manager()->m_queueFams[swpchn_ci.pQueueFamilyIndices[queueFamListIterIndx]];
     VkCommandPool transitionCmdPool, initializeCmdPool;
+    uint32_t      vkQueueFamIndx = swpchn_ci.pQueueFamilyIndices[queueFamListIterIndx];
     // Create command pools
     {
       VkCommandPoolCreateInfo cp_ci = {};
       cp_ci.flags                   = 0;
-      cp_ci.queueFamilyIndex        = queueFam->vk_queueFamIndex;
+      cp_ci.queueFamilyIndex        = vkQueueFamIndx;
       cp_ci.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
       THROW_RETURN_IF_FAIL(
         vkCreateCommandPool(GPU->vk_logical, &cp_ci, nullptr, &transitionCmdPool),
@@ -624,13 +637,13 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       // General -> Present
       THROW_RETURN_IF_FAIL(
         vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai,
-                                 window->vk_generalToPresent[queueFam->vk_queueFamIndex]),
+                                 window->vk_generalToPresent[vkQueueFamIndx]),
         "General->Present Command Buffer creation for swapchain transition has failed!",
         result_tgfx_FAIL);
       // Present -> General
       THROW_RETURN_IF_FAIL(
         vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai,
-                                 window->vk_presentToGeneral[queueFam->vk_queueFamIndex]),
+                                 window->vk_presentToGeneral[vkQueueFamIndx]),
         "Present->General Command Buffer creation for swapchain transition has failed!",
         result_tgfx_FAIL);
     }
@@ -641,7 +654,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       cb_bi.flags                    = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
       cb_bi.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
       {
-        VkCommandBuffer cb = window->vk_generalToPresent[queueFam->vk_queueFamIndex][textureIndx];
+        VkCommandBuffer cb = window->vk_generalToPresent[vkQueueFamIndx][textureIndx];
         THROW_RETURN_IF_FAIL(vkBeginCommandBuffer(cb, &cb_bi),
                              "General -> Present CB recording begin failed!", result_tgfx_FAIL);
         imBar.dstAccessMask               = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
@@ -667,7 +680,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       }
       // Present -> General CB Recording
       {
-        VkCommandBuffer cb = window->vk_presentToGeneral[queueFam->vk_queueFamIndex][textureIndx];
+        VkCommandBuffer cb = window->vk_presentToGeneral[vkQueueFamIndx][textureIndx];
         THROW_RETURN_IF_FAIL(vkBeginCommandBuffer(cb, &cb_bi),
                              "Present -> General CB recording begin failed!", result_tgfx_FAIL);
 
@@ -723,7 +736,8 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
           si.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
           si.waitSemaphoreCount   = 0;
           si.signalSemaphoreCount = 0;
-          ThrowIfFailed(vkQueueSubmit(queueFam->m_queues[0]->vk_queue, 1, &si, VK_NULL_HANDLE),
+          ThrowIfFailed(vkQueueSubmit(getQueueVkObj(getQueue(getQueueFam(GPU, vkQueueFamIndx), 0)),
+                                      1, &si, VK_NULL_HANDLE),
                         "Queue submission for layout transition");
         }
       }
@@ -736,7 +750,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
   // Create TEXTURE_VKOBJs and return handles
   window->vk_swapchainTextureUsage = swpchn_ci.imageUsage;
   for (uint32_t vkim_index = 0; vkim_index < desc->imageCount; vkim_index++) {
-    TEXTURE_VKOBJ* SWAPCHAINTEXTURE = contentmanager->GETTEXTURES_ARRAY().create_OBJ();
+    TEXTURE_VKOBJ* SWAPCHAINTEXTURE = contentManager->GETTEXTURES_ARRAY().create_OBJ();
     SWAPCHAINTEXTURE->m_channels    = texture_channels_tgfx_BGRA8UNORM;
     SWAPCHAINTEXTURE->m_width       = window->m_newWidth;
     SWAPCHAINTEXTURE->m_height      = window->m_newHeight;
@@ -750,14 +764,13 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
     SWAPCHAINTEXTURE->m_memBlock = memoryBlock_vk::GETINVALID();
     SWAPCHAINTEXTURE->m_memReqs  = memoryRequirements_vk::GETINVALID();
 
-    textures[vkim_index] =
-      contentmanager->GETTEXTURES_ARRAY().returnHANDLEfromOBJ(SWAPCHAINTEXTURE);
+    textures[vkim_index]                    = getHANDLE<texture_tgfxhnd>(SWAPCHAINTEXTURE);
     window->m_swapchainTextures[vkim_index] = textures[vkim_index];
   }
   return result_tgfx_SUCCESS;
 }
 result_tgfx vk_getCurrentSwapchainTextureIndex(window_tgfxhnd i_window, uint32_t* index) {
-  WINDOW_VKOBJ* window = hidden->WINDOWs.getOBJfromHANDLE(i_window);
+  WINDOW_VKOBJ* window = getOBJ<WINDOW_VKOBJ>(i_window);
 
   uint32_t swpchnIndx = UINT32_MAX;
   THROW_RETURN_IF_FAIL(
@@ -779,6 +792,27 @@ result_tgfx vk_getCurrentSwapchainTextureIndex(window_tgfxhnd i_window, uint32_t
 }
 void vk_takeInputs() {
   glfwPollEvents();
+
+  // Handle mouse button states
+  for (uint32_t i = 0; i < hidden->WINDOWs.size(); i++) {
+    WINDOW_VKOBJ* vkwindow = hidden->WINDOWs[i];
+    for (uint32_t mouseButtonIndx = 0; mouseButtonIndx < 3; mouseButtonIndx++) {
+      keyAction_tgfx curAction =
+        getKeyActionTgfx(glfwGetMouseButton(vkwindow->vk_glfwWindow, mouseButtonIndx));
+      key_tgfx key             = getKeyTgfx(mouseButtonIndx);
+      bool&    buttonPrevState = vkwindow->m_isMouseButtonPressed[vk_findMouseButton(key)];
+      if (curAction == keyAction_tgfx_PRESS) {
+        if (buttonPrevState) {
+          curAction = keyAction_tgfx_REPEAT;
+        }
+        buttonPrevState = true;
+      } else {
+        buttonPrevState = false;
+      }
+      vkwindow->m_keyFnc(( window_tgfxhnd )vkwindow, vkwindow->m_userData, key, 0, curAction,
+                         keyMod_tgfx_NONE);
+    }
+  }
   /*
   if (hidden->isAnyWindowResized) {
           vkDeviceWaitIdle(rendergpu->devLogical);
@@ -836,6 +870,40 @@ void vk_takeInputs() {
           }
   }*/
 }
+tgfx_vec2 vk_getCursorPos(window_tgfxhnd windowHnd) {
+  WINDOW_VKOBJ* window = getOBJ<WINDOW_VKOBJ>(windowHnd);
+  double        vec2[2];
+  glfwGetCursorPos(window->vk_glfwWindow, &vec2[0], &vec2[1]);
+  tgfx_vec2 fVec2 = {vec2[0], vec2[1]};
+  return fVec2;
+}
+void vk_setInputMode(window_tgfxhnd windowHnd, cursorMode_tgfx cursorMode, unsigned char stickyKeys,
+                     unsigned char stickyMouseButtons, unsigned char lockKeyMods) {
+  WINDOW_VKOBJ* window = getOBJ<WINDOW_VKOBJ>(windowHnd);
+
+  switch (cursorMode) {
+    case cursorMode_tgfx_NORMAL:
+      glfwSetInputMode(window->vk_glfwWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+      break;
+    case cursorMode_tgfx_HIDDEN:
+      glfwSetInputMode(window->vk_glfwWindow, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+      break;
+    case cursorMode_tgfx_DISABLED:
+      glfwSetInputMode(window->vk_glfwWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+      if (glfwRawMouseMotionSupported() == GLFW_TRUE) {
+        glfwSetInputMode(window->vk_glfwWindow, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+      }
+      break;
+    case cursorMode_tgfx_RAW:
+      glfwSetInputMode(window->vk_glfwWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+      if (glfwRawMouseMotionSupported() == GLFW_TRUE) {
+        glfwSetInputMode(window->vk_glfwWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+      } else {
+        printer(result_tgfx_WARNING, "Your system doesn't support raw mouse input mode!");
+      }
+      break;
+  }
+}
 void vk_saveMonitors() {
   int           monitor_count;
   GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
@@ -844,7 +912,7 @@ void vk_saveMonitors() {
 
     // Get monitor name provided by OS! It is a driver based name, so it maybe incorrect!
     const char*    monitor_name = glfwGetMonitorName(monitor);
-    MONITOR_VKOBJ* Monitor      = hidden->MONITORs.add();
+    MONITOR_VKOBJ* Monitor      = hidden->MONITORs.create_OBJ();
     Monitor->name               = monitor_name;
 
     // Get videomode to detect at which resolution the OS is using the monitor
@@ -867,26 +935,31 @@ void vk_saveMonitors() {
   }
 }
 
-inline void vk_getMonitorList(monitor_tgfxlsthnd* MonitorList) {
-  *MonitorList = hidden->MONITORs.returnHANDLELIST();
+inline void vk_getMonitorList(unsigned int* monitorCount, monitor_tgfxhnd* monitorList) {
+  /*
+  if (*monitorCount == hidden->MONITORs.size()) {
+    for (uint32_t i = 0; i < *monitorCount; i++) {
+      monitorList[i] = getHANDLE<monitor_tgfxhnd>(hidden->MONITORs[i]);
+    }
+  }
+  *monitorCount = hidden->MONITORs.size();*/
 }
-inline void vk_getGPUList(gpu_tgfxlsthnd* GPULIST) {
-  *GPULIST = hidden->DEVICE_GPUs.returnHANDLELIST();
+inline void vk_getGPUList(unsigned int* gpuCount, gpu_tgfxhnd* gpuList) {
+  if (*gpuCount == core_vk->gpuCount()) {
+    for (uint32_t i = 0; i < *gpuCount; i++) {
+      gpuList[i] = getHANDLE<gpu_tgfxhnd>(core_vk->getGPU(i));
+    }
+  }
+  *gpuCount = core_vk->gpuCount();
 }
 inline void vk_getGPUInfoGeneral(gpu_tgfxhnd h, tgfx_gpu_description* dsc) {
-  GPU_VKOBJ* VKGPU = core_vk->getGPUs().getOBJfromHANDLE(h);
+  GPU_VKOBJ* VKGPU = getOBJ<GPU_VKOBJ>(h);
   *dsc             = VKGPU->desc;
-}
-inline void vk_getGPUInfoQueues(gpu_tgfxhnd GPUhnd, unsigned int queueFamIndx,
-                                gpuQueue_tgfxlsthnd* queueList) {
-  GPU_VKOBJ*   VKGPU = core_vk->getGPUs().getOBJfromHANDLE(GPUhnd);
-  QUEUEFAM_VK* fam   = VKGPU->manager()->m_queueFams[queueFamIndx];
-  *queueList         = fam->m_queues.returnHANDLELIST();
 }
 result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
                                     windowGPUsupport_tgfx* info) {
-  GPU_VKOBJ*    GPU    = core_vk->getGPUs().getOBJfromHANDLE(gpu);
-  WINDOW_VKOBJ* window = core_vk->GETWINDOWs().getOBJfromHANDLE(i_window);
+  GPU_VKOBJ*    GPU    = getOBJ<GPU_VKOBJ>(gpu);
+  WINDOW_VKOBJ* window = getOBJ<WINDOW_VKOBJ>(i_window);
 
   VkSurfaceCapabilitiesKHR caps;
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(GPU->vk_physical, window->vk_surface, &caps);
@@ -941,22 +1014,7 @@ result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
     info->presentationModes[i] = vk_findPresentModeTgfx(Presentations[i]);
   }
 
-  uint32_t supportedQueueCount = 0;
-  for (uint32_t queueFamIndx = 0; queueFamIndx < GPU->manager()->m_queueFams.size();
-       queueFamIndx++) {
-    VkBool32 isSupported = false;
-    ThrowIfFailed(vkGetPhysicalDeviceSurfaceSupportKHR(GPU->vk_physical, queueFamIndx,
-                                                       window->vk_surface, &isSupported),
-                  "Querying queue family's swapchain support has failed!");
-    QUEUEFAM_VK* queueFam = GPU->manager()->m_queueFams[queueFamIndx];
-    if (isSupported) {
-      for (uint32_t queueIndx = 0; queueIndx < queueFam->m_queues.size(); queueIndx++) {
-        info->queues[supportedQueueCount++] =
-          queueFam->m_queues.returnHANDLEfromOBJ(queueFam->m_queues[queueIndx]);
-      }
-    }
-  }
-  info->queues[supportedQueueCount] = ( gpuQueue_tgfxhnd )core_tgfx_main->INVALIDHANDLE;
+  vk_getWindowSupportedQueues(GPU, window, info);
 
   return result_tgfx_SUCCESS;
 }
@@ -977,11 +1035,11 @@ extern void vk_createContentManager();
 void        vk_setupDebugging();
 void        vk_initRenderer();
 void        vk_setHelperFuncPtrs();
-extern void vk_setQueueFuncPtrs();
+extern void vk_setQueueFncPtrs();
 void        vk_errorCallback(int error_code, const char* description) {
   printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
 }
-result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallback printcallback) {
+result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_logCallback printcallback) {
   if (!regsys->getSystem(TGFX_PLUGIN_NAME)) return result_tgfx_FAIL;
 
   printer_cb = printcallback;
@@ -1010,27 +1068,33 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallbac
     profilerSys = profilerLoaded->funcs;
   }
 
+  BITSET_TAPI_PLUGIN_LOAD_TYPE bitsetSysLoaded =
+    ( BITSET_TAPI_PLUGIN_LOAD_TYPE )regsys->getSystem(BITSET_TAPI_PLUGIN_NAME);
+  if (bitsetSysLoaded) {
+    bitsetSys = bitsetSysLoaded->funcs;
+  }
+
   core_tgfx_main = core->api;
   vk_createBackendAllocator();
-  uint32_t malloc_size = sizeof(core_public) + sizeof(core_private);
-  uint32_t allocptr    = vk_virmem::allocatePage(malloc_size);
-  core_vk              = ( core_public* )VK_MEMOFFSET_TO_POINTER(allocptr);
-  core->data           = ( core_tgfx_d* )core_vk;
-  hidden               = ( core_private* )VK_MEMOFFSET_TO_POINTER(allocptr + sizeof(core_public));
-  virmemsys->virtual_commit(VK_MEMOFFSET_TO_POINTER(allocptr), malloc_size);
+  uint32_t               malloc_size = sizeof(core_public) + sizeof(core_private);
+  vk_virmem::dynamicmem* coreDynMem  = vk_virmem::allocate_dynamicmem(malloc_size);
+  core_vk                            = new (coreDynMem) core_public;
+  core->data                         = ( core_tgfx_d* )core_vk;
+  hidden                             = new (coreDynMem) core_private;
 
   // Set function pointers
   {
     core->api->initGPU                         = &vk_initGPU;
     core->api->createWindow                    = &vk_createWindow;
-    core->api->getmonitorlist                  = &vk_getMonitorList;
+    core->api->getMonitorList                  = &vk_getMonitorList;
     core->api->getGPUlist                      = &vk_getGPUList;
     core->api->createSwapchain                 = &vk_createSwapchain;
     core->api->helpers->getGPUInfo_General     = &vk_getGPUInfoGeneral;
-    core->api->helpers->getGPUInfo_Queues      = &vk_getGPUInfoQueues;
     core->api->helpers->getWindow_GPUSupport   = &vk_getWindow_GPUSupport;
     core->api->getCurrentSwapchainTextureIndex = &vk_getCurrentSwapchainTextureIndex;
     core->api->takeInputs                      = &vk_takeInputs;
+    core->api->setInputMode                    = &vk_setInputMode;
+    core->api->getCursorPos                    = &vk_getCursorPos;
     // core->api->change_window_resolution = &change_window_resolution;
     // core->api->debugcallback = &debugcallback;
     // core->api->debugcallback_threaded = &debugcallback_threaded;
@@ -1050,7 +1114,7 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_PrintLogCallbac
   vk_checkComputerSpecs();
 
   // Init systems
-  vk_setQueueFuncPtrs();
+  vk_setQueueFncPtrs();
   vk_createContentManager();
   vk_initRenderer();
   vk_setHelperFuncPtrs();

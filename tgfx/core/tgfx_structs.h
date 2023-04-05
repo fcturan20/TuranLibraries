@@ -60,22 +60,23 @@ typedef struct tgfx_gpu_description {
 typedef struct tgfx_window_description {
   tgfx_uvec2                size;
   monitor_tgfxhnd           monitor;
-  windowmode_tgfx           Mode;
-  const char*               NAME;
-  tgfx_windowResizeCallback ResizeCB;
-  tgfx_windowKeyCallback    keyCB;
+  windowmode_tgfx           mode;
+  const char*               name;
+  tgfx_windowResizeCallback resizeCb;
+  tgfx_windowKeyCallback    keyCb;
 } windowDescription_tgfx;
 
 typedef enum windowpresentation_tgfx windowpresentation_tgfx;
 typedef struct tgfx_swapchain_description {
-  window_tgfxhnd            window;
-  windowpresentation_tgfx   presentationMode;
-  windowcomposition_tgfx    composition;
-  colorspace_tgfx           colorSpace;
-  textureChannels_tgfx      channels;
-  textureUsageMask_tgfxflag swapchainUsage;
-  gpuQueue_tgfxlsthnd       permittedQueues;
-  unsigned int              imageCount;
+  window_tgfxhnd                window;
+  windowpresentation_tgfx       presentationMode;
+  windowcomposition_tgfx        composition;
+  colorspace_tgfx               colorSpace;
+  textureChannels_tgfx          channels;
+  textureUsageMask_tgfxflag     swapchainUsage;
+  unsigned int                  permittedQueueCount;
+  const gpuQueue_tgfxhnd* permittedQueues;
+  unsigned int                  imageCount;
 } swapchainDescription_tgfx;
 
 #define TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT 24
@@ -100,28 +101,32 @@ typedef struct tgfx_sampler_description {
 } samplerDescription_tgfx;
 
 typedef struct tgfx_texture_description {
-  texture_dimensions_tgfx   dimension;
-  unsigned int              width, height;
-  textureChannels_tgfx      channelType;
-  unsigned char             mipCount;
-  textureUsageMask_tgfxflag usage;
-  textureOrder_tgfx         dataOrder;
-  gpuQueue_tgfxlsthnd       permittedQueues;
+  texture_dimensions_tgfx       dimension;
+  unsigned int                  width, height;
+  textureChannels_tgfx          channelType;
+  unsigned char                 mipCount;
+  textureUsageMask_tgfxflag     usage;
+  textureOrder_tgfx             dataOrder;
+  unsigned int                  permittedQueueCount;
+  const gpuQueue_tgfxhnd* permittedQueues;
 } textureDescription_tgfx;
 
 typedef struct tgfx_buffer_description {
-  unsigned int             dataSize;
-  bufferUsageMask_tgfxflag usageFlag;
-  gpuQueue_tgfxlsthnd      permittedQueues;
-  extension_tgfxlsthnd     exts;
+  unsigned int                  dataSize;
+  bufferUsageMask_tgfxflag      usageFlag;
+  unsigned int                  permittedQueueCount;
+  const gpuQueue_tgfxhnd*        permittedQueues;
+  unsigned int                         extCount;
+  const extension_tgfxhnd* exts;
 } bufferDescription_tgfx;
 
 typedef struct tgfx_binding_table_description {
-  shaderdescriptortype_tgfx DescriptorType;
-  unsigned int              ElementCount;
-  shaderStage_tgfxflag      visibleStagesMask;
-  sampler_tgfxlsthnd        SttcSmplrs;
-  unsigned char             isDynamic;
+  shaderdescriptortype_tgfx    DescriptorType;
+  unsigned int                 ElementCount;
+  shaderStage_tgfxflag         visibleStagesMask;
+  unsigned int                 staticSamplerCount;
+  const sampler_tgfxhnd* staticSamplers;
+  unsigned char                isDynamic;
 } bindingTableDescription_tgfx;
 
 #define TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT 8
@@ -196,14 +201,17 @@ typedef struct tgfx_raster_input_assembler_description {
 } rasterInputAssemblerDescription_tgfx;
 
 typedef struct tgfx_raster_pipeline_description {
-  shaderSource_tgfxlsthnd              shaderSourceList;
+  unsigned int                         shaderCount;
+  const shaderSource_tgfxhnd*    shaders;
   rasterInputAssemblerDescription_tgfx attribLayout;
   viewportInfo_tgfx                    viewportList;
   const rasterStateDescription_tgfx*   mainStates;
   textureChannels_tgfx                 colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
-  const bindingTableDescription_tgfx const* tables;
+  const bindingTableDescription_tgfx* tables;
   unsigned int                              tableCount;
   textureChannels_tgfx                      depthStencilTextureFormat;
+  unsigned int                              extCount;
+  const extension_tgfxhnd*      exts;
 } rasterPipelineDescription_tgfx;
 
 typedef struct tgfx_rasterpass_begin_slot_info {

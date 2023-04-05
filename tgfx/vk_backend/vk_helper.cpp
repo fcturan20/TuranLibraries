@@ -22,7 +22,7 @@ static unsigned char vk_getTextureTypeLimits(
   texture_dimensions_tgfx dims, textureOrder_tgfx dataorder, textureChannels_tgfx chnnltype,
   textureUsageMask_tgfxflag usageflag, gpu_tgfxhnd GPUHandle, unsigned int* MAXWIDTH,
   unsigned int* MAXHEIGHT, unsigned int* MAXDEPTH, unsigned int* MAXMIPLEVEL) {
-  GPU_VKOBJ*              GPU = core_vk->getGPUs().getOBJfromHANDLE(GPUHandle);
+  GPU_VKOBJ*              GPU = getOBJ<GPU_VKOBJ>(GPUHandle);
   VkImageFormatProperties props;
   VkImageUsageFlags       flag = vk_findTextureUsageFlagVk(usageflag);
   if (chnnltype == texture_channels_tgfx_D24S8 || chnnltype == texture_channels_tgfx_D32) {
@@ -55,14 +55,12 @@ static unsigned char vk_getTextureTypeLimits(
 
 static void vk_getTextureSupportedMemTypes(texture_tgfxhnd texture,
                                            unsigned int*   SupportedMemoryTypesBitset) {
-  *SupportedMemoryTypesBitset = contentmanager->GETTEXTURES_ARRAY()
-                                  .getOBJfromHANDLE(texture)
-                                  ->m_memReqs.vk_memReqs.memoryTypeBits;
+  *SupportedMemoryTypesBitset = getOBJ<TEXTURE_VKOBJ>(texture)->m_memReqs.vk_memReqs.memoryTypeBits;
 }
 
 // EXTENSION HELPERS
 
-void Destroy_ExtensionData(extension_tgfx_handle ExtensionToDestroy) {}
+void vk_destroyExtData(extension_tgfxhnd ExtensionToDestroy) {}
 
 void vk_setHelperFuncPtrs() {
   core_tgfx_main->helpers->getTextureTypeLimits        = vk_getTextureTypeLimits;

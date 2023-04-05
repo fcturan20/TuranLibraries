@@ -17,57 +17,25 @@
 // OBJECT HANDLES
 ///////////////////////////////////////
 
-typedef struct tgfx_gpu_obj*                gpu_tgfxhnd;
-typedef struct tgfx_window_obj*             window_tgfxhnd;
-typedef struct tgfx_texture_obj*            texture_tgfxhnd;
-typedef struct tgfx_monitor_obj*            monitor_tgfxhnd;
-typedef struct tgfx_rtslotset_obj*          RTSlotset_tgfxhnd;
-typedef struct tgfx_buffer_obj*             buffer_tgfxhnd;
-typedef struct tgfx_samplingtype_obj*       sampler_tgfxhnd;
-typedef struct tgfx_shadersource_obj*       shaderSource_tgfxhnd;
-typedef struct tgfx_inheritedrtslotset_obj* inheritedRTSlotset_tgfxhnd;
-typedef struct tgfx_bindingtable_obj*       bindingTable_tgfxhnd;
-typedef struct tgfx_commandbuffer_obj*      commandBuffer_tgfxhnd;
-typedef struct tgfx_commandbundle_obj*      commandBundle_tgfxhnd;
-typedef struct tgfx_gpuqueue_obj*           gpuQueue_tgfxhnd;
-typedef struct tgfx_subrasterpass_obj*      subRasterpass_tgfxhnd;
-typedef struct tgfx_fence_obj*              fence_tgfxhnd;
-typedef struct tgfx_heap_obj*               heap_tgfxhnd;
-typedef struct tgfx_pipeline_obj*           pipeline_tgfxhnd;
+typedef struct tgfx_gpu_obj*           gpu_tgfxhnd;
+typedef struct tgfx_window_obj*        window_tgfxhnd;
+typedef struct tgfx_texture_obj*       texture_tgfxhnd;
+typedef struct tgfx_monitor_obj*       monitor_tgfxhnd;
+typedef struct tgfx_buffer_obj*        buffer_tgfxhnd;
+typedef struct tgfx_samplingtype_obj*  sampler_tgfxhnd;
+typedef struct tgfx_shadersource_obj*  shaderSource_tgfxhnd;
+typedef struct tgfx_bindingtable_obj*  bindingTable_tgfxhnd;
+typedef struct tgfx_commandbuffer_obj* commandBuffer_tgfxhnd;
+typedef struct tgfx_commandbundle_obj* commandBundle_tgfxhnd;
+typedef struct tgfx_gpuqueue_obj*      gpuQueue_tgfxhnd;
+typedef struct tgfx_fence_obj*         fence_tgfxhnd;
+typedef struct tgfx_heap_obj*          heap_tgfxhnd;
+typedef struct tgfx_pipeline_obj*      pipeline_tgfxhnd;
 
 // DATA HANDLES
 //////////////////////////////////////
 
-typedef struct tgfx_extension_data*         extension_tgfx_handle;
-typedef struct tgfx_rtslotdescription_data* RTSlotDescription_tgfxhnd;
-typedef struct tgfx_rtslotusage_data*       rtslotusage_tgfx_handle;
-typedef struct tgfx_stencilsettings_data*   stencilcnfg_tgfxnd;
-typedef struct tgfx_depthsettings_data*     depthsettings_tgfxhnd;
-typedef struct tgfx_memorytype_data*        memorytype_tgfx_handle;
-typedef struct tgfx_bindingtypeinfo_data*   bindingtypeinfo_tgfx_handle;
-typedef struct tgfx_buffereddrawcall*       buffereddrawcall_tgfx_handle;
-typedef struct tgfx_buffereddispatchcall*   buffereddispatchcall_tgfx_handle;
-
-// LISTS
-//////////////////////////////////////
-
-typedef monitor_tgfxhnd*           monitor_tgfxlsthnd;
-typedef gpu_tgfxhnd*               gpu_tgfxlsthnd;
-typedef extension_tgfx_handle*     extension_tgfxlsthnd;
-typedef RTSlotDescription_tgfxhnd* RTSlotDescription_tgfxlsthnd;
-typedef rtslotusage_tgfx_handle*   RTSlotUsage_tgfxlsthnd;
-typedef memorytype_tgfx_handle*    memorytype_tgfxlsthnd;
-typedef shaderSource_tgfxhnd*      shaderSource_tgfxlsthnd;
-typedef sampler_tgfxhnd*           sampler_tgfxlsthnd;
-typedef bindingTable_tgfxhnd*      bindingTable_tgfxlsthnd;
-typedef commandBuffer_tgfxhnd*     commandBuffer_tgfxlsthnd;
-typedef fence_tgfxhnd*             fence_tgfxlsthnd;
-typedef gpuQueue_tgfxhnd*          gpuQueue_tgfxlsthnd;
-typedef window_tgfxhnd*            window_tgfxlsthnd;
-typedef commandBundle_tgfxhnd*     commandBundle_tgfxlsthnd;
-typedef buffer_tgfxhnd*            buffer_tgfxlsthnd;
-typedef texture_tgfxhnd*           texture_tgfxlsthnd;
-typedef subRasterpass_tgfxhnd*     subRasterpass_tgfxlsthnd;
+typedef struct tgfx_extension_data* extension_tgfxhnd;
 
 // STRUCTS
 /////////////////////////////////////
@@ -108,7 +76,7 @@ typedef enum result_tgfx {
 } result_tgfx;
 
 // Variable Types!
-typedef enum datatype_tgfx{
+typedef enum datatype_tgfx {
   datatype_tgfx_UNDEFINED  = 0,
   datatype_tgfx_VAR_UBYTE8 = 1,
   datatype_tgfx_VAR_BYTE8  = 2,
@@ -123,7 +91,7 @@ typedef enum datatype_tgfx{
   datatype_tgfx_VAR_MAT4x4
 } datatype_tgfx;
 
-typedef enum cubeface_tgfx{
+typedef enum cubeface_tgfx {
   cubeface_tgfx_FRONT = 0,
   cubeface_tgfx_BACK  = 1,
   cubeface_tgfx_LEFT,
@@ -133,7 +101,7 @@ typedef enum cubeface_tgfx{
   cubeface_tgfx_ALL
 } cubeface_tgfx;
 
-typedef enum operationtype_tgfx{
+typedef enum operationtype_tgfx {
   operationtype_tgfx_READ_ONLY,
   operationtype_tgfx_WRITE_ONLY,
   operationtype_tgfx_READ_AND_WRITE,
@@ -160,7 +128,7 @@ typedef enum rasterpassStore_tgfx {
   rasterpassStore_tgfx_NONE
 } rasterpassStore_tgfx;
 
-typedef enum compare_tgfx{
+typedef enum compare_tgfx {
   compare_tgfx_ALWAYS,
   compare_tgfx_NEVER,
   compare_tgfx_LESS,
@@ -169,13 +137,17 @@ typedef enum compare_tgfx{
   compare_tgfx_GEQUAL
 } compare_tgfx;
 
-typedef enum depthmode_tgfx{
+typedef enum depthmode_tgfx {
   depthmode_tgfx_READ_WRITE,
   depthmode_tgfx_READ_ONLY,
   depthmode_tgfx_OFF
 } depthmode_tgfx;
 
-typedef enum cullmode_tgfx{ cullmode_tgfx_OFF, cullmode_tgfx_BACK, cullmode_tgfx_FRONT } cullmode_tgfx;
+typedef enum cullmode_tgfx {
+  cullmode_tgfx_OFF,
+  cullmode_tgfx_BACK,
+  cullmode_tgfx_FRONT
+} cullmode_tgfx;
 
 typedef enum stencilop_tgfx {
   stencilop_tgfx_DONT_CHANGE = 0,
@@ -219,7 +191,7 @@ typedef enum polygonmode_tgfx {
   polygonmode_tgfx_POINT
 } polygonmode_tgfx;
 
-typedef enum vertexlisttypes_tgfx{
+typedef enum vertexlisttypes_tgfx {
   vertexlisttypes_tgfx_TRIANGLELIST,
   vertexlisttypes_tgfx_TRIANGLESTRIP,
   vertexlisttypes_tgfx_LINELIST,
@@ -633,16 +605,21 @@ typedef enum key_tgfx {
   key_tgfx_RIGHT_CONTROL,
   key_tgfx_RIGHT_ALT,
   key_tgfx_RIGHT_SUPER,
-  key_tgfx_MENU
+  key_tgfx_MENU,
+  key_tgfx_MOUSE_LEFT,
+  key_tgfx_MOUSE_MIDDLE,
+  key_tgfx_MOUSE_RIGHT,
+  key_tgfx_MAX_ENUM
 } key_tgfx;
 
 typedef enum key_action_tgfx {
-  keyAction_tgfx_PRESS,
   keyAction_tgfx_RELEASE,
+  keyAction_tgfx_PRESS,
   keyAction_tgfx_REPEAT
 } keyAction_tgfx;
 
 typedef enum key_modifier_tgfx {
+  keyMod_tgfx_NONE,
   keyMod_tgfx_SHIFT,
   keyMod_tgfx_CONTROL,
   keyMod_tgfx_ALT,
@@ -651,12 +628,19 @@ typedef enum key_modifier_tgfx {
   keyMod_tgfx_NUMLOCK
 } keyMod_tgfx;
 
+typedef enum cursor_mode_tgfx {
+  cursorMode_tgfx_NORMAL,
+  cursorMode_tgfx_HIDDEN,
+  cursorMode_tgfx_DISABLED,
+  cursorMode_tgfx_RAW
+} cursorMode_tgfx;
+
 // CALLBACKS
 
-typedef void (*tgfx_windowResizeCallback)(window_tgfxhnd WindowHandle, void* UserPointer,
-                                          unsigned int WIDTH, unsigned int HEIGHT,
-                                          texture_tgfxhnd* SwapchainTextureHandles);
-typedef void (*tgfx_PrintLogCallback)(result_tgfx result, const char* text);
+typedef void (*tgfx_windowResizeCallback)(window_tgfxhnd windowHnd, void* userPtr,
+                                          tgfx_uvec2       resolution,
+                                          texture_tgfxhnd* swapchainTextures);
+typedef void (*tgfx_logCallback)(result_tgfx result, const char* text);
 // @param scanCode: System-specific scan code
 typedef void (*tgfx_windowKeyCallback)(window_tgfxhnd windowHnd, void* userPointer, key_tgfx key,
                                        int scanCode, key_action_tgfx action, keyMod_tgfx mode);

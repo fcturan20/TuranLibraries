@@ -3,11 +3,12 @@
 #include <map>
 
 #include "vk_resource.h"
+#include <stdarg.h>
 
 core_tgfx*             core_tgfx_main    = nullptr;
 core_public*           core_vk           = nullptr;
 renderer_public*       renderer          = nullptr;
-gpudatamanager_public* contentmanager    = nullptr;
+gpudatamanager_public* contentManager    = nullptr;
 imgui_vk*              imgui             = nullptr;
 GPU_VKOBJ*             rendergpu         = nullptr;
 threadingsys_tapi*     threadingsys      = nullptr;
@@ -16,9 +17,10 @@ gpuallocatorsys_vk*    gpu_allocator     = nullptr;
 manager_vk*            queuesys          = nullptr;
 virtualmemorysys_tapi* virmemsys         = nullptr;
 profiler_tapi*         profilerSys       = nullptr;
+bitsetsys_tapi*        bitsetSys         = nullptr;
 VkInstance             VKGLOBAL_INSTANCE = VK_NULL_HANDLE;
 VkApplicationInfo      VKGLOBAL_APPINFO;
-tgfx_PrintLogCallback  printer_cb                   = nullptr;
+tgfx_logCallback  printer_cb                   = nullptr;
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_CURRENTFRAME = nullptr;
 unsigned char          VKGLOBAL_FRAMEINDEX          = 0;
 
@@ -75,9 +77,49 @@ result_tgfx printer(unsigned int error_code) {
   printer_cb(errors[error_code].result, errors[error_code].output);
   return errors[error_code].result;
 }
-result_tgfx printer(result_tgfx r, const char* output) {
-  printer_cb(r, output);
-  return r;
+result_tgfx printer(result_tgfx failResult, const char* format, ...) {
+  static constexpr uint32_t maxLetter = 1 << 12;
+  char    buf[maxLetter] = {};
+
+  va_list args;
+  va_start(args, format);
+
+  int bufIter = 0;
+  uint32_t formatLen = strlen(format);
+  for (uint32_t formatIter = 0; formatIter < formatLen; formatIter++) {
+    if (format[formatIter] == '%' && formatIter + 1 <= formatLen) {
+      formatIter++;
+      if (format[formatIter] == 'd') {
+        int i = va_arg(args, int);
+        snprintf(&buf[bufIter], 4, "%d", i);
+        bufIter += 4;
+      } else if (format[formatIter] == 'c') {
+        // A 'char' variable will be promoted to 'int'
+        // A character literal in C is already 'int' by itself
+        int c        = va_arg(args, int);
+        buf[bufIter] = c;
+        bufIter++;
+      } else if (format[formatIter] == 'f') {
+        double d = va_arg(args, double);
+        snprintf(&buf[bufIter], 8, "%f", d);
+        bufIter += 8;
+      } else if (format[formatIter] == 's') {
+        const char* s      = va_arg(args, const char*);
+        int         strLen = strlen(s);
+        if (strLen <= maxLetter - 1 - bufIter) {
+          memcpy(&buf[bufIter], s, strLen);
+          bufIter += strLen;
+        }
+      }
+    } else {
+      buf[bufIter++] = format[formatIter];
+    }
+  }
+
+  va_end(args);
+
+  printer_cb(failResult, buf);
+  return failResult;
 }
 
 // This is the max element count of the VK_MAIN_ALLOCATOR's list array
@@ -103,42 +145,50 @@ static VK_MAIN_ALLOCATOR* allocator_main;
 std::function<void()> VKGLOBAL_emptyCallback = []() {};
 
 void vk_createBackendAllocator() {
-  VKCONST_VIRMEMSPACE_BEGIN = virmemsys->virtual_reserve(UINT32_MAX);
-  VKCONST_VIRMEMPAGESIZE    = virmemsys->get_pagesize();
-  virmemsys->virtual_commit(VKCONST_VIRMEMSPACE_BEGIN,
-                            VKCONST_VIRMEMPAGESIZE * VKCONST_VIRMEM_MANAGERONLYPAGECOUNT);
-  VKCONST_VIRMEM_MAXALLOCCOUNT =
-    ((VKCONST_VIRMEM_MANAGERONLYPAGECOUNT * VKCONST_VIRMEMPAGESIZE) - sizeof(VK_MAIN_ALLOCATOR)) /
-    sizeof(VK_PAGEINFO);
-  begin_loc = uintptr_t(VKCONST_VIRMEMSPACE_BEGIN);
-
-  VK_MAIN_ALLOCATOR mainalloc;
-  memcpy(VKCONST_VIRMEMSPACE_BEGIN, &mainalloc, sizeof(VK_MAIN_ALLOCATOR));
-
-  allocator_main = ( VK_MAIN_ALLOCATOR* )VKCONST_VIRMEMSPACE_BEGIN;
-  allocator_main->suballocations_list =
-    ( VK_PAGEINFO* )((( char* )allocator_main) + sizeof(VK_MAIN_ALLOCATOR));
-  for (unsigned int i = 0; i < VKCONST_VIRMEM_MAXALLOCCOUNT; i++) {
-    allocator_main->suballocations_list[i] = VK_PAGEINFO();
+  // Allocate enough space for all vulkan backend
+  {
+    VKCONST_VIRMEMSPACE_BEGIN = virmemsys->virtual_reserve(UINT32_MAX);
+    VKCONST_VIRMEMPAGESIZE    = virmemsys->get_pagesize();
+    virmemsys->virtual_commit(VKCONST_VIRMEMSPACE_BEGIN,
+                              VKCONST_VIRMEMPAGESIZE * VKCONST_VIRMEM_MANAGERONLYPAGECOUNT);
+    VKCONST_VIRMEM_MAXALLOCCOUNT =
+      ((VKCONST_VIRMEM_MANAGERONLYPAGECOUNT * VKCONST_VIRMEMPAGESIZE) - sizeof(VK_MAIN_ALLOCATOR)) /
+      sizeof(VK_PAGEINFO);
+    begin_loc = uintptr_t(VKCONST_VIRMEMSPACE_BEGIN);
   }
 
-  // Place INVALIDHANDLE at the end of the memory reservation
-  // So it's less possible to touch the invalid handle with wrong pointer arithmetic in backend
-  // Because backend probably won't use 4GBs of memory
-  core_tgfx_main->INVALIDHANDLE = ( void* )(uintptr_t(allocator_main) + UINT32_MAX + 1);
+
+  // Create main allocator (manages suballocations)
+  {
+    allocator_main  = ( VK_MAIN_ALLOCATOR* )VKCONST_VIRMEMSPACE_BEGIN;
+    VK_MAIN_ALLOCATOR defaultInit;
+    memcpy(allocator_main, &defaultInit, sizeof(VK_MAIN_ALLOCATOR));
+
+    allocator_main = ( VK_MAIN_ALLOCATOR* )VKCONST_VIRMEMSPACE_BEGIN;
+    allocator_main->suballocations_list =
+      ( VK_PAGEINFO* )((( char* )allocator_main) + sizeof(VK_MAIN_ALLOCATOR));
+    for (unsigned int i = 0; i < VKCONST_VIRMEM_MAXALLOCCOUNT; i++) {
+      allocator_main->suballocations_list[i] = VK_PAGEINFO();
+    }
+  }
 
   VKGLOBAL_VIRMEM_CURRENTFRAME = vk_virmem::allocate_dynamicmem(VKCONST_VIRMEM_PERFRAME_PAGECOUNT);
 }
 
 // Returns memory offset from the start of the memory allocation (which is mem ptr)
 uint32_t vk_virmem::allocatePage(uint32_t requestedSize, uint32_t* roundedUpSize) {
-  std::unique_lock<std::mutex> lock(allocator_main->allocation_lock);
-  unsigned int                 alloc_i = 0, page_i = VKCONST_VIRMEM_MANAGERONLYPAGECOUNT;
-  requestedSize += VKCONST_VIRMEMPAGESIZE - (requestedSize % VKCONST_VIRMEMPAGESIZE);
-  if (roundedUpSize) {
-    *roundedUpSize = requestedSize;
+  // Calculate required page size
+  {
+    std::unique_lock<std::mutex> lock(allocator_main->allocation_lock);
+    requestedSize += VKCONST_VIRMEMPAGESIZE - (requestedSize % VKCONST_VIRMEMPAGESIZE);
+    if (roundedUpSize) {
+      *roundedUpSize = requestedSize;
+    }
   }
   uint32_t requestedPageCount = requestedSize / VKCONST_VIRMEMPAGESIZE;
+
+  // Find or create an enough sub-allocation
+  unsigned int alloc_i = 0, page_i = VKCONST_VIRMEM_MANAGERONLYPAGECOUNT;
   while (alloc_i < VKCONST_VIRMEM_MAXALLOCCOUNT - 1) {
     VK_PAGEINFO& current_page = allocator_main->suballocations_list[alloc_i];
     if (current_page.isALIVE) {
@@ -153,8 +203,8 @@ uint32_t vk_virmem::allocatePage(uint32_t requestedSize, uint32_t* roundedUpSize
     VK_PAGEINFO& nextpage = allocator_main->suballocations_list[alloc_i + 1];
     if (current_page.PAGECOUNT >= requestedPageCount) {
       if (!nextpage.isALIVE && nextpage.isMERGED && current_page.PAGECOUNT - requestedPageCount) {
-        nextpage.isMERGED      = false;
-        nextpage.PAGECOUNT     = current_page.PAGECOUNT - requestedPageCount;
+        nextpage.isMERGED  = false;
+        nextpage.PAGECOUNT = current_page.PAGECOUNT - requestedPageCount;
       }
       current_page.PAGECOUNT = requestedPageCount;
       current_page.isALIVE   = true;
@@ -198,11 +248,10 @@ void vk_virmem::free_page(uint32_t suballocation_startoffset) {
     search_alloc_i++;
   }
   VK_PAGEINFO& alloc = allocator_main->suballocations_list[search_alloc_i];
-  void* free_address =
+  void*        free_address =
     ( void* )((VKCONST_VIRMEMPAGESIZE * page_i) + uintptr_t(VKCONST_VIRMEMSPACE_BEGIN));
-  virmemsys->virtual_decommit(
-    free_address, VKCONST_VIRMEMPAGESIZE * alloc.PAGECOUNT);
-  alloc.isALIVE = false;
+  virmemsys->virtual_decommit(free_address, VKCONST_VIRMEMPAGESIZE * alloc.PAGECOUNT);
+  alloc.isALIVE  = false;
   alloc.isMERGED = false;
 }
 struct vk_virmem::dynamicmem {
@@ -250,7 +299,7 @@ uint32_t vk_virmem::allocate_from_dynamicmem(dynamicmem* mem, uint32_t size, boo
   }
 #endif
   uintptr_t loc_of_base_mem = uintptr_t(mem);
-  uintptr_t location = (loc_of_base_mem + sizeof(dynamicmem) + mem->all_space - remaining);
+  uintptr_t location        = (loc_of_base_mem + sizeof(dynamicmem) + mem->all_space - remaining);
   if (shouldcommit) {
     virmemsys->virtual_commit(( void* )location, size);
   }
@@ -269,6 +318,7 @@ void pNext_addToLast(void* targetStruct, void* attachStruct) {
   }
   *target_pNext = attachStruct;
 }
+/*
 void* operator new(size_t size) {
   printer(result_tgfx_FAIL, "Default new() operator shouldn't be called by backend");
   assert_vk(0);
@@ -278,7 +328,7 @@ void* operator new[](size_t size) {
   printer(result_tgfx_FAIL, "Default new() operator shouldn't be called by backend");
   assert_vk(0);
   return nullptr;
-}
+}*/
 void* operator new(size_t size, vk_virmem::dynamicmem* mem) {
   return VK_ALLOCATE_AND_GETPTR(mem, size);
 }

@@ -10,14 +10,13 @@ typedef struct tgfx_core {
   gpudatamanager_tgfx* contentmanager;
   helper_tgfx*         helpers;
 
-  // Invalid handle is used to terminate array of i/o.
-  //	NULL is used to say i/o is a failed handle and ignored if possible.
-  void* INVALIDHANDLE;
-
-  result_tgfx (*load_backend)(tgfx_core* parent, backends_tgfx backend,
-                              tgfx_PrintLogCallback printFnc);
+  result_tgfx (*load_backend)(tgfx_core* parent, backends_tgfx backend, tgfx_logCallback printFnc);
   // Don't use the GPU to create object/resources before init
   result_tgfx (*initGPU)(gpu_tgfxhnd gpu);
+  void (*getGPUlist)(unsigned int* gpuCount, gpu_tgfxhnd* gpuList);
+
+  ////////////// DISPLAY/WINDOWING FUNCTIONALITY
+
   // Also create a supported swapchain with create_swapchain() to use the window
   // Create a new swapchain in the callback too
   void (*createWindow)(const windowDescription_tgfx* desc, void* user, window_tgfxhnd* window);
@@ -25,20 +24,20 @@ typedef struct tgfx_core {
   result_tgfx (*createSwapchain)(gpu_tgfxhnd gpu, const tgfx_swapchain_description* desc,
                                  texture_tgfxhnd* textures);
   result_tgfx (*getCurrentSwapchainTextureIndex)(window_tgfxhnd window, unsigned int* index);
-  void (*change_window_resolution)(window_tgfxhnd WindowHandle, unsigned int width,
-                                   unsigned int height);
-  void (*getmonitorlist)(monitor_tgfxlsthnd* MonitorList);
-  void (*getGPUlist)(gpu_tgfxlsthnd* GpuList);
-
-  // Debug callbacks are user defined callbacks (optional)
-  // As default, all backends set them as empty no-work functions
-  void (*debugcallback)(result_tgfx result, const char* Text);
-  // You can set this if TGFX is started with threaded call
-  void (*debugcallback_threaded)(unsigned char ThreadIndex, result_tgfx Result, const char* Text);
+  // If count is zero, list isn't touched (count is used to return value).
+  // If count is equal to returned value, list is filled.
+  void (*getMonitorList)(unsigned int* monitorCount, monitor_tgfxhnd* monitorList);
+  void (*changeWindowResolution)(window_tgfxhnd WindowHandle, unsigned int width,
+                                 unsigned int height);
   void (*takeInputs)();
+  tgfx_vec2 (*getCursorPos)(window_tgfxhnd windowHnd);
+  void (*setInputMode)(window_tgfxhnd windowHnd, cursorMode_tgfx cursorMode, unsigned char stickyKeys,
+                       unsigned char stickyMouseButtons, unsigned char lockKeyMods);
+
+  /////////////
 
   // Destroy all resources created by GFX API systems
-  void (*destroy_tgfx_resources)();
+  void (*destroy)();
 } core_tgfx;
 
 // This is for backend to implement
@@ -48,16 +47,10 @@ typedef struct tgfx_core_type {
   core_tgfx*   api;
 } core_tgfx_type;
 
-#define TGFXLISTCOUNT(gfxcoreptr, listobj, countername)                  \
-  unsigned int countername = 0;                                          \
-  while (listobj && listobj[countername] != gfxcoreptr->INVALIDHANDLE) { \
-    countername++;                                                       \
-  }
-
 typedef struct tapi_ecs ecs_tapi;
 // This function should be exported by the backend dll
 typedef result_tgfx (*backend_load_func)(ecs_tapi* regsys, core_tgfx_type* core,
-                                         tgfx_PrintLogCallback printcallback);
+                                         tgfx_logCallback printcallback);
 #define TGFX_BACKEND_ENTRY()                                                        \
   FUNC_DLIB_EXPORT result_tgfx BACKEND_LOAD(ecs_tapi* ecsSys, core_tgfx_type* core, \
-                                            tgfx_PrintLogCallback printCallback)
+                                            tgfx_logCallback printCallback)

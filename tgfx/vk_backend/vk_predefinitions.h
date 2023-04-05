@@ -3,6 +3,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <assert.h>
+#include <bitset_tapi.h>
 #include <stdint.h>
 #include <tgfx_core.h>
 #include <tgfx_forwarddeclarations.h>
@@ -13,6 +14,8 @@
 #include <limits>
 #include <mutex>
 #include <stdexcept>
+#include <string>
+#include <type_traits>
 
 // NAMING RULES:
 // 1) Variables directly passed to Vulkan should have "vk_" prefix
@@ -30,7 +33,9 @@ extern core_public* core_vk;
 struct renderer_public;
 extern renderer_public* renderer;
 struct gpudatamanager_public;
-extern gpudatamanager_public* contentmanager;
+extern gpudatamanager_public* contentManager;
+struct manager_vk;
+extern manager_vk* manager;
 struct imgui_vk;
 extern imgui_vk* imgui;
 struct GPU_VKOBJ;
@@ -43,10 +48,11 @@ extern gpuallocatorsys_vk*    gpu_allocator;
 extern virtualmemorysys_tapi* virmemsys;
 typedef struct profiler_tapi  profiler_tapi;
 extern profiler_tapi*         profilerSys;
+extern bitsetsys_tapi*        bitsetSys;
 
 result_tgfx                  printer(unsigned int error_code);
-result_tgfx                  printer(result_tgfx failresult, const char* output);
-extern tgfx_PrintLogCallback printer_cb;
+result_tgfx                  printer(result_tgfx failResult, const char* format, ...);
+extern tgfx_logCallback printer_cb;
 
 // <------------------------------------------------------------------------------------>
 //		Forward Declarations
@@ -78,7 +84,8 @@ inline bool ThrowIfFailed(VkResult func, const char* errorstring,
     return true;
   }
   if (func != VK_SUCCESS) {
-    printer(returnTGFXResult, errorstring);
+    printer(returnTGFXResult, (errorstring + std::to_string(func)).c_str());
+    _sleep(1000000);
   }
 #else
   if (func != VK_SUCCESS) {
@@ -134,12 +141,10 @@ void pNext_addToLast(void* targetStruct, void* attachStruct);
 #define vk_uint8c static constexpr uint8_t
 // User can pass lots of descriptor sets in a list, this defines the max size
 vk_uint32c VKCONST_MAXDESCSET_PERLIST          = 12;
-vk_uint32c VKCONST_MAXWINDOWCOUNT              = 16;
 vk_uint32c VKCONST_MAXVIEWPORTCOUNT            = 16;
 vk_uint32c VKCONST_MAXGPUCOUNT                 = 4;
 vk_uint32c VKCONST_MAXRTSLOTCOUNT              = 16;
-vk_uint32c VKCONST_MAXCMDBUFFERCOUNT_PERSUBMIT = 16;
-vk_uint32c VKCONST_MAXQUEUEFAMCOUNT_PERGPU = 5, VKCONST_MAXQUEUECOUNT_PERFAM = 16;
+vk_uint32c VKCONST_MAXQUEUEFAMCOUNT_PERGPU     = 5;
 vk_uint32c VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT = 16;
 vk_uint32c VKCONST_MAXSWPCHNCOUNT_PERSUBMIT    = 8; // Max count of swapchain count per submit
 
@@ -147,7 +152,7 @@ vk_uint32c VKCONST_MAXSWPCHNCOUNT_PERSUBMIT    = 8; // Max count of swapchain co
 
 vk_uint32c VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW = 4;
 // Memory manager reserves some of the first virtual memory pages for its own use
-vk_uint8c  VKCONST_VIRMEM_MANAGERONLYPAGECOUNT = 2;
+vk_uint8c  VKCONST_VIRMEM_MANAGERONLYPAGECOUNT = 16;
 vk_uint32c VKCONST_VIRMEM_PERFRAME_PAGECOUNT =
   1 << 16; // Define how many pages will be allocated per frame for dynamic memory
 extern void*    VKCONST_VIRMEMSPACE_BEGIN;
@@ -190,8 +195,8 @@ class vk_virmem {
 // This will be changed every frame but named as const to find easily
 extern vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_CURRENTFRAME;
 
-void* operator new(size_t size);
-void* operator new[](size_t size);
+// void* operator new(size_t size);
+// void* operator new[](size_t size);
 void* operator new(size_t size, vk_virmem::dynamicmem* mem);
 void* operator new[](size_t size, vk_virmem::dynamicmem* mem);
 
@@ -250,6 +255,49 @@ static_assert(
   "VKDATAHANDLE class is used to return handles to the user and it's assumed to have the size of a "
   "pointer. Please fix all VKDATAHANDLE funcs/enums to match your pointer size!");
 
+#define VK_USE_STD
+
+#ifdef VK_USE_STD
+#include <vector>
+template <typename T, typename TGFXHND, unsigned int max_object_count = 1 << 20>
+class VK_LINEAR_OBJARRAY {
+  static_assert(T::HANDLETYPE != VKHANDLETYPEs::UNDEFINED, "VKOBJ's type shouldn't be UNDEFINED");
+  const unsigned int elementCountPerPage() { return VKCONST_VIRMEMPAGESIZE / sizeof(T); }
+  std::vector<T*>    data;
+
+ public:
+  VK_LINEAR_OBJARRAY() {}
+  T* create_OBJ() {
+    T* o = new T;
+    data.push_back(o);
+    return o;
+  }
+  void destroyObj(unsigned int objIndx) {
+    T* o = data[objIndx];
+    delete o;
+    data.erase(data.begin() + objIndx);
+  }
+  bool isValid(T* obj) {
+    for (T* o : data) {
+      if (obj == o) {
+        return true;
+      }
+    }
+    return false;
+  }
+  unsigned int size() const { return data.size(); }
+  T*           getOBJbyINDEX(unsigned int i) { return (isValid(data[i])) ? (data[i]) : (NULL); }
+  T*           operator[](unsigned int index) { return getOBJbyINDEX(index); }
+  uint32_t     getINDEXbyOBJ(T* obj) {
+    for (uint32_t i = 0; i < data.size(); i++) {
+      if (data[i] == obj) {
+        return i;
+      }
+    }
+    return UINT32_MAX;
+  }
+};
+#else
 // Give a non-committed memory region's pointer while starting or let it handle all allocations
 // Backend should allocate all of the objects that will be returned to the user here
 // Backend also can use this to for non-returned objects (which backend uses internally and no other
@@ -260,283 +308,156 @@ static_assert(
 // create objects in holes between alive elements Linked lists are managed at the end of every frame
 template <typename T, typename TGFXHND, unsigned int max_object_count = 1 << 20>
 class VK_LINEAR_OBJARRAY {
-  static_assert(sizeof(T) >= 9,
-                "VK_LINEAR_OBJARRAY places previous and next free object's index if the object is "
-                "deleted, so VKOBJ struct should have at least 9 bytes");
   static_assert(T::HANDLETYPE != VKHANDLETYPEs::UNDEFINED, "VKOBJ's type shouldn't be UNDEFINED");
-  static constexpr unsigned int ELEMENTCOUNT_PERPAGE =
-    (1 << 12) / sizeof(T); // It is assumed that page size is 4KB
-  T*                   data                = NULL;
-  uint32_t             OBJCOUNT            = max_object_count;
-  std::atomic_uint32_t REMAINING_OBJ_COUNT = 0, MAX_OBJECT_INDEX = 0, LAST_FREED_ELEMENT = 0;
-  inline void          link_two_frees(uint32_t previous_element_i, uint32_t next_element_i) {
-             std::atomic_uint32_t* nextatomic_of_previous_one = (( char* )&data[previous_element_i]) + 5;
-             std::atomic_uint32_t* previousatomic_of_next_one = (( char* )&data[next_element_i]) + 1;
-             nextatomic_of_previous_one->store(next_element_i);
-             previousatomic_of_next_one->store(previous_element_i);
+  const unsigned int elementCountPerPage() { return VKCONST_VIRMEMPAGESIZE / sizeof(T); }
+  T* data = nullptr;
+  // Active Object -> 1, Free Object -> 0
+  bitset_tapi* bitset = nullptr;
+  std::atomic_uint32_t maxObjIndx = 0;
+  void commitNewPage() {
+    uint32_t elementIndx = maxObjIndx.fetch_add(elementCountPerPage());
+    virmemsys->virtual_commit(&data[elementIndx], VKCONST_VIRMEMPAGESIZE);
   }
+  unsigned int getFreeBit(int8_t* bitset) { return bitsetSys->getFirstBitIndx(bitset, true); }
 
  public:
-  // Give a reserved space for the array
-  // Don't default initialize objects, because space is not committed
-  VK_LINEAR_OBJARRAY(uint32_t datastart, uint32_t max_objects_count) {
-    OBJCOUNT = (max_objects_count % ELEMENTCOUNT_PERPAGE)
-      ? (max_objects_count + ELEMENTCOUNT_PERPAGE - (max_objects_count % ELEMENTCOUNT_PERPAGE));
-    data = ( T* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + datastart);
-    virmemsys->virtual_commit(data, VKCONST_VIRMEMPAGESIZE);
-    REMAINING_OBJ_COUNT.store(OBJCOUNT);
-  }
-  // Give a reserved space for the array
-  // Don't default initialize objects, because space is not committed
-  VK_LINEAR_OBJARRAY(uint32_t datastart) {
-    OBJCOUNT = (max_object_count % ELEMENTCOUNT_PERPAGE)
-      ? (max_object_count + ELEMENTCOUNT_PERPAGE - (max_object_count % ELEMENTCOUNT_PERPAGE));
-    data = ( T* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + datastart);
-    virmemsys->virtual_commit(data, VKCONST_VIRMEMPAGESIZE);
-    REMAINING_OBJ_COUNT.store(OBJCOUNT);
-  }
   // Allocate enough pages from main allocator directly
   // Don't default initialize objects, because space is not committed
   VK_LINEAR_OBJARRAY() {
-    OBJCOUNT =
-      (max_object_count % ELEMENTCOUNT_PERPAGE)
-        ? (max_object_count + ELEMENTCOUNT_PERPAGE - (max_object_count % ELEMENTCOUNT_PERPAGE))
-        : (max_object_count);
     data = ( T* )VK_MEMOFFSET_TO_POINTER(
-      vk_virmem::allocatePage((OBJCOUNT * sizeof(T) / VKCONST_VIRMEMPAGESIZE) + 1));
-    virmemsys->virtual_commit(data, VKCONST_VIRMEMPAGESIZE);
-    REMAINING_OBJ_COUNT.store(OBJCOUNT);
-  }
-  VK_LINEAR_OBJARRAY<T, TGFXHND, max_object_count>& operator=(
-    const VK_LINEAR_OBJARRAY<T, TGFXHND, max_object_count>& copyFrom) {
-    data     = copyFrom.data;
-    OBJCOUNT = copyFrom.OBJCOUNT;
-    REMAINING_OBJ_COUNT.store(copyFrom.REMAINING_OBJ_COUNT.load());
-    MAX_OBJECT_INDEX.store(REMAINING_OBJ_COUNT.load());
-    LAST_FREED_ELEMENT.store(copyFrom.LAST_FREED_ELEMENT.load());
+      vk_virmem::allocatePage((max_object_count * sizeof(T) / VKCONST_VIRMEMPAGESIZE) + 1));
+    bitset = bitsetSys->createBitset((max_object_count / 8) + 1);
+    assert(sizeof(T) <= VKCONST_VIRMEMPAGESIZE && "Size of the struct is bigger than page size");
+    commitNewPage();
   }
   T* create_OBJ() {
-    if (MAX_OBJECT_INDEX.load() % ELEMENTCOUNT_PERPAGE == ELEMENTCOUNT_PERPAGE - 1) {
-      virmemsys->virtual_commit(&data[MAX_OBJECT_INDEX.load()], VKCONST_VIRMEMPAGESIZE);
+    uint32_t bitIndx = bitsetSys->getFirstBitIndx(bitset, false);
+    bitsetSys->setBit(bitset, bitIndx, true);
+    if (bitIndx >= maxObjIndx.load()) {
+      commitNewPage();
     }
-    if (MAX_OBJECT_INDEX.load() != OBJCOUNT) {
-      unsigned int i  = MAX_OBJECT_INDEX.fetch_add(1);
-      data[i].isALIVE = true;
-      return &data[i];
-    }
-    printer(result_tgfx_FAIL, "Reaching the VK_LINEAR_OBJARRAY limit isn't supported for now!");
-    return nullptr;
+    return &data[bitIndx];
   }
-  void destroyOBJfromHANDLE(TGFXHND hnd) { getOBJfromHANDLE(hnd)->isALIVE = (0); }
-  T*   getOBJfromHANDLE(TGFXHND hnd) {
-      VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
-#ifdef VULKAN_DEBUGGING
-    if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX ||
-        (handle.OBJ_memoffset + uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) - uintptr_t(data)) %
-          (sizeof(T)) ||
-        ( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) < data ||
-        ( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) > data + OBJCOUNT) {
-      printer(result_tgfx_FAIL,
-              "Given handle is invalid! You probably used a invalid arithmetic/write operations on "
-              "the handle");
-      return NULL;
-    }
-#endif
-    T* obj = ( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset);
-#ifdef VULKAN_DEBUGGING
-    if (!obj->isALIVE) {
-      printer(result_tgfx_FAIL,
-              "Given handle is probably deleted but you try to use it anyway, so please check your "
-              "handle lifetimes!");
-      return NULL;
-    }
-#endif
-    return obj;
+  void destroyObj(unsigned int objIndx) {
+    bitsetSys->setBit(bitset, objIndx, false);
+    data[objIndx] = {};
   }
-  TGFXHND returnHANDLEfromOBJ(T* obj) {
-    VKOBJHANDLE handle;
-    handle.type          = T::HANDLETYPE;
-    handle.OBJ_memoffset = uintptr_t(obj) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN);
-    handle.EXTRA_FLAGs   = T::GET_EXTRAFLAGS(obj);
-    return *( TGFXHND* )&handle;
-  }
-  unsigned int size() const { return MAX_OBJECT_INDEX.load(); }
-  T*           getOBJbyINDEX(unsigned int i) { return (data[i].isALIVE) ? (&data[i]) : (NULL); }
-  T*           operator[](unsigned int index) { return getOBJbyINDEX(index); }
-  uint32_t     getINDEXbyOBJ(T* obj) {
-        uint32_t offset = (uintptr_t(obj) - uintptr_t(data));
-#ifdef VULKAN_DEBUGGING
-    if (offset % sizeof(T)) {
-      return UINT32_MAX;
-    }
-#endif
-    return offset / sizeof(T);
-  }
-};
-
-// Use this for structs that won't add new-delete elements frequently and small list
-// It is recommended to not use fancy constructors or assignment operators on the template class
-template <typename T, typename TGFXHND, uint16_t maxelementcount>
-class VK_STATICVECTOR {
-  T                    datas[maxelementcount]{};
-  std::atomic_uint16_t currentelement_i = 0;
-
- public:
-  // Returns the index of the object
-  unsigned int push_back(const T& obj) {
-    T* newObj = add();
-    *newObj   = obj;
-    return getINDEX_byOBJ(newObj);
-  }
-  T* operator[](unsigned int i) {
-#ifdef VULKAN_DEBUGGING
-    if (i >= currentelement_i.load()) {
-      printer(result_tgfx_FAIL, "There is no such element in the VK_VECTOR!");
-    }
-#endif
-    return &datas[i];
-  }
-  const T* operator[](unsigned int i) const {
-#ifdef VULKAN_DEBUGGING
-    if (i >= currentelement_i.load()) {
-      printer(result_tgfx_FAIL, "There is no such element in the VK_VECTOR!");
-    }
-#endif
-    return &datas[i];
-  }
-  const T* get(unsigned int i) const { return (*this)[i]; }
-  T*       data() { return datas; }
-  void     erase(int i) {
-#ifdef VULKAN_DEBUGGING
-    if (i >= currentelement_i.load()) {
-      printer(result_tgfx_FAIL, "There is no such element in the VK_VECTOR!");
-    }
-#endif
-    memmove(&datas[i], &datas[i + 1], sizeof(T) * (currentelement_i.fetch_sub(1) - 1 - i));
-  }
-  void clear() {
-    currentelement_i.store(0);
-    for (uint32_t i = 0; i < maxelementcount; i++) {
-      datas[i] = T();
-    }
-  }
-  unsigned int                  size() const { return currentelement_i.load(); }
-  static constexpr unsigned int capacity() { return maxelementcount; }
-
-  T* getOBJfromHANDLE(TGFXHND hnd) {
-    VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
-#ifdef VULKAN_DEBUGGING
-    if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX) {
-      printer(result_tgfx_FAIL,
-              "Given handle type isn't matching! You probably used a invalid arithmetic/write "
-              "operations on the handle");
-      return NULL;
-    }
-    if ((handle.OBJ_memoffset - (uintptr_t(datas) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN))) %
-        (sizeof(T))) {
+  bool isValid(T* obj) {
+    uintptr_t objINT = uintptr_t(obj), dataINT = uintptr_t(data);
+    if (objINT < dataINT || (objINT - dataINT) % sizeof(T) ||
+        objINT >= dataINT + (sizeof(T) * maxObjIndx.load())) {
       printer(result_tgfx_FAIL,
               "Given handle doesn't align with other elements in the array! You probably used a "
               "invalid arithmetic/write operations on the handle");
-      return NULL;
+      return false;
     }
-    if (( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) < datas ||
-        ( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset) >
-          datas + currentelement_i.load()) {
-      printer(result_tgfx_FAIL,
-              "Given handle isn't in array range! You probably used a invalid arithmetic/write "
-              "operations on the handle");
-      return NULL;
+    uint32_t indx = getINDEXbyOBJ(obj);
+    // Check if object is active
+    if (bitsetSys->getBitValue(bitset, indx) == 1) {
+      return true;
     }
-#endif
-    T* obj = ( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset);
-#ifdef VULKAN_DEBUGGING
-    if (!obj->isALIVE) {
-      printer(result_tgfx_FAIL,
-              "Given handle is probably deleted but you try to use it anyway, so please check your "
-              "handle lifetimes!");
-      return NULL;
-    }
-#endif
-    return obj;
+    return false;
   }
-  TGFXHND returnHANDLEfromOBJ(T* obj) const {
-    VKOBJHANDLE handle;
-    handle.type          = T::HANDLETYPE;
-    handle.OBJ_memoffset = uintptr_t(obj) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN);
-    handle.EXTRA_FLAGs   = T::GET_EXTRAFLAGS(obj);
-    return *( TGFXHND* )&handle;
-  }
-  uint32_t getINDEX_byOBJ(T* obj) { return uintptr_t(obj - datas); }
-
-  T* add() {
-    uint32_t indx = currentelement_i.fetch_add(1);
-    assert_vk(indx != maxelementcount && "Static vector is exceeded!");
-    T* added = (*this)[indx];
-    if constexpr (!std::is_pointer_v<T>) {
-      added->isALIVE = true;
-    }
-    return added;
-  }
-  TGFXHND* returnHANDLELIST() {
-    uint32_t listSize = size();
-    TGFXHND* list     = new (VKGLOBAL_VIRMEM_CURRENTFRAME) TGFXHND[listSize + 1];
-    for (uint32_t i = 0; i < size(); i++) {
-      list[i] = returnHANDLEfromOBJ((*this)[i]);
-    }
-    list[listSize] = ( TGFXHND )core_tgfx_main->INVALIDHANDLE;
-    return list;
+  unsigned int size() const { return maxObjIndx.load(); }
+  T* getOBJbyINDEX(unsigned int i) { return (isValid(&data[i])) ? (&data[i]) : (NULL); }
+  T* operator[](unsigned int index) { return getOBJbyINDEX(index); }
+  uint32_t getINDEXbyOBJ(T* obj) {
+    uintptr_t offset = uintptr_t(obj) - uintptr_t(data);
+    return offset / sizeof(T);
   }
 };
+#endif
 
-// This is to store render commands
-// So there is no erase, just clear all of the buffer
-template <typename T, uint32_t maxelementcount>
-class VK_VECTOR_ADDONLY {
-  uint32_t               PTR;
-  std::atomic_uint32_t   currentcmd_i  = 0;
-  vk_virmem::dynamicmem* dynamicmemptr = nullptr;
+template <typename T, typename TGFXHND>
+T* getOBJ(TGFXHND hnd) {
+#ifdef VK_USE_STD
+  return ( T* )hnd;
+  #else
+  VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
+#ifdef VULKAN_DEBUGGING
+  if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX ||
+      handle.OBJ_memoffset == 0) {
+    printer(result_tgfx_FAIL,
+            "Given handle type isn't matching! You probably used a invalid arithmetic/write "
+            "operations on the handle");
+    return NULL;
+  }
+#endif
+  return ( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset);
+  #endif
+}
+
+template <typename TGFXHND, typename T>
+TGFXHND getHANDLE(T* obj) {
+  #ifdef VK_USE_STD
+  return ( TGFXHND )obj;
+  #else
+  VKOBJHANDLE handle   = {};
+  handle.type          = T::HANDLETYPE;
+  handle.OBJ_memoffset = uintptr_t(obj) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN);
+  if constexpr (std::is_function<typename std::remove_pointer<T>::type>::value) {
+    handle.EXTRA_FLAGs = T::GET_EXTRAFLAGS(obj);
+  }
+  return *( TGFXHND* )&handle;
+  #endif
+}
+
+#ifdef VK_USE_STD
+template <typename T, typename TGFXHND>
+class VK_ARRAY {
+  std::vector<T> data;
 
  public:
-  VK_VECTOR_ADDONLY() {
-    dynamicmemptr =
-      vk_virmem::allocate_dynamicmem((maxelementcount * sizeof(T)) / VKCONST_VIRMEMPAGESIZE, &PTR);
-    virmemsys->virtual_commit(dynamicmemptr, VKCONST_VIRMEMPAGESIZE);
-  }
-  inline const VK_VECTOR_ADDONLY<T, maxelementcount>& operator=(
-    const VK_VECTOR_ADDONLY<T, maxelementcount>& copyFrom) {
-    PTR = copyFrom.PTR;
-    currentcmd_i.store(copyFrom.currentcmd_i.load());
-    dynamicmemptr = copyFrom.dynamicmemptr;
-    return *this;
-  }
-  void push_back(const T& obj) {
-    uint32_t cmd_i = currentcmd_i.load();
-    if (cmd_i % (VKCONST_VIRMEMPAGESIZE / sizeof(T))) {
-      virmemsys->virtual_commit((( char* )dynamicmemptr) + (sizeof(T) * cmd_i),
-                                VKCONST_VIRMEMPAGESIZE);
+  bool isValid(T* obj) const {
+    for (uint32_t i = 0; i < data.size(); i++) {
+      if (&data[i] == obj) {
+        return true;
+      }
     }
-    T* data     = ( T* )VK_MEMOFFSET_TO_POINTER(PTR);
-    data[cmd_i] = obj;
+    return false;
   }
-  void clear() {
-    virmemsys->virtual_decommit(VK_MEMOFFSET_TO_POINTER(PTR), currentcmd_i * sizeof(T));
-    currentcmd_i = 0;
-    virmemsys->virtual_commit(VK_MEMOFFSET_TO_POINTER(PTR), VKCONST_VIRMEMPAGESIZE);
+  void init(uint32_t size) {
+    data.resize(size);
   }
-  // This function doesn't allocate new memory, just increments currentcmd_i
-  void resize(uint32_t newsize) {
-#ifdef VULKAN_DEBUGGING
-    if (newsize > maxelementcount) {
-      printer(result_tgfx_NOTCODED,
-              "VK_VECTOR_ADDONLY doesn't allocate new memory but you're trying it!");
-    }
-#endif
-    virmemsys->virtual_commit(dynamicmemptr, (newsize * sizeof(T)));
-    currentcmd_i.store(newsize);
+  void     init(T* i_data, uint32_t size) {
+    data = std::vector<T>(i_data, i_data + size);
   }
-  T&       operator[](uint32_t i) { return (( T* )VK_MEMOFFSET_TO_POINTER(PTR))[i]; }
-  uint32_t size() { return currentcmd_i.load(); }
+  T*       operator[](uint32_t i) { return &data[i]; }
+  const T* operator[](uint32_t i) const { return &data[i]; }
+  uint32_t size() const { return data.size(); }
 };
+#else
+template <typename T, typename TGFXHND>
+class VK_ARRAY {
+  T*             data;
+  uint32_t       count;
+
+ public:
+  bool isValid(T* obj) const {
+    uintptr_t objINT = uintptr_t(obj), dataINT = uintptr_t(data);
+    if (objINT < dataINT || (objINT - dataINT) % sizeof(T) ||
+        objINT >= dataINT + (sizeof(T) * count)) {
+      printer(result_tgfx_FAIL,
+              "Given handle doesn't align with other elements in the array! You probably used a "
+              "invalid arithmetic/write operations on the handle");
+      return false;
+    }
+    return true;
+  }
+  void init(uint32_t size) {
+    data = ( T* )VK_MEMOFFSET_TO_POINTER(vk_virmem::allocatePage(sizeof(T) * size));
+    virmemsys->virtual_commit(data, sizeof(T) * size);
+    count = size;
+  }
+  void init(T* i_data, uint32_t size) {
+    data  = i_data;
+    count = size;
+  }
+  T*       operator[](uint32_t i) { return &data[i]; }
+  const T* operator[](uint32_t i) const { return &data[i]; }
+  uint32_t size() const { return count; }
+};
+#endif
 
 //--------------------------------------------------------------------------------------
 //	VKOBJECT TUTORIAL:

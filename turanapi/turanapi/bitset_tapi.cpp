@@ -4,23 +4,23 @@
 
 #include "ecs_tapi.h"
 
-typedef struct tapi_bitset {
+struct tapi_bitset {
   bool*        m_array;
   unsigned int m_byteLength;
-} bitset_tapi;
+};
 
-bitset_tapi* tapi_createBitset(unsigned int byteLength) {
-  bitset_tapi* bitset = ( bitset_tapi* )malloc(sizeof(bitset_tapi) + (sizeof(bool) * byteLength));
+bitset_tapi tapi_createBitset(unsigned int byteLength) {
+  bitset_tapi bitset = ( bitset_tapi )malloc(sizeof(bitset_tapi) + (sizeof(bool) * byteLength));
   bitset->m_array     = ( bool* )(bitset + 1);
   memset(bitset->m_array, 0, byteLength);
   bitset->m_byteLength = byteLength;
-  return ( bitset_tapi* )bitset;
+  return bitset;
 }
-void tapi_destroyBitset(bitset_tapi* hnd) {
-  bitset_tapi* bitset = ( bitset_tapi* )hnd;
+void tapi_destroyBitset(bitset_tapi hnd) {
+  bitset_tapi bitset = ( bitset_tapi )hnd;
   free(bitset);
 }
-void tapi_setBit(bitset_tapi* set, unsigned int index, unsigned char setTrue) {
+void tapi_setBit(bitset_tapi set, unsigned int index, unsigned char setTrue) {
   if (index / 8 > set->m_byteLength - 1) {
     std::cout << "There is no such bit, maximum bit index: " << (set->m_byteLength * 8) - 1
               << std::endl;
@@ -43,7 +43,7 @@ void tapi_setBit(bitset_tapi* set, unsigned int index, unsigned char setTrue) {
     }
   }
 }
-unsigned char tapi_getBitValue(const bitset_tapi* set, unsigned int index) {
+unsigned char tapi_getBitValue(const bitset_tapi set, unsigned int index) {
   unsigned char byte     = ((unsigned char* )set->m_array)[index / 8];
   unsigned char bitindex = (index % 8);
   if (byte & (1 << bitindex)) {
@@ -51,8 +51,8 @@ unsigned char tapi_getBitValue(const bitset_tapi* set, unsigned int index) {
   }
   return false;
 }
-unsigned int tapi_getByteLength(const bitset_tapi* set) { return set->m_byteLength; }
-unsigned int tapi_getFirstBitIndx(const bitset_tapi* set, unsigned char findTrue) {
+unsigned int tapi_getByteLength(const bitset_tapi set) { return set->m_byteLength; }
+unsigned int tapi_getFirstBitIndx(const bitset_tapi set, unsigned char findTrue) {
   if (findTrue) {
     unsigned int byteindex = 0;
     for (unsigned int byte_value = 0; byte_value == 0; byteindex++) {
@@ -81,10 +81,10 @@ unsigned int tapi_getFirstBitIndx(const bitset_tapi* set, unsigned char findTrue
     return (byteindex * 8) + bitindex;
   }
 }
-void tapi_clearBitset(bitset_tapi* set, unsigned char setTrue) {
+void tapi_clearBitset(bitset_tapi set, unsigned char setTrue) {
   memset(set->m_array, setTrue, set->m_byteLength);
 }
-void tapi_expandBitset(bitset_tapi* set, unsigned int expandSize) {
+void tapi_expandBitset(bitset_tapi set, unsigned int expandSize) {
   bool* new_block = new bool[expandSize + set->m_byteLength];
   if (new_block) {
     // This is a little bit redundant because all memory initialized with 0 at start

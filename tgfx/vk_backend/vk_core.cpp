@@ -54,10 +54,8 @@ result_tgfx vk_initGPU(gpu_tgfxhnd gpu) {
     GPU->ext()->getEnabledExtensionNames(&logicdevic_ci.enabledExtensionCount);
   logicdevic_ci.pEnabledFeatures  = nullptr;
   logicdevic_ci.enabledLayerCount = 0;
-  if (ThrowIfFailed(vkCreateDevice(GPU->vk_physical, &logicdevic_ci, nullptr, &GPU->vk_logical),
-                    "Vulkan failed to create a Logical Device!")) {
-    printer(result_tgfx_FAIL, "Vulkan failed to create a Logical Device!");
-    return result_tgfx_FAIL;
+  if (vkCreateDevice(GPU->vk_physical, &logicdevic_ci, nullptr, &GPU->vk_logical) != VK_SUCCESS) {
+    return vkPrint(7, L"vkCreateDevice()");
   }
   manager->get_queue_objects(GPU);
   return result_tgfx_SUCCESS;
@@ -80,8 +78,9 @@ inline bool vk_checkInstExtSupported(const char* extName) {
       return true;
     }
   }
-  printer(result_tgfx_WARNING,
-          ("Extension: " + std::string(extName) + " is not supported by the GPU!").c_str());
+  wchar_t wExtName[1024] = {};
+  mbstowcs(wExtName, extName, 1023);
+  vkPrint(8, wExtName);
   return false;
 }
 bool vk_checkInstanceExts() {
@@ -91,9 +90,7 @@ bool vk_checkInstanceExts() {
   glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
   for (int i = 0; i < glfwExtensionCount; i++) {
     if (!vk_checkInstExtSupported(glfwExtensions[i])) {
-      printer(result_tgfx_INVALIDARGUMENT,
-              "Your vulkan instance doesn't support extensions that're required by GLFW. This "
-              "situation is not tested, so report your device to the author!");
+      vkPrint(9);
       return false;
     }
     activeInstanceExts[instanceExtCount++] = glfwExtensions[i];
@@ -103,19 +100,14 @@ bool vk_checkInstanceExts() {
     hidden->isActive_SurfaceKHR            = true;
     activeInstanceExts[instanceExtCount++] = (VK_KHR_SURFACE_EXTENSION_NAME);
   } else {
-    printer(result_tgfx_WARNING,
-            "Your Vulkan instance doesn't support to display a window, so you shouldn't use any "
-            "window related functionality such as: GFXRENDERER->Create_WindowPass, "
-            "GFX->Create_Window, GFXRENDERER->Swap_Buffers ...");
+    vkPrint(10);
   }
 
   // Check PhysicalDeviceProperties2KHR
   if (VKGLOBAL_APPINFO.apiVersion == VK_API_VERSION_1_0) {
     if (!vk_checkInstExtSupported(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
       hidden->isSupported_PhysicalDeviceProperties2 = false;
-      printer(result_tgfx_FAIL,
-              "Your OS doesn't support Physical Device Properties 2 extension which is required, "
-              "so Vulkan device creation has failed!");
+      vkPrint(8, L"Physical Device Properties 2, so Vulkan device creation has failed!");
       return false;
     } else {
       activeInstanceExts[instanceExtCount++] =
@@ -149,8 +141,8 @@ void vk_createInstance() {
   unsigned int Supported_LayerNumber = 0;
   vkEnumerateInstanceLayerProperties(&Supported_LayerNumber, nullptr);
   if (Supported_LayerNumber > maxVkLayerCount) {
-    printer(result_tgfx_FAIL,
-            "Vulkan Instance support more layer than backend has imagined, report this please!");
+    vkPrint(2,
+            L"Vulkan Instance support more layer than backend has imagined, report this please!");
     return;
   }
   VkLayerProperties Supported_LayerList[maxVkLayerCount];
@@ -171,8 +163,9 @@ void vk_createInstance() {
   InstCreation_Info.ppEnabledLayerNames = Validation_Layers;
 #endif
 
-  ThrowIfFailed(vkCreateInstance(&InstCreation_Info, nullptr, &VKGLOBAL_INSTANCE),
-                "Failed to create a Vulkan Instance!");
+  if (vkCreateInstance(&InstCreation_Info, nullptr, &VKGLOBAL_INSTANCE) != VK_SUCCESS) {
+    vkPrint(16, L"Failed to create a Vulkan Instance!");
+  }
 }
 
 void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
@@ -244,18 +237,16 @@ inline void vk_checkComputerSpecs() {
   uint32_t gpuCount = 0;
   vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &gpuCount, nullptr);
   if (gpuCount > VKCONST_MAXGPUCOUNT) {
-    printer(result_tgfx_FAIL, "Your device has more GPUs than supported!");
+    vkPrint(16, L"System has more GPUs than supported, increase VKCONST_MAXGPUCOUNT!");
     return;
   }
   hidden->m_gpus.init(gpuCount);
 
-  vk_uint32c       maxGPUcount = 1024;
-  VkPhysicalDevice tempDevices[maxGPUcount];
-  assert_vk(maxGPUcount > gpuCount);
+  VkPhysicalDevice tempDevices[VKCONST_MAXGPUCOUNT];
   vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &gpuCount, tempDevices);
 
   if (gpuCount == 0) {
-    printer(result_tgfx_FAIL, "There is no Vulkan GPU!");
+    vkPrint(17);
     return;
   }
 
@@ -453,7 +444,10 @@ int vk_findMouseButton(key_tgfx key) {
     case key_tgfx_MOUSE_LEFT: return GLFW_MOUSE_BUTTON_LEFT;
     case key_tgfx_MOUSE_RIGHT: return GLFW_MOUSE_BUTTON_RIGHT;
     case key_tgfx_MOUSE_MIDDLE: return GLFW_MOUSE_BUTTON_MIDDLE;
-    default: printer(result_tgfx_NOTCODED, "Invalid key to vk_findMouseButton()!"); assert(0);
+    default:
+      vkPrint(16, L"Invalid key to vk_findMouseButton()!");
+      assert(0);
+      return -1;
   }
 }
 void vk_createWindow(const windowDescription_tgfx* desc, void* user_ptr, window_tgfxhnd* window) {
@@ -466,20 +460,18 @@ void vk_createWindow(const windowDescription_tgfx* desc, void* user_ptr, window_
   if (desc->monitor && desc->mode == windowmode_tgfx_FULLSCREEN) {
     monitor = getOBJ<MONITOR_VKOBJ>(desc->monitor)->monitorobj;
   }
-  GLFWwindow* glfw_window =
-    glfwCreateWindow(desc->size.x, desc->size.y, desc->name, monitor, nullptr);
+  GLFWwindow* glfwWndw = glfwCreateWindow(desc->size.x, desc->size.y, desc->name, monitor, nullptr);
 
   // Check and Report if GLFW fails
-  if (glfw_window == NULL) {
-    printer(result_tgfx_FAIL, "VulkanCore: We failed to create the window because of GLFW!");
+  if (glfwWndw == NULL) {
+    vkPrint(18);
     return;
   }
 
   // Window VulkanSurface Creation
-  VkSurfaceKHR Window_Surface = {};
-  if (ThrowIfFailed(
-        glfwCreateWindowSurface(VKGLOBAL_INSTANCE, glfw_window, nullptr, &Window_Surface),
-        "GLFW failed to create a window surface")) {
+  VkSurfaceKHR wndwSurface = {};
+  if (glfwCreateWindowSurface(VKGLOBAL_INSTANCE, glfwWndw, nullptr, &wndwSurface) != VK_SUCCESS) {
+    vkPrint(16, L"vkSurfaceKHR creation failed at glfwCreateWindowSurface");
     return;
   }
 
@@ -491,12 +483,12 @@ void vk_createWindow(const windowDescription_tgfx* desc, void* user_ptr, window_
   vkWindow->m_displayMode            = desc->mode;
   vkWindow->m_monitor                = nullptr;
   vkWindow->m_name                   = desc->name;
-  vkWindow->vk_glfwWindow            = glfw_window;
+  vkWindow->vk_glfwWindow            = glfwWndw;
   vkWindow->vk_swapchainTextureUsage = 0; // This will be set while creating swapchain
   vkWindow->m_resizeFnc              = desc->resizeCb;
   vkWindow->m_keyFnc                 = desc->keyCb;
   vkWindow->m_userData               = user_ptr;
-  vkWindow->vk_surface               = Window_Surface;
+  vkWindow->vk_surface               = wndwSurface;
 
   glfwSetWindowUserPointer(vkWindow->vk_glfwWindow, vkWindow);
   if (desc->resizeCb) {
@@ -549,9 +541,10 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
                                &swpchn_ci.imageSharingMode);
     swpchn_ci.pQueueFamilyIndices = queueFamIndxLst;
 
-    THROW_RETURN_IF_FAIL(
-      vkCreateSwapchainKHR(GPU->vk_logical, &swpchn_ci, nullptr, &window->vk_swapchain),
-      "Failed to create a Swapchain in vkCreateSwapchainKHR", result_tgfx_FAIL);
+    if (vkCreateSwapchainKHR(GPU->vk_logical, &swpchn_ci, nullptr, &window->vk_swapchain) !=
+        VK_SUCCESS) {
+      return vkPrint(19, L"at vkCreateSwapchainKHR()");
+    }
   }
 
   // Get Swapchain Images & Create Views
@@ -562,9 +555,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       uint32_t created_imagecount = 0;
       vkGetSwapchainImagesKHR(GPU->vk_logical, window->vk_swapchain, &created_imagecount, nullptr);
       if (created_imagecount != desc->imageCount) {
-        printer(result_tgfx_FAIL,
-                "VK backend asked for swapchain textures but Vulkan driver gave less number of "
-                "textures than intended!");
+        vkPrint(19, L"number of textures returned from backend isn't enough!");
         return result_tgfx_FAIL;
       }
       vkGetSwapchainImagesKHR(GPU->vk_logical, window->vk_swapchain, &created_imagecount,
@@ -590,7 +581,7 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
 
         if (vkCreateImageView(GPU->vk_logical, &ImageView_ci, nullptr, &SWPCHN_IMGVIEWs[i]) !=
             VK_SUCCESS) {
-          printer(result_tgfx_FAIL, "VulkanCore: Image View creation has failed!");
+          vkPrint(19, L"at vkCreateImageView()");
           return result_tgfx_FAIL;
         }
       }
@@ -605,9 +596,10 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
   {
     VkSemaphoreCreateInfo sem_ci = {};
     sem_ci.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    THROW_RETURN_IF_FAIL(
-      vkCreateSemaphore(GPU->vk_logical, &sem_ci, nullptr, &window->vk_acquireSemaphore),
-      "Acquire semaphore creation has failed!", result_tgfx_FAIL);
+    if (vkCreateSemaphore(GPU->vk_logical, &sem_ci, nullptr, &window->vk_acquireSemaphore) !=
+        VK_SUCCESS) {
+      return vkPrint(16, L"at acquire semaphore creation");
+    }
   }
 
   uint32_t queueFamListIterIndx = 0;
@@ -620,12 +612,12 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       cp_ci.flags                   = 0;
       cp_ci.queueFamilyIndex        = vkQueueFamIndx;
       cp_ci.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-      THROW_RETURN_IF_FAIL(
-        vkCreateCommandPool(GPU->vk_logical, &cp_ci, nullptr, &transitionCmdPool),
-        "Command Pool creation for swapchain transition has failed!", result_tgfx_FAIL);
-      THROW_RETURN_IF_FAIL(
-        vkCreateCommandPool(GPU->vk_logical, &cp_ci, nullptr, &initializeCmdPool),
-        "Command Pool creation for swapchain transition has failed!", result_tgfx_FAIL);
+      if (vkCreateCommandPool(GPU->vk_logical, &cp_ci, nullptr, &transitionCmdPool) != VK_SUCCESS) {
+        return vkPrint(16, L"at command pool creation for swapchain transition");
+      }
+      if (vkCreateCommandPool(GPU->vk_logical, &cp_ci, nullptr, &initializeCmdPool) != VK_SUCCESS) {
+        return vkPrint(16, L"at command pool creation for swapchain initialization");
+      }
     }
     {
       VkCommandBufferAllocateInfo cb_ai = {};
@@ -635,17 +627,14 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       cb_ai.pNext                       = nullptr;
       cb_ai.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
       // General -> Present
-      THROW_RETURN_IF_FAIL(
-        vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai,
-                                 window->vk_generalToPresent[vkQueueFamIndx]),
-        "General->Present Command Buffer creation for swapchain transition has failed!",
-        result_tgfx_FAIL);
-      // Present -> General
-      THROW_RETURN_IF_FAIL(
-        vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai,
-                                 window->vk_presentToGeneral[vkQueueFamIndx]),
-        "Present->General Command Buffer creation for swapchain transition has failed!",
-        result_tgfx_FAIL);
+      if (vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai,
+                                   window->vk_generalToPresent[vkQueueFamIndx]) != VK_SUCCESS) {
+        return vkPrint(16, L"at general->present command buffer creation for swapchain transition");
+      }
+      if (vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai,
+                                   window->vk_presentToGeneral[vkQueueFamIndx]) != VK_SUCCESS) {
+        return vkPrint(16, L"at present->general command buffer creation for swapchain transition");
+      }
     }
     for (uint32_t textureIndx = 0; textureIndx < window->m_swapchainTextureCount; textureIndx++) {
       VkImageMemoryBarrier imBar = {};
@@ -655,8 +644,9 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       cb_bi.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
       {
         VkCommandBuffer cb = window->vk_generalToPresent[vkQueueFamIndx][textureIndx];
-        THROW_RETURN_IF_FAIL(vkBeginCommandBuffer(cb, &cb_bi),
-                             "General -> Present CB recording begin failed!", result_tgfx_FAIL);
+        if (vkBeginCommandBuffer(cb, &cb_bi) != VK_SUCCESS) {
+          return vkPrint(16, L"at general->present command buffer recording begin");
+        }
         imBar.dstAccessMask               = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
         imBar.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
         imBar.image                       = SWPCHN_IMGs[textureIndx];
@@ -675,14 +665,16 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
         vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0,
                              nullptr, 0, nullptr, 1, &imBar);
-        THROW_RETURN_IF_FAIL(vkEndCommandBuffer(cb),
-                             "General -> Present CB recording begin failed!", result_tgfx_FAIL);
+        if (vkEndCommandBuffer(cb) != VK_SUCCESS) {
+          return vkPrint(16, L"at general->present command buffer recording end");
+        }
       }
       // Present -> General CB Recording
       {
         VkCommandBuffer cb = window->vk_presentToGeneral[vkQueueFamIndx][textureIndx];
-        THROW_RETURN_IF_FAIL(vkBeginCommandBuffer(cb, &cb_bi),
-                             "Present -> General CB recording begin failed!", result_tgfx_FAIL);
+        if (vkBeginCommandBuffer(cb, &cb_bi) != VK_SUCCESS) {
+          vkPrint(16, L"at present->general command buffer recording begin");
+        }
 
         imBar.oldLayout     = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         imBar.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
@@ -691,8 +683,9 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
         vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_DEVICE_GROUP_BIT, 0,
                              nullptr, 0, nullptr, 1, &imBar);
-        THROW_RETURN_IF_FAIL(vkEndCommandBuffer(cb),
-                             "Present -> General CB recording begin failed!", result_tgfx_FAIL);
+        if (vkEndCommandBuffer(cb) != VK_SUCCESS) {
+          vkPrint(16, L"at present->general command buffer recording begin");
+        }
       }
 
       // Present Texture only once
@@ -706,9 +699,10 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
           cb_ai.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
           cb_ai.pNext                       = nullptr;
           cb_ai.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-          THROW_RETURN_IF_FAIL(
-            vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai, &initializeCmdBuffer),
-            "Presentation CB allocation failed!", result_tgfx_FAIL);
+          if (vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai, &initializeCmdBuffer) !=
+              VK_SUCCESS) {
+            vkPrint(16, L"at presentation command buffer allocation");
+          }
         }
         // Record first CB
         {
@@ -736,9 +730,10 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
           si.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
           si.waitSemaphoreCount   = 0;
           si.signalSemaphoreCount = 0;
-          ThrowIfFailed(vkQueueSubmit(getQueueVkObj(getQueue(getQueueFam(GPU, vkQueueFamIndx), 0)),
-                                      1, &si, VK_NULL_HANDLE),
-                        "Queue submission for layout transition");
+          if (vkQueueSubmit(getQueueVkObj(getQueue(getQueueFam(GPU, vkQueueFamIndx), 0)), 1, &si,
+                            VK_NULL_HANDLE) != VK_SUCCESS) {
+            return vkPrint(16, L"at queue submission for layout transition");
+          }
         }
       }
     }
@@ -773,14 +768,13 @@ result_tgfx vk_getCurrentSwapchainTextureIndex(window_tgfxhnd i_window, uint32_t
   WINDOW_VKOBJ* window = getOBJ<WINDOW_VKOBJ>(i_window);
 
   uint32_t swpchnIndx = UINT32_MAX;
-  THROW_RETURN_IF_FAIL(
-    vkAcquireNextImageKHR(window->m_gpu->vk_logical, window->vk_swapchain, UINT64_MAX,
-                          window->vk_acquireSemaphore, nullptr, &swpchnIndx),
-    "Acquiring swapchain texture has failed!", result_tgfx_FAIL);
+  if (vkAcquireNextImageKHR(window->m_gpu->vk_logical, window->vk_swapchain, UINT64_MAX,
+                            window->vk_acquireSemaphore, nullptr, &swpchnIndx) != VK_SUCCESS) {
+    return vkPrint(16, L"vkAcquireNextImageKHR() has failed");
+  }
   if (UINT32_MAX == swpchnIndx) {
-    printer(result_tgfx_FAIL, "Acquire failed because acquiring gave UINT32_MAX!");
     *index = UINT32_MAX;
-    return result_tgfx_FAIL;
+    return vkPrint(16, L"Acquired texture's index is invalid!");
   }
 
   // Set current swapchain index
@@ -899,7 +893,7 @@ void vk_setInputMode(window_tgfxhnd windowHnd, cursorMode_tgfx cursorMode, unsig
       if (glfwRawMouseMotionSupported() == GLFW_TRUE) {
         glfwSetInputMode(window->vk_glfwWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
       } else {
-        printer(result_tgfx_WARNING, "Your system doesn't support raw mouse input mode!");
+        vkPrint(20);
       }
       break;
   }
@@ -926,8 +920,7 @@ void vk_saveMonitors() {
     int physical_width, physical_height;
     glfwGetMonitorPhysicalSize(monitor, &physical_width, &physical_height);
     if (physical_width == 0 || physical_height == 0) {
-      printer(result_tgfx_WARNING,
-              "One of the monitors have invalid physical sizes, please be careful");
+      vkPrint(21);
     }
     Monitor->physical_width  = physical_width;
     Monitor->physical_height = physical_height;
@@ -969,13 +962,12 @@ result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
   VkSurfaceFormatKHR formats[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
   vkGetPhysicalDeviceSurfaceFormatsKHR(GPU->vk_physical, window->vk_surface, &formatCount,
                                        VK_NULL_HANDLE);
-  THROW_RETURN_IF_FAIL(vkGetPhysicalDeviceSurfaceFormatsKHR(GPU->vk_physical, window->vk_surface,
-                                                            &formatCount, formats),
-                       "vkGetPhysicalDeviceSurfaceFormatsKHR failed!", result_tgfx_FAIL);
   if (formatCount > TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT) {
-    printer(result_tgfx_WARNING,
-            "Current window has TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT+ supported swapchain formats, "
-            "which backend supports only VKCONST_MAXSURFACEFORMATCOUNT. Report this issue!");
+    vkPrint(16, L"Current window has more swapchain formats than supported, please report this!");
+  }
+  if (vkGetPhysicalDeviceSurfaceFormatsKHR(GPU->vk_physical, window->vk_surface, &formatCount,
+                                           formats) != VK_SUCCESS) {
+    return vkPrint(16, L"vkGetPhysicalDeviceSurfaceFormatsKHR() failed");
   }
   for (uint32_t i = 0; i < formatCount; i++) {
     info->colorSpace[i] = vk_findColorSpaceTgfx(formats[i].colorSpace);
@@ -983,9 +975,7 @@ result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
   }
 
   if (caps.maxImageCount <= caps.minImageCount) {
-    printer(result_tgfx_FAIL,
-            "VulkanCore: Window Surface Capabilities have issues, maxImageCount <= minImageCount!");
-    return result_tgfx_FAIL;
+    return vkPrint(16, L"Window Surface Capabilities have issues, maxImageCount <= minImageCount!");
   }
   if (caps.maxImageCount == 0) {
     info->maxImageCount = UINT32_MAX;
@@ -998,19 +988,18 @@ result_tgfx vk_getWindow_GPUSupport(window_tgfxhnd i_window, gpu_tgfxhnd gpu,
   info->minExtent.x = caps.minImageExtent.width;
   info->minExtent.y = caps.minImageExtent.height;
 
-  uint32_t         PresentationModesCount = 0;
+  uint32_t         presentModesCount = 0;
   VkPresentModeKHR Presentations[TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE];
   vkGetPhysicalDeviceSurfacePresentModesKHR(GPU->vk_physical, window->vk_surface,
-                                            &PresentationModesCount, VK_NULL_HANDLE);
-  THROW_RETURN_IF_FAIL(
-    vkGetPhysicalDeviceSurfacePresentModesKHR(GPU->vk_physical, window->vk_surface,
-                                              &PresentationModesCount, Presentations),
-    "vkGetPhysicalDeviceSurfacePresentModesKHR failed!", result_tgfx_FAIL);
-  if (PresentationModesCount > TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE) {
-    printer(result_tgfx_WARNING,
-            "More presentation modes than predefined, possible memory corruption");
+                                            &presentModesCount, VK_NULL_HANDLE);
+  if (vkGetPhysicalDeviceSurfacePresentModesKHR(GPU->vk_physical, window->vk_surface,
+                                                &presentModesCount, Presentations) != VK_SUCCESS) {
+    return vkPrint(16, L"vkGetPhysicalDeviceSurfacePresentModesKHR() failed");
   }
-  for (uint32_t i = 0; i < PresentationModesCount; i++) {
+  if (presentModesCount > TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE) {
+    vkPrint(16, L"GPU supports more presentation modes than supported, please report this!");
+  }
+  for (uint32_t i = 0; i < presentModesCount; i++) {
     info->presentationModes[i] = vk_findPresentModeTgfx(Presentations[i]);
   }
 
@@ -1037,7 +1026,9 @@ void        vk_initRenderer();
 void        vk_setHelperFuncPtrs();
 extern void vk_setQueueFncPtrs();
 void        vk_errorCallback(int error_code, const char* description) {
-  printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
+  wchar_t maxLog[1 << 12] = {L"GLFW: "};
+  mbstowcs(&maxLog[6], description, (1ull << 10) - 1);
+  vkPrint(16, maxLog);
 }
 result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_logCallback printcallback) {
   if (!regsys->getSystem(TGFX_PLUGIN_NAME)) return result_tgfx_FAIL;
@@ -1047,9 +1038,7 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_logCallback pri
   VIRTUALMEMORY_TAPI_PLUGIN_TYPE virmemsystype =
     ( VIRTUALMEMORY_TAPI_PLUGIN_TYPE )regsys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
   if (!virmemsystype) {
-    printer(result_tgfx_FAIL,
-            "Vulkan backend needs virtual memory system, so initialization has failed!");
-    return result_tgfx_FAIL;
+    return vkPrint(1);
   } else {
     virmemsys = virmemsystype->funcs;
   }
@@ -1151,26 +1140,15 @@ vk_debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      Message_Severity,
         "VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT: Potential non-optimal use of Vulkan\n";
       break;
     default:
-      printer(result_tgfx_FAIL, "Vulkan Callback has returned a unsupported Message_Type\n");
+      vkPrint(16, L"Vulkan debug callback has returned a unsupported message type\n");
       return true;
       break;
   }
 
-  switch (Message_Severity) {
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-      printer(result_tgfx_SUCCESS, pCallback_Data->pMessage);
-      break;
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-      printer(result_tgfx_WARNING, pCallback_Data->pMessage);
-      break;
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-      printer(result_tgfx_FAIL, pCallback_Data->pMessage);
-      break;
-    default:
-      printer(result_tgfx_FAIL, "Vulkan Callback has returned a unsupported debug message type!");
-      return true;
-  }
+
+  wchar_t debugMessage[1ull << 12] = {};
+  mbstowcs(debugMessage, pCallback_Data->pMessage, (1ull << 12) - 1);
+  vkPrint(16, debugMessage);
   return false;
 }
 declareVkExtFunc(vkCreateDebugUtilsMessengerEXT);
@@ -1196,8 +1174,9 @@ void vk_setupDebugging() {
   dbg_mssngr_ci.pNext           = nullptr;
   dbg_mssngr_ci.pUserData       = nullptr;
 
-  ThrowIfFailed(
-    vkCreateDebugUtilsMessengerEXT_loaded(VKGLOBAL_INSTANCE, &dbg_mssngr_ci, nullptr, &dbg_mssngr),
-    "Vulkan's Debug Callback system failed to start!");
+  if (vkCreateDebugUtilsMessengerEXT_loaded(VKGLOBAL_INSTANCE, &dbg_mssngr_ci, nullptr,
+                                            &dbg_mssngr) != VK_SUCCESS) {
+    vkPrint(16, L"Vulkan Debug Callback system initialization failed");
+  }
 #endif
 }

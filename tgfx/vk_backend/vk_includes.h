@@ -123,7 +123,7 @@ inline unsigned char GetByteSizeOf_TextureChannels(textureChannels_tgfx channelt
     case texture_channels_tgfx_RGB32UI: return 12;
     case texture_channels_tgfx_RGBA32F:
     case texture_channels_tgfx_RGBA32I:
-    case texture_channels_tgfx_RGBA32UI: return 16;
+    case texture_channels_tgfx_RGBA32UI: return 16; assert(0);
     default: assert_vk(0 && "GetSizeOf_TextureChannels() doesn't support this type!"); break;
   }
 }

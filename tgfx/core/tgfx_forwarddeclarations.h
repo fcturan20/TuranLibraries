@@ -640,7 +640,9 @@ typedef enum cursor_mode_tgfx {
 typedef void (*tgfx_windowResizeCallback)(window_tgfxhnd windowHnd, void* userPtr,
                                           tgfx_uvec2       resolution,
                                           texture_tgfxhnd* swapchainTextures);
-typedef void (*tgfx_logCallback)(result_tgfx result, const char* text);
+// logCode is an index to look up from all tgfx logs. You should use core->getLogMessage() for text
+// extraInfo is the text from the backend, probably contains specific info about your system
+typedef void (*tgfx_logCallback)(unsigned int logCode, const wchar_t* extraInfo);
 // @param scanCode: System-specific scan code
 typedef void (*tgfx_windowKeyCallback)(window_tgfxhnd windowHnd, void* userPointer, key_tgfx key,
                                        int scanCode, key_action_tgfx action, keyMod_tgfx mode);

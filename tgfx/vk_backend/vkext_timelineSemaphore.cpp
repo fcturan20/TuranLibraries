@@ -32,8 +32,10 @@ fence_tgfxhnd vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue) {
   ci.pNext                             = &timelineCi;
   ci.sType                             = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
   VkSemaphore sem;
-  ThrowIfFailed(vkCreateSemaphore(gpu->vk_logical, &ci, nullptr, &sem),
-                "Timeline Semaphore creation has failed!");
+  if (vkCreateSemaphore(gpu->vk_logical, &ci, nullptr, &sem) != VK_SUCCESS) {
+    vkPrint(33, L"at vkCreateSemaphore()");
+    return nullptr;
+  }
 
   FENCE_VKOBJ* fence          = ext->fences.create_OBJ();
   fence->vk_timelineSemaphore = sem;
@@ -51,9 +53,10 @@ result_tgfx vk_getFenceValue(fence_tgfxhnd i_fence, unsigned long long* value) {
 
   getTimelineSemaphoreEXT(gpu, ext);
 
-  THROW_RETURN_IF_FAIL(
-    vkGetSemaphoreCounterValueKHR_loaded(gpu->vk_logical, fence->vk_timelineSemaphore, value),
-    "Failed to get fence value!", result_tgfx_FAIL);
+  if (vkGetSemaphoreCounterValueKHR_loaded(gpu->vk_logical, fence->vk_timelineSemaphore, value) !=
+      VK_SUCCESS) {
+    return vkPrint(34, L"at vkGetSemaphoreCounterValueKHR()");
+  }
   return result_tgfx_SUCCESS;
 }
 result_tgfx vk_setFenceValue(fence_tgfxhnd i_fence, unsigned long long value) {
@@ -65,8 +68,9 @@ result_tgfx vk_setFenceValue(fence_tgfxhnd i_fence, unsigned long long value) {
   info.value                    = fence->m_nextValue.load();
   info.semaphore                = fence->vk_timelineSemaphore;
   info.pNext                    = nullptr;
-  THROW_RETURN_IF_FAIL(vkSignalSemaphoreKHR_loaded(gpu->vk_logical, &info),
-                       "Failed to signal fence on CPU!", result_tgfx_FAIL);
+  if (vkSignalSemaphoreKHR_loaded(gpu->vk_logical, &info) != VK_SUCCESS) {
+    return vkPrint(22);
+  }
   return result_tgfx_SUCCESS;
 }
 

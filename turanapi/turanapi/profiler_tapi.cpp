@@ -1,9 +1,10 @@
 #include "profiler_tapi.h"
 
+#include <assert.h>
+
 #include <chrono>
 #include <iostream>
 #include <string>
-#include <vector>
 
 #include "ecs_tapi.h"
 #include "threadingsys_tapi.h"
@@ -15,159 +16,78 @@ typedef struct profiler_tapi_d {
   threadingsys_tapi*         threadsys;
 } profiler_tapi_d;
 
-struct Profiled_Scope {
+struct profiledScope {
  public:
-  bool                Is_Recording : 1;
-  unsigned char       TimingType : 2;
-  unsigned long long  START_POINT;
-  unsigned long long* DURATION;
-  std::string         NAME;
+  bool                isRecording : 1;
+  unsigned char       timingType : 2;
+  unsigned long long  startPoint;
+  unsigned long long* duration;
+  std::string         name;
 };
 
 profiler_tapi_d* profiler_data = nullptr;
 
-void start_profiling(profiledscope_handle_tapi* handle, const char* NAME,
-                     unsigned long long* duration, unsigned char TimingTypeIndex) {
-  unsigned int threadindex =
-    (profiler_data->threadcount == 1) ? (0) : (profiler_data->threadsys->this_thread_index());
-  Profiled_Scope* profil = new Profiled_Scope;
-  while (TimingTypeIndex > 3) {
-    printf("Profile started with index bigger than 3! Should be between 0-3!\n");
-    scanf(" %hhu", &TimingTypeIndex);
-  }
-  switch (TimingTypeIndex) {
+constexpr long long getTime(unsigned char timingType) {
+  switch (timingType) {
     case 0:
-      profil->START_POINT = std::chrono::time_point_cast<std::chrono::nanoseconds>(
-                              std::chrono::high_resolution_clock::now())
-                              .time_since_epoch()
-                              .count();
+      return std::chrono::time_point_cast<std::chrono::nanoseconds>(
+               std::chrono::high_resolution_clock::now())
+        .time_since_epoch()
+        .count();
       break;
     case 1:
-      profil->START_POINT = std::chrono::time_point_cast<std::chrono::microseconds>(
-                              std::chrono::high_resolution_clock::now())
-                              .time_since_epoch()
-                              .count();
+      return std::chrono::time_point_cast<std::chrono::microseconds>(
+               std::chrono::high_resolution_clock::now())
+        .time_since_epoch()
+        .count();
       break;
     case 2:
-      profil->START_POINT = std::chrono::time_point_cast<std::chrono::milliseconds>(
-                              std::chrono::high_resolution_clock::now())
-                              .time_since_epoch()
-                              .count();
+      return std::chrono::time_point_cast<std::chrono::milliseconds>(
+               std::chrono::high_resolution_clock::now())
+        .time_since_epoch()
+        .count();
       break;
     case 3:
-      profil->START_POINT = std::chrono::time_point_cast<std::chrono::seconds>(
-                              std::chrono::high_resolution_clock::now())
-                              .time_since_epoch()
-                              .count();
+      return std::chrono::time_point_cast<std::chrono::seconds>(
+               std::chrono::high_resolution_clock::now())
+        .time_since_epoch()
+        .count();
       break;
+    default: assert(0 && "Timing type is invalid!");
   }
-  profil->Is_Recording                     = true;
-  profil->DURATION                         = duration;
-  profil->TimingType                       = TimingTypeIndex;
-  profil->NAME                             = NAME;
-  *handle                                  = ( profiledscope_handle_tapi )profil;
+}
+
+void start_profiling(profiledscope_handle_tapi* handle, const char* name,
+                     unsigned long long* duration, unsigned char timingType) {
+  unsigned int threadindex =
+    (profiler_data->threadcount == 1) ? (0) : (profiler_data->threadsys->this_thread_index());
+  profiledScope* profile                   = new profiledScope;
+  profile->startPoint                      = getTime(timingType);
+  profile->isRecording                     = true;
+  profile->duration                        = duration;
+  profile->timingType                      = timingType;
+  profile->name                            = name;
+  *handle                                  = ( profiledscope_handle_tapi )profile;
   profiler_data->last_handles[threadindex] = *handle;
 }
 
-void finish_profiling(profiledscope_handle_tapi* handle, unsigned char ShouldPrint) {
-  Profiled_Scope* profil = ( Profiled_Scope* )*handle;
-  switch (profil->TimingType) {
-    case 0:
-      *profil->DURATION = std::chrono::time_point_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now())
-                            .time_since_epoch()
-                            .count() -
-                          profil->START_POINT;
-      if (ShouldPrint) {
-        printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " nanoseconds!\n")
-                 .c_str());
-      }
-      break;
-    case 1:
-      *profil->DURATION = std::chrono::time_point_cast<std::chrono::microseconds>(
-                            std::chrono::high_resolution_clock::now())
-                            .time_since_epoch()
-                            .count() -
-                          profil->START_POINT;
-      if (ShouldPrint) {
-        printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " microseconds!\n")
-                 .c_str());
-      }
-      break;
-    case 2:
-      *profil->DURATION = std::chrono::time_point_cast<std::chrono::milliseconds>(
-                            std::chrono::high_resolution_clock::now())
-                            .time_since_epoch()
-                            .count() -
-                          profil->START_POINT;
-      if (ShouldPrint) {
-        printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " milliseconds!\n")
-                 .c_str());
-      }
-      break;
-    case 3:
-      *profil->DURATION = std::chrono::time_point_cast<std::chrono::seconds>(
-                            std::chrono::high_resolution_clock::now())
-                            .time_since_epoch()
-                            .count();
-      if (ShouldPrint) {
-        printf(
-          (profil->NAME + " took: " + std::to_string(*profil->DURATION) + " seconds!\n").c_str());
-      }
-      break;
-  }
+void finish_profiling(profiledscope_handle_tapi* handle) {
+  profiledScope* profil = ( profiledScope* )*handle;
+  *profil->duration     = getTime(profil->timingType) - profil->startPoint;
   delete profil;
 }
-void threadlocal_finish_last_profiling(unsigned char ShouldPrint) {
+const char* timeNames[] = {"nanoseconds", "microseconds", "milliseconds", "seconds"};
+void        threadlocal_finish_last_profiling(unsigned char shouldPrint) {
   unsigned int threadindex =
     (profiler_data->threadcount == 1) ? (0) : (profiler_data->threadsys->this_thread_index());
-  Profiled_Scope* profil = ( Profiled_Scope* )profiler_data->last_handles[threadindex];
-  switch (profil->TimingType) {
-    case 0:
-      *profil->DURATION = std::chrono::time_point_cast<std::chrono::nanoseconds>(
-                            std::chrono::high_resolution_clock::now())
-                            .time_since_epoch()
-                            .count() -
-                          profil->START_POINT;
-      if (ShouldPrint) {
-        printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " nanoseconds!\n")
-                 .c_str());
-      }
-      return;
-    case 1:
-      *profil->DURATION = std::chrono::time_point_cast<std::chrono::microseconds>(
-                            std::chrono::high_resolution_clock::now())
-                            .time_since_epoch()
-                            .count() -
-                          profil->START_POINT;
-      if (ShouldPrint) {
-        printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " microseconds!\n")
-                 .c_str());
-      }
-      return;
-    case 2:
-      *profil->DURATION = std::chrono::time_point_cast<std::chrono::milliseconds>(
-                            std::chrono::high_resolution_clock::now())
-                            .time_since_epoch()
-                            .count() -
-                          profil->START_POINT;
-      if (ShouldPrint) {
-        printf((profil->NAME + " took: " + std::to_string(*profil->DURATION) + " milliseconds!\n")
-                 .c_str());
-      }
-      return;
-    case 3:
-      *profil->DURATION = std::chrono::time_point_cast<std::chrono::seconds>(
-                            std::chrono::high_resolution_clock::now())
-                            .time_since_epoch()
-                            .count();
-      if (ShouldPrint) {
-        printf(
-          (profil->NAME + " took: " + std::to_string(*profil->DURATION) + " seconds!\n").c_str());
-      }
-      return;
+  profiledScope*      profile  = ( profiledScope* )profiler_data->last_handles[threadindex];
+  unsigned long long* duration = profile->duration;
+  std::string         name     = profile->name;
+  unsigned char       timingType = profile->timingType;
+  finish_profiling(&profiler_data->last_handles[threadindex]);
+  if (shouldPrint) {
+    printf("%s took %llu %s!\n", name.c_str(), *duration, timeNames[timingType]);
   }
-  delete profil;
 }
 
 ECSPLUGIN_ENTRY(ecssys, reloadFlag) {

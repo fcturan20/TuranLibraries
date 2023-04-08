@@ -9,20 +9,20 @@
 #include <stb_image.h>
 
 #include "allocator_tapi.h"
-#include "array_of_strings_tapi.h"
+#include "bitset_tapi.h"
 #include "ecs_tapi.h"
 #include "filesys_tapi.h"
 #include "logger_tapi.h"
 #include "main.h"
 #include "pecfManager/pecfManager.h"
 #include "profiler_tapi.h"
+#include "string_tapi.h"
 #include "tgfx_core.h"
 #include "tgfx_gpucontentmanager.h"
 #include "tgfx_helper.h"
 #include "tgfx_renderer.h"
 #include "tgfx_structs.h"
 #include "threadingsys_tapi.h"
-#include "bitset_tapi.h"
 
 allocator_sys_tapi* allocatorSys     = nullptr;
 uint64_t            destructionCount = 0;
@@ -61,7 +61,7 @@ struct pluginElement {
 tgfx_core*                     tgfx           = {};
 tgfx_renderer*                 renderer       = {};
 tgfx_gpudatamanager*           contentManager = {};
-FILESYS_TAPI_PLUGIN_LOAD_TYPE  filesys        = {};
+FILESYS_TAPI_PLUGIN_LOAD_TYPE  fileSys        = {};
 PROFILER_TAPI_PLUGIN_LOAD_TYPE profilerSys    = {};
 
 void load_plugins() {
@@ -78,7 +78,7 @@ void load_plugins() {
   profilerSys = ( PROFILER_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(PROFILER_TAPI_PLUGIN_NAME);
 
   pluginHnd_ecstapi filesysPlugin = editorECS->loadPlugin("tapi_filesys.dll");
-  filesys = ( FILESYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(FILESYS_TAPI_PLUGIN_NAME);
+  fileSys = ( FILESYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(FILESYS_TAPI_PLUGIN_NAME);
 
   pluginHnd_ecstapi loggerPlugin = editorECS->loadPlugin("tapi_logger.dll");
   auto loggerSys = ( LOGGER_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(LOGGER_TAPI_PLUGIN_NAME);
@@ -109,8 +109,7 @@ void load_plugins() {
     for (uint32_t i = 0; i < 1000; i++) {
       allocatorSys->vector_manager->resize(v_pluginElements, Resizes[i]);
     }
-    STOP_PROFILE_PRINTLESS_TAPI(profilerSys->funcs);
-    loggerSys->funcs->log_status(("Loading systems took: " + std::to_string(duration)).c_str());
+    STOP_PROFILE_TAPI(profilerSys->funcs);
   }
 
   {
@@ -342,8 +341,8 @@ sampler_tgfxhnd      firstSampler = {};
 void compileShadersandPipelines() {
   // Compile compute shader, create binding table type & compute pipeline
   {
-    const char* shaderText =
-      filesys->funcs->read_textfile(SOURCE_DIR "/shaders/firstComputeShader.comp");
+    const char* shaderText = ( const char* )fileSys->funcs->read_textfile(
+      string_type_tapi_UTF8, SOURCE_DIR "/shaders/firstComputeShader.comp", string_type_tapi_UTF8);
     shaderSource_tgfxhnd firstComputeShader = nullptr;
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderStage_tgfx_COMPUTESHADER, ( void* )shaderText,
@@ -388,8 +387,8 @@ void compileShadersandPipelines() {
   // Compile first vertex-fragment shader & raster pipeline
   {
     shaderSource_tgfxhnd shaderSources[2] = {};
-    const char*          vertShaderText =
-      filesys->funcs->read_textfile(SOURCE_DIR "/shaders/firstShader.vert");
+    const char*          vertShaderText   = ( const char* )fileSys->funcs->read_textfile(
+      string_type_tapi_UTF8, SOURCE_DIR "/shaders/firstShader.vert", string_type_tapi_UTF8);
     shaderSource_tgfxhnd& firstVertShader = shaderSources[0];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderStage_tgfx_VERTEXSHADER, ( void* )vertShaderText,
@@ -397,8 +396,8 @@ void compileShadersandPipelines() {
                                         // vertShaderBin, vertDataSize,
                                         &firstVertShader);
 
-    const char* fragShaderText =
-      filesys->funcs->read_textfile(SOURCE_DIR "/shaders/firstShader.frag");
+    const char* fragShaderText = ( const char* )fileSys->funcs->read_textfile(
+      string_type_tapi_UTF8, SOURCE_DIR "/shaders/firstShader.frag", string_type_tapi_UTF8);
     shaderSource_tgfxhnd& firstFragShader = shaderSources[1];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderStage_tgfx_FRAGMENTSHADER, ( void* )fragShaderText,
@@ -640,7 +639,7 @@ void load_systems() {
     renderer->queueSubmit(queue);
   }
 
-  STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);
+  STOP_PROFILE_TAPI(profilerSys->funcs);
   waitValue++;
   signalValue++;
 
@@ -660,7 +659,8 @@ void load_systems() {
     {
       commandBuffer_tgfxhnd frameCmdBuffer = renderer->beginCommandBuffer(queue, 0, nullptr);
       colorAttachmentInfo.texture          = swpchnTextures[i % 2];
-      renderer->beginRasterpass(frameCmdBuffer, 1, &colorAttachmentInfo, depthAttachmentInfo, 0, nullptr);
+      renderer->beginRasterpass(frameCmdBuffer, 1, &colorAttachmentInfo, depthAttachmentInfo, 0,
+                                nullptr);
       renderer->executeBundles(frameCmdBuffer, 1, &standardDrawBundle, 0, nullptr);
       renderer->endRasterpass(frameCmdBuffer, 0, nullptr);
       renderer->endCommandBuffer(frameCmdBuffer);
@@ -675,7 +675,7 @@ void load_systems() {
       signalValue++;
       renderer->queuePresent(queue, 1, &mainWindowRT);
       renderer->queueSubmit(queue);
-      STOP_PROFILE_PRINTFUL_TAPI(profilerSys->funcs);
+      STOP_PROFILE_TAPI(profilerSys->funcs);
       printf("Finished and index: %u\n", swpchnIndx);
       tgfx->takeInputs();
     }

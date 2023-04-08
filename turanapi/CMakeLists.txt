@@ -21,12 +21,12 @@ set_target_properties(tapi_unittest PROPERTIES FOLDER "TuranLibraries/tapi")
 install(TARGETS tapi_unittest RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
 
 #Array of Strings System
-add_library (tapi_array_of_strings_sys SHARED "turanapi/array_of_strings_tapi.cpp" "turanapi/array_of_strings_tapi.h")
-set_target_properties(tapi_array_of_strings_sys PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
-set_target_properties(tapi_array_of_strings_sys PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
-set_target_properties(tapi_array_of_strings_sys PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/ReleaseDbg RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/ReleaseDbg PREFIX "")
-set_target_properties(tapi_array_of_strings_sys PROPERTIES FOLDER "TuranLibraries/tapi")
-install(TARGETS tapi_array_of_strings_sys RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
+add_library (tapi_string SHARED "turanapi/string_tapi.cpp" "turanapi/string_tapi.h")
+set_target_properties(tapi_string PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
+set_target_properties(tapi_string PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
+set_target_properties(tapi_string PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/ReleaseDbg RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/ReleaseDbg PREFIX "")
+set_target_properties(tapi_string PROPERTIES FOLDER "TuranLibraries/tapi")
+install(TARGETS tapi_string RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
 
 #Threaded Job System
 add_library (tapi_threadedjobsys SHARED "turanapi/threadingsys_tapi.cpp" "turanapi/threadingsys_tapi.h")

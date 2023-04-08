@@ -43,7 +43,7 @@ struct texture_descVK { // Both for SAMPLEDTEXTURE and STORAGEIMAGE
 };
 
 struct SHADERSOURCE_VKOBJ {
-  bool               isALIVE    = false;
+  bool                           isALIVE    = false;
   static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::SHADERSOURCE;
   static uint16_t                GET_EXTRAFLAGS(SHADERSOURCE_VKOBJ* obj) { return obj->stage; }
 
@@ -99,9 +99,9 @@ result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* des
     s_ci.pNext                   = nullptr;
     s_ci.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     s_ci.unnormalizedCoordinates = VK_FALSE;
-    THROW_RETURN_IF_FAIL(vkCreateSampler(GPU->vk_logical, &s_ci, nullptr, &sampler),
-                         "GFXContentManager->Create_SamplingType() has failed at vkCreateSampler!",
-                         result_tgfx_FAIL);
+    if (vkCreateSampler(GPU->vk_logical, &s_ci, nullptr, &sampler) != VK_SUCCESS) {
+      return vkPrint(26);
+    }
   }
 
   SAMPLER_VKOBJ* SAMPLER = hidden->samplers.create_OBJ();
@@ -115,8 +115,7 @@ void vk_destroySampler(sampler_tgfxhnd sampler) {
 #ifdef VULKAN_DEBUGGING
   assert(vkSampler && "Invalid sampler!");
 #endif // VULKAN_DEBUGGING
-  vkDestroySampler(core_vk->getGPU(vkSampler->m_gpu)->vk_logical, vkSampler->vk_sampler,
-                   nullptr);
+  vkDestroySampler(core_vk->getGPU(vkSampler->m_gpu)->vk_logical, vkSampler->vk_sampler, nullptr);
 }
 
 /*Attributes are ordered as the same order of input vector
@@ -139,10 +138,8 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
 
   if (desc->mipCount > std::floor(std::log2(std::max(desc->width, desc->height))) + 1 ||
       !desc->mipCount) {
-    printer(result_tgfx_FAIL,
-            "GFXContentManager->Create_Texture() has failed "
-            "because mip count of the texture is wrong!");
-    return result_tgfx_FAIL;
+    vkPrint(26);
+    return core_tgfx_main->getLogMessage(26, nullptr);
   }
 
   // Create VkImage
@@ -175,19 +172,15 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
     im_ci.usage   = usageFlag;
     im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
-    ThrowIfFailed(vkCreateImage(gpu->vk_logical, &im_ci, nullptr, &vkTextureObj),
-                  "GFXContentManager->Create_Texture() has failed in vkCreateImage()!");
+    if (vkCreateImage(gpu->vk_logical, &im_ci, nullptr, &vkTextureObj) != VK_SUCCESS) {
+      return vkPrint(24);
+    }
   }
 
   memoryRequirements_vk memReqs = memoryRequirements_vk::GETINVALID();
   vkGetImageMemoryRequirements(gpu->vk_logical, vkTextureObj, &memReqs.vk_memReqs);
   if (memReqs.requiresDedicatedAlloc) {
-    printer(result_tgfx_FAIL,
-            "Created texture requires a dedicated allocation but you didn't use dedicated "
-            "allocation extension. Provide a dedicated allocation info as extension!");
-    printer(result_tgfx_NOTCODED,
-            "Dedicated allocation extension isn't coded yet, so this resource creation's gonna "
-            "fail until the implementation.");
+    vkPrint(25);
     vkDestroyImage(gpu->vk_logical, vkTextureObj, nullptr);
     return result_tgfx_FAIL;
   }
@@ -234,20 +227,16 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
     ci.sType               = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     ci.size                = desc->dataSize;
 
-    ThrowIfFailed(vkCreateBuffer(gpu->vk_logical, &ci, nullptr, &vkBufObj),
-                  "vkCreateBuffer() has failed!");
+    if (vkCreateBuffer(gpu->vk_logical, &ci, nullptr, &vkBufObj) != VK_SUCCESS) {
+      return vkPrint(27);
+    }
   }
   memoryRequirements_vk memReqs;
   vkGetBufferMemoryRequirements(gpu->vk_logical, vkBufObj, &memReqs.vk_memReqs);
   if (memReqs.requiresDedicatedAlloc) {
-    printer(result_tgfx_FAIL,
-            "Created buffer requires a dedicated allocation but you didn't use dedicated "
-            "allocation extension. Provide a dedicated allocation info as extension!");
-    printer(result_tgfx_NOTCODED,
-            "Dedicated allocation extension isn't coded yet, so this resource creation's gonna "
-            "fail until the implementation.");
+    vkPrint(25);
     vkDestroyBuffer(gpu->vk_logical, vkBufObj, nullptr);
-    return result_tgfx_FAIL;
+    return core_tgfx_main->getLogMessage(25, nullptr);
   }
 
   // Get buffer requirements and fill BUFFER_VKOBJ
@@ -291,8 +280,7 @@ VkDescriptorSetLayout createDescriptorSetLayout(
   if (desc->DescriptorType == shaderdescriptortype_tgfx_SAMPLER && desc->staticSamplerCount) {
     for (uint32_t i = 0; i < desc->staticSamplerCount; i++) {
       if (!getOBJ<SAMPLER_VKOBJ>(desc->staticSamplers[i])) {
-        printer(result_tgfx_FAIL,
-                "You shouldn't give NULL or invalid handles to StaticSamplers list!");
+        vkPrint(10);
         return nullptr;
       }
 
@@ -338,8 +326,10 @@ VkDescriptorSetLayout createDescriptorSetLayout(
     ci.pNext = desc->isDynamic ? &dynCi : nullptr;
     ci.bindingCount = dynamicbinding_i + 1;
     ci.pBindings    = bindngs;
-    ThrowIfFailed(vkCreateDescriptorSetLayout(gpu->vk_logical, &ci, nullptr, &dsl),
-                  "Descriptor Set Layout creation has failed!");
+    if (vkCreateDescriptorSetLayout(gpu->vk_logical, &ci, nullptr, &dsl) != VK_SUCCESS) {
+      vkPrint(28);
+      return nullptr;
+    }
   }
   return dsl;
 }
@@ -350,12 +340,10 @@ result_tgfx vk_createBindingTable(gpu_tgfxhnd                                   
   // Check if pool has enough space for the desc set and if there is, then decrease the amount of
   // available descs in the pool for other checks
   if (!desc->ElementCount && !desc->staticSamplerCount) {
-    printer(result_tgfx_FAIL, "You shouldn't create a binding table with ElementCount = 0");
-    return result_tgfx_FAIL;
+    return vkPrint(29);
   }
   if (desc->staticSamplerCount && desc->DescriptorType != shaderdescriptortype_tgfx_SAMPLER) {
-    printer(result_tgfx_FAIL, "Static sampler should only be used in sampler binding table!");
-    return result_tgfx_FAIL;
+    return vkPrint(30);
   }
 #endif
   GPU_VKOBJ* gpu = getOBJ<GPU_VKOBJ>(i_gpu);
@@ -373,8 +361,9 @@ result_tgfx vk_createBindingTable(gpu_tgfxhnd                                   
     size.type                     = vk_findDescTypeVk(desc->DescriptorType);
     ci.pPoolSizes                 = &size;
     ci.flags = desc->isDynamic ? VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT : 0;
-    THROW_RETURN_IF_FAIL(vkCreateDescriptorPool(gpu->vk_logical, &ci, nullptr, &pool),
-                         "VkCreateDescriptorPool failed!", result_tgfx_FAIL);
+    if (vkCreateDescriptorPool(gpu->vk_logical, &ci, nullptr, &pool) != VK_SUCCESS) {
+      return vkPrint(28);
+    }
   }
 
   // Create DescriptorSet Layout
@@ -397,10 +386,9 @@ result_tgfx vk_createBindingTable(gpu_tgfxhnd                                   
     ai.pNext                       = desc->isDynamic ? &descIndexing : nullptr;
     ai.pSetLayouts                 = &DSL;
     ai.sType                       = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    if (ThrowIfFailed(vkAllocateDescriptorSets(gpu->vk_logical, &ai, &set),
-                      "vkAllocateDescriptorSets() failed!")) {
+    if (vkAllocateDescriptorSets(gpu->vk_logical, &ai, &set) != VK_SUCCESS) {
       vkDestroyDescriptorPool(gpu->vk_logical, pool, nullptr);
-      return result_tgfx_FAIL;
+      return vkPrint(31);
     }
   }
 
@@ -504,8 +492,9 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, unsigned int descSetCount,
     pl_ci.pPushConstantRanges    = nullptr;
   }
 
-  ThrowIfFailed(vkCreatePipelineLayout(GPU->vk_logical, &pl_ci, nullptr, layout),
-                "Link_MaterialType() failed at vkCreatePipelineLayout()!");
+  if (vkCreatePipelineLayout(GPU->vk_logical, &pl_ci, nullptr, layout) != VK_SUCCESS) {
+    vkPrint(16, L"Failed at vkCreatePipelineLayout()");
+  }
 
   for (uint32_t i = 0; i < descSetCount; i++) {
     vkDestroyDescriptorSetLayout(GPU->vk_logical, DESCLAYOUTs[i], nullptr);
@@ -535,12 +524,11 @@ result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx languag
       binary_spirv_data =
         VKCONST_GLSLANG_COMPILE_FNC(shaderstage, DATA, DATA_SIZE, &binary_spirv_datasize);
       if (!binary_spirv_datasize) {
-        printer(result_tgfx_FAIL, ( const char* )binary_spirv_data);
         delete binary_spirv_data;
-        return result_tgfx_FAIL;
+        return vkPrint(35);
       }
       break;
-    default: printer(result_tgfx_NOTCODED, "Vulkan backend doesn't support this shading language");
+    default: vkPrint(16, L"Backend doesn't support this shading language");
   }
 
   // Create Vertex Shader Module
@@ -552,8 +540,9 @@ result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx languag
   ci.codeSize                 = static_cast<size_t>(binary_spirv_datasize);
 
   VkShaderModule Module;
-  ThrowIfFailed(vkCreateShaderModule(GPU->vk_logical, &ci, 0, &Module),
-                "Shader Source is failed at creation!");
+  if (vkCreateShaderModule(GPU->vk_logical, &ci, 0, &Module) != VK_SUCCESS) {
+    return vkPrint(36);
+  }
 
   SHADERSOURCE_VKOBJ* SHADERSOURCE = hidden->shadersources.create_OBJ();
   SHADERSOURCE->Module             = Module;
@@ -576,36 +565,27 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     // Find vertex & fragment shader sources and detect GPU
     SHADERSOURCE_VKOBJ *vkSource_vertex = nullptr, *vkSource_fragment = nullptr;
     for (uint32_t shaderIndx = 0; shaderIndx < desc->shaderCount; shaderIndx++) {
-      SHADERSOURCE_VKOBJ* source =
-        getOBJ<SHADERSOURCE_VKOBJ>(desc->shaders[shaderIndx]);
+      SHADERSOURCE_VKOBJ* source = getOBJ<SHADERSOURCE_VKOBJ>(desc->shaders[shaderIndx]);
       if (!GPU) {
         GPU = getOBJ<GPU_VKOBJ>(source->m_gpu);
       } else if (GPU != getOBJ<GPU_VKOBJ>(source->m_gpu)) {
-        printer(result_tgfx_FAIL, "Shaders has to be from the same GPU!");
+        vkPrint(37);
         return result_tgfx_FAIL;
       }
       switch (source->stage) {
         case shaderStage_tgfx_VERTEXSHADER:
           if (vkSource_vertex) {
-            printer(result_tgfx_FAIL,
-                    "Link_MaterialType() has failed because there 2 vertex shaders in the list!");
-            return result_tgfx_FAIL;
+            return vkPrint(38);
           }
           vkSource_vertex = source;
           break;
         case shaderStage_tgfx_FRAGMENTSHADER:
           if (vkSource_fragment) {
-            printer(result_tgfx_FAIL,
-                    "Link_MaterialType() has failed because there 2 fragment shaders in the list!");
-            return result_tgfx_FAIL;
+            return vkPrint(38);
           }
           vkSource_fragment = source;
           break;
-        default:
-          printer(
-            result_tgfx_NOTCODED,
-            "Link_MaterialType() has failed because list has unsupported shader source type!");
-          return result_tgfx_NOTCODED;
+        default: return vkPrint(39);
       }
     }
 
@@ -631,26 +611,22 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     if (desc->attribLayout.attribCount > VKCONST_MAXVERTEXATTRIBCOUNT ||
         desc->attribLayout.attribCount >
           GPU->vk_propsDev.properties.limits.maxVertexInputAttributes) {
-      printer(result_tgfx_FAIL, "Exceeded max supported attribute count");
-      return result_tgfx_FAIL;
+      return vkPrint(40);
     }
     if (desc->attribLayout.attribCount > VKCONST_MAXVERTEXBINDINGCOUNT ||
         desc->attribLayout.attribCount >
           GPU->vk_propsDev.properties.limits.maxVertexInputBindings) {
-      printer(result_tgfx_FAIL, "Exceeded max supported attribute count");
-      return result_tgfx_FAIL;
+      return vkPrint(40);
     }
 
     for (uint32_t i = 0; i < desc->attribLayout.attribCount; i++) {
       const vertexAttributeDescription_tgfx& attr     = desc->attribLayout.i_attributes[i];
       uint32_t                               attrIndx = attr.attributeIndx;
       if (attrIndx >= desc->attribLayout.attribCount) {
-        printer(result_tgfx_FAIL, "Attribute index is wrong!");
-        return result_tgfx_FAIL;
+        return vkPrint(41);
       }
       if (attr.offset > GPU->vk_propsDev.properties.limits.maxVertexInputAttributeOffset) {
-        printer(result_tgfx_FAIL, "Attribute offset is too large, device doesn't support this!");
-        return result_tgfx_FAIL;
+        return vkPrint(42);
       }
 
       attribs[attrIndx].binding  = attr.bindingIndx;
@@ -663,12 +639,10 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
       const vertexBindingDescription_tgfx& binding     = desc->attribLayout.i_bindings[i];
       uint32_t                             bindingIndx = binding.bindingIndx;
       if (bindingIndx >= desc->attribLayout.bindingCount) {
-        printer(result_tgfx_FAIL, "Attribute index is wrong!");
-        return result_tgfx_FAIL;
+        return vkPrint(41);
       }
       if (binding.stride > GPU->vk_propsDev.properties.limits.maxVertexInputBindingStride) {
-        printer(result_tgfx_FAIL, "Stride is too large, device doesn't support this!");
-        return result_tgfx_FAIL;
+        return vkPrint(42);
       }
 
       bindings[bindingIndx].binding   = bindingIndx;
@@ -769,8 +743,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
 
   VkPipelineLayout layout = {};
   if (!VKPipelineLayoutCreation(GPU, desc->tableCount, desc->tables, false, &layout)) {
-    printer(result_tgfx_FAIL, "Compile_RasterPipeline() has failed at VKPipelineLayoutCreation!");
-    return result_tgfx_FAIL;
+    return vkPrint(43, L"raster pipeline at VKPipelineLayoutCreation()");
   }
 
   VkPipelineDepthStencilStateCreateInfo depthState = {};
@@ -846,8 +819,10 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     ci.flags               = VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
     ci.pNext               = &dynCi;
     vk_fillRasterPipelineStateInfo(GPU, &ci, desc, 0, nullptr);
-    ThrowIfFailed(vkCreateGraphicsPipelines(GPU->vk_logical, nullptr, 1, &ci, nullptr, &pipeline),
-                  "vkCreateGraphicsPipelines has failed!");
+    if (vkCreateGraphicsPipelines(GPU->vk_logical, nullptr, 1, &ci, nullptr, &pipeline) !=
+        VK_SUCCESS) {
+      vkPrint(43, L"at vkCreateGraphicsPipelines()");
+    }
   }
 
   PIPELINE_VKOBJ* pipelineObj = hidden->pipelines.create_OBJ();
@@ -895,9 +870,7 @@ result_tgfx vk_createComputePipeline(
   VkPipelineLayout layout = {};
   if (!VKPipelineLayoutCreation(GPU, bindingTableCount, bindingTableDescs, isCallBufferSupported,
                                 &layout)) {
-    printer(result_tgfx_FAIL,
-            "Compile_ComputeType() has failed at VKDescSet_PipelineLayoutCreation!");
-    return result_tgfx_FAIL;
+    return vkPrint(43, L"compute pipeline at VKPipelineLayoutCreation()!");
   }
 
   // VkPipeline creation
@@ -916,9 +889,10 @@ result_tgfx vk_createComputePipeline(
     cp_ci.layout                    = layout;
     cp_ci.pNext                     = nullptr;
     cp_ci.sType                     = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    ThrowIfFailed(
-      vkCreateComputePipelines(GPU->vk_logical, VK_NULL_HANDLE, 1, &cp_ci, nullptr, &pipelineObj),
-      "Compile_ComputeShader() has failed at vkCreateComputePipelines!");
+    if (vkCreateComputePipelines(GPU->vk_logical, VK_NULL_HANDLE, 1, &cp_ci, nullptr,
+                                 &pipelineObj) != VK_SUCCESS) {
+      return vkPrint(43, L"at vkCreateComputePipelines()");
+    }
   }
 
   PIPELINE_VKOBJ* obj = hidden->pipelines.create_OBJ();
@@ -937,18 +911,26 @@ result_tgfx vk_copyComputePipeline(pipeline_tgfxhnd src, const extension_tgfxhnd
 void vk_destroyPipeline(pipeline_tgfxhnd pipe) {
   PIPELINE_VKOBJ* vkPipe = getOBJ<PIPELINE_VKOBJ>(pipe);
   assert(vkPipe && "Invalid pipeline!");
-  vkDestroyPipelineLayout(core_vk->getGPU(vkPipe->m_gpu)->vk_logical, vkPipe->vk_layout,
-                          nullptr);
+  vkDestroyPipelineLayout(core_vk->getGPU(vkPipe->m_gpu)->vk_logical, vkPipe->vk_layout, nullptr);
   vkDestroyPipeline(core_vk->getGPU(vkPipe->m_gpu)->vk_logical, vkPipe->vk_object, nullptr);
   hidden->pipelines.destroyObj(hidden->pipelines.getINDEXbyOBJ(vkPipe));
 }
 
 static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
+static constexpr wchar_t* VKCONST_MAXDESCCHANGE_TEXT =
+  L"Exceeded max number of changable binding, please report this";
 // Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
 result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsigned int bindingCount,
-                                       const unsigned int*      bindingIndices,
+                                       const unsigned int*    bindingIndices,
                                        const sampler_tgfxhnd* samplerHandles) {
-  BINDINGTABLEINST_VKOBJ* set = getOBJ<BINDINGTABLEINST_VKOBJ>(bindingtable);
+  BINDINGTABLEINST_VKOBJ*   set      = getOBJ<BINDINGTABLEINST_VKOBJ>(bindingtable);
+  static constexpr wchar_t* funcName = L"at setBindingTable_sampler()";
+  if (!set) {
+    return vkPrint(11, funcName);
+  }
+  if (bindingCount > VKCONST_MAXDESCCHANGE_PERCALL) {
+    return vkPrint(16, VKCONST_MAXDESCCHANGE_TEXT);
+  }
 
   VkWriteDescriptorSet  writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   VkDescriptorImageInfo imageInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
@@ -957,8 +939,7 @@ result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsign
     uint32_t       elementIndx = bindingIndices[bindingIter];
     if (!set || !sampler || bindingIndices[bindingIter] >= set->m_elementCount ||
         set->vk_descType != VK_DESCRIPTOR_TYPE_SAMPLER) {
-      printer(result_tgfx_INVALIDARGUMENT, "vk_setBindingTable_Buffer() has invalid input!");
-      return result_tgfx_INVALIDARGUMENT;
+      return vkPrint(11, funcName);
     }
     sampler_descVK& samplerDESC = (( sampler_descVK* )set->m_descs)[elementIndx];
 
@@ -982,23 +963,21 @@ result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsign
 
 // Set a descriptor of the binding table created with shaderdescriptortype_tgfx_BUFFER
 result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int bindingCount,
-                                      const unsigned int*     bindingIndices,
+                                      const unsigned int*   bindingIndices,
                                       const buffer_tgfxhnd* buffers, const unsigned int* offsets,
                                       const unsigned int* sizes, unsigned int extCount,
                                       const extension_tgfxhnd* exts) {
-  BINDINGTABLEINST_VKOBJ* set = getOBJ<BINDINGTABLEINST_VKOBJ>(table);
+  BINDINGTABLEINST_VKOBJ*   set      = getOBJ<BINDINGTABLEINST_VKOBJ>(table);
+  static constexpr wchar_t* funcName = L"at setBindingTable_buffer()";
   if (!set) {
-    printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable!");
-    return result_tgfx_INVALIDARGUMENT;
+    return vkPrint(11, funcName);
   }
   if (set->vk_descType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER &&
       set->vk_descType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
-    printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable type!");
-    return result_tgfx_INVALIDARGUMENT;
+    return vkPrint(11, funcName);
   }
   if (bindingCount > VKCONST_MAXDESCCHANGE_PERCALL) {
-    printer(result_tgfx_FAIL, "Binding count is exceeded");
-    return result_tgfx_FAIL;
+    return vkPrint(16, VKCONST_MAXDESCCHANGE_TEXT);
   }
 
   VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
@@ -1008,8 +987,7 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
     buffer_descVK& bufferDESC  = (( buffer_descVK* )set->m_descs)[elementIndx];
 
     if (!buffer || elementIndx >= set->m_elementCount) {
-      printer(result_tgfx_INVALIDARGUMENT, "SetDescriptor_Buffer() has invalid input!");
-      return result_tgfx_FAIL;
+      return vkPrint(11, funcName);
     }
 
     bufferDESC.info.buffer = buffer->vk_buffer;
@@ -1033,21 +1011,19 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
   return result_tgfx_SUCCESS;
 }
 result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int bindingCount,
-                                       const unsigned int*      bindingIndices,
+                                       const unsigned int*    bindingIndices,
                                        const texture_tgfxhnd* textures) {
-  BINDINGTABLEINST_VKOBJ* set = getOBJ<BINDINGTABLEINST_VKOBJ>(table);
+  BINDINGTABLEINST_VKOBJ*   set      = getOBJ<BINDINGTABLEINST_VKOBJ>(table);
+  static constexpr wchar_t* funcName = L"at setBindingTable_texture()";
   if (!set) {
-    printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable!");
-    return result_tgfx_INVALIDARGUMENT;
+    return vkPrint(11, funcName);
   }
   if (set->vk_descType != VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE &&
       set->vk_descType != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
-    printer(result_tgfx_INVALIDARGUMENT, "Invalid bindingtable type!");
-    return result_tgfx_INVALIDARGUMENT;
+    return vkPrint(11, funcName);
   }
   if (bindingCount > VKCONST_MAXDESCCHANGE_PERCALL) {
-    printer(result_tgfx_FAIL, "You exceeded VKCONST_MAXDESCCHANGE_PERCALL");
-    return result_tgfx_FAIL;
+    return vkPrint(16, VKCONST_MAXDESCCHANGE_TEXT);
   }
   VkWriteDescriptorSet writeInfos[VKCONST_MAXDESCCHANGE_PERCALL] = {};
   for (uint32_t bindingIter = 0; bindingIter < bindingCount; bindingIter++) {
@@ -1055,9 +1031,7 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
     uint32_t        elementIndx = bindingIndices[bindingIter];
     texture_descVK& textureDESC = (( texture_descVK* )set->m_descs)[elementIndx];
     if (!texture || elementIndx >= set->m_elementCount) {
-      printer(result_tgfx_INVALIDARGUMENT,
-              "setBindingTable_Texture() has invalid input! Either texture is invalid or index");
-      return result_tgfx_INVALIDARGUMENT;
+      return vkPrint(21, funcName);
     }
     textureDESC.info.imageLayout = (set->vk_descType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
                                      ? VK_IMAGE_LAYOUT_GENERAL
@@ -1084,12 +1058,13 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
 //								MEMORY
 /////////////////////////////////////////////////////
 
+static constexpr wchar_t* VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT =
+  L"Extensions're not supported in heap functions for now";
 result_tgfx vk_createHeap(gpu_tgfxhnd gpu, unsigned char memoryRegionID,
                           unsigned long long heapSize, unsigned int extCount,
-                          const extension_tgfxhnd* exts,
-                          heap_tgfxhnd* heapHnd) {
+                          const extension_tgfxhnd* exts, heap_tgfxhnd* heapHnd) {
   if (exts) {
-    printer(result_tgfx_WARNING, "Extensions're not supported in createHeap");
+    return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
   }
   VkMemoryAllocateInfo memAlloc;
   memAlloc.allocationSize  = heapSize;
@@ -1098,8 +1073,9 @@ result_tgfx vk_createHeap(gpu_tgfxhnd gpu, unsigned char memoryRegionID,
   memAlloc.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   GPU_VKOBJ*     vkGPU     = getOBJ<GPU_VKOBJ>(gpu);
   VkDeviceMemory vkDevMem;
-  ThrowIfFailed(vkAllocateMemory(vkGPU->vk_logical, &memAlloc, nullptr, &vkDevMem),
-                "Heap allocation failed at vkAllocateMemory");
+  if (vkAllocateMemory(vkGPU->vk_logical, &memAlloc, nullptr, &vkDevMem) != VK_SUCCESS) {
+    return vkPrint(44, L"at vkAllocateMemory()");
+  }
 
   HEAP_VKOBJ* heap         = hidden->heaps.create_OBJ();
   heap->vk_memoryHandle    = vkDevMem;
@@ -1113,7 +1089,7 @@ result_tgfx vk_getHeapRequirement_Texture(texture_tgfxhnd i_texture, unsigned in
                                           const extension_tgfxhnd*   exts,
                                           heapRequirementsInfo_tgfx* reqs) {
   if (exts) {
-    printer(result_tgfx_WARNING, "Extensions not supported");
+    return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
   }
   TEXTURE_VKOBJ* texture  = getOBJ<TEXTURE_VKOBJ>(i_texture);
   uint8_t        listSize = 0;
@@ -1131,7 +1107,7 @@ result_tgfx vk_getHeapRequirement_Buffer(buffer_tgfxhnd i_buffer, unsigned int e
                                          const extension_tgfxhnd*   exts,
                                          heapRequirementsInfo_tgfx* reqs) {
   if (exts) {
-    printer(result_tgfx_WARNING, "Extensions not supported");
+    return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
   }
   BUFFER_VKOBJ* buf      = getOBJ<BUFFER_VKOBJ>(i_buffer);
   uint8_t       listSize = 0;
@@ -1155,24 +1131,21 @@ result_tgfx vk_getRemainingMemory(gpu_tgfxhnd GPU, unsigned char memoryRegionID,
 result_tgfx vk_bindToHeap_Buffer(heap_tgfxhnd i_heap, unsigned long long offset,
                                  buffer_tgfxhnd i_buffer, unsigned int extCount,
                                  const extension_tgfxhnd* exts) {
+  if (exts) {
+    return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
+  }
   BUFFER_VKOBJ* buffer = getOBJ<BUFFER_VKOBJ>(i_buffer);
   HEAP_VKOBJ*   heap   = getOBJ<HEAP_VKOBJ>(i_heap);
   GPU_VKOBJ*    gpu    = core_vk->getGPU(buffer->m_GPU);
   if (buffer->m_memReqs.requiresDedicatedAlloc) {
-    printer(result_tgfx_FAIL,
-            "Driver requires this buffer to be allocated specially, so you can't bind this to an "
-            "heap by hand. TGFX automatically bound it!");
-    return result_tgfx_FAIL;
+    return vkPrint(45);
   }
   if (offset % buffer->m_memReqs.vk_memReqs.alignment) {
-    printer(result_tgfx_FAIL,
-            "Offset should be multiple of the resource's alignment in bindToHeap");
-    return result_tgfx_FAIL;
+    return vkPrint(46);
   }
-  if (ThrowIfFailed(
-        vkBindBufferMemory(gpu->vk_logical, buffer->vk_buffer, heap->vk_memoryHandle, offset),
-        "bindToHeap_Buffer() has failed at vkBindBufferMemory!")) {
-    return result_tgfx_FAIL;
+  if (vkBindBufferMemory(gpu->vk_logical, buffer->vk_buffer, heap->vk_memoryHandle, offset) !=
+      VK_SUCCESS) {
+    return vkPrint(47, L"at vkBindBufferMemory()");
   }
   return result_tgfx_SUCCESS;
 }
@@ -1183,20 +1156,14 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
   HEAP_VKOBJ*    heap    = getOBJ<HEAP_VKOBJ>(i_heap);
   GPU_VKOBJ*     gpu     = core_vk->getGPU(texture->m_GPU);
   if (texture->m_memReqs.requiresDedicatedAlloc) {
-    printer(result_tgfx_FAIL,
-            "Driver requires this texture to be allocated specially, so you can't bind this to an "
-            "heap by hand. TGFX automatically bound it!");
-    return result_tgfx_FAIL;
+    return vkPrint(45);
   }
   if (offset % texture->m_memReqs.vk_memReqs.alignment) {
-    printer(result_tgfx_FAIL,
-            "Offset should be multiple of the resource's alignment in bindToHeap");
-    return result_tgfx_FAIL;
+    return vkPrint(46);
   }
-  if (ThrowIfFailed(
-        vkBindImageMemory(gpu->vk_logical, texture->vk_image, heap->vk_memoryHandle, offset),
-        "bindToHeap_Buffer() has failed at vkBindBufferMemory!")) {
-    return result_tgfx_FAIL;
+  if (vkBindImageMemory(gpu->vk_logical, texture->vk_image, heap->vk_memoryHandle, offset) !=
+      VK_SUCCESS) {
+    vkPrint(47, L"at vkBindImageMemory()");
   }
 
   if (texture->vk_imageView) {
@@ -1233,8 +1200,9 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
 
     Fill_ComponentMapping_byCHANNELs(texture->m_channels, ci.components);
 
-    ThrowIfFailed(vkCreateImageView(gpu->vk_logical, &ci, nullptr, &texture->vk_imageView),
-                  "bindToHeap_Texture() has failed in vkCreateImageView()!");
+    if (vkCreateImageView(gpu->vk_logical, &ci, nullptr, &texture->vk_imageView) != VK_SUCCESS) {
+      return vkPrint(47, L"at vkCreateImageView()");
+    }
   }
 
   return result_tgfx_SUCCESS;
@@ -1244,9 +1212,10 @@ result_tgfx vk_mapHeap(heap_tgfxhnd i_heap, unsigned long long offset, unsigned 
                        unsigned int extCount, const extension_tgfxhnd* exts, void** mappedRegion) {
   HEAP_VKOBJ* heap = getOBJ<HEAP_VKOBJ>(i_heap);
   GPU_VKOBJ*  gpu  = core_vk->getGPU(heap->m_GPU);
-  THROW_RETURN_IF_FAIL(
-    vkMapMemory(gpu->vk_logical, heap->vk_memoryHandle, offset, size, 0, mappedRegion),
-    "VkMapMemory failed!", result_tgfx_FAIL);
+  if (vkMapMemory(gpu->vk_logical, heap->vk_memoryHandle, offset, size, 0, mappedRegion) !=
+      VK_SUCCESS) {
+    return vkPrint(48);
+  }
   return result_tgfx_SUCCESS;
 }
 

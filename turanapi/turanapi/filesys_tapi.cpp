@@ -1,5 +1,6 @@
 #include "filesys_tapi.h"
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -7,30 +8,51 @@
 #include <vector>
 
 #include "ecs_tapi.h"
+#include "string_tapi.h"
 
-void* read_binaryfile(const char* path, unsigned long* size) {
-  std::ifstream Binary_File;
-  Binary_File.open(path, std::ios::binary | std::ios::in | std::ios::ate);
-  if (!(Binary_File.is_open())) {
-    std::cout << "There is no such file: " << path << std::endl;
+void failedToRead_tapi(stringArgument_tapi(path)) {
+  switch (pathType) {
+    case string_type_tapi_UTF8:
+      printf("There is no such file: %s\n", ( const char* )pathData);
+      break;
+    case string_type_tapi_UTF16:
+      wprintf(L"There is no such file %s\n", ( const wchar_t* )pathData);
+      break;
+    default: break;
+  }
+}
+template <typename T>
+void openFile_tapi(T& file, stringArgument_tapi(path), std::ios::openmode openMode = 1) {
+  switch (pathType) {
+    case string_type_tapi_UTF8: file.open(( const char* )pathData, openMode); break;
+    case string_type_tapi_UTF16: file.open(( const wchar_t* )pathData, openMode); break;
+    default: break;
+  }
+}
+void* read_binaryfile(stringArgument_tapi(path), unsigned long* size) {
+  std::ifstream binaryFile;
+  openFile_tapi(binaryFile, pathType, pathData, std::ios::binary | std::ios::in | std::ios::ate);
+  if (!(binaryFile.is_open())) {
+    failedToRead_tapi(pathType, pathData);
     return nullptr;
   }
 
-  Binary_File.seekg(0, std::ios::end);
-  unsigned long long length = Binary_File.tellg();
-  Binary_File.seekg(0, std::ios::beg);
+  binaryFile.seekg(0, std::ios::end);
+  unsigned long long length = binaryFile.tellg();
+  binaryFile.seekg(0, std::ios::beg);
   char* read_data = new char[length];
-  Binary_File.read(read_data, length);
-  Binary_File.close();
+  binaryFile.read(read_data, length);
+  binaryFile.close();
   *size = length;
   return read_data;
 }
 
-void overwrite_binaryfile(const char* path, void* data, unsigned long datasize) {
+void overwrite_binaryfile(stringArgument_tapi(path), void* data, unsigned long datasize) {
   // ios::trunc is used to clear the file before outputting the data!
-  std::ofstream Output_File(path, std::ios::binary | std::ios::out | std::ios::trunc);
-  if (!Output_File.is_open()) {
-    std::cout << "Error: " << path << " couldn't be outputted!\n";
+  std::ofstream outputFile;
+  openFile_tapi(outputFile, pathType, pathData, std::ios::binary | std::ios::out | std::ios::trunc);
+  if (!outputFile.is_open()) {
+    failedToRead_tapi(pathType, pathData);
     return;
   }
   if (data == nullptr) {
@@ -40,45 +62,72 @@ void overwrite_binaryfile(const char* path, void* data, unsigned long datasize) 
     std::cout << "data size is 0!\n";
   }
   // Write to a file and finish all of the operation!
-  Output_File.write(( const char* )data, datasize);
-  Output_File.close();
-  std::cout << path << " is outputted successfully!\n";
+  outputFile.write(( const char* )data, datasize);
+  outputFile.close();
+  printf("File output is successful\n");
 }
 
-char* read_textfile(const char* path) {
-  char*         finaltext = nullptr;
-  std::ifstream textfile;
-  textfile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-  try {
-    textfile.open(path);
-    std::stringstream string_data;
-    string_data << textfile.rdbuf();
-    textfile.close();
-    finaltext      = new char[string_data.str().length() + 1]{'\n'};
-    unsigned int i = 0;
-    while (string_data.str()[i] != '\0') {
-      finaltext[i] = string_data.str()[i];
-      i++;
-    }
-    return finaltext;
-  } catch (std::ifstream::failure error) {
-    std::cout << "Error: Text file couldn't read: " << path << std::endl;
-    return finaltext;
+void* read_textfile(stringArgument_tapi(path), string_type_tapi fileTextType) {
+  switch (fileTextType) {
+    case string_type_tapi_UTF8: {
+      std::ifstream cTextFile;
+      openFile_tapi(cTextFile, pathType, pathData);
+      std::stringstream stringData;
+      stringData << cTextFile.rdbuf();
+      cTextFile.close();
+      char*        finaltext = new char[stringData.str().length() + 1]{'\n'};
+      unsigned int i         = 0;
+      while (stringData.str()[i] != '\0') {
+        finaltext[i] = stringData.str()[i];
+        i++;
+      }
+      return finaltext;
+    } break;
+    case string_type_tapi_UTF16: {
+      std::ifstream wTextFile;
+      openFile_tapi(wTextFile, pathType, pathData);
+      std::wstringstream stringData;
+      stringData << wTextFile.rdbuf();
+      wTextFile.close();
+      wchar_t*     finaltext = new wchar_t[stringData.str().length() + 1]{'\n'};
+      unsigned int i         = 0;
+      while (stringData.str()[i] != '\0') {
+        finaltext[i] = stringData.str()[i];
+        i++;
+      }
+      return finaltext;
+    } break;
   }
 }
-void write_textfile(const char* text, const char* path, unsigned char write_to_end) {
-  std::ofstream Output_File;
-  if (write_to_end) {
-    Output_File.open(path, std::ios::out | std::ios::app);
-    Output_File << text << std::endl;
-    Output_File.close();
+void write_textfile(stringArgument_tapi(text), stringArgument_tapi(path),
+                    unsigned char writeToEnd) {
+  std::ios::openmode openMode;
+  if (writeToEnd) {
+    openMode = std::ios::out | std::ios::app;
   } else {
-    Output_File.open(path, std::ios::out | std::ios::trunc);
-    Output_File << text << std::endl;
-    Output_File.close();
+    openMode = std::ios::out | std::ios::trunc;
+  }
+  switch (textType) {
+    case string_type_tapi_UTF8: {
+      std::ofstream outputFile;
+      openFile_tapi(outputFile, pathType, pathData, openMode);
+      outputFile << ( const char* )textData << std::endl;
+      outputFile.close();
+    } break;
+    case string_type_tapi_UTF16: {
+      std::wofstream outputFile;
+      openFile_tapi(outputFile, pathType, pathData, openMode);
+      outputFile << ( const wchar_t* )textData << std::endl;
+      outputFile.close();
+    } break;
   }
 }
-void delete_file(const char* path) { std::remove(path); }
+void delete_file(stringArgument_tapi(path)) {
+  switch (pathType) {
+    case string_type_tapi_UTF8: std::filesystem::remove(( const char* )pathData); break;
+    case string_type_tapi_UTF16: std::filesystem::remove(( wchar_t* )pathData); break;
+  }
+}
 
 typedef struct filesys_tapi_d {
   filesys_tapi_type* type;

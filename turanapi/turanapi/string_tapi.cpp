@@ -1,4 +1,4 @@
-#include "array_of_strings_tapi.h"
+#include "string_tapi.h"
 
 #include "ecs_tapi.h"
 #include "predefinitions_tapi.h"

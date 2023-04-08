@@ -11,6 +11,21 @@
 // Create allocator flag (but not coded for now)
 #define ALLOCATOR_FLAG_TAPI() 0
 
+typedef enum tapi_string_type {
+  string_type_tapi_UTF8,
+  string_type_tapi_UTF16,
+  string_type_tapi_UTF32
+} string_type_tapi;
+
+typedef struct string_tapi {
+
+  // Use these to create a single string from variadic input
+  // Calling free() is enough to destroy
+  char* (*createString)(const char* format, ...);
+  wchar_t* (*createVString)(const wchar_t* format, ...);
+  char32_t* (*createWString)(const char32_t* format, ...);
+};
+
 typedef struct tapi_array_of_strings* array_of_strings_tapi;
 
 // Uses classic malloc

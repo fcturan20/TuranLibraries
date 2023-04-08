@@ -430,7 +430,7 @@ void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
     vk_destroyCmd(bundle->m_cmds[i]);
   }
   vk_virmem::free_page(VK_POINTER_TO_MEMOFFSET(bundle->m_cmds));
-  const uint32_t cmdBufferCount = 1;
+  const uint32_t cmdBufferCount = sizeof(bundle->vk_cmdBuffers) / sizeof(bundle->vk_cmdBuffers[0]);
   for (uint32_t i = 0; i < cmdBufferCount; i++) {
     VkCommandBuffer cmdBuffer = bundle->vk_cmdBuffers[i];
     if (cmdBuffer != VK_NULL_HANDLE) {

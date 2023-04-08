@@ -4,16 +4,29 @@
 #define LOGGER_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
 #define LOGGER_TAPI_PLUGIN_LOAD_TYPE logger_tapi_type*
 
+/*
+ * You should init the log system. This will make every log to be saved in the main log file
+ * If you want to save specific type of logs to a specific text file, you can query it with save().
+ * All logs are saved as UTF32.
+ * You can use all UTFs by defining them with proper format argument: 8 -> %s, 16 -> %v, 32 -> %w
+ * There is a limit of characters per log. It is defined with maxCharPerLog_tapi constant.
+ */
+
+typedef enum tapi_log_type {
+  log_type_tapi_STATUS,
+  log_type_tapi_WARNING,
+  log_type_tapi_ERROR,
+  log_type_tapi_NOTCODED,
+  log_type_tapi_CRASHING
+} log_type_tapi;
+
 typedef struct logger_tapi {
-  void (*log_crashing)(const char* log);
-  void (*log_error)(const char* log);
-  void (*log_warning)(const char* log);
-  void (*log_status)(const char* log);
-  void (*log_notcoded)(const char* log, unsigned char stop_running);
+  void (*init)(stringArgument_tapi(mainLogFile));
+  void (*destroy)();
   // You can set file paths different each time you write to file
   // Also you can set paths NULL if you don't want to change file path
-  void (*writelogs_tofile)(const char* mainlogfile, const char* errorlogfile,
-                           const char* warninglogfile, const char* notcodedfile);
+  void (*save)(tapi_log_type logType, stringArgument_tapi(path));
+  void (*log)(tapi_log_type type, unsigned char stopRunning, stringArgument_tapi(format), ...);
 } logger_tapi;
 
 typedef struct logger_tapi_d logger_tapi_d;

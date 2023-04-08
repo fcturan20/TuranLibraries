@@ -1,9 +1,10 @@
 #include "vk_predefinitions.h"
 
+#include <stdarg.h>
 #include <map>
 
 #include "vk_resource.h"
-#include <stdarg.h>
+#include "string_tapi.h"
 
 core_tgfx*             core_tgfx_main    = nullptr;
 core_public*           core_vk           = nullptr;
@@ -20,107 +21,9 @@ profiler_tapi*         profilerSys       = nullptr;
 bitsetsys_tapi*        bitsetSys         = nullptr;
 VkInstance             VKGLOBAL_INSTANCE = VK_NULL_HANDLE;
 VkApplicationInfo      VKGLOBAL_APPINFO;
-tgfx_logCallback  printer_cb                   = nullptr;
+tgfx_logCallback       printer_cb                   = nullptr;
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_CURRENTFRAME = nullptr;
 unsigned char          VKGLOBAL_FRAMEINDEX          = 0;
-
-typedef struct error_structs {
-  result_tgfx result;
-  const char* output;
-  error_structs(result_tgfx r, const char* o) : result(r), output(o) {}
-} error_structs;
-static error_structs errors[]{
-  // If you can't find the index of the code, do arithmetic on line numbers! :D
-  error_structs(result_tgfx_NOTCODED, "NO_OUTPUT_CODE!"),
-  error_structs(result_tgfx_INVALIDARGUMENT, "Second order subpasses has invalid wait desc"),
-  error_structs(result_tgfx_FAIL,
-                "This type of wait description isn't supported by Create_DrawPass()!"),
-  error_structs(result_tgfx_FAIL,
-                "VulkanRenderer: Create_TransferPass() has failed because this type of TP creation "
-                "isn't supported!"),
-  error_structs(
-    result_tgfx_FAIL,
-    "GFXRenderer->Create_DrawPass() has failed because one of the inherited slotsets isn't valid!"),
-  error_structs(result_tgfx_FAIL,
-                "GFXRenderer->Create_DrawPass() has failed because one of the inherited slotsets "
-                "isn't inherited from the DrawPass' Base Slotset!"),
-  error_structs(result_tgfx_FAIL,
-                "Check_WaitHandles() doesn't support this type, there is a possible memory bug!"),
-  error_structs(result_tgfx_FAIL,
-                "One of the passes waits for a subpass but its handle doesn't point to a main "
-                "pass, there is a bug!"),
-  error_structs(result_tgfx_FAIL, "Waited subpass isn't found in the draw pass!"),
-  error_structs(result_tgfx_FAIL, "There is a bug in the backend, RenderNodes list isn't valid"),
-  error_structs(result_tgfx_FAIL, "Bindingtable list has invalid handle!"),
-  error_structs(result_tgfx_FAIL, "There are more descsets than supported!"),
-  error_structs(result_tgfx_FAIL, "No descset is found!"),
-  error_structs(result_tgfx_FAIL, "Subpass handle isn't valid!"),
-  error_structs(result_tgfx_FAIL, "Object handle's type didn't match!"),
-  error_structs(result_tgfx_FAIL,
-                "This type of pass isn't supported to be checked for merge status!"),
-  error_structs(result_tgfx_FAIL,
-                "Pass wait description's type isn't supported, please report this!"),
-  error_structs(result_tgfx_FAIL, "Pass wait description's target main pass handle is wrong!"),
-  error_structs(
-    result_tgfx_FAIL,
-    "There are multiple of the same main pass type in a wait list, which isn't supported!"),
-  error_structs(result_tgfx_FAIL,
-                "SubTP wait handles couldn't be converted because subtp finding has failed! This "
-                "is a backend issue, please report this"),
-  error_structs(result_tgfx_FAIL,
-                "Converting waits has failed because there is merged pass conflicts!"),
-  error_structs(result_tgfx_INVALIDARGUMENT,
-                "CreateSubTransferPassDescription() has invalid transfer type argument!")};
-vk_uint32c errors_count = sizeof(errors) / sizeof(error_structs);
-
-result_tgfx printer(unsigned int error_code) {
-  printer_cb(errors[error_code].result, errors[error_code].output);
-  return errors[error_code].result;
-}
-result_tgfx printer(result_tgfx failResult, const char* format, ...) {
-  static constexpr uint32_t maxLetter = 1 << 12;
-  char    buf[maxLetter] = {};
-
-  va_list args;
-  va_start(args, format);
-
-  int bufIter = 0;
-  uint32_t formatLen = strlen(format);
-  for (uint32_t formatIter = 0; formatIter < formatLen; formatIter++) {
-    if (format[formatIter] == '%' && formatIter + 1 <= formatLen) {
-      formatIter++;
-      if (format[formatIter] == 'd') {
-        int i = va_arg(args, int);
-        snprintf(&buf[bufIter], 4, "%d", i);
-        bufIter += 4;
-      } else if (format[formatIter] == 'c') {
-        // A 'char' variable will be promoted to 'int'
-        // A character literal in C is already 'int' by itself
-        int c        = va_arg(args, int);
-        buf[bufIter] = c;
-        bufIter++;
-      } else if (format[formatIter] == 'f') {
-        double d = va_arg(args, double);
-        snprintf(&buf[bufIter], 8, "%f", d);
-        bufIter += 8;
-      } else if (format[formatIter] == 's') {
-        const char* s      = va_arg(args, const char*);
-        int         strLen = strlen(s);
-        if (strLen <= maxLetter - 1 - bufIter) {
-          memcpy(&buf[bufIter], s, strLen);
-          bufIter += strLen;
-        }
-      }
-    } else {
-      buf[bufIter++] = format[formatIter];
-    }
-  }
-
-  va_end(args);
-
-  printer_cb(failResult, buf);
-  return failResult;
-}
 
 // This is the max element count of the VK_MAIN_ALLOCATOR's list array
 uint32_t  VKCONST_VIRMEM_MAXALLOCCOUNT = 0;
@@ -142,8 +45,6 @@ struct VK_MAIN_ALLOCATOR {
 };
 static VK_MAIN_ALLOCATOR* allocator_main;
 
-std::function<void()> VKGLOBAL_emptyCallback = []() {};
-
 void vk_createBackendAllocator() {
   // Allocate enough space for all vulkan backend
   {
@@ -157,10 +58,9 @@ void vk_createBackendAllocator() {
     begin_loc = uintptr_t(VKCONST_VIRMEMSPACE_BEGIN);
   }
 
-
   // Create main allocator (manages suballocations)
   {
-    allocator_main  = ( VK_MAIN_ALLOCATOR* )VKCONST_VIRMEMSPACE_BEGIN;
+    allocator_main = ( VK_MAIN_ALLOCATOR* )VKCONST_VIRMEMSPACE_BEGIN;
     VK_MAIN_ALLOCATOR defaultInit;
     memcpy(allocator_main, &defaultInit, sizeof(VK_MAIN_ALLOCATOR));
 
@@ -220,14 +120,12 @@ uint32_t vk_virmem::allocatePage(uint32_t requestedSize, uint32_t* roundedUpSize
       current_page.isALIVE   = true;
       return VKCONST_VIRMEMPAGESIZE * page_i;
     } else {
-      printer(result_tgfx_FAIL, "Backend page allocation fail!");
+      vkPrint(3);
       return UINT32_MAX;
     }
   }
   if (alloc_i == VKCONST_VIRMEM_MAXALLOCCOUNT - 1) {
-    printer(result_tgfx_FAIL,
-            "You exceeded Max Memory Allocation Count which is super weird. You should give more "
-            "pages to the VK backend's own memory manager!");
+    vkPrint(4);
   }
   return UINT32_MAX;
 }
@@ -237,7 +135,7 @@ void vk_virmem::free_page(uint32_t suballocation_startoffset) {
   std::unique_lock<std::mutex> lock(allocator_main->allocation_lock);
 #ifdef VULKAN_DEBUGGING
   if (suballocation_startoffset % VKCONST_VIRMEMPAGESIZE) {
-    printer(result_tgfx_FAIL, "VK backend tried to free a suballocation wrong!");
+    vkPrint(5);
     return;
   }
 #endif
@@ -275,27 +173,21 @@ uint32_t vk_virmem::allocate_from_dynamicmem(dynamicmem* mem, uint32_t size, boo
 #ifdef VULKAN_DEBUGGING
   uint32_t remaining = mem->remaining_space.load();
   if (remaining < size) {
-    printer(result_tgfx_FAIL,
-            "Vulkan backend's intended memory allocation is bigger than suballocation's size, "
-            "please report this issue");
-    return NULL;
+    vkPrint(6);
+    return UINT32_MAX;
   }
   while (!mem->remaining_space.compare_exchange_strong(remaining, remaining - size)) {
     remaining = mem->remaining_space.load();
     if (remaining < size) {
-      printer(result_tgfx_FAIL,
-              "Vulkan backend's intended memory allocation is bigger than suballocation's size, "
-              "please report this issue");
-      return NULL;
+      vkPrint(6);
+      return UINT32_MAX;
     }
   }
 #else
   uint32_t remaining = mem->remaining_space.fetch_sub(size);
   if (remaining < size) {
-    printer(result_tgfx_FAIL,
-            "Vulkan backend's intended memory allocation is bigger than suballocation's size, "
-            "please report this issue");
-    return NULL;
+    vkPrint(6);
+    return UINT32_MAX;
   }
 #endif
   uintptr_t loc_of_base_mem = uintptr_t(mem);

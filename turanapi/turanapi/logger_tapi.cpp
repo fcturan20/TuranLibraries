@@ -1,39 +1,33 @@
 #include "logger_tapi.h"
 
+#include <assert.h>
+#include <stdarg.h>
+#include <wchar.h>
+
+#include <codecvt>
 #include <iostream>
 #include <string>
 #include <vector>
 
-#include "array_of_strings_tapi.h"
 #include "ecs_tapi.h"
 #include "filesys_tapi.h"
+#include "string_tapi.h"
 #include "virtualmemorysys_tapi.h"
 
-enum class LOG_TYPE : unsigned char {
-  CRASHING_ERROR = 0,
-  SOME_ERROR     = 1,
-  WARNING        = 2,
-  STATUS         = 3,
-  NOT_CODEDPATH  = 4
-};
-
-struct LOG {
-  std::string TEXT;
-  LOG_TYPE    TYPE;
+struct tapi_log {
+  std::wstring  logText;
+  tapi_log_type logType;
 };
 struct Logger {
-  std::string      MainLogFile_Path;
-  std::string      WarningLogFile_Path;
-  std::string      ErrorLogFile_Path;
-  std::string      NotCodedLogFile_Path;
-  std::vector<LOG> LOGLIST;
+  std::wstring          mainFilePath;
+  std::vector<tapi_log> logList;
 };
-static Logger*       LOGSYS  = nullptr;
-static filesys_tapi* filesys = nullptr;
+static Logger*       logSys  = nullptr;
+static filesys_tapi* fileSys = nullptr;
 
 #define GET_printer(i) (*GET_LOGLISTTAPI())[i]
-inline void breakpoint(const char* log) {
-  std::cout << "Crashing ERROR: " << log << "\ny to continue, n to exit application" << std::endl;
+inline void breakpoint() {
+  printf("This log is meant to stop the app: y to continue, n to exit application\n");
   char breakpoint_choice = 0;
   while (breakpoint_choice != 'y' || breakpoint_choice != 'n') {
     std::cin >> &breakpoint_choice;
@@ -43,117 +37,138 @@ inline void breakpoint(const char* log) {
   }
 }
 
-void WRITE_LOGs_toFILEs(const char* mainlogfile, const char* errorlogfile,
-                        const char* warninglogfile, const char* notcodedfile) {
-  if (!mainlogfile) {
-    LOGSYS->MainLogFile_Path = mainlogfile;
-  }
-  if (!errorlogfile) {
-    LOGSYS->ErrorLogFile_Path = errorlogfile;
-  }
-  if (!warninglogfile) {
-    LOGSYS->WarningLogFile_Path = warninglogfile;
-  }
-  if (!notcodedfile) {
-    LOGSYS->NotCodedLogFile_Path = notcodedfile;
-  }
-  if (LOGSYS->LOGLIST.size() == 0) {
-    std::cout << "There is no log to write!\n";
+void logSave_tapi(tapi_log_type logType, stringArgument_tapi(path)) {
+  if (logSys->logList.size() == 0) {
     return;
   }
-  std::string MainLogFile_Text, ErrorLogFile_Text, WarningLogFile_Text, NotCodedLogFile_Text;
-  LOG*        log_data = nullptr;
-  for (unsigned int i = 0; i < LOGSYS->LOGLIST.size(); i++) {
-    log_data = &LOGSYS->LOGLIST[i];
-    switch (log_data->TYPE) {
-      case LOG_TYPE::CRASHING_ERROR:
-      case LOG_TYPE::SOME_ERROR:
-        MainLogFile_Text.append(log_data->TEXT);
-        MainLogFile_Text.append("\n");
-        ErrorLogFile_Text.append(log_data->TEXT);
-        ErrorLogFile_Text.append("\n");
-        break;
-      case LOG_TYPE::WARNING:
-        MainLogFile_Text.append(log_data->TEXT);
-        MainLogFile_Text.append("\n");
-        WarningLogFile_Text.append(log_data->TEXT);
-        WarningLogFile_Text.append("\n");
-        break;
-      case LOG_TYPE::NOT_CODEDPATH:
-        MainLogFile_Text.append(log_data->TEXT);
-        MainLogFile_Text.append("\n");
-        ErrorLogFile_Text.append(log_data->TEXT);
-        ErrorLogFile_Text.append("\n");
-        NotCodedLogFile_Text.append(log_data->TEXT);
-        NotCodedLogFile_Text.append("\n");
-        break;
-      case LOG_TYPE::STATUS:
-        MainLogFile_Text.append(log_data->TEXT);
-        MainLogFile_Text.append("\n");
-        break;
-      default: break;
+  std::wstring textData;
+  for (unsigned int i = 0; i < logSys->logList.size(); i++) {
+    const tapi_log& log = logSys->logList[i];
+    // If logType is INT32_MAX, this is the main log file save
+    if (logType == INT32_MAX) {
+      textData += log.logText;
+    } else if (logType == log.logType) {
+      textData += log.logText;
     }
   }
-  filesys->write_textfile(MainLogFile_Text.c_str(), LOGSYS->MainLogFile_Path.c_str(), true);
-  filesys->write_textfile(ErrorLogFile_Text.c_str(), LOGSYS->ErrorLogFile_Path.c_str(), true);
-  filesys->write_textfile(WarningLogFile_Text.c_str(), LOGSYS->WarningLogFile_Path.c_str(), true);
-  filesys->write_textfile(NotCodedLogFile_Text.c_str(), LOGSYS->NotCodedLogFile_Path.c_str(), true);
-
-  LOGSYS->LOGLIST.clear();
+  fileSys->write_textfile(string_type_tapi_UTF16, textData.c_str(), pathType, pathData, false);
+  logSys->logList.clear();
 }
 
-void LOG_CRASHING(const char* log) {
-  LOG* log_data = nullptr;
-  LOGSYS->LOGLIST.push_back(LOG());
-  log_data       = &LOGSYS->LOGLIST[LOGSYS->LOGLIST.size() - 1];
-  log_data->TEXT = log;
-  log_data->TYPE = LOG_TYPE::CRASHING_ERROR;
-  WRITE_LOGs_toFILEs(nullptr, nullptr, nullptr, nullptr);
-  breakpoint(log);
-}
-
-void LOG_ERROR(const char* log) {
-  LOG* log_data = nullptr;
-  LOGSYS->LOGLIST.push_back(LOG());
-  log_data       = &LOGSYS->LOGLIST[LOGSYS->LOGLIST.size() - 1];
-  log_data->TEXT = log;
-  log_data->TYPE = LOG_TYPE::SOME_ERROR;
-
-  std::cout << "Error: " << log_data->TEXT << std::endl;
-}
-
-void LOG_WARNING(const char* log) {
-  LOG* log_data = nullptr;
-  LOGSYS->LOGLIST.push_back(LOG());
-  log_data       = &LOGSYS->LOGLIST[LOGSYS->LOGLIST.size() - 1];
-  log_data->TEXT = log;
-  log_data->TYPE = LOG_TYPE::WARNING;
-
-  std::cout << "Warning: " << log_data->TEXT << std::endl;
-}
-
-void LOG_STATUS(const char* log) {
-  LOG* log_data = nullptr;
-  LOGSYS->LOGLIST.push_back(LOG());
-  log_data       = &LOGSYS->LOGLIST[LOGSYS->LOGLIST.size() - 1];
-  log_data->TEXT = log;
-  log_data->TYPE = LOG_TYPE::STATUS;
-  std::cout << "Status: " << log_data->TEXT << std::endl;
-}
-
-void LOG_NOTCODED(const char* log, unsigned char stop_running) {
-  LOG* log_data = nullptr;
-  LOGSYS->LOGLIST.push_back(LOG());
-  log_data       = &LOGSYS->LOGLIST[LOGSYS->LOGLIST.size() - 1];
-  log_data->TEXT = log;
-  log_data->TYPE = LOG_TYPE::NOT_CODEDPATH;
-
-  std::cout << "Not Coded Path: " << log_data->TEXT << std::endl;
-
-  if (stop_running) {
-    WRITE_LOGs_toFILEs(nullptr, nullptr, nullptr, nullptr);
-    breakpoint(log);
+static constexpr uint32_t maxCharPerLog_tapi = 1 << 12;
+static constexpr wchar_t* statusNames[]      = {L"Status", L"Warning", L"Error", L"Not coded",
+                                                L"Crashing"};
+bool logCheckFormatLetter(stringArgument_tapi(format), uint32_t letterIndx, char letter) {
+  switch (formatType) {
+    case string_type_tapi_UTF8: {
+      const char* format = ( const char* )formatData;
+      return format[letterIndx] == letter;
+    } break;
+    case string_type_tapi_UTF16: {
+      wchar_t wchar = (( const wchar_t* )formatData)[letterIndx];
+      return wchar == letter;
+    } break;
+    case string_type_tapi_UTF32: {
+      char32_t uchar = (( const char32_t* )formatData)[letterIndx];
+      return uchar == letter;
+    } break;
+    default: assert(0 && "Unsupported format for logCheckFormatLetter!");
   }
+  return false;
+}
+void logLog_tapi(tapi_log_type type, unsigned char stopRunning, stringArgument_tapi(format), ...) {
+  wchar_t buf[maxCharPerLog_tapi] = {};
+
+  va_list args;
+  va_start(args, formatData);
+
+  int      bufIter   = 0;
+  uint32_t formatLen = 0, sizeOfEachChar = 0;
+  switch (formatType) {
+    case string_type_tapi_UTF8:
+      formatLen      = strlen(( const char* )formatData);
+      sizeOfEachChar = sizeof(char);
+      break;
+    case string_type_tapi_UTF16:
+      formatLen      = wcslen(( const wchar_t* )formatData);
+      sizeOfEachChar = sizeof(wchar_t);
+      break;
+    default: assert(0 && "Only UTF8 and UTF16 supported for now!");
+  }
+  for (uint32_t formatIter = 0; formatIter < formatLen && formatIter < maxCharPerLog_tapi;
+       formatIter++) {
+    if (logCheckFormatLetter(formatType, formatData, formatIter, '%') &&
+        formatIter + 1 <= formatLen) {
+      formatIter++;
+      if (logCheckFormatLetter(formatType, formatData, formatIter, 'd')) {
+        int i = va_arg(args, int);
+        _snwprintf(&buf[bufIter], 4, L"%d", i);
+        bufIter += 4;
+      } else if (logCheckFormatLetter(formatType, formatData, formatIter, 'f')) {
+        double d = va_arg(args, double);
+        _snwprintf(&buf[bufIter], 8, L"%f", d);
+        bufIter += 8;
+      } else if (logCheckFormatLetter(formatType, formatData, formatIter, 's')) {
+        const char* s      = va_arg(args, const char*);
+        if (s) {
+          int strLen = strlen(s);
+          if (strLen <= maxCharPerLog_tapi - 1 - bufIter) {
+            mbstowcs(&buf[bufIter], s, strLen);
+            bufIter += strLen;
+          } else {
+            assert(0 && "maxCharPerLog_tapi is exceeded!");
+          }
+        }
+      } else if (logCheckFormatLetter(formatType, formatData, formatIter, 'v')) {
+        const wchar_t* vs     = va_arg(args, const wchar_t*);
+        if (vs) {
+          int strLen = wcslen(vs);
+          if (strLen <= maxCharPerLog_tapi - 1 - bufIter) {
+            memcpy(&buf[bufIter], vs, sizeof(wchar_t) * strLen);
+            bufIter += strLen;
+          } else {
+            assert(0 && "maxCharPerLog_tapi is exceeded!");
+          }
+        }
+      } else {
+        assert(0 && "Unsupported type of log argument!");
+      }
+    } else {
+      memcpy(buf + (sizeOfEachChar * bufIter),
+             (( char* )formatData) + (sizeOfEachChar * formatIter), sizeOfEachChar);
+    }
+  }
+
+  va_end(args);
+
+  logSys->logList.push_back(tapi_log());
+  tapi_log& log = logSys->logList[logSys->logList.size() - 1];
+  log.logText   = buf;
+  log.logType   = type;
+  wprintf_s(L"%s: %s", statusNames[type], buf);
+  logSave_tapi(( tapi_log_type )INT32_MAX, string_type_tapi_UTF16, logSys->mainFilePath.c_str());
+
+  if (stopRunning) {
+    breakpoint();
+  }
+}
+
+void logInit_tapi(stringArgument_tapi(mainLogFile)) {
+  switch (mainLogFileType) {
+    case string_type_tapi_UTF8: {
+      typedef std::codecvt_utf8<wchar_t>          convert_type;
+      std::wstring_convert<convert_type, wchar_t> converter;
+      logSys->mainFilePath = converter.from_bytes(( const char* )mainLogFileData);
+    } break;
+    case string_type_tapi_UTF16: {
+      logSys->mainFilePath = ( const wchar_t* )mainLogFileData;
+    } break;
+  }
+  logSys->logList.clear();
+}
+void logDestroy_tapi() {
+  logSys->mainFilePath = {};
+  logSys->logList.clear();
 }
 
 typedef struct logger_tapi_d {
@@ -181,16 +196,14 @@ ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
   type->funcs      = ( logger_tapi* )malloc(sizeof(logger_tapi));
   type->data->type = type;
 
-  type->funcs->log_crashing     = &LOG_CRASHING;
-  type->funcs->log_error        = &LOG_ERROR;
-  type->funcs->log_notcoded     = &LOG_NOTCODED;
-  type->funcs->log_status       = &LOG_STATUS;
-  type->funcs->log_warning      = &LOG_WARNING;
-  type->funcs->writelogs_tofile = &WRITE_LOGs_toFILEs;
+  type->funcs->init    = &logInit_tapi;
+  type->funcs->destroy = &logDestroy_tapi;
+  type->funcs->log     = &logLog_tapi;
+  type->funcs->save    = &logSave_tapi;
 
   ecssys->addSystem(LOGGER_TAPI_PLUGIN_NAME, LOGGER_TAPI_PLUGIN_VERSION, type);
 
-  LOGSYS              = new Logger;
-  type->data->log_sys = LOGSYS;
+  logSys              = new Logger;
+  type->data->log_sys = logSys;
 }
 ECSPLUGIN_EXIT(ecssys, reloadFlag) { printf("Not coded!"); }

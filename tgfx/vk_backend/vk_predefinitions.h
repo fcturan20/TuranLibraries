@@ -10,7 +10,6 @@
 #include <virtualmemorysys_tapi.h>
 
 #include <atomic>
-#include <functional>
 #include <limits>
 #include <mutex>
 #include <stdexcept>
@@ -50,9 +49,11 @@ typedef struct profiler_tapi  profiler_tapi;
 extern profiler_tapi*         profilerSys;
 extern bitsetsys_tapi*        bitsetSys;
 
-result_tgfx                  printer(unsigned int error_code);
-result_tgfx                  printer(result_tgfx failResult, const char* format, ...);
 extern tgfx_logCallback printer_cb;
+result_tgfx                    vkPrint(unsigned int logCode, const wchar_t* extraInfo = nullptr) {
+  printer_cb(logCode, extraInfo);
+  return core_tgfx_main->getLogMessage(logCode, nullptr);
+}
 
 // <------------------------------------------------------------------------------------>
 //		Forward Declarations
@@ -68,42 +69,6 @@ struct RTSLOTSET_VKOBJ;
 struct WINDOW_VKOBJ;
 struct FENCE_VKOBJ;
 
-extern std::function<void()> VKGLOBAL_emptyCallback;
-// If you want to throw error if the func doesn't return VK_SUCCESS, don't use throwResultFromCall
-// argument If you want to give a specific TGFXResult to printer, you should use returnTGFXResult
-// argument This function throws std::exception in Release build if func isn't VK_SUCCESS and
-// doesn't use printer() func
-inline bool ThrowIfFailed(VkResult func, const char* errorstring,
-                          result_tgfx            returnTGFXResult    = result_tgfx_FAIL,
-                          VkResult               throwResultFromCall = VK_RESULT_MAX_ENUM,
-                          std::function<void()>& callback            = VKGLOBAL_emptyCallback) {
-  callback();
-#ifdef VULKAN_DEBUGGING
-  if (throwResultFromCall != VK_RESULT_MAX_ENUM && func == throwResultFromCall) {
-    printer(returnTGFXResult, errorstring);
-    return true;
-  }
-  if (func != VK_SUCCESS) {
-    printer(returnTGFXResult, (errorstring + std::to_string(func)).c_str());
-    _sleep(1000000);
-  }
-#else
-  if (func != VK_SUCCESS) {
-    std::runtime_error(std::string(errorstring));
-  }
-#endif
-  return false;
-}
-#define THROW_RETURN_IF_FAIL(vkCall, errorString, returnTGFXResult) \
-  if (ThrowIfFailed(vkCall, errorString, returnTGFXResult)) {       \
-    return returnTGFXResult;                                        \
-  }
-
-inline void assert_vk(bool status) {
-  if (!status) {
-    assert(0);
-  }
-}
 void pNext_addToLast(void* targetStruct, void* attachStruct);
 
 #define VK_PRIM_MIN(primType) std::numeric_limits<primType>::min()
@@ -120,8 +85,8 @@ void pNext_addToLast(void* targetStruct, void* attachStruct);
   PFN_##funcName funcName##_loadVkFunc() {                                                    \
     auto func = ( PFN_##funcName )vkGetInstanceProcAddr(VKGLOBAL_INSTANCE, #funcName);        \
     if (func == nullptr) {                                                                    \
-      printer(result_tgfx_FAIL,                                                               \
-              "Vulkan failed to load " #funcName " function! Probably an OS update problem"); \
+      vkPrint(16,                                                               \
+              L"Vulkan failed to load " #funcName " function! Probably an OS update problem"); \
       return nullptr;                                                                         \
     }                                                                                         \
     return func;                                                                              \

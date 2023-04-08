@@ -14,6 +14,7 @@ typedef struct tgfx_core {
   // Don't use the GPU to create object/resources before init
   result_tgfx (*initGPU)(gpu_tgfxhnd gpu);
   void (*getGPUlist)(unsigned int* gpuCount, gpu_tgfxhnd* gpuList);
+  result_tgfx (*getLogMessage)(unsigned int logCode, const wchar_t** logMessage);
 
   ////////////// DISPLAY/WINDOWING FUNCTIONALITY
 

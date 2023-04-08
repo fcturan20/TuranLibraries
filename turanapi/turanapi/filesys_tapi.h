@@ -5,12 +5,13 @@
 #define FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys_tapi_type*
 
 typedef struct filesys_tapi {
-  void* (*read_binaryfile)(const char* path, unsigned long* size);
-  void (*write_binaryfile)(const char* path, void* data, unsigned long size);
-  void (*overwrite_binaryfile)(const char* path, void* data, unsigned long size);
-  char* (*read_textfile)(const char* path);
-  void (*write_textfile)(const char* text, const char* path, unsigned char write_to_end);
-  void (*delete_file)(const char* path);
+  void* (*read_binaryfile)(stringArgument_tapi(path), unsigned long* size);
+  void (*write_binaryfile)(stringArgument_tapi(path), void* data, unsigned long size);
+  void (*overwrite_binaryfile)(stringArgument_tapi(path), void* data, unsigned long size);
+  void* (*read_textfile)(stringArgument_tapi(path), string_type_tapi fileTextType);
+  void (*write_textfile)(stringArgument_tapi(text), stringArgument_tapi(path),
+                         unsigned char writeToEnd);
+  void (*delete_file)(stringArgument_tapi(path));
 } filesys_tapi;
 
 typedef struct filesys_tapi_d filesys_tapi_d;

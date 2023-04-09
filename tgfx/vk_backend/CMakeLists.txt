@@ -47,7 +47,7 @@ endif()
 find_package(glslang CONFIG REQUIRED)
 add_library(TGFXVulkanGlslang SHARED "vk_glslang.cpp")
 target_include_directories(TGFXVulkanGlslang PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../turanapi/turanapi/ ${CMAKE_CURRENT_SOURCE_DIR}/../core/)
-target_link_libraries(TGFXVulkanGlslang PUBLIC HLSL SPIRV glslang OGLCompiler)
+target_link_libraries(TGFXVulkanGlslang PRIVATE glslang::OSDependent glslang::glslang glslang::MachineIndependent glslang::GenericCodeGen glslang::glslang-default-resource-limits glslang::OGLCompiler glslang::SPVRemapper glslang::SPIRV glslang::HLSL)
 
 set_target_properties(TGFXVulkanGlslang PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 set_target_properties(TGFXVulkanGlslang PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")

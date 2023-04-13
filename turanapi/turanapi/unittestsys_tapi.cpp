@@ -1,7 +1,8 @@
 #include "unittestsys_tapi.h"
-
 #include "string_tapi.h"
 #include "ecs_tapi.h"
+#include <stdlib.h>
+#include <stdio.h>
 
 unittestsys_tapi_type* utsys;
 
@@ -13,7 +14,7 @@ typedef struct unittestsys_tapi_d {
 void* add_unittest(const char* name, unsigned int classification_flag,
                    unittest_interface_tapi test_interface) {
   const char* test_result;
-  test_interface.test(&test_result, NULL);
+  test_interface.test(&test_result, nullptr);
   printf("Test Name: %s\n Result: %s", name, test_result);
   return nullptr;
 }

@@ -1,13 +1,10 @@
 #pragma once
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include <stdarg.h>
 #include "predefinitions_tapi.h"
 
-#define ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME "tapi_array_of_strings_sys"
-#define ARRAY_OF_STRINGS_TAPI_LOAD_TYPE array_of_strings_tapi_type*
-#define ARRAY_OF_STRINGS_TAPI_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 1)
+#define STRINGSYS_TAPI_PLUGIN_NAME "tapi_string"
+#define STRINGSYS_TAPI_LOAD_TYPE stringSys_tapi_type*
+#define STRINGSYS_TAPI_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 1)
 // Create allocator flag (but not coded for now)
 #define ALLOCATOR_FLAG_TAPI() 0
 
@@ -17,14 +14,13 @@ typedef enum tapi_string_type {
   string_type_tapi_UTF32
 } string_type_tapi;
 
-typedef struct string_tapi {
-
+typedef struct stringSys_tapi {
+  void (*convertString)(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst), unsigned long long maxLen);
   // Use these to create a single string from variadic input
   // Calling free() is enough to destroy
-  char* (*createString)(const char* format, ...);
-  wchar_t* (*createVString)(const wchar_t* format, ...);
-  char32_t* (*createWString)(const char32_t* format, ...);
-};
+  void (*createString)(string_type_tapi targetType, void** target, const wchar_t* format, ...);
+  void (*vCreateString)(string_type_tapi targetType, void** target, const wchar_t* format, va_list arg);
+} tapi_stringSys;
 
 typedef struct tapi_array_of_strings* array_of_strings_tapi;
 
@@ -64,10 +60,11 @@ typedef struct array_of_strings_virtualallocatorsys_tapi {
                                       unsigned long long     element_index);
 } array_of_strings_virtualallocatorsys_tapi;
 
-typedef struct array_of_strings_tapi_d array_of_strings_tapi_d;
+typedef struct stringSys_tapi_d stringSys_tapi_d;
 // Array of Strings System
-typedef struct array_of_strings_tapi_type {
-  array_of_strings_tapi_d*                   data;
+typedef struct stringSys_tapi_type {
+  stringSys_tapi_d*                          data;
+  stringSys_tapi*                            standardString;
   array_of_strings_standardallocator_tapi*   standard_allocator;
   array_of_strings_virtualallocatorsys_tapi* virtual_allocator;
-} array_of_strings_tapi_type;
+} stringSys_tapi_type;

@@ -30,11 +30,10 @@ static unsigned char vk_getTextureTypeLimits(
   } else {
     flag &= ~(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
   }
-  VkResult result = vkGetPhysicalDeviceImageFormatProperties(
-    GPU->vk_physical, vk_findFormatVk(chnnltype), vk_findImageTypeVk(dims),
-    Find_VkTiling(dataorder), flag, 0, &props);
-  if (result != VK_SUCCESS) {
-    printer(result_tgfx_FAIL, "helpers->GetTextureTypeLimits() has failed!");
+  if(vkGetPhysicalDeviceImageFormatProperties(
+    GPU->vk_physical, vk_findFormatVk(chnnltype), vk_findImageTypeVk(dims), Find_VkTiling(dataorder),
+                                               flag, 0, &props) != VK_SUCCESS) {
+    vkPrint(55, L"at vkGetPhysicalDeviceImageFormatProperties()");
     return false;
   }
 

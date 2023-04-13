@@ -125,9 +125,10 @@ void vkext_dynamicRendering::vk_beginRenderpass(
   if (features.dynamicRendering) {
     vkext_beginDynamicRenderPass(cb, colorAttachmentCount, colorAttachments, depthAttachment);
   } else {
-    assert_vk(exts &&
-              "Your device doesn't support dynamic rendering, which means you have to use "
-              "TGFX_Subpass extension! Extension isn't supported for now.");
+    if (!exts) {
+      vkPrint(62, L"Extension isn't supported yet");
+      return;
+    }
 
     vkext_beginStaticRenderPass(cb, extCount, exts);
   }

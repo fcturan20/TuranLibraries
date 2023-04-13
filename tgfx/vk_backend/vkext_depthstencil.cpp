@@ -27,10 +27,7 @@ void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref
         Ref.attachment = VK_ATTACHMENT_UNUSED;
         Ref.layout     = VK_IMAGE_LAYOUT_UNDEFINED;
         break;
-      default:
-        printer(
-          result_tgfx_INVALIDARGUMENT,
-          "VK::Fill_SubpassStructs() doesn't support this type of Operation Type for DepthBuffer!");
+      default: vkPrint(58);
     }
   } else if (channels == texture_channels_tgfx_D24S8) {
     switch (STENCILOPTYPE) {
@@ -64,10 +61,7 @@ void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref
           Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
         }
         break;
-      default:
-        printer(result_tgfx_INVALIDARGUMENT,
-                "VK::Fill_SubpassStructs() doesn't support this type of Operation Type for "
-                "DepthSTENCILBuffer!");
+      default: vkPrint(58);
     }
   }
 }
@@ -160,13 +154,11 @@ void vkext_depthStencil::inspect() {
   } else {
     fillDepthAttachDesc = Fill_DepthAttachmentDescription_NOSeperated;
     fillDepthAttachRef  = Fill_DepthAttachmentReference_NOSeperated;
-    printer(result_tgfx_WARNING,
-            "%s doesn't support seperated depth stencil layouts, so layout transitions isn't gonna "
-            "be precise!",
-            m_gpu->desc.name);
+
+    vkPrint(56, m_gpu->desc.name);
   }
   if (!m_gpu->vk_featuresDev.features.depthBounds) {
-    printer(result_tgfx_WARNING, "GPU: %s doesn't support depth bounds testing", m_gpu->desc.name);
+    vkPrint(57, m_gpu->desc.name);
   }
 }
 void vkext_depthStencil::manage(VkStructureType structType, void* structPtr, unsigned int extCount,

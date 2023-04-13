@@ -3,6 +3,7 @@
 #include <ecs_tapi.h>
 #include <profiler_tapi.h>
 #include <stdio.h>
+#include <string_tapi.h>
 #include <tgfx_core.h>
 #include <tgfx_gpucontentmanager.h>
 #include <tgfx_helper.h>
@@ -11,7 +12,6 @@
 #include <threadingsys_tapi.h>
 #include <virtualmemorysys_tapi.h>
 
-#include <string>
 #include <vector>
 
 #include "vk_contentmanager.h"
@@ -261,13 +261,6 @@ inline void vk_checkComputerSpecs() {
     vk_analizeGPUmemory(vkgpu);
     extManager_vkDevice::createExtManager(vkgpu);
 
-    // SAVE BASIC INFOs TO THE GPU DESC
-    vkgpu->desc.name          = vkgpu->vk_propsDev.properties.deviceName;
-    vkgpu->desc.driverVersion = vkgpu->vk_propsDev.properties.driverVersion;
-    vkgpu->desc.gfxApiVersion = vkgpu->vk_propsDev.properties.apiVersion;
-    vkgpu->desc.driverVersion = vkgpu->vk_propsDev.properties.driverVersion;
-    vkgpu->desc.type          = vk_findGPUTypeTgfx(vkgpu->vk_propsDev.properties.deviceType);
-
     vkgpu->ext()->inspect();
   }
 
@@ -460,7 +453,11 @@ void vk_createWindow(const windowDescription_tgfx* desc, void* user_ptr, window_
   if (desc->monitor && desc->mode == windowmode_tgfx_FULLSCREEN) {
     monitor = getOBJ<MONITOR_VKOBJ>(desc->monitor)->monitorobj;
   }
-  GLFWwindow* glfwWndw = glfwCreateWindow(desc->size.x, desc->size.y, desc->name, monitor, nullptr);
+  char* windowCName = nullptr;
+  stringSys->createString(string_type_tapi_UTF8, ( void** )&windowCName, L"%v", desc->name);
+  GLFWwindow* glfwWndw =
+    glfwCreateWindow(desc->size.x, desc->size.y, windowCName, monitor, nullptr);
+  free(windowCName);
 
   // Check and Report if GLFW fails
   if (glfwWndw == NULL) {
@@ -899,32 +896,31 @@ void vk_setInputMode(window_tgfxhnd windowHnd, cursorMode_tgfx cursorMode, unsig
   }
 }
 void vk_saveMonitors() {
-  int           monitor_count;
-  GLFWmonitor** monitors = glfwGetMonitors(&monitor_count);
-  for (int i = 0; i < monitor_count; i++) {
-    GLFWmonitor* monitor = monitors[i];
+  int           monitorCount;
+  GLFWmonitor** glfwMonitors = glfwGetMonitors(&monitorCount);
+  for (int i = 0; i < monitorCount; i++) {
+    GLFWmonitor* glfwMonitor = glfwMonitors[i];
 
     // Get monitor name provided by OS! It is a driver based name, so it maybe incorrect!
-    const char*    monitor_name = glfwGetMonitorName(monitor);
-    MONITOR_VKOBJ* Monitor      = hidden->MONITORs.create_OBJ();
-    Monitor->name               = monitor_name;
+    const char*    monitorName = glfwGetMonitorName(glfwMonitor);
+    MONITOR_VKOBJ* vkMonitor   = hidden->MONITORs.create_OBJ();
+
+    stringSys->createString(string_type_tapi_UTF16, ( void** )&vkMonitor->name, L"%s", monitorName);
 
     // Get videomode to detect at which resolution the OS is using the monitor
-    const GLFWvidmode* monitor_vid_mode = glfwGetVideoMode(monitor);
-    Monitor->width                      = monitor_vid_mode->width;
-    Monitor->height                     = monitor_vid_mode->height;
-    Monitor->color_bites                = monitor_vid_mode->blueBits;
-    Monitor->refresh_rate               = monitor_vid_mode->refreshRate;
+    const GLFWvidmode* glfwVidMode = glfwGetVideoMode(glfwMonitor);
+    vkMonitor->res          = {( uint32_t )glfwVidMode->width, ( uint32_t )glfwVidMode->height};
+    vkMonitor->color_bites  = glfwVidMode->blueBits;
+    vkMonitor->refresh_rate = glfwVidMode->refreshRate;
 
     // Get monitor's physical size, developer may want to use it!
-    int physical_width, physical_height;
-    glfwGetMonitorPhysicalSize(monitor, &physical_width, &physical_height);
-    if (physical_width == 0 || physical_height == 0) {
+    int phyWidth, phyHeight;
+    glfwGetMonitorPhysicalSize(glfwMonitor, &phyWidth, &phyHeight);
+    if (phyWidth == 0 || phyHeight == 0) {
       vkPrint(21);
     }
-    Monitor->physical_width  = physical_width;
-    Monitor->physical_height = physical_height;
-    Monitor->monitorobj      = monitor;
+    vkMonitor->physicalSize = {( uint32_t )phyWidth, ( uint32_t )phyHeight};
+    vkMonitor->monitorobj   = glfwMonitor;
   }
 }
 
@@ -1063,6 +1059,12 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_logCallback pri
     bitsetSys = bitsetSysLoaded->funcs;
   }
 
+  STRINGSYS_TAPI_LOAD_TYPE stringSysLoaded =
+    ( STRINGSYS_TAPI_LOAD_TYPE )regsys->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
+  if (stringSysLoaded) {
+    stringSys = stringSysLoaded->standardString;
+  }
+
   core_tgfx_main = core->api;
   vk_createBackendAllocator();
   uint32_t               malloc_size = sizeof(core_public) + sizeof(core_private);
@@ -1121,33 +1123,21 @@ TGFX_BACKEND_ENTRY() { return vk_load(ecsSys, core, printCallback); }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 vk_debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      Message_Severity,
-                 VkDebugUtilsMessageTypeFlagsEXT             Message_Type,
+                 VkDebugUtilsMessageTypeFlagsEXT             messageType,
                  const VkDebugUtilsMessengerCallbackDataEXT* pCallback_Data, void* pUserData) {
-  const char* callbackType = "";
-  switch (Message_Type) {
-    case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-      callbackType =
-        "VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT : Some event has happened that "
-        "is unrelated to the specification or performance\n";
-      break;
-    case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-      callbackType =
-        "VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT: Something has happened that "
-        "violates the specification or indicates a possible mistake\n";
-      break;
-    case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-      callbackType =
-        "VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT: Potential non-optimal use of Vulkan\n";
-      break;
-    default:
-      vkPrint(16, L"Vulkan debug callback has returned a unsupported message type\n");
-      return true;
-      break;
-  }
+  // All of these titles should at same char count = 87
+  static constexpr wchar_t* messageTypeTitles[] = {
+    L"VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT: Unrelated to specification or performance\n",
+    L"VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:                 Specification violated\n",
+    L"VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:             Non-optimal use of Vulkan\n",
+    L"Unsupported VK_DEBUG_UTILS_MESSAGE_TYPE:                        Please report this log\n"};
+  static constexpr uint32_t messageTypeTitleLen = 87, maxDebugMessageLen = 1ull << 12;
 
-
-  wchar_t debugMessage[1ull << 12] = {};
-  mbstowcs(debugMessage, pCallback_Data->pMessage, (1ull << 12) - 1);
+  wchar_t debugMessage[maxDebugMessageLen] = {};
+  memcpy(debugMessage, messageTypeTitles[messageType], messageTypeTitleLen * sizeof(wchar_t));
+  stringSys->convertString(string_type_tapi_UTF8, pCallback_Data->pMessage, string_type_tapi_UTF16,
+                           debugMessage + messageTypeTitleLen,
+                           maxDebugMessageLen - messageTypeTitleLen);
   vkPrint(16, debugMessage);
   return false;
 }

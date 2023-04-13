@@ -229,16 +229,18 @@ uint32_t find_overridenCompType(ecs_entityType* eType, compTypeID_ecstapi base,
 ////////////////////////////////////////////////////////////////////
 
 typedef void (*ECSTAPIPLUGIN_loadfnc)(ecs_tapi* ecsHnd, unsigned int reload);
-pluginHnd_ecstapi loadPlugin(const char* pluginPath) {
+static const char* ECS_ERROR_TEXT_DLL_NOT_FOUND = "DLL file isn't found: %s\n";
+static const char* ECS_ERROR_TEXT_ENTRY_NOT_FOUND = "DLL file is found but plugin entry isn't\n";
+pluginHnd_ecstapi  loadPlugin(const char* pluginPath) {
   auto dll = DLIB_LOAD_TAPI(pluginPath);
   if (!dll) {
-    printf("dll file isn't found!");
+    printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, pluginPath);
     return nullptr;
   }
   ECSTAPIPLUGIN_loadfnc dll_loader =
     ( ECSTAPIPLUGIN_loadfnc )DLIB_FUNC_LOAD_TAPI(dll, "ECSTAPIPLUGIN_load");
   if (!dll_loader) {
-    printf("dll is loaded but plugin entry isn't found!\n");
+    printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
     return nullptr;
   }
   dll_loader(ecs_funcs, false);
@@ -264,13 +266,13 @@ void reloadPlugin(pluginHnd_ecstapi plugin) {
   }
   auto dll = DLIB_LOAD_TAPI(info->PATH);
   if (!dll) {
-    printf("dll file isn't found!\n");
+    printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, info->PATH);
     return;
   }
   ECSTAPIPLUGIN_loadfnc dll_loader =
     ( ECSTAPIPLUGIN_loadfnc )DLIB_FUNC_LOAD_TAPI(dll, "ECSTAPIPLUGIN_load");
   if (!dll_loader) {
-    printf("dll is loaded but plugin entry isn't found!\n");
+    printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
     return;
   }
   dll_loader(ecs_funcs, true);

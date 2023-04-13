@@ -1,6 +1,6 @@
 #pragma once
 #include "predefinitions_tapi.h"
-#define BITSET_TAPI_PLUGIN_NAME "tapi_bitsetsys"
+#define BITSET_TAPI_PLUGIN_NAME "tapi_bitset"
 #define BITSET_TAPI_PLUGIN_LOAD_TYPE bitsetsys_tapi_type*
 #define BITSET_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
 

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <wchar.h>
+#include <windows.h> // WinApi header
 
 #include <codecvt>
 #include <iostream>
@@ -14,13 +15,15 @@
 #include "string_tapi.h"
 #include "virtualmemorysys_tapi.h"
 
-struct tapi_log {
+stringSys_tapi* stringSys = nullptr;
+
+struct logObject {
   std::wstring  logText;
   tapi_log_type logType;
 };
 struct Logger {
-  std::wstring          mainFilePath;
-  std::vector<tapi_log> logList;
+  std::wstring           mainFilePath;
+  std::vector<logObject> logList;
 };
 static Logger*       logSys  = nullptr;
 static filesys_tapi* fileSys = nullptr;
@@ -37,13 +40,13 @@ inline void breakpoint() {
   }
 }
 
-void logSave_tapi(tapi_log_type logType, stringArgument_tapi(path)) {
-  if (logSys->logList.size() == 0) {
+void tapi_logSave(tapi_log_type logType, stringReadArgument_tapi(path)) {
+  if (logSys->logList.size() == 0 || !fileSys) {
     return;
   }
   std::wstring textData;
   for (unsigned int i = 0; i < logSys->logList.size(); i++) {
-    const tapi_log& log = logSys->logList[i];
+    const logObject& log = logSys->logList[i];
     // If logType is INT32_MAX, this is the main log file save
     if (logType == INT32_MAX) {
       textData += log.logText;
@@ -58,102 +61,38 @@ void logSave_tapi(tapi_log_type logType, stringArgument_tapi(path)) {
 static constexpr uint32_t maxCharPerLog_tapi = 1 << 12;
 static constexpr wchar_t* statusNames[]      = {L"Status", L"Warning", L"Error", L"Not coded",
                                                 L"Crashing"};
-bool logCheckFormatLetter(stringArgument_tapi(format), uint32_t letterIndx, char letter) {
-  switch (formatType) {
-    case string_type_tapi_UTF8: {
-      const char* format = ( const char* )formatData;
-      return format[letterIndx] == letter;
-    } break;
-    case string_type_tapi_UTF16: {
-      wchar_t wchar = (( const wchar_t* )formatData)[letterIndx];
-      return wchar == letter;
-    } break;
-    case string_type_tapi_UTF32: {
-      char32_t uchar = (( const char32_t* )formatData)[letterIndx];
-      return uchar == letter;
-    } break;
-    default: assert(0 && "Unsupported format for logCheckFormatLetter!");
-  }
-  return false;
-}
-void logLog_tapi(tapi_log_type type, unsigned char stopRunning, stringArgument_tapi(format), ...) {
-  wchar_t buf[maxCharPerLog_tapi] = {};
+static constexpr int      consoleColors[]    = {2, 6, 12, 14, 64};
 
+HANDLE hConsole = nullptr;
+void   tapi_logLog(tapi_log_type type, unsigned char stopRunning, const wchar_t* format, ...) {
   va_list args;
-  va_start(args, formatData);
+  va_start(args, format);
 
-  int      bufIter   = 0;
-  uint32_t formatLen = 0, sizeOfEachChar = 0;
-  switch (formatType) {
-    case string_type_tapi_UTF8:
-      formatLen      = strlen(( const char* )formatData);
-      sizeOfEachChar = sizeof(char);
-      break;
-    case string_type_tapi_UTF16:
-      formatLen      = wcslen(( const wchar_t* )formatData);
-      sizeOfEachChar = sizeof(wchar_t);
-      break;
-    default: assert(0 && "Only UTF8 and UTF16 supported for now!");
-  }
-  for (uint32_t formatIter = 0; formatIter < formatLen && formatIter < maxCharPerLog_tapi;
-       formatIter++) {
-    if (logCheckFormatLetter(formatType, formatData, formatIter, '%') &&
-        formatIter + 1 <= formatLen) {
-      formatIter++;
-      if (logCheckFormatLetter(formatType, formatData, formatIter, 'd')) {
-        int i = va_arg(args, int);
-        _snwprintf(&buf[bufIter], 4, L"%d", i);
-        bufIter += 4;
-      } else if (logCheckFormatLetter(formatType, formatData, formatIter, 'f')) {
-        double d = va_arg(args, double);
-        _snwprintf(&buf[bufIter], 8, L"%f", d);
-        bufIter += 8;
-      } else if (logCheckFormatLetter(formatType, formatData, formatIter, 's')) {
-        const char* s      = va_arg(args, const char*);
-        if (s) {
-          int strLen = strlen(s);
-          if (strLen <= maxCharPerLog_tapi - 1 - bufIter) {
-            mbstowcs(&buf[bufIter], s, strLen);
-            bufIter += strLen;
-          } else {
-            assert(0 && "maxCharPerLog_tapi is exceeded!");
-          }
-        }
-      } else if (logCheckFormatLetter(formatType, formatData, formatIter, 'v')) {
-        const wchar_t* vs     = va_arg(args, const wchar_t*);
-        if (vs) {
-          int strLen = wcslen(vs);
-          if (strLen <= maxCharPerLog_tapi - 1 - bufIter) {
-            memcpy(&buf[bufIter], vs, sizeof(wchar_t) * strLen);
-            bufIter += strLen;
-          } else {
-            assert(0 && "maxCharPerLog_tapi is exceeded!");
-          }
-        }
-      } else {
-        assert(0 && "Unsupported type of log argument!");
-      }
-    } else {
-      memcpy(buf + (sizeOfEachChar * bufIter),
-             (( char* )formatData) + (sizeOfEachChar * formatIter), sizeOfEachChar);
-    }
-  }
-
+  wchar_t* buf = nullptr;
+  stringSys->vCreateString(string_type_tapi_UTF16, ( void** )&buf, format, args);
   va_end(args);
 
-  logSys->logList.push_back(tapi_log());
-  tapi_log& log = logSys->logList[logSys->logList.size() - 1];
-  log.logText   = buf;
-  log.logType   = type;
-  wprintf_s(L"%s: %s", statusNames[type], buf);
-  logSave_tapi(( tapi_log_type )INT32_MAX, string_type_tapi_UTF16, logSys->mainFilePath.c_str());
+  if (!buf) {
+    printf("String conversion has failed, please check your log format\n");
+    return;
+  }
+
+  logSys->logList.push_back(logObject());
+  logObject& log = logSys->logList[logSys->logList.size() - 1];
+  log.logText    = buf;
+  log.logType    = type;
+  SetConsoleTextAttribute(hConsole, consoleColors[type]);
+  wprintf_s(L"%s: %s\n", statusNames[type], buf);
+  SetConsoleTextAttribute(hConsole, 7);
+  tapi_logSave(( tapi_log_type )INT32_MAX, string_type_tapi_UTF16, logSys->mainFilePath.c_str());
 
   if (stopRunning) {
     breakpoint();
   }
 }
 
-void logInit_tapi(stringArgument_tapi(mainLogFile)) {
+void tapi_logInit(stringReadArgument_tapi(mainLogFile)) {
+  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
   switch (mainLogFileType) {
     case string_type_tapi_UTF8: {
       typedef std::codecvt_utf8<wchar_t>          convert_type;
@@ -166,7 +105,7 @@ void logInit_tapi(stringArgument_tapi(mainLogFile)) {
   }
   logSys->logList.clear();
 }
-void logDestroy_tapi() {
+void tapi_logDestroy() {
   logSys->mainFilePath = {};
   logSys->logList.clear();
 }
@@ -178,15 +117,14 @@ typedef struct logger_tapi_d {
 ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
   VIRTUALMEMORY_TAPI_PLUGIN_TYPE virmemsys_type =
     ( VIRTUALMEMORY_TAPI_PLUGIN_TYPE )ecssys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
-  ARRAY_OF_STRINGS_TAPI_LOAD_TYPE array_of_strings_sys_type =
-    ( ARRAY_OF_STRINGS_TAPI_LOAD_TYPE )ecssys->getSystem(ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME);
+  STRINGSYS_TAPI_LOAD_TYPE stringSysType =
+    ( STRINGSYS_TAPI_LOAD_TYPE )ecssys->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
   FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys_type =
     ( FILESYS_TAPI_PLUGIN_LOAD_TYPE )ecssys->getSystem(FILESYS_TAPI_PLUGIN_NAME);
 
-  if (!virmemsys_type || !array_of_strings_sys_type || !filesys_type) {
-    printf(
-      "Logger system needs virtual memory, array of strings and file systems loaded. So loading "
-      "failed!");
+  if (!virmemsys_type || !stringSysType || !filesys_type) {
+    printf("Logger system needs %s, %s and %s loaded. Loading logger has failed",
+           VIRTUALMEMORY_TAPI_PLUGIN_NAME, STRINGSYS_TAPI_PLUGIN_NAME, FILESYS_TAPI_PLUGIN_NAME);
     return;
   }
 
@@ -196,10 +134,11 @@ ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
   type->funcs      = ( logger_tapi* )malloc(sizeof(logger_tapi));
   type->data->type = type;
 
-  type->funcs->init    = &logInit_tapi;
-  type->funcs->destroy = &logDestroy_tapi;
-  type->funcs->log     = &logLog_tapi;
-  type->funcs->save    = &logSave_tapi;
+  type->funcs->init    = &tapi_logInit;
+  type->funcs->destroy = &tapi_logDestroy;
+  type->funcs->log     = &tapi_logLog;
+  type->funcs->save    = &tapi_logSave;
+  stringSys            = stringSysType->standardString;
 
   ecssys->addSystem(LOGGER_TAPI_PLUGIN_NAME, LOGGER_TAPI_PLUGIN_VERSION, type);
 

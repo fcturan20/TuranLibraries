@@ -100,7 +100,7 @@ class vk_atomic {
   }
 };
 
-inline unsigned char GetByteSizeOf_TextureChannels(textureChannels_tgfx channeltype) {
+inline unsigned char      GetByteSizeOf_TextureChannels(textureChannels_tgfx channeltype) {
   switch (channeltype) {
     case texture_channels_tgfx_R8B:
     case texture_channels_tgfx_R8UB: return 1;
@@ -123,8 +123,8 @@ inline unsigned char GetByteSizeOf_TextureChannels(textureChannels_tgfx channelt
     case texture_channels_tgfx_RGB32UI: return 12;
     case texture_channels_tgfx_RGBA32F:
     case texture_channels_tgfx_RGBA32I:
-    case texture_channels_tgfx_RGBA32UI: return 16; assert(0);
-    default: assert_vk(0 && "GetSizeOf_TextureChannels() doesn't support this type!"); break;
+    case texture_channels_tgfx_RGBA32UI: return 16;
+    default: vkPrint(49); return 0;
   }
 }
 inline VkFormat vk_findDataType(datatype_tgfx datatype) {
@@ -132,9 +132,7 @@ inline VkFormat vk_findDataType(datatype_tgfx datatype) {
     case datatype_tgfx_VAR_VEC2: return VK_FORMAT_R32G32_SFLOAT;
     case datatype_tgfx_VAR_VEC3: return VK_FORMAT_R32G32B32_SFLOAT;
     case datatype_tgfx_VAR_VEC4: return VK_FORMAT_R32G32B32A32_SFLOAT;
-    default:
-      printer(result_tgfx_FAIL,
-              "(Find_VkFormat_byDataType() doesn't support this data type! UNDEFINED");
+    default: vkPrint(49);
       return VK_FORMAT_UNDEFINED;
   }
 }
@@ -157,9 +155,7 @@ inline VkFormat vk_findFormatVk(textureChannels_tgfx channels) {
     case texture_channels_tgfx_RGBA8SRGB: return VK_FORMAT_R8G8B8A8_SRGB;
     case texture_channels_tgfx_UNDEF: return VK_FORMAT_UNDEFINED;
     case texture_channels_tgfx_UNDEF2:
-    default:
-      printer(result_tgfx_FAIL,
-              "(Find_VkFormat_byTEXTURECHANNELs doesn't support this type of channel!");
+    default: vkPrint(49);
       return VK_FORMAT_UNDEFINED;
   }
 }
@@ -180,8 +176,7 @@ inline textureChannels_tgfx vk_findTextureChannelsTgfx(VkFormat format) {
     case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return texture_channels_tgfx_A2B10G10R10_UNORM;
     case VK_FORMAT_R8G8B8A8_UNORM: return texture_channels_tgfx_RGBA8UNORM;
     case VK_FORMAT_R8G8B8A8_SRGB: return texture_channels_tgfx_RGBA8SRGB;
-    default:
-      printer(result_tgfx_FAIL, "(Find_TEXTURECHANNELs_byVkFormat doesn't support this VkFormat!");
+    default: vkPrint(49);
       return texture_channels_tgfx_R8B;
   }
 }
@@ -203,8 +198,7 @@ inline datatype_tgfx vk_findTextureDataType(VkFormat format) {
     case VK_FORMAT_R8G8B8A8_SINT:
     case VK_FORMAT_R8_SINT:
     case VK_FORMAT_R32G32B32A32_SINT: return datatype_tgfx_VAR_INT32;
-    default:
-      printer(result_tgfx_FAIL, "vk_findTextureDataType() has failed!");
+    default: vkPrint(49);
       return datatype_tgfx_UNDEFINED;
   }
 }
@@ -215,8 +209,7 @@ inline VkDescriptorType vk_findDescTypeVk(shaderdescriptortype_tgfx desc) {
     case shaderdescriptortype_tgfx_SAMPLER: return VK_DESCRIPTOR_TYPE_SAMPLER;
     case shaderdescriptortype_tgfx_STORAGEIMAGE: return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     case shaderdescriptortype_tgfx_EXT_UNIFORMBUFFER: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    default:
-      printer(result_tgfx_FAIL, "vk_findDescTypeVk couldn't find descriptor type!");
+    default: vkPrint(49);
       return VK_DESCRIPTOR_TYPE_MAX_ENUM;
   }
 }
@@ -227,8 +220,7 @@ inline shaderdescriptortype_tgfx vk_findDescTypeTgfx(VkDescriptorType desc) {
     case VK_DESCRIPTOR_TYPE_SAMPLER: return shaderdescriptortype_tgfx_SAMPLER;
     case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: return shaderdescriptortype_tgfx_STORAGEIMAGE;
     case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: return shaderdescriptortype_tgfx_EXT_UNIFORMBUFFER;
-    default:
-      printer(result_tgfx_FAIL, "vk_findDescTypeVk couldn't find descriptor type!");
+    default: vkPrint(49);
       return ( shaderdescriptortype_tgfx )UINT64_MAX;
   }
 }
@@ -237,9 +229,7 @@ inline VkSamplerAddressMode vk_findAddressModeVk(texture_wrapping_tgfx Wrapping)
     case texture_wrapping_tgfx_REPEAT: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
     case texture_wrapping_tgfx_MIRRORED_REPEAT: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
     case texture_wrapping_tgfx_CLAMP_TO_EDGE: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "Find_AddressMode_byWRAPPING() doesn't support this wrapping type!");
+    default: vkPrint(49);
       return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
   }
 }
@@ -249,9 +239,7 @@ inline VkFilter vk_findFilterVk(texture_mipmapfilter_tgfx filter) {
     case texture_mipmapfilter_tgfx_LINEAR_FROM_2MIP: return VK_FILTER_LINEAR;
     case texture_mipmapfilter_tgfx_NEAREST_FROM_1MIP:
     case texture_mipmapfilter_tgfx_NEAREST_FROM_2MIP: return VK_FILTER_NEAREST;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "Find_VkFilter_byGFXFilter() doesn't support this filter type!");
+    default: vkPrint(49);
       return VK_FILTER_MAX_ENUM;
   }
 }
@@ -261,41 +249,33 @@ inline VkSamplerMipmapMode vk_findMipmapModeVk(texture_mipmapfilter_tgfx filter)
     case texture_mipmapfilter_tgfx_NEAREST_FROM_2MIP: return VK_SAMPLER_MIPMAP_MODE_LINEAR;
     case texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP:
     case texture_mipmapfilter_tgfx_NEAREST_FROM_1MIP: return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    default: vkPrint(49);
   }
 }
 inline VkCullModeFlags vk_findCullModeVk(cullmode_tgfx mode) {
   switch (mode) {
-    case cullmode_tgfx_OFF: return VK_CULL_MODE_NONE; break;
-    case cullmode_tgfx_BACK: return VK_CULL_MODE_BACK_BIT; break;
-    case cullmode_tgfx_FRONT: return VK_CULL_MODE_FRONT_BIT; break;
+    case cullmode_tgfx_OFF: return VK_CULL_MODE_NONE;
+    case cullmode_tgfx_BACK: return VK_CULL_MODE_BACK_BIT;
+    case cullmode_tgfx_FRONT: return VK_CULL_MODE_FRONT_BIT;
     default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "This culling type isn't supported by Find_CullMode_byGFXCullMode()!");
+      vkPrint(49);
       return VK_CULL_MODE_NONE;
-      break;
   }
 }
 inline VkPolygonMode vk_findPolygonModeVk(polygonmode_tgfx mode) {
   switch (mode) {
-    case polygonmode_tgfx_FILL: return VK_POLYGON_MODE_FILL; break;
-    case polygonmode_tgfx_LINE: return VK_POLYGON_MODE_LINE; break;
-    case polygonmode_tgfx_POINT: return VK_POLYGON_MODE_POINT; break;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "This polygon mode isn't support by Find_PolygonMode_byGFXPolygonMode()");
-      break;
+    case polygonmode_tgfx_FILL: return VK_POLYGON_MODE_FILL;
+    case polygonmode_tgfx_LINE: return VK_POLYGON_MODE_LINE;
+    case polygonmode_tgfx_POINT: return VK_POLYGON_MODE_POINT;
+    default: vkPrint(49); return VK_POLYGON_MODE_MAX_ENUM;
   }
 }
 inline VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(
   vertexlisttypes_tgfx vertextype) {
   switch (vertextype) {
     case vertexlisttypes_tgfx_TRIANGLELIST: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "This type of vertex list is not supported by "
-              "Find_PrimitiveTopology_byGFXVertexListType()");
+    default: vkPrint(49);
       return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
-      break;
   }
 }
 inline VkLogicOp   vk_findLogicOpVk() {}
@@ -303,9 +283,7 @@ inline VkIndexType Find_IndexType_byGFXDATATYPE(datatype_tgfx datatype) {
   switch (datatype) {
     case datatype_tgfx_VAR_UINT32: return VK_INDEX_TYPE_UINT32;
     case datatype_tgfx_VAR_UINT16: return VK_INDEX_TYPE_UINT16;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "This type of data isn't supported by Find_IndexType_byGFXDATATYPE()");
+    default: vkPrint(49);
       return VK_INDEX_TYPE_MAX_ENUM;
   }
 }
@@ -317,9 +295,7 @@ inline VkCompareOp vk_findCompareOpVk(compare_tgfx test) {
     case compare_tgfx_GREATER: return VK_COMPARE_OP_GREATER;
     case compare_tgfx_LEQUAL: return VK_COMPARE_OP_LESS_OR_EQUAL;
     case compare_tgfx_LESS: return VK_COMPARE_OP_LESS;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "vk_findCompareOpVk() doesn't support this type of test!");
+    default: vkPrint(49);
       return VK_COMPARE_OP_MAX_ENUM;
   }
 }
@@ -338,9 +314,7 @@ inline void Find_DepthMode_byGFXDepthMode(depthmode_tgfx mode, VkBool32& ShouldT
       ShouldTest  = VK_FALSE;
       ShouldWrite = VK_FALSE;
       break;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "Find_DepthMode_byGFXDepthMode() doesn't support this type of depth mode!");
+    default: vkPrint(49);
       break;
   }
 }
@@ -350,9 +324,7 @@ inline VkAttachmentLoadOp vk_findLoadTypeVk(rasterpassLoad_tgfx load) {
     case rasterpassLoad_tgfx_DISCARD: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     case rasterpassLoad_tgfx_LOAD: return VK_ATTACHMENT_LOAD_OP_LOAD;
     case rasterpassLoad_tgfx_NONE: return VK_ATTACHMENT_LOAD_OP_NONE_EXT;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "vk_findLoadTypeVk() doesn't support this type of load!");
+    default: vkPrint(49);
       return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
   }
 }
@@ -361,9 +333,7 @@ inline VkAttachmentStoreOp vk_findStoreTypeVk(rasterpassStore_tgfx store) {
     case rasterpassStore_tgfx_STORE: return VK_ATTACHMENT_STORE_OP_STORE;
     case rasterpassStore_tgfx_DISCARD: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
     case rasterpassLoad_tgfx_NONE: return VK_ATTACHMENT_STORE_OP_NONE;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "vk_findLoadTypeVk() doesn't support this type of load!");
+    default: vkPrint(49);
       return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
   }
 }
@@ -377,9 +347,7 @@ inline VkStencilOp vk_findStencilOpVk(stencilop_tgfx op) {
     case stencilop_tgfx_CLAMPED_DECREMENT: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
     case stencilop_tgfx_WRAPPED_DECREMENT: return VK_STENCIL_OP_DECREMENT_AND_WRAP;
     case stencilop_tgfx_BITWISE_INVERT: return VK_STENCIL_OP_INVERT;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "Find_StencilOp_byGFXStencilOp() doesn't support this type of stencil operation!");
+    default: vkPrint(49);
       return VK_STENCIL_OP_KEEP;
   }
 }
@@ -390,9 +358,7 @@ inline VkBlendOp vk_findBlendOpVk(blendmode_tgfx mode) {
     case blendmode_tgfx_SUBTRACTIVE_SWAPPED: return VK_BLEND_OP_REVERSE_SUBTRACT;
     case blendmode_tgfx_MIN: return VK_BLEND_OP_MIN;
     case blendmode_tgfx_MAX: return VK_BLEND_OP_MAX;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "Find_BlendOp_byGFXBlendMode() doesn't support this type of blend mode!");
+    default: vkPrint(49);
       return VK_BLEND_OP_MAX_ENUM;
   }
 }
@@ -412,9 +378,7 @@ inline VkBlendFactor vk_findBlendFactorVk(blendfactor_tgfx factor) {
     case blendfactor_tgfx_CONST_1MINUSCOLOR: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
     case blendfactor_tgfx_CONST_ALPHA: return VK_BLEND_FACTOR_CONSTANT_ALPHA;
     case blendfactor_tgfx_CONST_1MINUSALPHA: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "Find_BlendFactor_byGFXBlendFactor() doesn't support this type of blend factor!");
+    default: vkPrint(49);
       return VK_BLEND_FACTOR_MAX_ENUM;
   }
 }
@@ -589,8 +553,8 @@ inline void vk_findSubpassAccessPattern(subdrawpassaccess_tgfx access, bool isSo
       accessflag |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
       break;
     default:
-      stageflag  = UINT64_MAX;
-      accessflag = UINT64_MAX;
+      stageflag  = UINT64_MAX; accessflag = UINT64_MAX;
+      vkPrint(49);
       break;
   }
 }
@@ -692,9 +656,7 @@ inline void vk_findImageAccessPattern(const image_access_tgfx& Access,
       TargetAccessFlag  = VK_ACCESS_TRANSFER_READ_BIT;
       TargetImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
       return;
-    default:
-      printer(result_tgfx_NOTCODED,
-              "Find_AccessPattern_byIMAGEACCESS() doesn't support this access type!");
+    default: vkPrint(49);
       return;
   }
 }
@@ -703,8 +665,7 @@ inline VkImageType vk_findImageTypeVk(texture_dimensions_tgfx dimensions) {
     case texture_dimensions_tgfx_2D:
     case texture_dimensions_tgfx_2DCUBE: return VK_IMAGE_TYPE_2D;
     case texture_dimensions_tgfx_3D: return VK_IMAGE_TYPE_3D;
-    default:
-      printer(result_tgfx_NOTCODED, "Find_VkImageType() doesn't support this dimension!");
+    default: vkPrint(49);
       return VkImageType::VK_IMAGE_TYPE_MAX_ENUM;
   }
 }
@@ -712,8 +673,7 @@ inline VkImageTiling Find_VkTiling(textureOrder_tgfx order) {
   switch (order) {
     case textureOrder_tgfx_SWIZZLE: return VK_IMAGE_TILING_OPTIMAL;
     case textureOrder_tgfx_LINEAR: return VK_IMAGE_TILING_LINEAR;
-    default:
-      printer(result_tgfx_NOTCODED, "Find_VkTiling() doesn't support this order!");
+    default: vkPrint(49);
       return VkImageTiling::VK_IMAGE_TILING_MAX_ENUM;
   }
 }
@@ -725,10 +685,7 @@ inline unsigned int Find_TextureLayer_fromtgfx_cubeface(cubeface_tgfx cubeface) 
     case cubeface_tgfx_RIGHT: return 3;
     case cubeface_tgfx_TOP: return 4;
     case cubeface_tgfx_BOTTOM: return 5;
-    default:
-      printer(result_tgfx_FAIL,
-              "Find_TextureLayer_fromGFXtgfx_cubeface() in Vulkan backend doesn't support this "
-              "type of CubeFace!");
+    default: vkPrint(49);
   }
 }
 inline unsigned int vk_getDataTypeByteSizes(datatype_tgfx data) {
@@ -745,9 +702,7 @@ inline unsigned int vk_getDataTypeByteSizes(datatype_tgfx data) {
     case datatype_tgfx_VAR_VEC4: return 16;
     case datatype_tgfx_VAR_MAT4x4: return 64;
     case datatype_tgfx_UNDEFINED:
-    default:
-      printer(result_tgfx_INVALIDARGUMENT,
-              "get_uniformtypes_sizeinbytes() has failed because input isn't supported!");
+    default: vkPrint(49);
       return 0;
   }
 }
@@ -757,8 +712,7 @@ inline VkPresentModeKHR vk_findPresentModeVk(windowpresentation_tgfx p) {
     case windowpresentation_tgfx_FIFO_RELAXED: return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
     case windowpresentation_tgfx_IMMEDIATE: return VK_PRESENT_MODE_IMMEDIATE_KHR;
     case windowpresentation_tgfx_MAILBOX: return VK_PRESENT_MODE_MAILBOX_KHR;
-    default:
-      printer(result_tgfx_NOTCODED, "This presentation mode isn't supported by the VK backend!");
+    default: vkPrint(49);
       return VK_PRESENT_MODE_MAX_ENUM_KHR;
   }
 }
@@ -768,8 +722,7 @@ inline windowpresentation_tgfx vk_findPresentModeTgfx(VkPresentModeKHR p) {
     case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return windowpresentation_tgfx_FIFO_RELAXED;
     case VK_PRESENT_MODE_IMMEDIATE_KHR: return windowpresentation_tgfx_IMMEDIATE;
     case VK_PRESENT_MODE_MAILBOX_KHR: return windowpresentation_tgfx_MAILBOX;
-    default:
-      printer(result_tgfx_NOTCODED, "This presentation mode isn't supported by the VK backend!");
+    default: vkPrint(49);
       return windowpresentation_tgfx_FIFO;
   }
 }
@@ -778,8 +731,7 @@ inline VkColorSpaceKHR vk_findColorSpaceVk(colorspace_tgfx cs) {
     case colorspace_tgfx_sRGB_NONLINEAR: return VK_COLORSPACE_SRGB_NONLINEAR_KHR;
     case colorspace_tgfx_HDR10_ST2084: return VK_COLOR_SPACE_HDR10_ST2084_EXT;
     case colorspace_tgfx_EXTENDED_sRGB_LINEAR: return VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
-    default:
-      printer(result_tgfx_NOTCODED, "ColorSpace isn't supported by Find_VkColorSpace_byTGFX");
+    default: vkPrint(49);
   }
   return VK_COLOR_SPACE_MAX_ENUM_KHR;
 }
@@ -812,9 +764,7 @@ inline VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls) 
     case texture_channels_tgfx_R8B: return VK_COLOR_COMPONENT_R_BIT;
     case texture_channels_tgfx_D32:
     case texture_channels_tgfx_D24S8:
-    default:
-      printer(result_tgfx_NOTCODED,
-              "Find_ColorWriteMask_byChannels() doesn't support this type of RTSlot channel!");
+    default: vkPrint(49);
       return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
   }
 }
@@ -838,8 +788,7 @@ inline colorspace_tgfx vk_findColorSpaceTgfx(VkColorSpaceKHR cs) {
     case VK_COLORSPACE_SRGB_NONLINEAR_KHR: return colorspace_tgfx_sRGB_NONLINEAR;
     case VK_COLOR_SPACE_HDR10_ST2084_EXT: return colorspace_tgfx_HDR10_ST2084;
     case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT: return colorspace_tgfx_EXTENDED_sRGB_LINEAR;
-    default:
-      printer(result_tgfx_NOTCODED, "ColorSpace isn't supported by Find_TGFXColorSpace_byVk");
+    default: vkPrint(49);
       return ( colorspace_tgfx )UINT32_MAX;
   }
 }
@@ -862,8 +811,7 @@ inline VkPipelineBindPoint vk_findPipelineBindPoint(pipelineType_tgfx type) {
     case pipelineType_tgfx_COMPUTE: return VK_PIPELINE_BIND_POINT_COMPUTE;
     case pipelineType_tgfx_RASTER: return VK_PIPELINE_BIND_POINT_GRAPHICS;
     case pipelineType_tgfx_RAYTRACING: return VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR;
-    default:
-      printer(result_tgfx_FAIL, "vk_findPipelineBindPoint() doesn't support this pipeline!");
+    default: vkPrint(49);
       return VK_PIPELINE_BIND_POINT_MAX_ENUM;
   }
 }
@@ -905,7 +853,6 @@ inline VkVertexInputRate vk_findVertexInputRateVk(vertexBindingInputRate_tgfx ra
   switch (rate) {
     case vertexBindingInputRate_tgfx_VERTEX: return VK_VERTEX_INPUT_RATE_VERTEX;
     case vertexBindingInputRate_tgfx_INSTANCE: return VK_VERTEX_INPUT_RATE_INSTANCE;
-    default: assert(0 && "Vertex Input Rate is invalid!");
+    default: vkPrint(49); return VK_VERTEX_INPUT_RATE_MAX_ENUM;
   }
-  return VK_VERTEX_INPUT_RATE_MAX_ENUM;
 }

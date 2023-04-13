@@ -1,10 +1,7 @@
 #include "vk_predefinitions.h"
 
-#include <stdarg.h>
-#include <map>
-
-#include "vk_resource.h"
 #include "string_tapi.h"
+#include "vk_resource.h"
 
 core_tgfx*             core_tgfx_main    = nullptr;
 core_public*           core_vk           = nullptr;
@@ -19,6 +16,7 @@ manager_vk*            queuesys          = nullptr;
 virtualmemorysys_tapi* virmemsys         = nullptr;
 profiler_tapi*         profilerSys       = nullptr;
 bitsetsys_tapi*        bitsetSys         = nullptr;
+stringSys_tapi*        stringSys         = nullptr;
 VkInstance             VKGLOBAL_INSTANCE = VK_NULL_HANDLE;
 VkApplicationInfo      VKGLOBAL_APPINFO;
 tgfx_logCallback       printer_cb                   = nullptr;
@@ -226,4 +224,9 @@ void* operator new(size_t size, vk_virmem::dynamicmem* mem) {
 }
 void* operator new[](size_t size, vk_virmem::dynamicmem* mem) {
   return VK_ALLOCATE_AND_GETPTR(mem, size);
+}
+result_tgfx vkPrint(unsigned int logCode, const wchar_t* extraInfo)
+{
+  printer_cb(logCode, extraInfo);
+  return core_tgfx_main->getLogMessage(logCode, nullptr);
 }

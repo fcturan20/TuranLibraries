@@ -51,9 +51,9 @@ struct MONITOR_VKOBJ {
 
   MONITOR_VKOBJ() = default;
   MONITOR_VKOBJ(const MONITOR_VKOBJ& copyFrom) { *this = copyFrom; }
-  unsigned int width = 0, height = 0, color_bites = 0, refresh_rate = 0, physical_width = 0,
-               physical_height = 0;
-  const char*  name            = NULL;
+  tgfx_uvec2   res, physicalSize;
+  unsigned int color_bites = 0, refresh_rate = 00;
+  const wchar_t*  name            = NULL;
   GLFWmonitor* monitorobj      = NULL;
 };
 
@@ -67,7 +67,7 @@ struct WINDOW_VKOBJ {
   windowmode_tgfx           m_displayMode = windowmode_tgfx_WINDOWED;
   MONITOR_VKOBJ*            m_monitor     = nullptr;
   GPU_VKOBJ*                m_gpu         = nullptr;
-  const char*               m_name        = nullptr;
+  const wchar_t*               m_name        = nullptr;
   tgfx_windowResizeCallback m_resizeFnc   = nullptr;
   tgfx_windowKeyCallback    m_keyFnc      = nullptr;
   void*                     m_userData    = nullptr;

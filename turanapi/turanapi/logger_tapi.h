@@ -21,12 +21,12 @@ typedef enum tapi_log_type {
 } log_type_tapi;
 
 typedef struct logger_tapi {
-  void (*init)(stringArgument_tapi(mainLogFile));
+  void (*init)(stringReadArgument_tapi(mainLogFile));
   void (*destroy)();
   // You can set file paths different each time you write to file
   // Also you can set paths NULL if you don't want to change file path
-  void (*save)(tapi_log_type logType, stringArgument_tapi(path));
-  void (*log)(tapi_log_type type, unsigned char stopRunning, stringArgument_tapi(format), ...);
+  void (*save)(tapi_log_type logType, stringReadArgument_tapi(path));
+  void (*log)(tapi_log_type type, unsigned char stopRunning, const wchar_t* format, ...);
 } logger_tapi;
 
 typedef struct logger_tapi_d logger_tapi_d;

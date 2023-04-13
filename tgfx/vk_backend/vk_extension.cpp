@@ -1,13 +1,13 @@
-#include "vk_extension.h"
-
-#include <tgfx_forwarddeclarations.h>
-
 #include <atomic>
 #include <glm/glm.hpp>
+#include <string_tapi.h>
+#include <tgfx_forwarddeclarations.h>
+
 
 #include "vk_core.h"
 #include "vk_includes.h"
 #include "vk_resource.h"
+#include "vk_extension.h"
 
 // Extensions
 #include "vkext_depthstencil.h"
@@ -66,7 +66,17 @@ void extManager_vkDevice::inspect() {
 
   vkGetPhysicalDeviceFeatures2(m_GPU->vk_physical, &m_GPU->vk_featuresDev);
   vkGetPhysicalDeviceProperties2(m_GPU->vk_physical, &m_GPU->vk_propsDev);
-  
+
+  // SAVE BASIC INFOs TO THE GPU DESC
+  {
+    stringSys->createString(string_type_tapi_UTF16, ( void** )&m_GPU->desc.name, L"%s",
+                            m_GPU->vk_propsDev.properties.deviceName);
+    m_GPU->desc.driverVersion = m_GPU->vk_propsDev.properties.driverVersion;
+    m_GPU->desc.gfxApiVersion = m_GPU->vk_propsDev.properties.apiVersion;
+    m_GPU->desc.driverVersion = m_GPU->vk_propsDev.properties.driverVersion;
+    m_GPU->desc.type          = vk_findGPUTypeTgfx(m_GPU->vk_propsDev.properties.deviceType);
+  }
+
   for (size_t extIndx = 0; extIndx < vkext_interface::vkext_count; extIndx++) {
     vkext_interface* ext = m_exts[extIndx];
     if (ext) {

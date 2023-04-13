@@ -1,5 +1,14 @@
 #include "string_tapi.h"
 
+#include <assert.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <string>
+
 #include "ecs_tapi.h"
 #include "predefinitions_tapi.h"
 #include "unittestsys_tapi.h"
@@ -12,14 +21,15 @@
 
 virtualmemorysys_tapi*                     virmem_sys;
 unsigned int                               pagesize;
-array_of_strings_tapi_type*                aos;
-array_of_strings_tapi_d*                   aos_sys_d;
+stringSys_tapi_type*                       strSysType;
+stringSys_tapi_d*                          aos_sys_d;
 array_of_strings_standardallocator_tapi*   aos_standard;
 array_of_strings_virtualallocatorsys_tapi* aos_virtual;
+stringSys_tapi*                            stringSys;
 
-typedef struct array_of_strings_tapi_d {
-  array_of_strings_tapi_type* aos_sys;
-} array_of_strings_tapi_d;
+typedef struct stringSys_tapi_d {
+  stringSys_tapi_type* aos_sys;
+} stringSys_tapi_d;
 
 typedef struct standard_array_of_strings {
   char*               list_of_chars;
@@ -30,15 +40,14 @@ typedef struct standard_array_of_strings {
 
 array_of_strings_tapi* standard_create_array(unsigned long long initial_size,
                                              unsigned long long char_expand_size) {
-  standard_array_of_strings* array =
-    ( standard_array_of_strings* )malloc(sizeof(standard_array_of_strings));
-  array->ptr_list_len      = 0;
-  array->ptr_list_capacity = initial_size;
+  standard_array_of_strings* array = new standard_array_of_strings;
+  array->ptr_list_len              = 0;
+  array->ptr_list_capacity         = initial_size;
   if (array->ptr_list_capacity) {
     array->list_of_ptrs =
       ( unsigned long long* )malloc(array->ptr_list_capacity * sizeof(array->list_of_ptrs[0]));
   }
-  array->list_of_chars = NULL;
+  array->list_of_chars = nullptr;
 
   return ( array_of_strings_tapi* )array;
 }
@@ -145,7 +154,7 @@ array_of_strings_tapi* virtual_create_array(void* virtualmem_loc, unsigned long 
   // Place char list far away from the ptr list's start
   // Placement is like this: page0[baseobj - ptrlist_beginning], page1-x[ptrlist_continue],
   // pagex-end[charlist] [x,end] range is "(tapi_average_string_len / sizeof(unsigned int))-1" times
-  //bigger than [1-x] range
+  // bigger than [1-x] range
   arry->list_of_chars = ( char* )arry + (pagesize * (memsize / pagesize) /
                                          (tapi_average_string_len / sizeof(unsigned int)));
   virmem_sys->virtual_commit(( char* )arry + pagesize, pagesize);
@@ -219,6 +228,231 @@ unsigned long long virtual_delete_string(array_of_strings_tapi* array_o,
   }
 }
 
+/////////////////////////////////////////// STRING SYSTEM
+
+void string_convertString(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst),
+                          uint64_t maxLen) {
+  switch (srcType) {
+    case string_type_tapi_UTF8: {
+      uint64_t wholeSrcStrLen = strlen(( const char* )srcData) + 1;
+      uint64_t copyLen        = __min(wholeSrcStrLen, maxLen);
+      switch (dstType) {
+        case string_type_tapi_UTF8: {
+          memcpy(dstData, srcData, copyLen);
+        } break;
+        case string_type_tapi_UTF16: {
+          mbstowcs(( wchar_t* )dstData, ( const char* )srcData, wholeSrcStrLen);
+        } break;
+        default: assert(0 && "This string type isn't supported to be converted");
+      }
+    } break;
+    case string_type_tapi_UTF16: {
+      uint64_t wholeSrcStrLen = wcslen(( const wchar_t* )srcData) + 1;
+      uint64_t copyLen        = __min(wholeSrcStrLen, maxLen);
+      switch (dstType) {
+        case string_type_tapi_UTF8: {
+          wcstombs(( char* )dstData, ( const wchar_t* )srcData, copyLen);
+        } break;
+        case string_type_tapi_UTF16: {
+          memcpy(( wchar_t* )dstData, ( const wchar_t* )srcData, sizeof(wchar_t) * copyLen);
+        } break;
+        default: assert(0 && "This string type isn't supported to be converted");
+      }
+    } break;
+    default: assert(0 && "This string type isn't supported to be converted");
+  }
+}
+bool logCheckFormatLetter(stringReadArgument_tapi(format), uint32_t letterIndx, char letter) {
+  switch (formatType) {
+    case string_type_tapi_UTF8: {
+      const char* format = ( const char* )formatData;
+      return format[letterIndx] == letter;
+    } break;
+    case string_type_tapi_UTF16: {
+      wchar_t wchar = (( const wchar_t* )formatData)[letterIndx];
+      return wchar == letter;
+    } break;
+    case string_type_tapi_UTF32: {
+      char32_t uchar = (( const char32_t* )formatData)[letterIndx];
+      return uchar == letter;
+    } break;
+    default: assert(0 && "Unsupported format for logCheckFormatLetter!");
+  }
+  return false;
+}
+#define tStrPrint(buf, bufIter, count, format, p)                   \
+  if (targetType == string_type_tapi_UTF8) {                        \
+    snprintf((( char* )##buf) + bufIter, count, format, p);         \
+  } else if (targetType == string_type_tapi_UTF16) {                \
+    _snwprintf((( wchar_t* )##buf) + bufIter, count, L##format, p); \
+  }
+void tapi_vCreateString(string_type_tapi targetType, void** target, const wchar_t* format,
+                        va_list args) {
+  // Read format
+  uint64_t bufSize = 0;
+  {
+    va_list rArgs;
+    va_copy(rArgs, args);
+
+    uint64_t formatIter = 0;
+    while (format[formatIter] != L'\0') {
+      if (format[formatIter] == L'%' && format[formatIter + 1] != L'\0') {
+        formatIter++;
+        if (format[formatIter] == L'l' && format[formatIter + 1] != L'\0') {
+          formatIter++;
+          if (format[formatIter] == L'd') {
+            long long int d = va_arg(rArgs, long long int);
+            bufSize += 8;
+          } else if (format[formatIter] == L'u') {
+            unsigned long long int u = va_arg(rArgs, unsigned long long int);
+            bufSize += 8;
+          }
+        }
+        else if (format[formatIter] == L'd') {
+          int d = va_arg(rArgs, int);
+          bufSize += 4;
+        } else if (format[formatIter] == L'u') {
+          unsigned int u = va_arg(rArgs, unsigned int);
+          bufSize += 4;
+        } else if (format[formatIter] == L'f') {
+          float s = va_arg(rArgs, float);
+          bufSize += 8;
+        } else if (format[formatIter] == L'p') {
+          void* p = va_arg(rArgs, void*);
+          bufSize += 16;
+        } else if (format[formatIter] == L's') {
+          const char* s = va_arg(rArgs, const char*);
+          if (s) {
+            bufSize += strlen(s);
+          }
+        } else if (format[formatIter] == L'v') {
+          const wchar_t* vs = va_arg(rArgs, const wchar_t*);
+          if (vs) {
+            bufSize += wcslen(vs);
+          }
+        } else {
+          assert(0 && "Unsupported type of log argument!");
+        }
+      } else {
+        bufSize++;
+      }
+
+      formatIter++;
+    }
+
+    va_end(rArgs);
+  }
+
+  // Allocate string buffer
+  uint64_t charSize = 0;
+  {
+    switch (targetType) {
+      case string_type_tapi_UTF8: charSize = sizeof(char); break;
+      case string_type_tapi_UTF16: charSize = sizeof(wchar_t); break;
+      case string_type_tapi_UTF32: charSize = sizeof(char32_t); break;
+    }
+    *target = malloc((bufSize + 1) * charSize);
+  }
+
+  // Fill string buffer
+  {
+    uint64_t bufIter = 0, formatIter = 0;
+    while (format[formatIter] != L'\0') {
+      if (format[formatIter] == L'%' && format[formatIter + 1] != L'\0') {
+        formatIter++;
+        if (format[formatIter] == L'l' && format[formatIter + 1] != L'\0') {
+          formatIter++;
+          if (format[formatIter] == L'd') {
+            long long int d = va_arg(args, long long int);
+            tStrPrint(*target, bufIter, 8, "%ld", d);
+            bufSize += 8;
+          } else if (format[formatIter] == L'u') {
+            unsigned long long int u = va_arg(args, unsigned long long int);
+            tStrPrint(*target, bufIter, 8, "%lu", u);
+            bufSize += 8;
+          }
+        }
+        else if (format[formatIter] == L'd') {
+          int i = va_arg(args, int);
+          tStrPrint(*target, bufIter, 4, "%d", i);
+          bufIter += 4;
+        } else if (format[formatIter] == L'u') {
+          unsigned int u = va_arg(args, unsigned int);
+          tStrPrint(*target, bufIter, 4, "%u", u);
+          bufIter += 4;
+        } else if (format[formatIter] == L'f') {
+          double d = va_arg(args, double);
+          tStrPrint(*target, bufIter, 8, "%f", d);
+          bufIter += 8;
+        } else if (format[formatIter] == L'p') {
+          void* p = va_arg(args, void*);
+          tStrPrint(*target, bufIter, 16, "%p", p);
+          bufIter += 16;
+        } else if (format[formatIter] == L's') {
+          const char* s = va_arg(args, const char*);
+          if (s) {
+            uint64_t strLength = strlen(s);
+            if (strLength) {
+              switch (targetType) {
+                case string_type_tapi_UTF8:
+                  memcpy((( char* )*target) + bufIter, s, strLength);
+                  break;
+                case string_type_tapi_UTF16:
+                  mbstowcs((( wchar_t* )*target) + bufIter, s, strLength);
+                  break;
+                default: assert(0 && "NOT SUPPORTED FORMAT TO CREATE STRING");
+              }
+              bufIter += strLength;
+            }
+          }
+        } else if (format[formatIter] == L'v') {
+          const wchar_t* vs = va_arg(args, const wchar_t*);
+          if (vs) {
+            uint64_t strLength = wcslen(vs);
+            if (strLength) {
+              switch (targetType) {
+                case string_type_tapi_UTF8:
+                  wcstombs((( char* )*target) + bufIter, vs, strLength);
+                  break;
+                case string_type_tapi_UTF16:
+                  memcpy((( wchar_t* )*target) + bufIter, vs, sizeof(wchar_t) * strLength);
+                  break;
+                default: assert(0 && "NOT SUPPORTED FORMAT TO CREATE STRING");
+              }
+              bufIter += strLength;
+            }
+          }
+        } else {
+          assert(0 && "Unsupported type of log argument!");
+        }
+      } else {
+        switch (targetType) {
+          case string_type_tapi_UTF8:
+            wcstombs((( char* )*target) + bufIter, &format[formatIter], 1);
+            break;
+          case string_type_tapi_UTF16: (( wchar_t* )*target)[bufIter] = format[formatIter]; break;
+          default: assert(0 && "NOT SUPPORTED FORMAT TO CREATE STRING");
+        }
+        bufIter++;
+      }
+
+      formatIter++;
+    }
+    switch (targetType) {
+      case string_type_tapi_UTF8: (( char* )*target)[bufIter] = '\0'; break;
+      case string_type_tapi_UTF16: (( wchar_t* )*target)[bufIter] = L'\0'; break;
+    }
+  }
+}
+void string_createString(string_type_tapi targetType, void** target, const wchar_t* format, ...) {
+  va_list args;
+  va_start(args, format);
+  tapi_vCreateString(targetType, target, format, args);
+  va_end(args);
+}
+
+////////////////////////////////////////////////////////////////
+
 // Unit Tests
 unsigned char ut_0(const char** output_string, void* data) {
   *output_string = "Hello from ut_0!";
@@ -234,9 +468,6 @@ void set_unittests(ecs_tapi* ecsSYS) {
     x.test = &ut_0;
     ut_sys->funcs->add_unittest("array_of_strings", 0, x);*/
   } else {
-    printf(
-      "Array of Strings: Unit tests aren't implemented because unit test system isn't "
-      "available!\n");
   }
 }
 
@@ -247,15 +478,21 @@ ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
   pagesize   = virmem_sys->get_pagesize();
   set_unittests(ecsSys);
 
-  aos = ( array_of_strings_tapi_type* )malloc(sizeof(array_of_strings_tapi_type));
-  aos->standard_allocator = ( array_of_strings_standardallocator_tapi* )malloc(
+  strSysType                     = ( stringSys_tapi_type* )malloc(sizeof(stringSys_tapi_type));
+  strSysType->standardString     = ( stringSys_tapi* )malloc(sizeof(stringSys_tapi));
+  strSysType->standard_allocator = ( array_of_strings_standardallocator_tapi* )malloc(
     sizeof(array_of_strings_standardallocator_tapi));
-  aos->virtual_allocator = ( array_of_strings_virtualallocatorsys_tapi* )malloc(
+  strSysType->virtual_allocator = ( array_of_strings_virtualallocatorsys_tapi* )malloc(
     sizeof(array_of_strings_virtualallocatorsys_tapi));
-  aos->data    = ( array_of_strings_tapi_d* )malloc(sizeof(array_of_strings_tapi_d));
-  aos_sys_d    = aos->data;
-  aos_standard = aos->standard_allocator;
-  aos_virtual  = aos->virtual_allocator;
+  strSysType->data = ( stringSys_tapi_d* )malloc(sizeof(stringSys_tapi_d));
+  aos_sys_d        = strSysType->data;
+  stringSys        = strSysType->standardString;
+  aos_standard     = strSysType->standard_allocator;
+  aos_virtual      = strSysType->virtual_allocator;
+
+  stringSys->convertString = string_convertString;
+  stringSys->createString  = string_createString;
+  stringSys->vCreateString = tapi_vCreateString;
 
   aos_standard->change_string          = &standard_change_string;
   aos_standard->create_array_of_string = &standard_create_array;
@@ -268,12 +505,13 @@ ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
   aos_virtual->delete_string          = &virtual_delete_string;
   aos_virtual->read_string            = &virtual_read_string;
 
-  ecsSys->addSystem(ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME, ARRAY_OF_STRINGS_TAPI_VERSION, virmemtype);
+  ecsSys->addSystem(STRINGSYS_TAPI_PLUGIN_NAME, STRINGSYS_TAPI_VERSION, strSysType);
 }
 
 ECSPLUGIN_EXIT(ecsSys, reloadFlag) {
   free(aos_standard);
   free(aos_virtual);
   free(aos_sys_d);
-  free(aos);
+  free(stringSys);
+  free(strSysType);
 }

@@ -70,9 +70,9 @@ void load_plugins() {
     ( THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(THREADINGSYS_TAPI_PLUGIN_NAME);
   printf("Thread Count: %u\n", threadingSys->funcs->thread_count());
 
-  pluginHnd_ecstapi arrayOfStringsPlugin = editorECS->loadPlugin("tapi_array_of_strings_sys.dll");
-  auto              AoSsys =
-    ( ARRAY_OF_STRINGS_TAPI_LOAD_TYPE )editorECS->getSystem(ARRAY_OF_STRINGS_TAPI_PLUGIN_NAME);
+  pluginHnd_ecstapi stringSysPlugin = editorECS->loadPlugin(STRINGSYS_TAPI_PLUGIN_NAME".dll");
+  auto              stringSysType =
+    ( STRINGSYS_TAPI_LOAD_TYPE )editorECS->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
 
   pluginHnd_ecstapi profilerPlugin = editorECS->loadPlugin("tapi_profiler.dll");
   profilerSys = ( PROFILER_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(PROFILER_TAPI_PLUGIN_NAME);

@@ -73,4 +73,5 @@
 
 
 typedef enum tapi_string_type string_type_tapi;
-#define stringArgument_tapi(name) string_type_tapi name##Type, const void* name##Data
+#define stringReadArgument_tapi(name) string_type_tapi name##Type, const void* name##Data
+#define stringWriteArgument_tapi(name) string_type_tapi name##Type, void* name##Data

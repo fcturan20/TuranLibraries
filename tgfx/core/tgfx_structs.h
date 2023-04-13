@@ -48,7 +48,7 @@ typedef struct tgfx_memory_description {
 } memoryDescription_tgfx;
 
 typedef struct tgfx_gpu_description {
-  const char*   name;
+  const wchar_t*   name;
   unsigned int  gfxApiVersion, driverVersion;
   gpu_type_tgfx type;
   unsigned char operationSupport_raster, operationSupport_compute, operationSupport_transfer,
@@ -61,7 +61,7 @@ typedef struct tgfx_window_description {
   tgfx_uvec2                size;
   monitor_tgfxhnd           monitor;
   windowmode_tgfx           mode;
-  const char*               name;
+  const wchar_t*               name;
   tgfx_windowResizeCallback resizeCb;
   tgfx_windowKeyCallback    keyCb;
 } windowDescription_tgfx;

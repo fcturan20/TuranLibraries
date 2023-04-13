@@ -26,11 +26,23 @@ static logger_tapi*    core_logSys;
 void defaultPrintCallback(unsigned int logCode, const wchar_t* extraInfo) {
   const wchar_t* logMessage = nullptr;
   result_tgfx    result     = core_typePtr->api->getLogMessage(logCode, &logMessage);
-  core_logSys->log(( tapi_log_type )result, false, string_type_tapi_UTF16, L"TGFX -> %v %v",
-                   logMessage, extraInfo);
+  tapi_log_type  logType    = log_type_tapi_STATUS;
+  switch (result) {
+    case result_tgfx_SUCCESS: logType = log_type_tapi_STATUS; break;
+    case result_tgfx_FAIL:
+    case result_tgfx_INVALIDARGUMENT:
+    case result_tgfx_WRONGTIMING: logType = log_type_tapi_ERROR; break;
+    case result_tgfx_NOTCODED: logType = log_type_tapi_NOTCODED; break;
+    case result_tgfx_WARNING: logType = log_type_tapi_WARNING; break;
+  }
+  if (extraInfo) {
+    core_logSys->log(logType, false, L"[TGFX] %v; %v", logMessage, extraInfo);
+  } else {
+    core_logSys->log(logType, false, L"[TGFX] %v", logMessage);
+  }
 }
 
-static constexpr char* backendFileNames[] = {"TGFXVulkan.dll", "TGFXD3D12.dll"};
+static constexpr char* backendFileNames[] = {"", "TGFXVulkan.dll", "TGFXD3D12.dll"};
 constexpr std::size_t  constexpr_slen(const char* s) { return std::char_traits<char>::length(s); }
 static constexpr uint32_t maxBackendFileName =
   max(constexpr_slen(backendFileNames[0]), constexpr_slen(backendFileNames[1]));
@@ -70,6 +82,8 @@ ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
   core->api->helpers        = new helper_tgfx;
   core->api->imgui          = new dearimgui_tgfx;
   core->api->renderer       = new renderer_tgfx;
+  core_logSys =
+    (( LOGGER_TAPI_PLUGIN_LOAD_TYPE )core_regSys->getSystem(LOGGER_TAPI_PLUGIN_NAME))->funcs;
 
   core->api->load_backend  = &load_backend;
   core->api->getLogMessage = &tgfxGetLogMessage;
@@ -96,7 +110,7 @@ static tgfxLogStruct tgfxLogMessages[]{
   {result_tgfx_FAIL, L"Windowing system isn't supported by your system with this backend"},
   {result_tgfx_WARNING, L"System doesn't support display"},
   {result_tgfx_INVALIDARGUMENT, L"Invalid object handle"},
-  {result_tgfx_FAIL, L"There are more descsets than supported!"},
+  {result_tgfx_FAIL, L"There are more binding tables than supported!"},
   {result_tgfx_FAIL, L"No descset is found!"},
   {result_tgfx_FAIL, L"Subpass handle isn't valid!"},
   {result_tgfx_FAIL, L"Object handle's type didn't match!"},
@@ -108,13 +122,9 @@ static tgfxLogStruct tgfxLogMessages[]{
   {result_tgfx_WARNING, L"One of the monitors have invalid physical sizes, be careful"},
   {result_tgfx_FAIL, L"Failed to signal fence on CPU!"},
   {result_tgfx_FAIL, L"Backend DLL file isn't found!"},
-  {result_tgfx_FAIL,
-   L"Backend doesn't have any backend_load() function, which it should. You are "
-   L"probably using a newer version that uses different load scheme!"},
+  {result_tgfx_FAIL, L"Backend's loading scheme isn't supported"},
   {result_tgfx_FAIL, L"Texture creation has failed at backend object creation"},
-  {result_tgfx_FAIL,
-   L"Created object requires a dedicated allocation but you didn't use dedicated "
-   L"allocation extension. Provide a dedicated allocation info as extension!"},
+  {result_tgfx_FAIL, L"Created object requires a dedicated allocation but you didn't"},
   {result_tgfx_FAIL, L"Texture creation has failed because mip count of the texture is wrong!"},
   {result_tgfx_FAIL, L"Buffer creation has failed because at vkCreateBuffer()"},
   {result_tgfx_FAIL, L"Binding table creation failed at vkCreateDescriptorPool()"},
@@ -125,7 +135,7 @@ static tgfxLogStruct tgfxLogMessages[]{
   {result_tgfx_FAIL, L"Fence value reading has failed"},
   {result_tgfx_FAIL, L"Invalid shader source"},
   {result_tgfx_FAIL, L"Shader source compilation has failed"},
-  {result_tgfx_FAIL, L"Shaders are from different GPUs"},
+  {result_tgfx_INVALIDARGUMENT, L"Objects are from different GPUs"},
   {result_tgfx_FAIL, L"2 shader sources with the same type isn't supported"},
   {result_tgfx_NOTCODED, L"Backend doesn't support this type of shader source"},
   {result_tgfx_FAIL, L"Exceeded max supported attribute or binding count"},
@@ -136,8 +146,22 @@ static tgfxLogStruct tgfxLogMessages[]{
   {result_tgfx_FAIL, L"TGFX already bound the resource to its own dedicated heap"},
   {result_tgfx_FAIL, L"Bind offset should be multiple of the resource's memory alignment"},
   {result_tgfx_FAIL, L"Binding resource to heap has failed"},
-  {result_tgfx_FAIL, L"Heap mapping has failed"}};
-  static constexpr uint32_t tgfxLogCount = sizeof(tgfxLogMessages) / sizeof(tgfxLogStruct);
+  {result_tgfx_FAIL, L"Heap mapping has failed"},
+  {result_tgfx_INVALIDARGUMENT, L"Fix your function arguments or report this!"},
+  {result_tgfx_FAIL, L"Querying queue support for window has failed"},
+  {result_tgfx_FAIL, L"GPU doesn't support Compute, Graphics or Transfer; GPU isn't usable"},
+  {result_tgfx_FAIL, L"Queue submission failed"},
+  {result_tgfx_FAIL, L"Command buffer recording failed"},
+  {result_tgfx_FAIL, L"Active queue operation type isn't matching"},
+  {result_tgfx_FAIL, L"Querying texture type limits failed"},
+  {result_tgfx_WARNING, L"Seperate depth-stencil layouts aren't supported by the GPU"},
+  {result_tgfx_WARNING, L"Depth bounds testing isn't supported by the GPU"},
+  {result_tgfx_FAIL, L"Invalid depth attachment info"},
+  {result_tgfx_FAIL, L"Invalid indirect operation type"},
+  {result_tgfx_WARNING, L"Backend specific warning"},
+  {result_tgfx_FAIL, L"This command can't be called in this bundle"},
+  {result_tgfx_FAIL, L"GPU doesn't support dynamic rendering, use subpass extension"}};
+static constexpr uint32_t tgfxLogCount = sizeof(tgfxLogMessages) / sizeof(tgfxLogStruct);
 result_tgfx               tgfxGetLogMessage(unsigned int logCode, const wchar_t** logMessage) {
   if (logCode >= tgfxLogCount) {
     *logMessage = L"There is no such log!";

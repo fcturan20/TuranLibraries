@@ -48,12 +48,11 @@ extern virtualmemorysys_tapi* virmemsys;
 typedef struct profiler_tapi  profiler_tapi;
 extern profiler_tapi*         profilerSys;
 extern bitsetsys_tapi*        bitsetSys;
+typedef struct stringSys_tapi tapi_stringSys;
+extern stringSys_tapi*        stringSys;
 
 extern tgfx_logCallback printer_cb;
-result_tgfx                    vkPrint(unsigned int logCode, const wchar_t* extraInfo = nullptr) {
-  printer_cb(logCode, extraInfo);
-  return core_tgfx_main->getLogMessage(logCode, nullptr);
-}
+result_tgfx             vkPrint(unsigned int logCode, const wchar_t* extraInfo = nullptr);
 
 // <------------------------------------------------------------------------------------>
 //		Forward Declarations
@@ -81,16 +80,15 @@ void pNext_addToLast(void* targetStruct, void* attachStruct);
   PFN_##funcName        funcName##_loadVkFunc(); \
   extern PFN_##funcName funcName##_loaded;
 
-#define defineVkExtFunc(funcName)                                                             \
-  PFN_##funcName funcName##_loadVkFunc() {                                                    \
-    auto func = ( PFN_##funcName )vkGetInstanceProcAddr(VKGLOBAL_INSTANCE, #funcName);        \
-    if (func == nullptr) {                                                                    \
-      vkPrint(16,                                                               \
-              L"Vulkan failed to load " #funcName " function! Probably an OS update problem"); \
-      return nullptr;                                                                         \
-    }                                                                                         \
-    return func;                                                                              \
-  };                                                                                          \
+#define defineVkExtFunc(funcName)                                                                  \
+  PFN_##funcName funcName##_loadVkFunc() {                                                         \
+    auto func = ( PFN_##funcName )vkGetInstanceProcAddr(VKGLOBAL_INSTANCE, #funcName);             \
+    if (func == nullptr) {                                                                         \
+      vkPrint(16, L"Vulkan failed to load " #funcName " function! Probably an OS update problem"); \
+      return nullptr;                                                                              \
+    }                                                                                              \
+    return func;                                                                                   \
+  };                                                                                               \
   PFN_##funcName funcName##_loaded = nullptr;
 
 #define loadVkExtFunc(funcName) funcName##_loaded = funcName##_loadVkFunc()
@@ -275,11 +273,11 @@ template <typename T, typename TGFXHND, unsigned int max_object_count = 1 << 20>
 class VK_LINEAR_OBJARRAY {
   static_assert(T::HANDLETYPE != VKHANDLETYPEs::UNDEFINED, "VKOBJ's type shouldn't be UNDEFINED");
   const unsigned int elementCountPerPage() { return VKCONST_VIRMEMPAGESIZE / sizeof(T); }
-  T* data = nullptr;
+  T*                 data = nullptr;
   // Active Object -> 1, Free Object -> 0
-  bitset_tapi* bitset = nullptr;
+  bitset_tapi*         bitset     = nullptr;
   std::atomic_uint32_t maxObjIndx = 0;
-  void commitNewPage() {
+  void                 commitNewPage() {
     uint32_t elementIndx = maxObjIndx.fetch_add(elementCountPerPage());
     virmemsys->virtual_commit(&data[elementIndx], VKCONST_VIRMEMPAGESIZE);
   }
@@ -324,9 +322,9 @@ class VK_LINEAR_OBJARRAY {
     return false;
   }
   unsigned int size() const { return maxObjIndx.load(); }
-  T* getOBJbyINDEX(unsigned int i) { return (isValid(&data[i])) ? (&data[i]) : (NULL); }
-  T* operator[](unsigned int index) { return getOBJbyINDEX(index); }
-  uint32_t getINDEXbyOBJ(T* obj) {
+  T*           getOBJbyINDEX(unsigned int i) { return (isValid(&data[i])) ? (&data[i]) : (NULL); }
+  T*           operator[](unsigned int index) { return getOBJbyINDEX(index); }
+  uint32_t     getINDEXbyOBJ(T* obj) {
     uintptr_t offset = uintptr_t(obj) - uintptr_t(data);
     return offset / sizeof(T);
   }
@@ -337,7 +335,7 @@ template <typename T, typename TGFXHND>
 T* getOBJ(TGFXHND hnd) {
 #ifdef VK_USE_STD
   return ( T* )hnd;
-  #else
+#else
   VKOBJHANDLE handle = *( VKOBJHANDLE* )&hnd;
 #ifdef VULKAN_DEBUGGING
   if (handle.type != T::HANDLETYPE || handle.OBJ_memoffset == UINT32_MAX ||
@@ -349,14 +347,14 @@ T* getOBJ(TGFXHND hnd) {
   }
 #endif
   return ( T* )(( char* )VKCONST_VIRMEMSPACE_BEGIN + handle.OBJ_memoffset);
-  #endif
+#endif
 }
 
 template <typename TGFXHND, typename T>
 TGFXHND getHANDLE(T* obj) {
-  #ifdef VK_USE_STD
+#ifdef VK_USE_STD
   return ( TGFXHND )obj;
-  #else
+#else
   VKOBJHANDLE handle   = {};
   handle.type          = T::HANDLETYPE;
   handle.OBJ_memoffset = uintptr_t(obj) - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN);
@@ -364,7 +362,7 @@ TGFXHND getHANDLE(T* obj) {
     handle.EXTRA_FLAGs = T::GET_EXTRAFLAGS(obj);
   }
   return *( TGFXHND* )&handle;
-  #endif
+#endif
 }
 
 #ifdef VK_USE_STD
@@ -381,12 +379,8 @@ class VK_ARRAY {
     }
     return false;
   }
-  void init(uint32_t size) {
-    data.resize(size);
-  }
-  void     init(T* i_data, uint32_t size) {
-    data = std::vector<T>(i_data, i_data + size);
-  }
+  void     init(uint32_t size) { data.resize(size); }
+  void     init(T* i_data, uint32_t size) { data = std::vector<T>(i_data, i_data + size); }
   T*       operator[](uint32_t i) { return &data[i]; }
   const T* operator[](uint32_t i) const { return &data[i]; }
   uint32_t size() const { return data.size(); }
@@ -394,8 +388,8 @@ class VK_ARRAY {
 #else
 template <typename T, typename TGFXHND>
 class VK_ARRAY {
-  T*             data;
-  uint32_t       count;
+  T*       data;
+  uint32_t count;
 
  public:
   bool isValid(T* obj) const {

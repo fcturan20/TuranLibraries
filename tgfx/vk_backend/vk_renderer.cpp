@@ -240,7 +240,7 @@ struct vkCmdStruct_executeIndirect {
             vkCmdDispatchIndirect(cb, vk_buffer, activeOffset);
             break;
           default:
-            printer(result_tgfx_NOTCODED, "Indirect Operation Type isn't supported!");
+            vkPrint(59);
             return;
         }
         activeOffset += indirectArgumentDataSize * drawCount;
@@ -343,8 +343,8 @@ void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cm
       (( vkCmdStruct_copyBufferToBuffer* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
     case vk_cmdType::error:
-    case vk_cmdType::error_2: printf("One of the cmds is not used!"); break;
-    default: assert_vk(0 && "Don't forget to specify command execution in vk_executeCmd()!");
+    case vk_cmdType::error_2: vkPrint(60, L"one of the commands in the buffer is not used"); break;
+    default: vkPrint(16, L"invalid command type in vk_executeCmd()");
   }
 }
 void vk_destroyCmd(vk_cmd& cmd) {
@@ -451,7 +451,7 @@ void vk_cmdBindBindingTables(commandBundle_tgfxhnd bndl, unsigned long long sort
       glm::min(VKCONST_MAXDESCSET_PERLIST,
                bundle->m_gpu->vk_propsDev.properties.limits.maxBoundDescriptorSets);
     if (bindingTableCount > descSetLimit) {
-      printer(result_tgfx_FAIL, "Max binding table count is exceeded!");
+      vkPrint(22, L"Max binding table count is exceeded!");
       return;
     }
     for (uint32_t i = 0; i < bindingTableCount; i++) {
@@ -470,8 +470,9 @@ void vk_cmdBindPipeline(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
   auto*            cmd    = vk_createCmdStruct<vkCmdStruct_bindPipeline>(&bundle->m_cmds[sortKey]);
   PIPELINE_VKOBJ*  pipe   = getOBJ<PIPELINE_VKOBJ>(pipeline);
 
-  assert_vk(pipe->vk_type == bundle->vk_bindPoint &&
-            "You can't call this type of operation in this command bundle!");
+  if (pipe->vk_type != bundle->vk_bindPoint) {
+    vkPrint(61);
+  }
   cmd->vk_bindPoint      = pipe->vk_type;
   cmd->vk_pipeline       = pipe->vk_object;
   cmd->vk_pipelineLayout = pipe->vk_layout;
@@ -710,14 +711,16 @@ void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount, const commandBundle_
 
       bi.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
       bi.pInheritanceInfo = &secInfo;
-
-      assert_vk(!ThrowIfFailed(vkBeginCommandBuffer(vkCmdBuffer, &bi),
-                               "vkBeginCommandBuffer() shouldn't fail!"));
+      if (vkBeginCommandBuffer(vkCmdBuffer, &bi) != VK_SUCCESS) {
+        vkPrint(16, L"at vkBeginCommandBuffer()");
+        return;
+      }
       for (uint64_t cmdIndx = 0; cmdIndx < bundle->m_cmdCount; cmdIndx++) {
         vk_executeCmd(vkCmdBuffer, bundle, bundle->m_cmds[cmdIndx]);
       }
-      assert_vk(
-        !ThrowIfFailed(vkEndCommandBuffer(vkCmdBuffer), "vkEndCommandBuffer() shouldn't fail!"));
+      if (vkEndCommandBuffer(vkCmdBuffer) != VK_SUCCESS) {
+        vkPrint(16, L"at vkEndCommandBuffer()");
+      }
     }
 
     secondaryCmdBuffers[bundleCount++] = vkCmdBuffer;

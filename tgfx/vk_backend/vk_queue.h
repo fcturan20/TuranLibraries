@@ -29,18 +29,16 @@ struct queueflag_vk {
   }
   // Returned flag's every bit is false. You should set at least one of them as true.
   inline static queueflag_vk CreateInvalidNullFlag() { return queueflag_vk(); }
-
-  inline bool isFlagValid() const {
+  static constexpr wchar_t*  VKCONST_FLAG_INVALID_ERROR_TEXT = L"Some inner flag is invalid";
+  inline bool                isFlagValid() const {
     if (doesntNeedAnything &&
         (is_GRAPHICSsupported || is_COMPUTEsupported || is_TRANSFERsupported)) {
-      printer(
-        result_tgfx_FAIL,
-        "(This flag doesn't need anything but it also needs something, this shouldn't happen!");
+      vkPrint(16, VKCONST_FLAG_INVALID_ERROR_TEXT);
       return false;
     }
     if (!doesntNeedAnything && !is_GRAPHICSsupported && !is_COMPUTEsupported &&
         !is_TRANSFERsupported) {
-      printer(result_tgfx_FAIL, "(This flag needs something but it doesn't support anything");
+      vkPrint(16, VKCONST_FLAG_INVALID_ERROR_TEXT);
       return false;
     }
     return true;

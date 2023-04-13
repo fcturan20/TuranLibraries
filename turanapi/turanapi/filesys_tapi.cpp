@@ -10,7 +10,7 @@
 #include "ecs_tapi.h"
 #include "string_tapi.h"
 
-void failedToRead_tapi(stringArgument_tapi(path)) {
+void failedToRead_tapi(stringReadArgument_tapi(path)) {
   switch (pathType) {
     case string_type_tapi_UTF8:
       printf("There is no such file: %s\n", ( const char* )pathData);
@@ -22,14 +22,14 @@ void failedToRead_tapi(stringArgument_tapi(path)) {
   }
 }
 template <typename T>
-void openFile_tapi(T& file, stringArgument_tapi(path), std::ios::openmode openMode = 1) {
+void openFile_tapi(T& file, stringReadArgument_tapi(path), std::ios::openmode openMode = 1) {
   switch (pathType) {
     case string_type_tapi_UTF8: file.open(( const char* )pathData, openMode); break;
     case string_type_tapi_UTF16: file.open(( const wchar_t* )pathData, openMode); break;
     default: break;
   }
 }
-void* read_binaryfile(stringArgument_tapi(path), unsigned long* size) {
+void* read_binaryfile(stringReadArgument_tapi(path), unsigned long* size) {
   std::ifstream binaryFile;
   openFile_tapi(binaryFile, pathType, pathData, std::ios::binary | std::ios::in | std::ios::ate);
   if (!(binaryFile.is_open())) {
@@ -47,7 +47,7 @@ void* read_binaryfile(stringArgument_tapi(path), unsigned long* size) {
   return read_data;
 }
 
-void overwrite_binaryfile(stringArgument_tapi(path), void* data, unsigned long datasize) {
+void overwrite_binaryfile(stringReadArgument_tapi(path), void* data, unsigned long datasize) {
   // ios::trunc is used to clear the file before outputting the data!
   std::ofstream outputFile;
   openFile_tapi(outputFile, pathType, pathData, std::ios::binary | std::ios::out | std::ios::trunc);
@@ -67,7 +67,7 @@ void overwrite_binaryfile(stringArgument_tapi(path), void* data, unsigned long d
   printf("File output is successful\n");
 }
 
-void* read_textfile(stringArgument_tapi(path), string_type_tapi fileTextType) {
+void* read_textfile(stringReadArgument_tapi(path), string_type_tapi fileTextType) {
   switch (fileTextType) {
     case string_type_tapi_UTF8: {
       std::ifstream cTextFile;
@@ -99,7 +99,7 @@ void* read_textfile(stringArgument_tapi(path), string_type_tapi fileTextType) {
     } break;
   }
 }
-void write_textfile(stringArgument_tapi(text), stringArgument_tapi(path),
+void write_textfile(stringReadArgument_tapi(text), stringReadArgument_tapi(path),
                     unsigned char writeToEnd) {
   std::ios::openmode openMode;
   if (writeToEnd) {
@@ -122,7 +122,7 @@ void write_textfile(stringArgument_tapi(text), stringArgument_tapi(path),
     } break;
   }
 }
-void delete_file(stringArgument_tapi(path)) {
+void delete_file(stringReadArgument_tapi(path)) {
   switch (pathType) {
     case string_type_tapi_UTF8: std::filesystem::remove(( const char* )pathData); break;
     case string_type_tapi_UTF16: std::filesystem::remove(( wchar_t* )pathData); break;

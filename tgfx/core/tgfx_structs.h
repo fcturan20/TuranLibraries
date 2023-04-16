@@ -42,9 +42,9 @@ typedef struct tgfx_cubeRegion {
 } cubeRegion_tgfx;
 
 typedef struct tgfx_memory_description {
-  unsigned char             memorytype_id;
-  memoryallocationtype_tgfx allocationtype;
-  unsigned long             max_allocationsize;
+  unsigned char             memoryTypeId;
+  memoryallocationtype_tgfx allocationType;
+  unsigned long             maxAllocationSize;
 } memoryDescription_tgfx;
 
 typedef struct tgfx_gpu_description {
@@ -102,7 +102,7 @@ typedef struct tgfx_sampler_description {
 
 typedef struct tgfx_texture_description {
   texture_dimensions_tgfx       dimension;
-  unsigned int                  width, height;
+  tgfx_uvec2                    resolution;
   textureChannels_tgfx          channelType;
   unsigned char                 mipCount;
   textureUsageMask_tgfxflag     usage;

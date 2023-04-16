@@ -207,9 +207,9 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
 
     auto createMemDesc = [memTypeIndx, VKGPU, memType](memoryallocationtype_tgfx allocType) {
       tgfx_memory_description& memtype_desc = VKGPU->m_memoryDescTGFX[memTypeIndx];
-      memtype_desc.allocationtype           = allocType;
-      memtype_desc.memorytype_id            = memTypeIndx;
-      memtype_desc.max_allocationsize =
+      memtype_desc.allocationType           = allocType;
+      memtype_desc.memoryTypeId            = memTypeIndx;
+      memtype_desc.maxAllocationSize =
         VKGPU->vk_propsMemory.memoryProperties.memoryHeaps[memType.heapIndex].size;
     };
     if (isDeviceLocal) {
@@ -276,6 +276,8 @@ inline void vk_checkComputerSpecs() {
 void glfwWindowResizeCallback(GLFWwindow* glfwwindow, int width, int height) {
   WINDOW_VKOBJ* vkwindow = ( WINDOW_VKOBJ* )glfwGetWindowUserPointer(glfwwindow);
   tgfx_uvec2    res      = {width, height};
+  vkwindow->m_newWidth   = width;
+  vkwindow->m_newHeight   = height;
   vkwindow->m_resizeFnc(( window_tgfxhnd )vkwindow, vkwindow->m_userData, res,
                         ( texture_tgfxhnd* )vkwindow->m_swapchainTextures);
 }
@@ -453,11 +455,12 @@ void vk_createWindow(const windowDescription_tgfx* desc, void* user_ptr, window_
   if (desc->monitor && desc->mode == windowmode_tgfx_FULLSCREEN) {
     monitor = getOBJ<MONITOR_VKOBJ>(desc->monitor)->monitorobj;
   }
-  char* windowCName = nullptr;
-  stringSys->createString(string_type_tapi_UTF8, ( void** )&windowCName, L"%v", desc->name);
+  static constexpr uint32_t VKCONST_MAX_WINDOW_NAME_CHAR              = 256;
+  char                      windowCName[VKCONST_MAX_WINDOW_NAME_CHAR] = {};
+  stringSys->convertString(string_type_tapi_UTF16, desc->name, string_type_tapi_UTF8, windowCName,
+                           VKCONST_MAX_WINDOW_NAME_CHAR - 1);
   GLFWwindow* glfwWndw =
     glfwCreateWindow(desc->size.x, desc->size.y, windowCName, monitor, nullptr);
-  free(windowCName);
 
   // Check and Report if GLFW fails
   if (glfwWndw == NULL) {
@@ -555,8 +558,11 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
         vkPrint(19, L"number of textures returned from backend isn't enough!");
         return result_tgfx_FAIL;
       }
-      vkGetSwapchainImagesKHR(GPU->vk_logical, window->vk_swapchain, &created_imagecount,
-                              SWPCHN_IMGs);
+      if (vkGetSwapchainImagesKHR(GPU->vk_logical, window->vk_swapchain, &created_imagecount,
+                                  SWPCHN_IMGs) != VK_SUCCESS) {
+        vkPrint(19, L"at vkGetSwapchainImagesKHR()");
+        return result_tgfx_FAIL;
+      }
 
       for (unsigned int i = 0; i < desc->imageCount; i++) {
         VkImageViewCreateInfo ImageView_ci           = {};
@@ -586,11 +592,15 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
   }
 
   window->m_swapchainTextureCount       = desc->imageCount;
-  window->m_swapchainCurrentTextureIndx = 0;
   window->m_gpu                         = GPU;
+
+  vkDeviceWaitIdle(GPU->vk_logical);
 
   // Create acquire semaphore
   {
+    if (window->vk_acquireSemaphore) {
+      vkDestroySemaphore(GPU->vk_logical, window->vk_acquireSemaphore, nullptr);
+    }
     VkSemaphoreCreateInfo sem_ci = {};
     sem_ci.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     if (vkCreateSemaphore(GPU->vk_logical, &sem_ci, nullptr, &window->vk_acquireSemaphore) !=
@@ -741,14 +751,14 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
 
   // Create TEXTURE_VKOBJs and return handles
   window->vk_swapchainTextureUsage = swpchn_ci.imageUsage;
-  for (uint32_t vkim_index = 0; vkim_index < desc->imageCount; vkim_index++) {
+  for (uint32_t vkImIndx = 0; vkImIndx < desc->imageCount; vkImIndx++) {
     TEXTURE_VKOBJ* SWAPCHAINTEXTURE = contentManager->GETTEXTURES_ARRAY().create_OBJ();
     SWAPCHAINTEXTURE->m_channels    = texture_channels_tgfx_BGRA8UNORM;
     SWAPCHAINTEXTURE->m_width       = window->m_newWidth;
     SWAPCHAINTEXTURE->m_height      = window->m_newHeight;
     SWAPCHAINTEXTURE->m_mips        = 1;
-    SWAPCHAINTEXTURE->vk_image      = SWPCHN_IMGs[vkim_index];
-    SWAPCHAINTEXTURE->vk_imageView  = SWPCHN_IMGVIEWs[vkim_index];
+    SWAPCHAINTEXTURE->vk_image      = SWPCHN_IMGs[vkImIndx];
+    SWAPCHAINTEXTURE->vk_imageView  = SWPCHN_IMGVIEWs[vkImIndx];
     SWAPCHAINTEXTURE->vk_imageUsage = window->vk_swapchainTextureUsage;
     SWAPCHAINTEXTURE->m_dim         = texture_dimensions_tgfx_2D;
     SWAPCHAINTEXTURE->m_GPU         = GPU->gpuIndx();
@@ -756,9 +766,11 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
     SWAPCHAINTEXTURE->m_memBlock = memoryBlock_vk::GETINVALID();
     SWAPCHAINTEXTURE->m_memReqs  = memoryRequirements_vk::GETINVALID();
 
-    textures[vkim_index]                    = getHANDLE<texture_tgfxhnd>(SWAPCHAINTEXTURE);
-    window->m_swapchainTextures[vkim_index] = textures[vkim_index];
+    textures[vkImIndx]                    = getHANDLE<texture_tgfxhnd>(SWAPCHAINTEXTURE);
+    window->m_swapchainTextures[vkImIndx] = textures[vkImIndx];
   }
+  window->m_lastHeight = window->m_newHeight;
+  window->m_lastWidth = window->m_newWidth;
   return result_tgfx_SUCCESS;
 }
 result_tgfx vk_getCurrentSwapchainTextureIndex(window_tgfxhnd i_window, uint32_t* index) {
@@ -1059,8 +1071,8 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_logCallback pri
     bitsetSys = bitsetSysLoaded->funcs;
   }
 
-  STRINGSYS_TAPI_LOAD_TYPE stringSysLoaded =
-    ( STRINGSYS_TAPI_LOAD_TYPE )regsys->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
+  STRINGSYS_TAPI_PLUGIN_LOAD_TYPE stringSysLoaded =
+    ( STRINGSYS_TAPI_PLUGIN_LOAD_TYPE )regsys->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
   if (stringSysLoaded) {
     stringSys = stringSysLoaded->standardString;
   }
@@ -1087,8 +1099,6 @@ result_tgfx vk_load(ecs_tapi* regsys, core_tgfx_type* core, tgfx_logCallback pri
     core->api->setInputMode                    = &vk_setInputMode;
     core->api->getCursorPos                    = &vk_getCursorPos;
     // core->api->change_window_resolution = &change_window_resolution;
-    // core->api->debugcallback = &debugcallback;
-    // core->api->debugcallback_threaded = &debugcallback_threaded;
     // core->api->destroy_tgfx_resources = &destroy_tgfx_resources;
   }
 

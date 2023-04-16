@@ -3,8 +3,8 @@
 #include "predefinitions_tapi.h"
 
 #define STRINGSYS_TAPI_PLUGIN_NAME "tapi_string"
-#define STRINGSYS_TAPI_LOAD_TYPE stringSys_tapi_type*
-#define STRINGSYS_TAPI_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 1)
+#define STRINGSYS_TAPI_PLUGIN_LOAD_TYPE stringSys_tapi_type*
+#define STRINGSYS_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 1)
 // Create allocator flag (but not coded for now)
 #define ALLOCATOR_FLAG_TAPI() 0
 
@@ -18,6 +18,8 @@ typedef struct stringSys_tapi {
   void (*convertString)(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst), unsigned long long maxLen);
   // Use these to create a single string from variadic input
   // Calling free() is enough to destroy
+  // %v Wide string, %s Char string, %u uint32, %d int32, %f f32-64, %p pointer
+  // %lld int64, %llu uint64
   void (*createString)(string_type_tapi targetType, void** target, const wchar_t* format, ...);
   void (*vCreateString)(string_type_tapi targetType, void** target, const wchar_t* format, va_list arg);
 } tapi_stringSys;

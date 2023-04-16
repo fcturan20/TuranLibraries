@@ -282,10 +282,12 @@ bool logCheckFormatLetter(stringReadArgument_tapi(format), uint32_t letterIndx, 
 }
 #define tStrPrint(buf, bufIter, count, format, p)                   \
   if (targetType == string_type_tapi_UTF8) {                        \
-    snprintf((( char* )##buf) + bufIter, count, format, p);         \
+    count = snprintf((( char* )##buf) + bufIter, count, format, p); \
   } else if (targetType == string_type_tapi_UTF16) {                \
-    _snwprintf((( wchar_t* )##buf) + bufIter, count, L##format, p); \
+    count = _snwprintf((( wchar_t* )##buf) + bufIter, count, L##format, p); \
   }
+// All f32 variadic arguments are converted to f64 by compiler anyway
+// So don't bother with supporting %llf or something like that
 void tapi_vCreateString(string_type_tapi targetType, void** target, const wchar_t* format,
                         va_list args) {
   // Read format
@@ -301,25 +303,37 @@ void tapi_vCreateString(string_type_tapi targetType, void** target, const wchar_
         if (format[formatIter] == L'l' && format[formatIter + 1] != L'\0') {
           formatIter++;
           if (format[formatIter] == L'd') {
-            long long int d = va_arg(rArgs, long long int);
-            bufSize += 8;
+            long long int lld = va_arg(rArgs, long long int);
+            uint32_t      maxLetterCount = 0;
+            tStrPrint(nullptr, 0, maxLetterCount, "%lld", lld);
+            bufSize += maxLetterCount;
           } else if (format[formatIter] == L'u') {
-            unsigned long long int u = va_arg(rArgs, unsigned long long int);
-            bufSize += 8;
+            unsigned long long int llu              = va_arg(rArgs, unsigned long long int);
+            uint32_t               maxLetterCount = 0;
+            tStrPrint(nullptr, 0, maxLetterCount, "%llu", llu);
+            bufSize += maxLetterCount;
           }
         }
         else if (format[formatIter] == L'd') {
-          int d = va_arg(rArgs, int);
-          bufSize += 4;
+          int      d              = va_arg(rArgs, int);
+          uint32_t maxLetterCount = 0;
+          tStrPrint(nullptr, 0, maxLetterCount, "%d", d);
+          bufSize += maxLetterCount;
         } else if (format[formatIter] == L'u') {
-          unsigned int u = va_arg(rArgs, unsigned int);
-          bufSize += 4;
+          unsigned int u              = va_arg(rArgs, unsigned int);
+          uint32_t     maxLetterCount = 0;
+          tStrPrint(nullptr, 0, maxLetterCount, "%u", u);
+          bufSize += maxLetterCount;
         } else if (format[formatIter] == L'f') {
-          float s = va_arg(rArgs, float);
-          bufSize += 8;
+          double    f              = va_arg(rArgs, double);
+          uint32_t maxLetterCount = 0;
+          tStrPrint(nullptr, 0, maxLetterCount, "%f", f);
+          bufSize += maxLetterCount;
         } else if (format[formatIter] == L'p') {
-          void* p = va_arg(rArgs, void*);
-          bufSize += 16;
+          void*    p              = va_arg(rArgs, void*);
+          uint32_t maxLetterCount = 0;
+          tStrPrint(nullptr, 0, maxLetterCount, "%p", p);
+          bufSize += maxLetterCount;
         } else if (format[formatIter] == L's') {
           const char* s = va_arg(rArgs, const char*);
           if (s) {
@@ -363,31 +377,37 @@ void tapi_vCreateString(string_type_tapi targetType, void** target, const wchar_
         if (format[formatIter] == L'l' && format[formatIter + 1] != L'\0') {
           formatIter++;
           if (format[formatIter] == L'd') {
-            long long int d = va_arg(args, long long int);
-            tStrPrint(*target, bufIter, 8, "%ld", d);
-            bufSize += 8;
+            long long int lld              = va_arg(args, long long int);
+            uint32_t      maxLetterCount = 32;
+            tStrPrint(*target, bufIter, maxLetterCount, "%lld", lld);
+            bufIter += 8;
           } else if (format[formatIter] == L'u') {
-            unsigned long long int u = va_arg(args, unsigned long long int);
-            tStrPrint(*target, bufIter, 8, "%lu", u);
-            bufSize += 8;
+            unsigned long long int u              = va_arg(args, unsigned long long int);
+            uint32_t               maxLetterCount = 32;
+            tStrPrint(*target, bufIter, maxLetterCount, "%llu", u);
+            bufIter += maxLetterCount;
           }
         }
         else if (format[formatIter] == L'd') {
-          int i = va_arg(args, int);
-          tStrPrint(*target, bufIter, 4, "%d", i);
-          bufIter += 4;
+          int      i              = va_arg(args, int);
+          uint32_t maxLetterCount = 32;
+          tStrPrint(*target, bufIter, maxLetterCount, "%d", i);
+          bufIter += maxLetterCount;
         } else if (format[formatIter] == L'u') {
-          unsigned int u = va_arg(args, unsigned int);
-          tStrPrint(*target, bufIter, 4, "%u", u);
-          bufIter += 4;
+          unsigned int u              = va_arg(args, unsigned int);
+          uint32_t     maxLetterCount = 32;
+          tStrPrint(*target, bufIter, maxLetterCount, "%u", u);
+          bufIter += maxLetterCount;
         } else if (format[formatIter] == L'f') {
-          double d = va_arg(args, double);
-          tStrPrint(*target, bufIter, 8, "%f", d);
-          bufIter += 8;
+          double   d              = va_arg(args, double);
+          uint32_t maxLetterCount = 32;
+          tStrPrint(*target, bufIter, maxLetterCount, "%f", d);
+          bufIter += maxLetterCount;
         } else if (format[formatIter] == L'p') {
-          void* p = va_arg(args, void*);
-          tStrPrint(*target, bufIter, 16, "%p", p);
-          bufIter += 16;
+          void*    p              = va_arg(args, void*);
+          uint32_t maxLetterCount = 32;
+          tStrPrint(*target, bufIter, maxLetterCount, "%p", p);
+          bufIter += maxLetterCount;
         } else if (format[formatIter] == L's') {
           const char* s = va_arg(args, const char*);
           if (s) {
@@ -460,8 +480,8 @@ unsigned char ut_0(const char** output_string, void* data) {
 }
 
 void set_unittests(ecs_tapi* ecsSYS) {
-  UNITTEST_TAPI_LOAD_TYPE ut_sys =
-    ( UNITTEST_TAPI_LOAD_TYPE )ecsSYS->getSystem(UNITTEST_TAPI_PLUGIN_NAME);
+  UNITTEST_TAPI_PLUGIN_LOAD_TYPE ut_sys =
+    ( UNITTEST_TAPI_PLUGIN_LOAD_TYPE )ecsSYS->getSystem(UNITTEST_TAPI_PLUGIN_NAME);
   // If unit test system is available, add unit tests to it
   if (ut_sys) {
     /*unittest_interface_tapi x;
@@ -505,7 +525,7 @@ ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
   aos_virtual->delete_string          = &virtual_delete_string;
   aos_virtual->read_string            = &virtual_read_string;
 
-  ecsSys->addSystem(STRINGSYS_TAPI_PLUGIN_NAME, STRINGSYS_TAPI_VERSION, strSysType);
+  ecsSys->addSystem(STRINGSYS_TAPI_PLUGIN_NAME, STRINGSYS_TAPI_PLUGIN_VERSION, strSysType);
 }
 
 ECSPLUGIN_EXIT(ecsSys, reloadFlag) {

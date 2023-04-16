@@ -136,7 +136,8 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
     usageFlag &= ~(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
   }
 
-  if (desc->mipCount > std::floor(std::log2(std::max(desc->width, desc->height))) + 1 ||
+  if (desc->mipCount >
+        std::floor(std::log2(std::max(desc->resolution.x, desc->resolution.y))) + 1 ||
       !desc->mipCount) {
     vkPrint(26);
     return core_tgfx_main->getLogMessage(26, nullptr);
@@ -147,8 +148,8 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
   VkImageCreateInfo im_ci = {};
   {
     im_ci.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    im_ci.extent.width  = desc->width;
-    im_ci.extent.height = desc->height;
+    im_ci.extent.width  = desc->resolution.x;
+    im_ci.extent.height = desc->resolution.x;
     im_ci.extent.depth  = 1;
     if (desc->dimension == texture_dimensions_tgfx_2DCUBE) {
       im_ci.flags       = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
@@ -187,8 +188,8 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
 
   TEXTURE_VKOBJ* texture = contentManager->GETTEXTURES_ARRAY().create_OBJ();
   texture->m_channels    = desc->channelType;
-  texture->m_height      = desc->height;
-  texture->m_width       = desc->width;
+  texture->m_width       = desc->resolution.x;
+  texture->m_height      = desc->resolution.y;
   texture->vk_imageUsage = usageFlag;
   texture->m_dim         = desc->dimension;
   texture->m_mips        = desc->mipCount;

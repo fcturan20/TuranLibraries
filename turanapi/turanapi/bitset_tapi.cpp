@@ -1,8 +1,9 @@
-#include "bitset_tapi.h"
 #include <atomic>
 #include <iostream>
 
 #include "ecs_tapi.h"
+#include "unittestsys_tapi.h"
+#include "bitset_tapi.h"
 
 struct tapi_bitset {
   bool*        m_array;
@@ -103,6 +104,8 @@ void tapi_expandBitset(bitset_tapi set, unsigned int expandSize) {
   }
 }
 
+void tapi_setUnitTests_bitset(ecs_tapi* ecsSYS);
+
 typedef struct bitsetsys_tapi_d {
   bitsetsys_tapi_type* type;
 } bitsetsys_tapi_d;
@@ -122,5 +125,75 @@ ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
   type->funcs->getFirstBitIndx = &tapi_getFirstBitIndx;
   type->funcs->clearBitset     = &tapi_clearBitset;
   type->funcs->expand          = &tapi_expandBitset;
+
+  tapi_setUnitTests_bitset(ecssys);
 }
 ECSPLUGIN_EXIT(ecssys, reloadFlag) {}
+
+/////////////////////////////////////////////// Unit Tests
+#include <vector>
+#define TAPI_UNITTEST_CLASSFLAG_BITSET 1
+
+bitsetsys_tapi* tapi_getBitsetSystem(ecs_tapi* ecsSys) {
+  return
+    (( BITSET_TAPI_PLUGIN_LOAD_TYPE )ecsSys->getSystem(BITSET_TAPI_PLUGIN_NAME))->funcs;
+}
+
+uint32_t findFirst(std::vector<bool>& stdBitset, bool isTrue) {
+  for (uint32_t i = 0; i < stdBitset.size(); i++) {
+    if (stdBitset[i] == isTrue) {
+      return i;
+    }
+  }
+  return UINT32_MAX;
+}
+
+TAPI_UNITTEST_FUNC(tapi_unitTest_bitset0, data, outputStr) {
+  bitsetsys_tapi* bitsetSys = tapi_getBitsetSystem((ecs_tapi*)data);
+  static constexpr uint32_t bitsetByteLength = 10 << 10;
+  std::vector<bool>         stdBitset(bitsetByteLength * 8, false);
+  bitset_tapi               tBitset = bitsetSys->createBitset(bitsetByteLength);
+
+  time_t t;
+  srand(( unsigned )time(&t));
+  for (uint32_t i = 0; i < bitsetByteLength * 8; i++) {
+    uint32_t bit   = rand() % (bitsetByteLength * 8);
+    bool     v     = rand() % 2;
+    stdBitset[bit] = v;
+    bitsetSys->setBit(tBitset, bit, v);
+  }
+  if (findFirst(stdBitset, true) != bitsetSys->getFirstBitIndx(tBitset, true) ||
+      findFirst(stdBitset, false) != bitsetSys->getFirstBitIndx(tBitset, false)) {
+    *outputStr = L"Firsts're not matching!";
+    return 0;
+  }
+  for (uint32_t i = 0; i < bitsetByteLength * 8; i++) {
+    unsigned char tapiV = bitsetSys->getBitValue(tBitset, i);
+    unsigned char stdV  = stdBitset[i];
+    if (stdV != tapiV) {
+      *outputStr = L"Some elements're not matching!";
+      return 0;
+    }
+  }
+  *outputStr = L"Succeded";
+  return 1;
+}
+
+void tapi_setUnitTests_bitset(ecs_tapi* ecsSYS) {
+  UNITTEST_TAPI_PLUGIN_LOAD_TYPE utSysLoaded =
+    ( UNITTEST_TAPI_PLUGIN_LOAD_TYPE )ecsSYS->getSystem(UNITTEST_TAPI_PLUGIN_NAME);
+  // If unit test system is available, add unit tests to it
+  if (utSysLoaded) {
+    auto utSys = utSysLoaded->funcs;
+    
+    unittest_interface_tapi u;
+    u.test = tapi_unitTest_bitset0;
+    u.data = ecsSYS;
+    utSys->add_unittest(L"Bitset0", TAPI_UNITTEST_CLASSFLAG_BITSET, u);
+    /*unittest_interface_tapi x;
+    x.test = &ut_0;
+    ut_sys->funcs->add_unittest("array_of_strings", 0, x);*/
+  }
+}
+
+/////////////////////////////////////////////////////////////////

@@ -72,7 +72,7 @@ void load_plugins() {
 
   pluginHnd_ecstapi stringSysPlugin = editorECS->loadPlugin(STRINGSYS_TAPI_PLUGIN_NAME".dll");
   auto              stringSysType =
-    ( STRINGSYS_TAPI_LOAD_TYPE )editorECS->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
+    ( STRINGSYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
 
   pluginHnd_ecstapi profilerPlugin = editorECS->loadPlugin("tapi_profiler.dll");
   profilerSys = ( PROFILER_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(PROFILER_TAPI_PLUGIN_NAME);
@@ -134,7 +134,7 @@ textureUsageMask_tgfxflag textureAllUsages = textureUsageMask_tgfx_COPYFROM |
                             textureUsageMask_tgfx_COPYTO | textureUsageMask_tgfx_RANDOMACCESS;
 gpuQueue_tgfxhnd           allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
 window_tgfxhnd             mainWindowRT;
-tgfx_swapchain_description swpchn_desc;
+tgfx_swapchain_description swpchnDesc;
 static constexpr uint32_t  swapchainTextureCount = 2;
 static constexpr uint32_t  INIT_GPUINDEX         = 0;
 
@@ -188,25 +188,25 @@ void createFirstWindow() {
   {
     tgfx->helpers->getWindow_GPUSupport(mainWindowRT, gpu, &swapchainSupport);
 
-    swpchn_desc.channels       = swapchainSupport.channels[0];
-    swpchn_desc.colorSpace     = colorspace_tgfx_sRGB_NONLINEAR;
-    swpchn_desc.composition    = windowcomposition_tgfx_OPAQUE;
-    swpchn_desc.imageCount     = swapchainTextureCount;
-    swpchn_desc.swapchainUsage = textureAllUsages;
+    swpchnDesc.channels       = swapchainSupport.channels[0];
+    swpchnDesc.colorSpace     = colorspace_tgfx_sRGB_NONLINEAR;
+    swpchnDesc.composition    = windowcomposition_tgfx_OPAQUE;
+    swpchnDesc.imageCount     = swapchainTextureCount;
+    swpchnDesc.swapchainUsage = textureAllUsages;
 
-    swpchn_desc.presentationMode = windowpresentation_tgfx_IMMEDIATE;
-    swpchn_desc.window           = mainWindowRT;
+    swpchnDesc.presentationMode = windowpresentation_tgfx_IMMEDIATE;
+    swpchnDesc.window           = mainWindowRT;
     // Get all supported queues of the first GPU
     for (uint32_t i = 0; i < TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT; i++) {
       if (!swapchainSupport.queues[i]) {
         break;
       }
       allQueues[i] = swapchainSupport.queues[i];
-      swpchn_desc.permittedQueueCount++;
+      swpchnDesc.permittedQueueCount++;
     }
-    swpchn_desc.permittedQueues = allQueues;
+    swpchnDesc.permittedQueues = allQueues;
     // Create swapchain
-    tgfx->createSwapchain(gpu, &swpchn_desc, swpchnTextures);
+    tgfx->createSwapchain(gpu, &swpchnDesc, swpchnTextures);
   }
 #ifdef NDEBUG
   printf("createGPUandFirstWindow() finished!\n");
@@ -232,19 +232,19 @@ void createDeviceLocalResources() {
   uint32_t                  deviceLocalMemType = UINT32_MAX, hostVisibleMemType = UINT32_MAX;
   for (uint32_t memTypeIndx = 0; memTypeIndx < gpuDesc.memRegionsCount; memTypeIndx++) {
     const memoryDescription_tgfx& memDesc = gpuDesc.memRegions[memTypeIndx];
-    if (memDesc.allocationtype == memoryallocationtype_HOSTVISIBLE ||
-        memDesc.allocationtype == memoryallocationtype_FASTHOSTVISIBLE) {
+    if (memDesc.allocationType == memoryallocationtype_HOSTVISIBLE ||
+        memDesc.allocationType == memoryallocationtype_FASTHOSTVISIBLE) {
       // If there 2 different memory types with same allocation type, select the bigger one!
       if (hostVisibleMemType != UINT32_MAX &&
-          gpuDesc.memRegions[hostVisibleMemType].max_allocationsize > memDesc.max_allocationsize) {
+          gpuDesc.memRegions[hostVisibleMemType].maxAllocationSize > memDesc.maxAllocationSize) {
         continue;
       }
       hostVisibleMemType = memTypeIndx;
     }
-    if (memDesc.allocationtype == memoryallocationtype_DEVICELOCAL) {
+    if (memDesc.allocationType == memoryallocationtype_DEVICELOCAL) {
       // If there 2 different memory types with same allocation type, select the bigger one!
       if (deviceLocalMemType != UINT32_MAX &&
-          gpuDesc.memRegions[deviceLocalMemType].max_allocationsize > memDesc.max_allocationsize) {
+          gpuDesc.memRegions[deviceLocalMemType].maxAllocationSize > memDesc.maxAllocationSize) {
         continue;
       }
       deviceLocalMemType = memTypeIndx;
@@ -253,11 +253,11 @@ void createDeviceLocalResources() {
   heap_tgfxhnd hostVisibleHeap = {}, deviceLocalHeap = {};
   assert(hostVisibleMemType != UINT32_MAX && deviceLocalMemType != UINT32_MAX &&
          "An appropriate memory region isn't found!");
-  contentManager->createHeap(gpu, gpuDesc.memRegions[hostVisibleMemType].memorytype_id, heapSize, 0,
+  contentManager->createHeap(gpu, gpuDesc.memRegions[hostVisibleMemType].memoryTypeId, heapSize, 0,
                              nullptr, &hostVisibleHeap);
   contentManager->mapHeap(hostVisibleHeap, 0, heapSize, 0, nullptr, &mappedRegion);
 
-  contentManager->createHeap(gpu, gpuDesc.memRegions[deviceLocalMemType].memorytype_id, heapSize, 0,
+  contentManager->createHeap(gpu, gpuDesc.memRegions[deviceLocalMemType].memoryTypeId, heapSize, 0,
                              nullptr, &deviceLocalHeap);
 
   textureDescription_tgfx textureDesc = {};
@@ -448,7 +448,7 @@ void compileShadersandPipelines() {
     stateDesc.blendStates[0].dstColorFactor       = blendfactor_tgfx_DST_COLOR;
     stateDesc.blendStates[0].srcColorFactor       = blendfactor_tgfx_SRC_COLOR;
     rasterPipelineDescription_tgfx pipelineDesc   = {};
-    pipelineDesc.colorTextureFormats[0]           = swpchn_desc.channels;
+    pipelineDesc.colorTextureFormats[0]           = swpchnDesc.channels;
     pipelineDesc.depthStencilTextureFormat        = depthRTFormat;
     pipelineDesc.mainStates                       = &stateDesc;
     pipelineDesc.shaderCount                      = 2;

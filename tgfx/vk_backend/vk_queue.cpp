@@ -710,7 +710,8 @@ void vkQueueSubmit_Present(QUEUE_VKOBJ* queue, VkFence submitFence) {
   info.waitSemaphoreCount = waitSemCount;
   info.pWaitSemaphores    = binarySignalSemaphores;
   info.pResults           = nullptr;
-  if (vkQueuePresentKHR(queue->vk_queue, &info) != VK_SUCCESS) {
+  VkResult result = vkQueuePresentKHR(queue->vk_queue, &info);
+  if (result != VK_SUCCESS) {
     vkPrint(16, L"at vkQueuePresentKHR()");
   }
 

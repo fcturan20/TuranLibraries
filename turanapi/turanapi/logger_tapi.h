@@ -25,6 +25,7 @@ typedef struct logger_tapi {
   void (*destroy)();
   // You can set file paths different each time you write to file
   // Also you can set paths NULL if you don't want to change file path
+  // Formats are the same as string api's
   void (*save)(tapi_log_type logType, stringReadArgument_tapi(path));
   void (*log)(tapi_log_type type, unsigned char stopRunning, const wchar_t* format, ...);
 } logger_tapi;

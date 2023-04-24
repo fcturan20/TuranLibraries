@@ -789,6 +789,9 @@ void VK_getQueueAndSharingInfos(unsigned int queueList, const gpuQueue_tgfxhnd* 
   GPU_VKOBJ* theGPU             = nullptr;
   for (uint32_t listIndx = 0; listIndx < queueList; listIndx++) {
     QUEUE_VKOBJ* queue = getOBJ<QUEUE_VKOBJ>(i_queueList[listIndx]);
+    if (!queue) {
+      continue;
+    }
     GPU_VKOBJ*   gpu   = queue->m_gpu;
     if (!theGPU) {
       theGPU = gpu;

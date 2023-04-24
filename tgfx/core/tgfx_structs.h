@@ -159,7 +159,6 @@ typedef struct tgfx_raster_state_description {
 
 typedef struct tgfx_heap_requirements_info {
   // Single GPU can have max 32 regions
-  // Sentinel = 255
   // GPU should be same with the one used in CreateTexture()
   unsigned char      memoryRegionIDs[32];
   unsigned int       offsetAlignment;

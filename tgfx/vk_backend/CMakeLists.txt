@@ -6,7 +6,7 @@ cmake_minimum_required (VERSION 3.8)
 add_library(TGFXVulkan SHARED "vk_core.h" "vk_core.cpp" "vk_predefinitions.h" "vk_predefinitions.cpp" "vk_extension.h" "vk_extension.cpp"
  "vkext_timelineSemaphore.h" "vkext_timelineSemaphore.cpp" "vk_queue.h" "vk_queue.cpp" "vk_helper.cpp" "vk_helper.h" "vkext_descIndexing.h" "vkext_descIndexing.cpp"
  "vkext_depthstencil.h" "vkext_depthstencil.cpp" "vk_includes.h" "vk_renderer.h" "vk_renderer.cpp" "vk_contentmanager.cpp" "vk_contentmanager.h" "vkext_dynamic_rendering.cpp" "vkext_dynamic_rendering.h"
- "vkext_dynamicStates.cpp" "vkext_dynamicStates.h")
+ "vkext_dynamicStates.cpp" "vkext_dynamicStates.h" "vk_glslang.cpp")
 target_include_directories(TGFXVulkan PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../turanapi/turanapi/ ${CMAKE_CURRENT_SOURCE_DIR}/../core/)
 message(${CMAKE_CURRENT_SOURCE_DIR}/../../turanapi/turanapi/)
 set_target_properties(TGFXVulkan PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
@@ -43,13 +43,5 @@ else()
 endif()
 
 # GLSLANG
-
 find_package(glslang CONFIG REQUIRED)
-add_library(TGFXVulkanGlslang SHARED "vk_glslang.cpp")
-target_include_directories(TGFXVulkanGlslang PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../turanapi/turanapi/ ${CMAKE_CURRENT_SOURCE_DIR}/../core/)
-target_link_libraries(TGFXVulkanGlslang PRIVATE glslang::OSDependent glslang::glslang glslang::MachineIndependent glslang::GenericCodeGen glslang::glslang-default-resource-limits glslang::OGLCompiler glslang::SPVRemapper glslang::SPIRV glslang::HLSL)
-
-set_target_properties(TGFXVulkanGlslang PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
-set_target_properties(TGFXVulkanGlslang PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
-set_target_properties(TGFXVulkanGlslang PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/ReleaseDbg RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/ReleaseDbg PREFIX "")
-set_target_properties(TGFXVulkanGlslang PROPERTIES FOLDER "TuranLibraries/tgfx")
+target_link_libraries(TGFXVulkan PRIVATE glslang::OSDependent glslang::glslang glslang::MachineIndependent glslang::GenericCodeGen glslang::glslang-default-resource-limits glslang::OGLCompiler glslang::SPVRemapper glslang::SPIRV glslang::HLSL)

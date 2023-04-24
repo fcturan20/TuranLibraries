@@ -65,8 +65,6 @@ typedef struct tgfx_renderer {
   ////////////////////////////
 
   // @param maxCmdCount: Backend allocates a command buffer to store commands
-  // @param subpassHandle: If command bundle is gonna run raster operations, this should be a valid
-  // raster pipeline. Compute bundles doesn't need this to be set.
   // Every cmdXXX call's "key" argument should be [0,maxCmdCount-1].
   commandBundle_tgfxhnd (*beginCommandBundle)(gpu_tgfxhnd gpu, unsigned long long maxCmdCount,
                                               pipeline_tgfxhnd defaultPipeline,

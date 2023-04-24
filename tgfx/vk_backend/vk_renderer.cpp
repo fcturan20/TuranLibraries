@@ -561,7 +561,7 @@ void vk_cmdDrawIndexedDirect(commandBundle_tgfxhnd bndl, unsigned long long sort
 void vk_cmdExecuteIndirect(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
                            unsigned int                      operationCount,
                            const indirectOperationType_tgfx* operationTypes,
-                           buffer_tgfxhnd dataBffr, unsigned long long drawDataBufferOffset,
+                           buffer_tgfxhnd dataBffr, unsigned long long indirectBufferOffset,
                            unsigned int extCount, const extension_tgfxhnd* exts) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd = vk_createCmdStruct<vkCmdStruct_executeIndirect>(&bundle->m_cmds[sortKey]);
@@ -589,7 +589,7 @@ void vk_cmdExecuteIndirect(commandBundle_tgfxhnd bndl, unsigned long long sortKe
     stateIndx++;
   }
   cmd->vk_buffer       = getOBJ<BUFFER_VKOBJ>(dataBffr)->vk_buffer;
-  cmd->vk_bufferOffset = drawDataBufferOffset;
+  cmd->vk_bufferOffset = indirectBufferOffset;
 }
 void vk_cmdBarrierTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
                           texture_tgfxhnd i_texture, image_access_tgfx lastAccess,
@@ -714,6 +714,12 @@ void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount, const commandBundle_
       if (vkBeginCommandBuffer(vkCmdBuffer, &bi) != VK_SUCCESS) {
         vkPrint(16, L"at vkBeginCommandBuffer()");
         return;
+      }
+      if (bundle->m_defaultPipeline) {
+        PIPELINE_VKOBJ* pipe = getOBJ<PIPELINE_VKOBJ>(bundle->m_defaultPipeline);
+        vkCmdBindPipeline(vkCmdBuffer, pipe->vk_type, pipe->vk_object);
+        bundle->vk_activePipeline       = pipe->vk_object;
+        bundle->vk_activePipelineLayout = pipe->vk_layout;
       }
       for (uint64_t cmdIndx = 0; cmdIndx < bundle->m_cmdCount; cmdIndx++) {
         vk_executeCmd(vkCmdBuffer, bundle, bundle->m_cmds[cmdIndx]);

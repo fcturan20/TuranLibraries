@@ -149,7 +149,7 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
   {
     im_ci.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     im_ci.extent.width  = desc->resolution.x;
-    im_ci.extent.height = desc->resolution.x;
+    im_ci.extent.height = desc->resolution.y;
     im_ci.extent.depth  = 1;
     if (desc->dimension == texture_dimensions_tgfx_2DCUBE) {
       im_ci.flags       = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
@@ -504,11 +504,8 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, unsigned int descSetCount,
   return true;
 }
 
-typedef const void* (*vk_glslangCompileFnc)(shaderStage_tgfx tgfxstage, const void* i_DATA,
-                                            unsigned int  i_DATA_SIZE,
-                                            unsigned int* compiledbinary_datasize);
-vk_glslangCompileFnc VKCONST_GLSLANG_COMPILE_FNC;
-
+const void* vk_compileWithGlslang(shaderStage_tgfx tgfxstage, const void* i_DATA,
+                                  unsigned int i_DATA_SIZE, unsigned int* compiledbinary_datasize);
 result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx language,
                                    shaderStage_tgfx shaderstage, const void* DATA,
                                    unsigned int          DATA_SIZE,
@@ -523,10 +520,11 @@ result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx languag
       break;
     case shaderlanguages_tgfx_GLSL:
       binary_spirv_data =
-        VKCONST_GLSLANG_COMPILE_FNC(shaderstage, DATA, DATA_SIZE, &binary_spirv_datasize);
+        vk_compileWithGlslang(shaderstage, DATA, DATA_SIZE, &binary_spirv_datasize);
       if (!binary_spirv_datasize) {
+        vkPrint(35, (const wchar_t*)binary_spirv_data);
         delete binary_spirv_data;
-        return vkPrint(35);
+        return core_tgfx_main->getLogMessage(35, nullptr);
       }
       break;
     default: vkPrint(16, L"Backend doesn't support this shading language");
@@ -1034,7 +1032,7 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
     if (!texture || elementIndx >= set->m_elementCount) {
       return vkPrint(21, funcName);
     }
-    textureDESC.info.imageLayout = (set->vk_descType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+    textureDESC.info.imageLayout = (set->vk_descType == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
                                      ? VK_IMAGE_LAYOUT_GENERAL
                                      : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     textureDESC.info.imageView   = texture->vk_imageView;
@@ -1093,13 +1091,13 @@ result_tgfx vk_getHeapRequirement_Texture(texture_tgfxhnd i_texture, unsigned in
     return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
   }
   TEXTURE_VKOBJ* texture  = getOBJ<TEXTURE_VKOBJ>(i_texture);
-  uint8_t        listSize = 0;
   for (uint8_t memTypeIndx = 0; memTypeIndx < 32; memTypeIndx++) {
     if (texture->m_memReqs.vk_memReqs.memoryTypeBits & (1u << memTypeIndx)) {
-      reqs->memoryRegionIDs[listSize++] = memTypeIndx;
+      reqs->memoryRegionIDs[memTypeIndx] = true;
+    } else {
+      reqs->memoryRegionIDs[memTypeIndx] = false;
     }
   }
-  reqs->memoryRegionIDs[listSize] = 255;
   reqs->offsetAlignment           = texture->m_memReqs.vk_memReqs.alignment;
   reqs->size                      = texture->m_memReqs.vk_memReqs.size;
   return result_tgfx_SUCCESS;
@@ -1111,13 +1109,14 @@ result_tgfx vk_getHeapRequirement_Buffer(buffer_tgfxhnd i_buffer, unsigned int e
     return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
   }
   BUFFER_VKOBJ* buf      = getOBJ<BUFFER_VKOBJ>(i_buffer);
-  uint8_t       listSize = 0;
+ 
   for (uint8_t memTypeIndx = 0; memTypeIndx < 32; memTypeIndx++) {
     if (buf->m_memReqs.vk_memReqs.memoryTypeBits & (1u << memTypeIndx)) {
-      reqs->memoryRegionIDs[listSize++] = memTypeIndx;
+      reqs->memoryRegionIDs[memTypeIndx] = true;
+    } else {
+      reqs->memoryRegionIDs[memTypeIndx] = false;
     }
   }
-  reqs->memoryRegionIDs[listSize] = 255;
   reqs->offsetAlignment           = buf->m_memReqs.vk_memReqs.alignment;
   reqs->size                      = buf->m_memReqs.vk_memReqs.size;
   return result_tgfx_SUCCESS;
@@ -1262,15 +1261,7 @@ inline void set_functionpointers() {
   core_tgfx_main->contentmanager->destroyPipeline            = vk_destroyPipeline;
 }
 
-void initGlslang() {
-  // Load dll and func pointers
-  auto* dllHandle          = DLIB_LOAD_TAPI("TGFXVulkanGlslang.dll");
-  void (*initGlslangFnc)() = ( void (*)() )DLIB_FUNC_LOAD_TAPI(dllHandle, "startGlslang");
-  VKCONST_GLSLANG_COMPILE_FNC =
-    ( vk_glslangCompileFnc )DLIB_FUNC_LOAD_TAPI(dllHandle, "glslangCompile");
-  // Init glslang
-  initGlslangFnc();
-}
+extern void vk_initGlslang();
 void vk_createContentManager() {
   VKGLOBAL_VIRMEM_CONTENTMANAGER = vk_virmem::allocate_dynamicmem(
     sizeof(gpudatamanager_public) + sizeof(gpudatamanager_private) + (10ull << 20));
@@ -1279,8 +1270,7 @@ void vk_createContentManager() {
   hidden                 = contentManager->hidden;
 
   set_functionpointers();
-
-  initGlslang();
+  vk_initGlslang();
 }
 
 // Helper funcs

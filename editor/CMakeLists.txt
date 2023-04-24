@@ -10,7 +10,7 @@ set_target_properties(editor PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO 
 set_target_properties(editor PROPERTIES FOLDER "TuranLibraries/editor")
 install(TARGETS editor RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
 target_compile_definitions(editor PUBLIC SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../")
-target_link_libraries(editor PRIVATE tgfx_core TGFXVulkan TGFXVulkanGlslang tapi_ecs tapi_string tapi_bitset tapi_filesys tapi_logger tapi_profiler tapi_threadedjobsys tapi_unittest)
+target_link_libraries(editor PRIVATE tgfx_core TGFXVulkan tapi_ecs tapi_string tapi_bitset tapi_filesys tapi_logger tapi_profiler tapi_threadedjobsys tapi_unittest)
 
 find_package(glm REQUIRED)
 target_include_directories(editor PUBLIC ${glm_INCLUDE_DIRS})

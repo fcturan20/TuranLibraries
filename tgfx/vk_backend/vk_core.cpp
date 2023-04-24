@@ -21,6 +21,7 @@
 #include "vk_queue.h"
 #include "vk_renderer.h"
 #define VK_VALIDATION_LAYER
+#include <Windows.h>
 
 struct core_private {
  public:
@@ -506,7 +507,8 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
   GPU_VKOBJ*    GPU    = getOBJ<GPU_VKOBJ>(gpu);
 
   // Create VkSwapchainKHR object
-  VkSwapchainCreateInfoKHR swpchn_ci = {};
+  VkSwapchainCreateInfoKHR swpchn_ci                                        = {};
+  uint32_t                 queueFamIndxLst[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {UINT32_MAX};
   {
     swpchn_ci.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swpchn_ci.flags            = 0;
@@ -518,13 +520,12 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
     swpchn_ci.imageColorSpace  = vk_findColorSpaceVk(desc->colorSpace);
     swpchn_ci.imageExtent      = {window->m_newWidth, window->m_newHeight};
     swpchn_ci.imageArrayLayers = 1;
-    // swpchn_ci.imageUsage       = Get_VkTextureUsageFlag_byTGFX(desc->SwapchainUsage);
+    swpchn_ci.imageUsage       = vk_findTextureUsageFlagVk(desc->swapchainUsage);
     //  Swapchain texture can be used as framebuffer, but we should set its bit!
     if (swpchn_ci.imageUsage &
         (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
       swpchn_ci.imageUsage &= ~(1UL << 5);
     }
-    swpchn_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     swpchn_ci.clipped        = VK_TRUE;
     swpchn_ci.preTransform   = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
@@ -535,7 +536,6 @@ result_tgfx vk_createSwapchain(gpu_tgfxhnd gpu, const tgfx_swapchain_description
       swpchn_ci.oldSwapchain = nullptr;
     }
 
-    uint32_t queueFamIndxLst[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {UINT32_MAX};
     VK_getQueueAndSharingInfos(desc->permittedQueueCount, desc->permittedQueues, 0, nullptr,
                                queueFamIndxLst, &swpchn_ci.queueFamilyIndexCount,
                                &swpchn_ci.imageSharingMode);
@@ -1163,18 +1163,18 @@ void vk_setupDebugging() {
   loadVkExtFunc(vkCreateDebugUtilsMessengerEXT);
   loadVkExtFunc(vkDestroyDebugUtilsMessengerEXT);
 
-  VkDebugUtilsMessengerCreateInfoEXT dbg_mssngr_ci = {};
-  dbg_mssngr_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-  dbg_mssngr_ci.messageSeverity =
+  VkDebugUtilsMessengerCreateInfoEXT dbgMssngrCi = {};
+  dbgMssngrCi.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+  dbgMssngrCi.messageSeverity =
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-  dbg_mssngr_ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+  dbgMssngrCi.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
                               VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-  dbg_mssngr_ci.pfnUserCallback = vk_debugCallback;
-  dbg_mssngr_ci.pNext           = nullptr;
-  dbg_mssngr_ci.pUserData       = nullptr;
+  dbgMssngrCi.pfnUserCallback = vk_debugCallback;
+  dbgMssngrCi.pNext           = nullptr;
+  dbgMssngrCi.pUserData       = nullptr;
 
-  if (vkCreateDebugUtilsMessengerEXT_loaded(VKGLOBAL_INSTANCE, &dbg_mssngr_ci, nullptr,
+  if (vkCreateDebugUtilsMessengerEXT_loaded(VKGLOBAL_INSTANCE, &dbgMssngrCi, nullptr,
                                             &dbg_mssngr) != VK_SUCCESS) {
     vkPrint(16, L"Vulkan Debug Callback system initialization failed");
   }

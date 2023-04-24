@@ -227,7 +227,7 @@ struct firstUboStruct {
   vec4_tgfx translate[2];
 };
 
-void createDeviceLocalResources() {
+void createBuffersAndTextures() {
   static constexpr uint32_t heapSize           = 1 << 27;
   uint32_t                  deviceLocalMemType = UINT32_MAX, hostVisibleMemType = UINT32_MAX;
   for (uint32_t memTypeIndx = 0; memTypeIndx < gpuDesc.memRegionsCount; memTypeIndx++) {
@@ -264,8 +264,7 @@ void createDeviceLocalResources() {
   textureDesc.channelType             = depthRTFormat;
   textureDesc.dataOrder               = textureOrder_tgfx_SWIZZLE;
   textureDesc.dimension               = texture_dimensions_tgfx_2D;
-  textureDesc.height                  = 720;
-  textureDesc.width                   = 1280;
+  textureDesc.resolution              = {1280, 720};
   textureDesc.mipCount                = 1;
   textureDesc.permittedQueues         = allQueues;
   textureDesc.usage = textureUsageMask_tgfx_RENDERATTACHMENT | textureUsageMask_tgfx_COPYFROM |
@@ -278,8 +277,7 @@ void createDeviceLocalResources() {
   }
 
   textureDesc.channelType = texture_channels_tgfx_RGBA8UB;
-  textureDesc.width       = 3000;
-  textureDesc.height      = 3000;
+  textureDesc.resolution  = {3000, 3000};
   textureDesc.usage       = textureAllUsages;
   if (tgfx->helpers->getTextureTypeLimits(textureDesc.dimension, textureDesc.dataOrder,
                                           textureDesc.channelType, textureDesc.usage, gpu,
@@ -559,7 +557,7 @@ void load_systems() {
 
   createFirstWindow();
 
-  createDeviceLocalResources();
+  createBuffersAndTextures();
 
   compileShadersandPipelines();
 

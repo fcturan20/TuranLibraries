@@ -230,7 +230,7 @@ unsigned long long virtual_delete_string(array_of_strings_tapi* array_o,
 
 /////////////////////////////////////////// STRING SYSTEM
 
-void string_convertString(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst),
+void string_convertString(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst), 
                           uint64_t maxLen) {
   switch (srcType) {
     case string_type_tapi_UTF8: {

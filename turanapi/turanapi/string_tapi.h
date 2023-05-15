@@ -15,7 +15,8 @@ typedef enum tapi_string_type {
 } string_type_tapi;
 
 typedef struct stringSys_tapi {
-  void (*convertString)(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst), unsigned long long maxLen);
+  void (*convertString)(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst), 
+                        unsigned long long maxLen);
   // Use these to create a single string from variadic input
   // Calling free() is enough to destroy
   // %v Wide string, %s Char string, %u uint32, %d int32, %f f32-64, %p pointer

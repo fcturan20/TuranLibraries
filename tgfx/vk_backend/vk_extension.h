@@ -15,7 +15,7 @@ struct extManager_vkDevice {
 
  private:
   // Swapchain
-  bool SwapchainDisplay = false;
+  bool                               SwapchainDisplay = false;
 
  public:
   static void createExtManager(GPU_VKOBJ* gpu);

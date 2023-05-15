@@ -64,6 +64,11 @@ void extManager_vkDevice::inspect() {
     vk_virmem::allocatePage(allocSize));
   virmemsys->virtual_commit(m_activeDevExtNames, sizeof(allocSize));
 
+  VkPhysicalDeviceSubgroupProperties subgroupProps;
+  subgroupProps.pNext = nullptr;
+  subgroupProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+  pNext_addToLast(&m_GPU->vk_propsDev, &subgroupProps);
+
   vkGetPhysicalDeviceFeatures2(m_GPU->vk_physical, &m_GPU->vk_featuresDev);
   vkGetPhysicalDeviceProperties2(m_GPU->vk_physical, &m_GPU->vk_propsDev);
 

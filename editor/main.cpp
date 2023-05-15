@@ -1,6 +1,5 @@
 #define T_INCLUDE_PLATFORM_LIBS
 #include "main.h"
-
 #include <stdio.h>
 
 #include "allocator_tapi.h"

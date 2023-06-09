@@ -1,21 +1,22 @@
 #pragma once
-#include "tgfx_forwarddeclarations.h"
-#include "tgfx_structs.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // This class is to manage windows easier
-typedef struct tgfx_imgui_window {
+struct tgfx_imguiWindow {
   unsigned char isWindowOpen;
   const char*   WindowName;
-  void (*RunWindow)(struct tgfx_imgui_window* windowdata);
+  void (*RunWindow)(struct tgfx_imguiWindow* windowdata);
   void* userdata;
-} imguiWindow_tgfx;
+};
 
-typedef struct tgfx_dearimgui {
+struct tgfx_dearImgui {
   // WINDOW MANAGEMENT
 
   void (*Run_IMGUI_WINDOWs)();
-  void (*Register_WINDOW)(imguiWindow_tgfx* WINDOW);
-  void (*Delete_WINDOW)(imguiWindow_tgfx* WINDOW);
+  void (*Register_WINDOW)(struct tgfx_imguiWindow* WINDOW);
+  void (*Delete_WINDOW)(struct tgfx_imguiWindow* WINDOW);
 
   // INITIALIZATION
 
@@ -62,24 +63,28 @@ typedef struct tgfx_dearimgui {
   //		Selected item's index is the selected_index's pointer's value!
   unsigned char (*Selectable_ListBox)(const char* name, int* selected_index,
                                       const char* const* item_names);
-  void (*Display_Texture)(texture_tgfxhnd hnd, unsigned int width, unsigned int height,
+  void (*Display_Texture)(struct tgfx_texture* hnd, unsigned int width, unsigned int height,
                           unsigned char should_Flip_Vertically);
   unsigned char (*Begin_TabBar)();
   void (*End_TabBar)();
   unsigned char (*Begin_TabItem)(const char* name);
   void (*End_TabItem)();
   void (*Separator)();
-  vec2_tgfx (*GetLastItemRectMin)();
-  vec2_tgfx (*GetLastItemRectMax)();
-  vec2_tgfx (*GetItemWindowPos)();
-  vec2_tgfx (*GetMouseWindowPos)();
+  void (*GetLastItemRectMin)(struct tgfx_vec2* r);
+  void (*GetLastItemRectMax)(struct tgfx_vec2* r);
+  void (*GetItemWindowPos)(struct tgfx_vec2* r);
+  void (*GetMouseWindowPos)(struct tgfx_vec2* r);
 
   // Add here UInt, UShort & Short, UChar & Char sliders too!
   /////////////////////////////////////////////////////////
 
   unsigned char (*Slider_Int)(const char* name, int* data, int min, int max);
   unsigned char (*Slider_Float)(const char* name, float* data, float min, float max);
-  unsigned char (*Slider_Vec2)(const char* name, vec2_tgfx* data, float min, float max);
-  unsigned char (*Slider_Vec3)(const char* name, vec3_tgfx* data, float min, float max);
-  unsigned char (*Slider_Vec4)(const char* name, vec4_tgfx* data, float min, float max);
-} dearimgui_tgfx;
+  unsigned char (*Slider_Vec2)(const char* name, struct tgfx_vec2* data, float min, float max);
+  unsigned char (*Slider_Vec3)(const char* name, struct tgfx_vec3* data, float min, float max);
+  unsigned char (*Slider_Vec4)(const char* name, struct tgfx_vec4* data, float min, float max);
+};
+
+#ifdef __cplusplus
+}
+#endif

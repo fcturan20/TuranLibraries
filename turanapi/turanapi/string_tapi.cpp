@@ -19,18 +19,18 @@
 
 // TO-DO: Add debug build checks
 
-virtualmemorysys_tapi*                     virmem_sys;
+tapi_virtualMemorySys*                     virmem_sys;
 unsigned int                               pagesize;
-stringSys_tapi_type*                       strSysType;
-stringSys_tapi_d*                          aos_sys_d;
-array_of_strings_standardallocator_tapi*   aos_standard;
-array_of_strings_virtualallocatorsys_tapi* aos_virtual;
-stringSys_tapi*                            stringSys;
+tapi_stringSys_type*                       strSysType;
+tapi_stringSys_d*                          aos_sys_d;
+//array_of_strings_standardallocator_tapi*   aos_standard;
+//array_of_strings_virtualallocatorsys_tapi* aos_virtual;
+tapi_stringSys*                            stringSys;
 
-typedef struct stringSys_tapi_d {
-  stringSys_tapi_type* aos_sys;
-} stringSys_tapi_d;
-
+struct tapi_stringSys_d {
+  tapi_stringSys_type* aos_sys;
+};
+/*
 typedef struct standard_array_of_strings {
   char*               list_of_chars;
   unsigned long long* list_of_ptrs;
@@ -226,7 +226,7 @@ unsigned long long virtual_delete_string(array_of_strings_tapi* array_o,
     array->list_of_ptrs[element_index] = UINT_MAX;
     return ULONG_MAX;
   }
-}
+}*/
 
 /////////////////////////////////////////// STRING SYSTEM
 
@@ -479,7 +479,7 @@ unsigned char ut_0(const char** output_string, void* data) {
   return 255;
 }
 
-void set_unittests(ecs_tapi* ecsSYS) {
+void set_unittests(tapi_ecs* ecsSYS) {
   UNITTEST_TAPI_PLUGIN_LOAD_TYPE ut_sys =
     ( UNITTEST_TAPI_PLUGIN_LOAD_TYPE )ecsSYS->getSystem(UNITTEST_TAPI_PLUGIN_NAME);
   // If unit test system is available, add unit tests to it
@@ -492,28 +492,30 @@ void set_unittests(ecs_tapi* ecsSYS) {
 }
 
 ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
-  virtualmemorysys_tapi_type* virmemtype =
-    ( VIRTUALMEMORY_TAPI_PLUGIN_TYPE )ecsSys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
+  tapi_virtualMemorySys_type* virmemtype =
+    ( VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE )ecsSys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
   virmem_sys = virmemtype->funcs;
   pagesize   = virmem_sys->get_pagesize();
   set_unittests(ecsSys);
 
-  strSysType                     = ( stringSys_tapi_type* )malloc(sizeof(stringSys_tapi_type));
-  strSysType->standardString     = ( stringSys_tapi* )malloc(sizeof(stringSys_tapi));
+  strSysType                     = ( tapi_stringSys_type* )malloc(sizeof(tapi_stringSys_type));
+  strSysType->standardString     = ( tapi_stringSys* )malloc(sizeof(tapi_stringSys));
+  /*
   strSysType->standard_allocator = ( array_of_strings_standardallocator_tapi* )malloc(
     sizeof(array_of_strings_standardallocator_tapi));
   strSysType->virtual_allocator = ( array_of_strings_virtualallocatorsys_tapi* )malloc(
-    sizeof(array_of_strings_virtualallocatorsys_tapi));
-  strSysType->data = ( stringSys_tapi_d* )malloc(sizeof(stringSys_tapi_d));
+    sizeof(array_of_strings_virtualallocatorsys_tapi));*/
+  strSysType->data = ( tapi_stringSys_d* )malloc(sizeof(tapi_stringSys_d));
   aos_sys_d        = strSysType->data;
   stringSys        = strSysType->standardString;
-  aos_standard     = strSysType->standard_allocator;
-  aos_virtual      = strSysType->virtual_allocator;
+  //aos_standard     = strSysType->standard_allocator;
+  //aos_virtual      = strSysType->virtual_allocator;
 
   stringSys->convertString = string_convertString;
   stringSys->createString  = string_createString;
   stringSys->vCreateString = tapi_vCreateString;
 
+  /*
   aos_standard->change_string          = &standard_change_string;
   aos_standard->create_array_of_string = &standard_create_array;
   aos_standard->delete_string          = &standard_delete_string;
@@ -523,14 +525,12 @@ ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
   aos_virtual->change_string          = &virtual_change_string;
   aos_virtual->create_array_of_string = &virtual_create_array;
   aos_virtual->delete_string          = &virtual_delete_string;
-  aos_virtual->read_string            = &virtual_read_string;
+  aos_virtual->read_string            = &virtual_read_string;*/
 
   ecsSys->addSystem(STRINGSYS_TAPI_PLUGIN_NAME, STRINGSYS_TAPI_PLUGIN_VERSION, strSysType);
 }
 
 ECSPLUGIN_EXIT(ecsSys, reloadFlag) {
-  free(aos_standard);
-  free(aos_virtual);
   free(aos_sys_d);
   free(stringSys);
   free(strSysType);

@@ -15,7 +15,7 @@
 #include "string_tapi.h"
 #include "virtualmemorysys_tapi.h"
 
-stringSys_tapi* stringSys = nullptr;
+tapi_stringSys* stringSys = nullptr;
 
 struct logObject {
   std::wstring  logText;
@@ -26,7 +26,7 @@ struct Logger {
   std::vector<logObject> logList;
 };
 static Logger*       logSys  = nullptr;
-static filesys_tapi* fileSys = nullptr;
+static tapi_fileSys* fileSys = nullptr;
 
 #define GET_printer(i) (*GET_LOGLISTTAPI())[i]
 inline void breakpoint() {
@@ -110,13 +110,13 @@ void tapi_logDestroy() {
   logSys->logList.clear();
 }
 
-typedef struct logger_tapi_d {
-  logger_tapi_type* type;
+typedef struct tapi_logger_d {
+  tapi_logger_type* type;
   Logger*           log_sys;
 } logger_tapi_d;
 ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
-  VIRTUALMEMORY_TAPI_PLUGIN_TYPE virmemsys_type =
-    ( VIRTUALMEMORY_TAPI_PLUGIN_TYPE )ecssys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
+  VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE virmemsys_type =
+    ( VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE )ecssys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
   STRINGSYS_TAPI_PLUGIN_LOAD_TYPE stringSysType =
     ( STRINGSYS_TAPI_PLUGIN_LOAD_TYPE )ecssys->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
   FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys_type =
@@ -129,20 +129,26 @@ ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
   }
 
   LOGGER_TAPI_PLUGIN_LOAD_TYPE type =
-    ( LOGGER_TAPI_PLUGIN_LOAD_TYPE )malloc(sizeof(logger_tapi_type));
-  type->data       = ( logger_tapi_d* )malloc(sizeof(logger_tapi_d));
-  type->funcs      = ( logger_tapi* )malloc(sizeof(logger_tapi));
-  type->data->type = type;
+    ( LOGGER_TAPI_PLUGIN_LOAD_TYPE )malloc(sizeof(tapi_logger_type));
+  {
+    tapi_logger_d* d = ( tapi_logger_d* )malloc(sizeof(tapi_logger_d));
+    tapi_logger*   f = ( tapi_logger* )malloc(sizeof(tapi_logger));
 
-  type->funcs->init    = &tapi_logInit;
-  type->funcs->destroy = &tapi_logDestroy;
-  type->funcs->log     = &tapi_logLog;
-  type->funcs->save    = &tapi_logSave;
-  stringSys            = stringSysType->standardString;
+    d->type    = type;
+    logSys     = new Logger;
+    d->log_sys = logSys;
+
+    f->init    = &tapi_logInit;
+    f->destroy = &tapi_logDestroy;
+    f->log     = &tapi_logLog;
+    f->save    = &tapi_logSave;
+
+    type->data  = d;
+    type->funcs = f;
+  }
+
+  stringSys = stringSysType->standardString;
 
   ecssys->addSystem(LOGGER_TAPI_PLUGIN_NAME, LOGGER_TAPI_PLUGIN_VERSION, type);
-
-  logSys              = new Logger;
-  type->data->log_sys = logSys;
 }
 ECSPLUGIN_EXIT(ecssys, reloadFlag) { printf("Not coded!"); }

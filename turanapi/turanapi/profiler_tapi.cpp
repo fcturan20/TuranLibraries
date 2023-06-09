@@ -9,11 +9,11 @@
 #include "ecs_tapi.h"
 #include "threadingsys_tapi.h"
 
-typedef struct profiler_tapi_d {
-  profiler_tapi_type*        type;
+typedef struct tapi_profiler_d {
+  tapi_profiler_type*        type;
   profiledscope_handle_tapi* last_handles;
   unsigned int               threadcount;
-  threadingsys_tapi*         threadsys;
+  tapi_threadingSys*         threadsys;
 } profiler_tapi_d;
 
 struct profiledScope {
@@ -25,7 +25,7 @@ struct profiledScope {
   std::string         name;
 };
 
-profiler_tapi_d* profiler_data = nullptr;
+tapi_profiler_d* profiler_data = nullptr;
 
 constexpr long long getTime(unsigned char timingType) {
   switch (timingType) {
@@ -98,9 +98,9 @@ ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
     threadcount = threadsystype->funcs->thread_count();
   }
 
-  profiler_tapi_type* type = ( profiler_tapi_type* )malloc(sizeof(profiler_tapi_type));
-  type->data               = ( profiler_tapi_d* )malloc(sizeof(profiler_tapi_d));
-  type->funcs              = ( profiler_tapi* )malloc(sizeof(profiler_tapi));
+  tapi_profiler_type* type = ( tapi_profiler_type* )malloc(sizeof(tapi_profiler_type));
+  type->data               = ( tapi_profiler_d* )malloc(sizeof(tapi_profiler_d));
+  type->funcs              = ( tapi_profiler* )malloc(sizeof(tapi_profiler));
   profiler_data            = type->data;
 
   ecssys->addSystem(PROFILER_TAPI_PLUGIN_NAME, PROFILER_TAPI_PLUGIN_VERSION, type);

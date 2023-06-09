@@ -28,9 +28,9 @@ defineVkExtFunc(vkCmdSetStencilTestEnableEXT);
 
 vk_fillRasterPipelineStateInfoFnc vk_fillRasterPipelineStateInfo = {};
 void vk_fillRasterPipelineStateInfo_dynamicState(GPU_VKOBJ* gpu, VkGraphicsPipelineCreateInfo* ci,
-                                                 const rasterPipelineDescription_tgfx* desc,
+                                                 const tgfx_rasterPipelineDescription* desc,
                                                  unsigned int                          extCount,
-                                                 const extension_tgfxhnd*              exts) {
+                                                 struct tgfx_extension* const*              exts) {
   /*
   auto* ext = ( vkext_dynamicStates* )gpu->ext()->m_exts[vkext_interface::dynamicStates_vkExtEnum];
   VkDynamicState* states     = *( VkDynamicState** )&ci->pDynamicState->pDynamicStates;
@@ -106,4 +106,4 @@ void vkext_dynamicStates::inspect() {
   }
 }
 void vkext_dynamicStates::manage(VkStructureType structType, void* structPtr, unsigned int extCount,
-                                 const extension_tgfxhnd* exts) {}
+                                 struct tgfx_extension* const* exts) {}

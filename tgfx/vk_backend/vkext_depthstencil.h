@@ -8,7 +8,7 @@ struct vkext_depthStencil : public vkext_interface {
   vkext_depthStencil(GPU_VKOBJ* gpu);
   virtual void inspect() override;
   virtual void manage(VkStructureType structType, void* structPtr, unsigned int extCount,
-                      const extension_tgfxhnd* exts) override;
+                      struct tgfx_extension* const* exts) override;
   VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures features;
 };
 

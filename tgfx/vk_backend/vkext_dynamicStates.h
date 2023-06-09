@@ -8,7 +8,7 @@ struct vkext_dynamicStates : public vkext_interface {
   vkext_dynamicStates(GPU_VKOBJ* gpu);
   virtual void inspect() override;
   virtual void manage(VkStructureType structType, void* structPtr, unsigned int extCount,
-                      const extension_tgfxhnd* exts) override;
+                      struct tgfx_extension* const* exts) override;
   VkPhysicalDeviceExtendedDynamicStateFeaturesEXT    features1;
   VkPhysicalDeviceExtendedDynamicState2FeaturesEXT   features2;
   VkPhysicalDeviceExtendedDynamicState3FeaturesEXT   features3;
@@ -17,11 +17,11 @@ struct vkext_dynamicStates : public vkext_interface {
 };
 
 // These are TGFX CORE functionalities, so func pointers are here
-typedef struct tgfx_raster_pipeline_description rasterPipelineDescription_tgfx;
+typedef struct tgfx_rasterPipelineDescription tgfx_rasterPipelineDescription;
 typedef void (*vk_fillRasterPipelineStateInfoFnc)(GPU_VKOBJ* gpu, VkGraphicsPipelineCreateInfo* ci,
-                                                  const rasterPipelineDescription_tgfx* desc,
+                                                  const tgfx_rasterPipelineDescription* desc,
                                                   unsigned int                          extCount,
-                                                  const extension_tgfxhnd*              exts);
+                                                  struct tgfx_extension* const*              exts);
 extern vk_fillRasterPipelineStateInfoFnc vk_fillRasterPipelineStateInfo;
 
 // vk_EXT_extended_dynamic_state

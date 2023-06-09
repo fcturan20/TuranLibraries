@@ -209,7 +209,7 @@ struct renderer_funcs {
       PrepareForNextFrame();
     }
   }
-  static void DrawDirect(buffer_tgfxhnd VertexBuffer_ID, buffer_tgfxhnd IndexBuffer_ID,
+  static void DrawDirect(struct tgfx_buffer* VertexBuffer_ID, struct tgfx_buffer* IndexBuffer_ID,
                          unsigned int Count, unsigned int VertexOffset, unsigned int FirstIndex,
                          unsigned int InstanceCount, unsigned int FirstInstance,
                          rasterPipelineInstance_tgfxhnd MaterialInstance_ID,
@@ -276,7 +276,7 @@ struct renderer_funcs {
     }
   }
 
-  static void SwapBuffers(window_tgfxhnd WindowHandle, windowpass_tgfx_handle WindowPassHandle) {
+  static void SwapBuffers(struct tgfx_window* WindowHandle, windowpass_tgfx_handle WindowPassHandle) {
     WINDOW_VKOBJ* VKWINDOW = ( WINDOW_VKOBJ* )WindowHandle;
     if (VKWINDOW->isSwapped.load()) {
       return;
@@ -309,7 +309,7 @@ struct renderer_funcs {
     wp->WindowCalls.push_back(call);
   }
 
-  static void FindBufferOBJ_byBufType(buffer_tgfxhnd Handle, VkBuffer& TargetBuffer,
+  static void FindBufferOBJ_byBufType(struct tgfx_buffer* Handle, VkBuffer& TargetBuffer,
                                       VkDeviceSize& TargetOffset) {
     VKOBJHANDLE objhandle = *( VKOBJHANDLE* )&Handle;
     switch (objhandle.type) {
@@ -339,8 +339,8 @@ struct renderer_funcs {
   // Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
   // Target Buffer should be created with DEVICELOCAL
   static void CopyBuffer_toBuffer(subtransferpass_tgfx_handle TransferPassHandle,
-                                  buffer_tgfxhnd              SourceBuffer_Handle,
-                                  buffer_tgfxhnd              TargetBuffer_Handle,
+                                  struct tgfx_buffer*              SourceBuffer_Handle,
+                                  struct tgfx_buffer*              TargetBuffer_Handle,
                                   unsigned int                SourceBuffer_Offset,
                                   unsigned int TargetBuffer_Offset, unsigned int Size) {
     VkBuffer     SourceBuffer, DistanceBuffer;
@@ -364,7 +364,7 @@ struct renderer_funcs {
 
   // Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
   static void CopyBuffer_toImage(subtransferpass_tgfx_handle TransferPassHandle,
-                                 buffer_tgfxhnd SourceBuffer_Handle, texture_tgfxhnd TextureHandle,
+                                 struct tgfx_buffer* SourceBuffer_Handle, struct tgfx_texture* TextureHandle,
                                  unsigned int   SourceBuffer_offset,
                                  boxRegion_tgfx TargetTextureRegion, unsigned int TargetMipLevel,
                                  cubeface_tgfx TargetCubeMapFace) {
@@ -415,14 +415,14 @@ struct renderer_funcs {
   }
 
   static void CopyImage_toImage(subtransferpass_tgfx_handle TransferPassHandle,
-                                texture_tgfxhnd             SourceTextureHandle,
-                                texture_tgfxhnd TargetTextureHandle, uvec3_tgfx SourceTextureOffset,
+                                struct tgfx_texture*             SourceTextureHandle,
+                                struct tgfx_texture* TargetTextureHandle, uvec3_tgfx SourceTextureOffset,
                                 uvec3_tgfx CopySize, uvec3_tgfx TargetTextureOffset,
                                 unsigned int SourceMipLevel, unsigned int TargetMipLevel,
                                 cubeface_tgfx SourceCubeMapFace, cubeface_tgfx TargetCubeMapFace);
 
   static void ImageBarrier(subtransferpass_tgfx_handle BarrierTPHandle,
-                           texture_tgfxhnd TextureHandle, image_access_tgfx LAST_ACCESS,
+                           struct tgfx_texture* TextureHandle, image_access_tgfx LAST_ACCESS,
                            image_access_tgfx NEXT_ACCESS, unsigned int TargetMipLevel,
                            cubeface_tgfx TargetCubeMapFace) {
     TEXTURE_VKOBJ*                Texture     = ( TEXTURE_VKOBJ* )TextureHandle;

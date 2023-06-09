@@ -6,10 +6,10 @@
 #include <random>
 #include <string>
 #define STB_IMAGE_IMPLEMENTATION
+#include <bitset_tapi.h>
 #include <stb_image.h>
 
 #include "allocator_tapi.h"
-#include "bitset_tapi.h"
 #include "ecs_tapi.h"
 #include "filesys_tapi.h"
 #include "logger_tapi.h"
@@ -17,6 +17,8 @@
 #include "pecfManager/pecfManager.h"
 #include "profiler_tapi.h"
 #include "string_tapi.h"
+#include "tgfx_forwarddeclarations.h"
+#include "tgfx_structs.h"
 #include "tgfx_core.h"
 #include "tgfx_gpucontentmanager.h"
 #include "tgfx_helper.h"
@@ -24,10 +26,10 @@
 #include "tgfx_structs.h"
 #include "threadingsys_tapi.h"
 
-allocator_sys_tapi* allocatorSys     = nullptr;
+const tapi_allocatorSys* allocatorSys     = nullptr;
 uint64_t            destructionCount = 0;
 struct pluginElement {
-  pluginHnd_ecstapi pluginPTR;
+  tapi_ecs_plugin* pluginPTR;
   const char*       pluginMainSysName;
   unsigned char     copyCount;
   /*
@@ -59,31 +61,31 @@ struct pluginElement {
 };
 
 tgfx_core*                     tgfx           = {};
-tgfx_renderer*                 renderer       = {};
-tgfx_gpudatamanager*           contentManager = {};
+tgfx_renderer*                 tgfxRenderer       = {};
+tgfx_gpuDataManager*           contentManager = {};
 FILESYS_TAPI_PLUGIN_LOAD_TYPE  fileSys        = {};
 PROFILER_TAPI_PLUGIN_LOAD_TYPE profilerSys    = {};
 
 void load_plugins() {
-  pluginHnd_ecstapi threadingPlugin = editorECS->loadPlugin("tapi_threadedjobsys.dll");
+  tapi_ecs_plugin* threadingPlugin = editorECS->loadPlugin("tapi_threadedjobsys.dll");
   auto              threadingSys =
     ( THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(THREADINGSYS_TAPI_PLUGIN_NAME);
   printf("Thread Count: %u\n", threadingSys->funcs->thread_count());
 
-  pluginHnd_ecstapi stringSysPlugin = editorECS->loadPlugin(STRINGSYS_TAPI_PLUGIN_NAME".dll");
+  tapi_ecs_plugin* stringSysPlugin = editorECS->loadPlugin(STRINGSYS_TAPI_PLUGIN_NAME ".dll");
   auto              stringSysType =
     ( STRINGSYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
 
-  pluginHnd_ecstapi profilerPlugin = editorECS->loadPlugin("tapi_profiler.dll");
+  tapi_ecs_plugin* profilerPlugin = editorECS->loadPlugin("tapi_profiler.dll");
   profilerSys = ( PROFILER_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(PROFILER_TAPI_PLUGIN_NAME);
 
-  pluginHnd_ecstapi filesysPlugin = editorECS->loadPlugin("tapi_filesys.dll");
+  tapi_ecs_plugin* filesysPlugin = editorECS->loadPlugin("tapi_filesys.dll");
   fileSys = ( FILESYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(FILESYS_TAPI_PLUGIN_NAME);
 
-  pluginHnd_ecstapi loggerPlugin = editorECS->loadPlugin("tapi_logger.dll");
+  tapi_ecs_plugin* loggerPlugin = editorECS->loadPlugin("tapi_logger.dll");
   auto loggerSys = ( LOGGER_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(LOGGER_TAPI_PLUGIN_NAME);
 
-  pluginHnd_ecstapi bitsetPlugin = editorECS->loadPlugin("tapi_bitset.dll");
+  tapi_ecs_plugin* bitsetPlugin = editorECS->loadPlugin("tapi_bitset.dll");
   auto bitsetSys = ( BITSET_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(BITSET_TAPI_PLUGIN_NAME);
 
   allocatorSys =
@@ -94,7 +96,7 @@ void load_plugins() {
     Resizes[i] = rand() % vectorMaxSize;
   }
 
-  supermemoryblock_tapi* superMemBlock =
+  auto superMemBlock =
     allocatorSys->createSuperMemoryBlock(1ull << 30, "Vector Perf Test");
   pluginElement* v_pluginElements = nullptr;
   {
@@ -113,18 +115,18 @@ void load_plugins() {
   }
 
   {
-    pluginHnd_ecstapi tgfxPlugin = editorECS->loadPlugin("tgfx_core.dll");
+    tapi_ecs_plugin* tgfxPlugin = editorECS->loadPlugin("tgfx_core.dll");
     auto              tgfxSys    = ( TGFX_PLUGIN_LOAD_TYPE )editorECS->getSystem(TGFX_PLUGIN_NAME);
     if (tgfxSys) {
       tgfx           = tgfxSys->api;
-      renderer       = tgfx->renderer;
+      tgfxRenderer       = tgfx->renderer;
       contentManager = tgfx->contentmanager;
     }
   }
 }
 
-gpu_tgfxhnd               gpu;
-tgfx_gpu_description      gpuDesc;
+struct tgfx_gpu*          gpu;
+tgfx_gpuDescription      gpuDesc;
 textureUsageMask_tgfxflag textureAllUsages = textureUsageMask_tgfx_COPYFROM |
                                              textureUsageMask_tgfx_COPYTO |
                                              textureUsageMask_tgfx_RANDOMACCESS |
@@ -132,17 +134,17 @@ textureUsageMask_tgfxflag textureAllUsages = textureUsageMask_tgfx_COPYFROM |
                                              textureUsageMask_tgfx_RENDERATTACHMENT,
                           storageImageUsage =
                             textureUsageMask_tgfx_COPYTO | textureUsageMask_tgfx_RANDOMACCESS;
-gpuQueue_tgfxhnd           allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
-window_tgfxhnd             mainWindowRT;
-tgfx_swapchain_description swpchnDesc;
+struct tgfx_gpuQueue*      allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
+struct tgfx_window*        mainWindowRT;
+tgfx_swapchainDescription swpchnDesc;
 static constexpr uint32_t  swapchainTextureCount = 2;
 static constexpr uint32_t  INIT_GPUINDEX         = 0;
 
 void createGPU() {
   tgfx->load_backend(nullptr, backends_tgfx_VULKAN, nullptr);
 
-  gpu_tgfxhnd  gpus[4];
-  unsigned int gpuCount;
+  struct tgfx_gpu* gpus[4];
+  unsigned int     gpuCount;
   tgfx->getGPUlist(&gpuCount, gpus);
   tgfx->getGPUlist(&gpuCount, gpus);
   gpu = gpus[INIT_GPUINDEX];
@@ -151,19 +153,19 @@ void createGPU() {
   tgfx->initGPU(gpu);
 }
 
-static tgfx_window_gpu_support swapchainSupport                      = {};
+static tgfx_windowGPUsupport swapchainSupport                      = {};
 static textureChannels_tgfx    depthRTFormat                         = texture_channels_tgfx_D24S8;
-texture_tgfxhnd                swpchnTextures[swapchainTextureCount] = {};
+struct tgfx_texture*           swpchnTextures[swapchainTextureCount] = {};
 
-void keyCB(window_tgfxhnd windowHnd, void* userPointer, key_tgfx key, int scanCode,
-           key_action_tgfx action, keyMod_tgfx mode) {
+void keyCB(struct tgfx_window* windowHnd, void* userPointer, key_tgfx key, int scanCode,
+           keyAction_tgfx action, keyMod_tgfx mode) {
   if (key == key_tgfx_A) {
     exit(-1);
   }
 };
 void createFirstWindow() {
   // Create window and the swapchain
-  monitor_tgfxhnd monitors[4];
+  struct tgfx_monitor* monitors[4];
   {
     uint32_t monitorCount = 0;
     // Get monitor list
@@ -174,7 +176,7 @@ void createFirstWindow() {
 
   // Create window (OS operation) on first monitor
   {
-    tgfx_window_description windowDesc = {};
+    tgfx_windowDescription windowDesc = {};
     windowDesc.size                    = {1280, 720};
     windowDesc.mode                    = windowmode_tgfx_WINDOWED;
     windowDesc.monitor                 = monitors[0];
@@ -214,24 +216,24 @@ void createFirstWindow() {
 }
 
 // Create device local resources
-texture_tgfxhnd customDepthRT = {}, reiChikitaTexture = {};
-buffer_tgfxhnd  firstBuffer  = {};
-void*           mappedRegion = nullptr;
+struct tgfx_texture *customDepthRT = {}, *reiChikitaTexture = {};
+struct tgfx_buffer*  firstBuffer  = {};
+void*                mappedRegion = nullptr;
 struct vertex {
-  vec2_tgfx position;
-  vec2_tgfx textCoord;
+  tgfx_vec2 position;
+  tgfx_vec2 textCoord;
 };
 struct firstUboStruct {
   vertex vertices[6];
   // uint16_t  indices[6];
-  vec4_tgfx translate[2];
+  struct tgfx_vec4 translate[2];
 };
 
 void createBuffersAndTextures() {
   static constexpr uint32_t heapSize           = 1 << 27;
   uint32_t                  deviceLocalMemType = UINT32_MAX, hostVisibleMemType = UINT32_MAX;
   for (uint32_t memTypeIndx = 0; memTypeIndx < gpuDesc.memRegionsCount; memTypeIndx++) {
-    const memoryDescription_tgfx& memDesc = gpuDesc.memRegions[memTypeIndx];
+    const tgfx_memoryDescription& memDesc = gpuDesc.memRegions[memTypeIndx];
     if (memDesc.allocationType == memoryallocationtype_HOSTVISIBLE ||
         memDesc.allocationType == memoryallocationtype_FASTHOSTVISIBLE) {
       // If there 2 different memory types with same allocation type, select the bigger one!
@@ -250,7 +252,7 @@ void createBuffersAndTextures() {
       deviceLocalMemType = memTypeIndx;
     }
   }
-  heap_tgfxhnd hostVisibleHeap = {}, deviceLocalHeap = {};
+  struct tgfx_heap *hostVisibleHeap = {}, *deviceLocalHeap = {};
   assert(hostVisibleMemType != UINT32_MAX && deviceLocalMemType != UINT32_MAX &&
          "An appropriate memory region isn't found!");
   contentManager->createHeap(gpu, gpuDesc.memRegions[hostVisibleMemType].memoryTypeId, heapSize, 0,
@@ -260,7 +262,7 @@ void createBuffersAndTextures() {
   contentManager->createHeap(gpu, gpuDesc.memRegions[deviceLocalMemType].memoryTypeId, heapSize, 0,
                              nullptr, &deviceLocalHeap);
 
-  textureDescription_tgfx textureDesc = {};
+  tgfx_textureDescription textureDesc = {};
   textureDesc.channelType             = depthRTFormat;
   textureDesc.dataOrder               = textureOrder_tgfx_SWIZZLE;
   textureDesc.dimension               = texture_dimensions_tgfx_2D;
@@ -269,7 +271,7 @@ void createBuffersAndTextures() {
   textureDesc.permittedQueues         = allQueues;
   textureDesc.usage = textureUsageMask_tgfx_RENDERATTACHMENT | textureUsageMask_tgfx_COPYFROM |
                       textureUsageMask_tgfx_COPYTO;
-  uvec4_tgfx maxSize = {};
+  tgfx_uvec4 maxSize = {};
   if (tgfx->helpers->getTextureTypeLimits(textureDesc.dimension, textureDesc.dataOrder,
                                           textureDesc.channelType, textureDesc.usage, gpu,
                                           &maxSize.x, &maxSize.y, &maxSize.z, &maxSize.w)) {
@@ -285,11 +287,11 @@ void createBuffersAndTextures() {
     contentManager->createTexture(gpu, &textureDesc, &reiChikitaTexture);
   }
 
-  heapRequirementsInfo_tgfx reiChikitaTextureReqs = {}, depthTextureReqs = {};
+  tgfx_heapRequirementsInfo reiChikitaTextureReqs = {}, depthTextureReqs = {};
   contentManager->getHeapRequirement_Texture(reiChikitaTexture, 0, nullptr, &reiChikitaTextureReqs);
   contentManager->getHeapRequirement_Texture(customDepthRT, 0, nullptr, &depthTextureReqs);
 
-  bufferDescription_tgfx bufferDesc = {};
+  tgfx_bufferDescription bufferDesc = {};
   bufferDesc.dataSize               = 2048 + reiChikitaTextureReqs.size;
   bufferDesc.exts                   = nullptr;
   bufferDesc.permittedQueues        = allQueues;
@@ -298,12 +300,12 @@ void createBuffersAndTextures() {
                          bufferUsageMask_tgfx_INDEXBUFFER | bufferUsageMask_tgfx_INDIRECTBUFFER;
   contentManager->createBuffer(gpu, &bufferDesc, &firstBuffer);
 
-  heapRequirementsInfo_tgfx bufferHeapReqs = {};
+  tgfx_heapRequirementsInfo bufferHeapReqs = {};
   contentManager->getHeapRequirement_Buffer(firstBuffer, 0, nullptr, &bufferHeapReqs);
 
   // Host Visible Heap
   contentManager->bindToHeap_Buffer(hostVisibleHeap, 0, firstBuffer, 0, nullptr);
-  ivec3_tgfx reiChikitaWHC  = {};
+  tgfx_ivec3 reiChikitaWHC  = {};
   void*      reiChikitaData = stbi_load(SOURCE_DIR "/shaders/reiChikita.jpg", &reiChikitaWHC.x,
                                         &reiChikitaWHC.y, &reiChikitaWHC.z, 4);
   memcpy((( char* )mappedRegion) + 2048, reiChikitaData, 3000 * 3000ull * 4ull);
@@ -314,7 +316,7 @@ void createBuffersAndTextures() {
 
   // DevLocal heap
   uint32_t lastMemPoint        = 0;
-  auto&    calculateHeapOffset = [&lastMemPoint](const heapRequirementsInfo_tgfx& heapReq) -> void {
+  auto&    calculateHeapOffset = [&lastMemPoint](const tgfx_heapRequirementsInfo& heapReq) -> void {
     lastMemPoint = ((lastMemPoint / heapReq.offsetAlignment) +
                     ((lastMemPoint % heapReq.offsetAlignment) ? 1 : 0)) *
                    heapReq.offsetAlignment;
@@ -329,27 +331,28 @@ void createBuffersAndTextures() {
 #endif
 }
 
-bindingTableDescription_tgfx bufferBindingType = {}, textureBindingType = {},
+tgfx_bindingTableDescription bufferBindingType = {}, textureBindingType = {},
                              samplerBindingType = {};
-pipeline_tgfxhnd     firstComputePipeline       = {};
-pipeline_tgfxhnd     firstRasterPipeline        = {};
-bindingTable_tgfxhnd bufferBindingTable = {}, textureBindingTable = {}, samplerBindingTable = {};
-sampler_tgfxhnd      firstSampler = {};
+struct tgfx_pipeline*     firstComputePipeline  = {};
+struct tgfx_pipeline*     firstRasterPipeline   = {};
+struct tgfx_bindingTable *bufferBindingTable = {}, *textureBindingTable = {},
+                         *samplerBindingTable = {};
+struct tgfx_sampler* firstSampler             = {};
 
 void compileShadersandPipelines() {
   // Compile compute shader, create binding table type & compute pipeline
   {
     const char* shaderText = ( const char* )fileSys->funcs->read_textfile(
       string_type_tapi_UTF8, SOURCE_DIR "/shaders/firstComputeShader.comp", string_type_tapi_UTF8);
-    shaderSource_tgfxhnd firstComputeShader = nullptr;
+    struct tgfx_shaderSource* firstComputeShader = nullptr;
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderStage_tgfx_COMPUTESHADER, ( void* )shaderText,
                                         strlen(shaderText), &firstComputeShader);
 
     {
-      samplerDescription_tgfx samplerDesc = {};
-      samplerDesc.MinMipLevel             = 0;
-      samplerDesc.MaxMipLevel             = 0;
+      tgfx_samplerDescription samplerDesc = {};
+      samplerDesc.minMipLevel             = 0;
+      samplerDesc.maxMipLevel             = 0;
       samplerDesc.magFilter               = texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP;
       samplerDesc.minFilter               = texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP;
       samplerDesc.wrapWidth               = texture_wrapping_tgfx_REPEAT;
@@ -360,34 +363,34 @@ void compileShadersandPipelines() {
 
     // Create binding table types
     {
-      tgfx_binding_table_description desc = {};
-      desc.DescriptorType                 = shaderdescriptortype_tgfx_BUFFER;
-      desc.ElementCount                   = 1;
+      tgfx_bindingTableDescription desc = {};
+      desc.descriptorType                 = shaderdescriptortype_tgfx_BUFFER;
+      desc.elementCount                   = 1;
       desc.staticSamplerCount             = 0;
       desc.visibleStagesMask = shaderStage_tgfx_COMPUTESHADER | shaderStage_tgfx_VERTEXSHADER |
                                shaderStage_tgfx_FRAGMENTSHADER;
       bufferBindingType = desc;
 
-      desc.DescriptorType = shaderdescriptortype_tgfx_SAMPLEDTEXTURE;
+      desc.descriptorType = shaderdescriptortype_tgfx_SAMPLEDTEXTURE;
       textureBindingType  = desc;
 
-      desc.DescriptorType     = shaderdescriptortype_tgfx_SAMPLER;
+      desc.descriptorType     = shaderdescriptortype_tgfx_SAMPLER;
       desc.staticSamplerCount = 1;
       desc.staticSamplers     = &firstSampler;
-      desc.ElementCount       = 1;
+      desc.elementCount       = 1;
       samplerBindingType      = desc;
     }
 
-    contentManager->createComputePipeline(firstComputeShader, 1, &bufferBindingType, false,
+    contentManager->createComputePipeline(firstComputeShader, 1, &bufferBindingType, 0, 0,
                                           &firstComputePipeline);
   }
 
   // Compile first vertex-fragment shader & raster pipeline
   {
-    shaderSource_tgfxhnd shaderSources[2] = {};
-    const char*          vertShaderText   = ( const char* )fileSys->funcs->read_textfile(
+    struct tgfx_shaderSource* shaderSources[2] = {};
+    const char*               vertShaderText   = ( const char* )fileSys->funcs->read_textfile(
       string_type_tapi_UTF8, SOURCE_DIR "/shaders/firstShader.vert", string_type_tapi_UTF8);
-    shaderSource_tgfxhnd& firstVertShader = shaderSources[0];
+    struct tgfx_shaderSource*& firstVertShader = shaderSources[0];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderStage_tgfx_VERTEXSHADER, ( void* )vertShaderText,
                                         strlen(vertShaderText),
@@ -396,15 +399,15 @@ void compileShadersandPipelines() {
 
     const char* fragShaderText = ( const char* )fileSys->funcs->read_textfile(
       string_type_tapi_UTF8, SOURCE_DIR "/shaders/firstShader.frag", string_type_tapi_UTF8);
-    shaderSource_tgfxhnd& firstFragShader = shaderSources[1];
+    struct tgfx_shaderSource*& firstFragShader = shaderSources[1];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderStage_tgfx_FRAGMENTSHADER, ( void* )fragShaderText,
                                         strlen(fragShaderText),
                                         // fragShaderBin, fragDataSize,
                                         &firstFragShader);
 
-    vertexAttributeDescription_tgfx attribs[3];
-    vertexBindingDescription_tgfx   bindings[2];
+    tgfx_vertexAttributeDescription attribs[3];
+    tgfx_vertexBindingDescription   bindings[2];
     {
       attribs[0].attributeIndx = 0;
       attribs[0].bindingIndx   = 0;
@@ -430,7 +433,7 @@ void compileShadersandPipelines() {
       bindings[1].stride      = 16;
     }
 
-    rasterStateDescription_tgfx stateDesc         = {};
+    tgfx_rasterStateDescription stateDesc         = {};
     stateDesc.culling                             = cullmode_tgfx_OFF;
     stateDesc.polygonmode                         = polygonmode_tgfx_FILL;
     stateDesc.topology                            = vertexlisttypes_tgfx_TRIANGLELIST;
@@ -445,7 +448,7 @@ void compileShadersandPipelines() {
     stateDesc.blendStates[0].srcAlphaFactor       = blendfactor_tgfx_SRC_ALPHA;
     stateDesc.blendStates[0].dstColorFactor       = blendfactor_tgfx_DST_COLOR;
     stateDesc.blendStates[0].srcColorFactor       = blendfactor_tgfx_SRC_COLOR;
-    rasterPipelineDescription_tgfx pipelineDesc   = {};
+    tgfx_rasterPipelineDescription pipelineDesc   = {};
     pipelineDesc.colorTextureFormats[0]           = swpchnDesc.channels;
     pipelineDesc.depthStencilTextureFormat        = depthRTFormat;
     pipelineDesc.mainStates                       = &stateDesc;
@@ -455,7 +458,8 @@ void compileShadersandPipelines() {
     pipelineDesc.attribLayout.bindingCount        = 2;
     pipelineDesc.attribLayout.i_attributes        = attribs;
     pipelineDesc.attribLayout.i_bindings          = bindings;
-    bindingTableDescription_tgfx bindingTypes[3]  = {bufferBindingType, textureBindingType,
+    pipelineDesc.pushConstantSize                 = 128;
+    tgfx_bindingTableDescription bindingTypes[3]  = {bufferBindingType, textureBindingType,
                                                      samplerBindingType};
     pipelineDesc.tableCount                       = 3;
     pipelineDesc.tables                           = bindingTypes;
@@ -482,71 +486,76 @@ void compileShadersandPipelines() {
   }
 }
 
-commandBundle_tgfxhnd standardDrawBundle, initBundle;
+struct tgfx_commandBundle *standardDrawBundle, *initBundle;
 
+tgfx_viewportInfo viewportInfo  = {0, 0, 1280, 720, 0.0f, 1.0f};
+tgfx_ivec2        scissorOffset = {0, 0};
+tgfx_uvec2        scissorSize   = {1280, 720};
 void recordCommandBundles() {
-  initBundle = renderer->beginCommandBundle(gpu, 3, nullptr, 0, nullptr);
-  renderer->cmdBarrierTexture(initBundle, 0, reiChikitaTexture, image_access_tgfx_NO_ACCESS,
+  initBundle = tgfxRenderer->beginCommandBundle(gpu, 3, nullptr, 0, nullptr);
+  tgfxRenderer->cmdBarrierTexture(initBundle, 0, reiChikitaTexture, image_access_tgfx_NO_ACCESS,
                               image_access_tgfx_TRANSFER_DIST, textureAllUsages, textureAllUsages,
                               0, nullptr);
-  renderer->cmdCopyBufferToTexture(initBundle, 1, firstBuffer, 2048, reiChikitaTexture,
+  tgfxRenderer->cmdCopyBufferToTexture(initBundle, 1, firstBuffer, 2048, reiChikitaTexture,
                                    image_access_tgfx_TRANSFER_DIST, 0, nullptr);
-  renderer->cmdBarrierTexture(initBundle, 2, reiChikitaTexture, image_access_tgfx_TRANSFER_DIST,
+  tgfxRenderer->cmdBarrierTexture(initBundle, 2, reiChikitaTexture, image_access_tgfx_TRANSFER_DIST,
                               image_access_tgfx_SHADER_SAMPLEONLY, textureAllUsages,
                               textureAllUsages, 0, nullptr);
-  renderer->finishCommandBundle(initBundle, 0, nullptr);
-  static constexpr uint32_t cmdCount = 9;
+  tgfxRenderer->finishCommandBundle(initBundle, 0, nullptr);
+  static constexpr uint32_t cmdCount = 10;
   // Record command bundle
-  standardDrawBundle = renderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, 0, nullptr);
+  standardDrawBundle = tgfxRenderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, 0, nullptr);
   {
-    bindingTable_tgfxhnd bindingTables[3] = {bufferBindingTable, textureBindingTable,
-                                             samplerBindingTable};
-    uint32_t             cmdKey           = 0;
+    struct tgfx_bindingTable* bindingTables[3] = {bufferBindingTable, textureBindingTable,
+                                                  samplerBindingTable};
+    uint32_t                  cmdKey           = 0;
 
-    renderer->cmdSetDepthBounds(standardDrawBundle, cmdKey++, 0.0f, 1.0f);
-    renderer->cmdSetViewport(standardDrawBundle, cmdKey++, {0, 0, 1280, 720, 0.0f, 1.0f});
-    renderer->cmdSetScissor(standardDrawBundle, cmdKey++, {0, 0}, {1280, 720});
-    renderer->cmdBindPipeline(standardDrawBundle, cmdKey++, firstRasterPipeline);
-    uint64_t       offsets[2] = {0, offsetof(firstUboStruct, translate)};
-    buffer_tgfxhnd buffers[2] = {firstBuffer, firstBuffer};
-    renderer->cmdBindVertexBuffers(standardDrawBundle, cmdKey++, 0, 2, buffers, offsets);
+    unsigned int values[32] = {0};
+    tgfxRenderer->cmdPushConstant(standardDrawBundle, cmdKey++, 0, 128, values);
+    tgfxRenderer->cmdSetDepthBounds(standardDrawBundle, cmdKey++, 0.0f, 1.0f);
+    tgfxRenderer->cmdSetViewport(standardDrawBundle, cmdKey++, &viewportInfo);
+    tgfxRenderer->cmdSetScissor(standardDrawBundle, cmdKey++, &scissorOffset, &scissorSize);
+    tgfxRenderer->cmdBindPipeline(standardDrawBundle, cmdKey++, firstRasterPipeline);
+    uint64_t            offsets[2] = {0, offsetof(firstUboStruct, translate)};
+    struct tgfx_buffer* buffers[2] = {firstBuffer, firstBuffer};
+    tgfxRenderer->cmdBindVertexBuffers(standardDrawBundle, cmdKey++, 0, 2, buffers, offsets);
     // renderer->cmdBindIndexBuffer(standardDrawBundle, cmdKey++, firstBuffer,
     // offsetof(firstUboStruct, indices), 2);
-    renderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, 0, 3, bindingTables,
+    tgfxRenderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, 0, 3, bindingTables,
                                    pipelineType_tgfx_RASTER);
     indirectOperationType_tgfx firstOp[5] = {
       indirectOperationType_tgfx_DRAWNONINDEXED, indirectOperationType_tgfx_DRAWNONINDEXED,
       indirectOperationType_tgfx_DRAWNONINDEXED, indirectOperationType_tgfx_DRAWNONINDEXED,
       indirectOperationType_tgfx_DRAWNONINDEXED};
-    renderer->cmdExecuteIndirect(standardDrawBundle, cmdKey++, 5, firstOp, firstBuffer,
+    tgfxRenderer->cmdExecuteIndirect(standardDrawBundle, cmdKey++, 5, firstOp, firstBuffer,
                                  sizeof(firstUboStruct), 0, nullptr);
 
     assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
   }
-  renderer->finishCommandBundle(standardDrawBundle, 0, nullptr);
+  tgfxRenderer->finishCommandBundle(standardDrawBundle, 0, nullptr);
 }
 
-commandBundle_tgfxhnd perSwpchnCmdBundles[swapchainTextureCount];
+struct tgfx_commandBundle* perSwpchnCmdBundles[swapchainTextureCount];
 
 void recordSwpchnCmdBundles() {
   for (uint32_t i = 0; i < swapchainTextureCount; i++) {
     static constexpr uint32_t cmdCount = 5;
     // Record command bundle
     perSwpchnCmdBundles[i] =
-      renderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, 0, nullptr);
+      tgfxRenderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, 0, nullptr);
     {
       uint32_t cmdKey = 0;
 
-      renderer->cmdBindPipeline(perSwpchnCmdBundles[i], cmdKey++, firstRasterPipeline);
-      renderer->cmdBindBindingTables(perSwpchnCmdBundles[i], cmdKey++, 0, 1, &bufferBindingTable,
+      tgfxRenderer->cmdBindPipeline(perSwpchnCmdBundles[i], cmdKey++, firstRasterPipeline);
+      tgfxRenderer->cmdBindBindingTables(perSwpchnCmdBundles[i], cmdKey++, 0, 1, &bufferBindingTable,
                                      pipelineType_tgfx_COMPUTE);
-      renderer->cmdSetViewport(perSwpchnCmdBundles[i], cmdKey++, {0, 0, 1280, 720, 0.0f, 1.0f});
-      renderer->cmdSetScissor(perSwpchnCmdBundles[i], cmdKey++, {0, 0}, {1280, 720});
-      renderer->cmdDrawNonIndexedDirect(perSwpchnCmdBundles[i], cmdKey++, 3, 1, 0, 0);
+      tgfxRenderer->cmdSetViewport(perSwpchnCmdBundles[i], cmdKey++, &viewportInfo);
+      tgfxRenderer->cmdSetScissor(perSwpchnCmdBundles[i], cmdKey++, &scissorOffset, &scissorSize);
+      tgfxRenderer->cmdDrawNonIndexedDirect(perSwpchnCmdBundles[i], cmdKey++, 3, 1, 0, 0);
 
       assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
     }
-    renderer->finishCommandBundle(perSwpchnCmdBundles[i], 0, nullptr);
+    tgfxRenderer->finishCommandBundle(perSwpchnCmdBundles[i], 0, nullptr);
   }
 }
 
@@ -580,28 +589,28 @@ void load_systems() {
   ubo.indices[5] = 1;
   */
 
-  drawNonIndexedIndirectArgument_tgfx& firstArgument =
-    *( drawNonIndexedIndirectArgument_tgfx* )(( firstUboStruct* )mappedRegion + 1);
+  tgfx_drawNonIndexedIndirectArgument& firstArgument =
+    *( tgfx_drawNonIndexedIndirectArgument* )(( firstUboStruct* )mappedRegion + 1);
   firstArgument.firstVertex            = 0;
   firstArgument.firstInstance          = 0;
   firstArgument.vertexCountPerInstance = 6;
   firstArgument.instanceCount          = 2;
 
-  fence_tgfxhnd fence;
-  renderer->createFences(gpu, 1, 0u, &fence);
-  gpuQueue_tgfxhnd queuesPerFam[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
-  uint32_t         queueCount                                        = 0;
+  struct tgfx_fence* fence;
+  tgfxRenderer->createFences(gpu, 1, 0u, &fence);
+  struct tgfx_gpuQueue* queuesPerFam[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
+  uint32_t              queueCount                                        = 0;
   tgfx->helpers->getGPUInfo_Queues(gpu, 0, &queueCount, queuesPerFam);
   tgfx->helpers->getGPUInfo_Queues(gpu, 0, &queueCount, queuesPerFam);
 
-  gpuQueue_tgfxhnd queue    = queuesPerFam[0];
-  uint64_t         duration = 0;
+  struct tgfx_gpuQueue* queue    = queuesPerFam[0];
+  uint64_t              duration = 0;
   TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "queueSignal", &duration);
   static uint64_t waitValue = 0, signalValue = 1;
-  renderer->queueFenceSignalWait(queue, 1, &fence, &waitValue, 1, &fence, &signalValue);
+  tgfxRenderer->queueFenceSignalWait(queue, 1, &fence, &waitValue, 1, &fence, &signalValue);
 
   // Color Attachment Info for Begin Render Pass
-  rasterpassBeginSlotInfo_tgfx colorAttachmentInfo = {}, depthAttachmentInfo = {};
+  tgfx_rasterpassBeginSlotInfo colorAttachmentInfo = {}, depthAttachmentInfo = {};
   {
     colorAttachmentInfo.imageAccess = image_access_tgfx_SHADER_SAMPLEWRITE;
     colorAttachmentInfo.loadOp      = rasterpassLoad_tgfx_CLEAR;
@@ -618,11 +627,11 @@ void load_systems() {
   }
 
   // Initialization Command Buffer Recording
-  commandBuffer_tgfxhnd initCmdBuffer = {};
+  struct tgfx_commandBuffer* initCmdBuffer = {};
   {
-    initCmdBuffer = renderer->beginCommandBuffer(queue, 0, nullptr);
-    renderer->executeBundles(initCmdBuffer, 1, &initBundle, 0, nullptr);
-    renderer->endCommandBuffer(initCmdBuffer);
+    initCmdBuffer = tgfxRenderer->beginCommandBuffer(queue, 0, nullptr);
+    tgfxRenderer->executeBundles(initCmdBuffer, 1, &initBundle, 0, nullptr);
+    tgfxRenderer->endCommandBuffer(initCmdBuffer);
   }
 
   // Submit initialization operations to GPU!
@@ -630,11 +639,11 @@ void load_systems() {
     uint32_t swpchnIndx = UINT32_MAX;
     tgfx->getCurrentSwapchainTextureIndex(mainWindowRT, &swpchnIndx);
     if (initCmdBuffer) {
-      renderer->queueExecuteCmdBuffers(queue, 1, &initCmdBuffer, 0, nullptr);
-      renderer->queueSubmit(queue);
+      tgfxRenderer->queueExecuteCmdBuffers(queue, 1, &initCmdBuffer, 0, nullptr);
+      tgfxRenderer->queueSubmit(queue);
     }
-    renderer->queuePresent(queue, 1, &mainWindowRT);
-    renderer->queueSubmit(queue);
+    tgfxRenderer->queuePresent(queue, 1, &mainWindowRT);
+    tgfxRenderer->queueSubmit(queue);
   }
 
   STOP_PROFILE_TAPI(profilerSys->funcs);
@@ -646,7 +655,7 @@ void load_systems() {
     TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "presentation", &duration);
     uint64_t currentFenceValue = 0;
     while (currentFenceValue < signalValue - 2) {
-      renderer->getFenceValue(fence, &currentFenceValue);
+      tgfxRenderer->getFenceValue(fence, &currentFenceValue);
       printf("Waiting for fence value %u, currentFenceValue %u!\n", signalValue - 2,
              currentFenceValue);
     }
@@ -655,24 +664,24 @@ void load_systems() {
 
     // Record frame's command buffer
     {
-      commandBuffer_tgfxhnd frameCmdBuffer = renderer->beginCommandBuffer(queue, 0, nullptr);
-      colorAttachmentInfo.texture          = swpchnTextures[i % 2];
-      renderer->beginRasterpass(frameCmdBuffer, 1, &colorAttachmentInfo, depthAttachmentInfo, 0,
+      struct tgfx_commandBuffer* frameCmdBuffer = tgfxRenderer->beginCommandBuffer(queue, 0, nullptr);
+      colorAttachmentInfo.texture               = swpchnTextures[i % 2];
+      tgfxRenderer->beginRasterpass(frameCmdBuffer, 1, &colorAttachmentInfo, &depthAttachmentInfo, 0,
                                 nullptr);
-      renderer->executeBundles(frameCmdBuffer, 1, &standardDrawBundle, 0, nullptr);
-      renderer->endRasterpass(frameCmdBuffer, 0, nullptr);
-      renderer->endCommandBuffer(frameCmdBuffer);
+      tgfxRenderer->executeBundles(frameCmdBuffer, 1, &standardDrawBundle, 0, nullptr);
+      tgfxRenderer->endRasterpass(frameCmdBuffer, 0, nullptr);
+      tgfxRenderer->endCommandBuffer(frameCmdBuffer);
 
       ubo.translate[0] = {sinf(i / 360.0), cosf(i / 360.0)};
 
-      renderer->queueExecuteCmdBuffers(queue, 1, &frameCmdBuffer, 0, nullptr);
-      renderer->queueFenceSignalWait(queue, 1, &fence, &waitValue, 1, &fence, &signalValue);
-      renderer->queueSubmit(queue);
+      tgfxRenderer->queueExecuteCmdBuffers(queue, 1, &frameCmdBuffer, 0, nullptr);
+      tgfxRenderer->queueFenceSignalWait(queue, 1, &fence, &waitValue, 1, &fence, &signalValue);
+      tgfxRenderer->queueSubmit(queue);
 
       waitValue++;
       signalValue++;
-      renderer->queuePresent(queue, 1, &mainWindowRT);
-      renderer->queueSubmit(queue);
+      tgfxRenderer->queuePresent(queue, 1, &mainWindowRT);
+      tgfxRenderer->queueSubmit(queue);
       STOP_PROFILE_TAPI(profilerSys->funcs);
       printf("Finished and index: %u\n", swpchnIndx);
       tgfx->takeInputs();
@@ -680,7 +689,7 @@ void load_systems() {
   }
   uint64_t fenceVal = 0;
   while (fenceVal != waitValue) {
-    renderer->getFenceValue(fence, &fenceVal);
+    tgfxRenderer->getFenceValue(fence, &fenceVal);
   }
   contentManager->destroyTexture(customDepthRT);
   contentManager->destroyTexture(reiChikitaTexture);
@@ -694,5 +703,5 @@ void load_systems() {
   // renderer->destroyCommandBundle(perSwpchnCmdBundles[1]);
   // renderer->destroyCommandBundle(standardDrawBundle);
   // renderer->destroyCommandBundle(initBundle);
-  renderer->destroyFence(fence);
+  tgfxRenderer->destroyFence(fence);
 }

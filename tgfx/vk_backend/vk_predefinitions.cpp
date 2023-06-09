@@ -3,23 +3,23 @@
 #include "string_tapi.h"
 #include "vk_resource.h"
 
-core_tgfx*             core_tgfx_main    = nullptr;
+tgfx_core*             core_tgfx_main    = nullptr;
 core_public*           core_vk           = nullptr;
-renderer_public*       renderer          = nullptr;
+renderer_public*       tgfxRenderer          = nullptr;
 gpudatamanager_public* contentManager    = nullptr;
 imgui_vk*              imgui             = nullptr;
 GPU_VKOBJ*             rendergpu         = nullptr;
-threadingsys_tapi*     threadingsys      = nullptr;
+tapi_threadingSys*     threadingsys      = nullptr;
 unsigned int           threadcount       = 1;
 gpuallocatorsys_vk*    gpu_allocator     = nullptr;
 manager_vk*            queuesys          = nullptr;
-virtualmemorysys_tapi* virmemsys         = nullptr;
-profiler_tapi*         profilerSys       = nullptr;
-bitsetsys_tapi*        bitsetSys         = nullptr;
-stringSys_tapi*        stringSys         = nullptr;
+tapi_virtualMemorySys* virmemsys         = nullptr;
+tapi_profiler*         profilerSys       = nullptr;
+tapi_bitsetSys*        bitsetSys         = nullptr;
+tapi_stringSys*        stringSys         = nullptr;
 VkInstance             VKGLOBAL_INSTANCE = VK_NULL_HANDLE;
 VkApplicationInfo      VKGLOBAL_APPINFO;
-tgfx_logCallback       printer_cb                   = nullptr;
+void (*printer_cb)(unsigned int logCode, const wchar_t* extraInfo) = nullptr;
 vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_CURRENTFRAME = nullptr;
 unsigned char          VKGLOBAL_FRAMEINDEX          = 0;
 

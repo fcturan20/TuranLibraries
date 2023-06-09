@@ -94,13 +94,13 @@ void vk_allocateCmdBuffer(QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, cmd
                           VkCommandBuffer* cbs, uint32_t count);
 void vk_freeCmdBuffer(cmdPool_vk* cmdPool, VkCommandBuffer cb);
 VkQueue      getQueueVkObj(QUEUE_VKOBJ* queue);
-QUEUE_VKOBJ* getQueue(gpuQueue_tgfxhnd hnd);
+QUEUE_VKOBJ* getQueue(struct tgfx_gpuQueue* hnd);
 QUEUEFAM_VK* getQueueFam(GPU_VKOBJ* gpu, unsigned int queueFamIndx);
 QUEUE_VKOBJ* getQueue(QUEUEFAM_VK* queueFam, uint32_t queueIndx);
 // Extension: QueueOwnershipTransfer
 // Use o_ params with uint32_t queueFamList[VKCONST_MAXQUEUEFAMCOUNT] etc.
-void VK_getQueueAndSharingInfos(unsigned int queueList, const gpuQueue_tgfxhnd* i_queueList,
-                                unsigned int extCount, const extension_tgfxhnd* i_exts,
+void VK_getQueueAndSharingInfos(unsigned int queueList, struct tgfx_gpuQueue* const* i_queueList,
+                                unsigned int extCount, struct tgfx_extension* const* i_exts,
                                 uint32_t* o_famList, uint32_t* o_famListSize,
                                 VkSharingMode* o_sharingMode);
-void vk_getWindowSupportedQueues(GPU_VKOBJ* GPU, WINDOW_VKOBJ* window, windowGPUsupport_tgfx* info);
+void vk_getWindowSupportedQueues(GPU_VKOBJ* GPU, WINDOW_VKOBJ* window, tgfx_windowGPUsupport* info);

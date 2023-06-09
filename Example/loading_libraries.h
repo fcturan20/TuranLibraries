@@ -8,7 +8,7 @@ takes one step-.
 #define T_INCLUDE_PLATFORM_LIBS
 #include "allocator_tapi.h"
 #include "array_of_strings_tapi.h"
-#include "bitset_tapi.h"
+#include <bitset_tapi.h>
 #include "filesys_tapi.h"
 #include "logger_tapi.h"
 #include "profiler_tapi.h"
@@ -41,10 +41,10 @@ extern dearimgui_tgfx*      TGFXIMGUI          = nullptr;
 
 // Global variables
 extern unsigned int    devicelocalmemtype_id = UINT32_MAX, fastvisiblememtype_id = UINT32_MAX;
-extern texture_tgfxhnd swapchain_textures[2] = {NULL, NULL}, depthbuffer_handle = NULL,
+extern struct tgfx_texture* swapchain_textures[2] = {NULL, NULL}, depthbuffer_handle = NULL,
                        orange_texture                     = NULL;
-extern window_tgfxhnd                firstwindow          = NULL;
-extern buffer_tgfxhnd                shaderuniformsbuffer = NULL;
+extern struct tgfx_window*                firstwindow          = NULL;
+extern struct tgfx_buffer*                shaderuniformsbuffer = NULL;
 extern vertexAttributeLayout_tgfxhnd vertexattriblayout   = NULL;
 
 extern transferpass_tgfx_handle    framebegin_TP        = NULL;

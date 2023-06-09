@@ -19,7 +19,7 @@ vkext_timelineSemaphore::vkext_timelineSemaphore(GPU_VKOBJ* gpu)
   features.pNext = nullptr;
 }
 
-fence_tgfxhnd vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue) {
+struct tgfx_fence* vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue) {
   vkext_timelineSemaphore* ext =
     ( vkext_timelineSemaphore* )gpu->ext()->m_exts[vkext_interface::timelineSemaphores_vkExtEnum];
   VkSemaphoreTypeCreateInfo timelineCi = {};
@@ -41,14 +41,14 @@ fence_tgfxhnd vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue) {
   fence->vk_timelineSemaphore = sem;
   fence->m_curValue           = initValue;
   fence->m_gpuIndx            = gpu->gpuIndx();
-  return getHANDLE<fence_tgfxhnd>(fence);
+  return getHANDLE<struct tgfx_fence*>(fence);
 }
 
 #define findGPUfromFence(i_fence)                    \
   FENCE_VKOBJ* fence = getOBJ<FENCE_VKOBJ>(i_fence); \
   GPU_VKOBJ*   gpu   = core_vk->getGPU(fence->m_gpuIndx)
 
-result_tgfx vk_getFenceValue(fence_tgfxhnd i_fence, unsigned long long* value) {
+result_tgfx vk_getFenceValue(struct tgfx_fence* i_fence, unsigned long long* value) {
   findGPUfromFence(i_fence);
 
   getTimelineSemaphoreEXT(gpu, ext);
@@ -59,7 +59,7 @@ result_tgfx vk_getFenceValue(fence_tgfxhnd i_fence, unsigned long long* value) {
   }
   return result_tgfx_SUCCESS;
 }
-result_tgfx vk_setFenceValue(fence_tgfxhnd i_fence, unsigned long long value) {
+result_tgfx vk_setFenceValue(struct tgfx_fence* i_fence, unsigned long long value) {
   findGPUfromFence(i_fence);
   getTimelineSemaphoreEXT(gpu, ext);
 
@@ -88,6 +88,6 @@ void vkext_timelineSemaphore::inspect() {
 }
 
 void vkext_timelineSemaphore::manage(VkStructureType structType, void* structPtr,
-                                     unsigned int extCount, const extension_tgfxhnd* exts) {
+                                     unsigned int extCount, struct tgfx_extension* const* exts) {
   switch (structType) {}
 }

@@ -58,14 +58,14 @@ int main() {
                                          &shaderuniformsbuffer);
   shaderStageFlag_tgfxhnd onlycompute_shaderstage =
     TGFXHELPER->createShaderStageFlag(1, shaderstage_tgfx_COMPUTESHADER);
-  bindingTable_tgfxhnd firstbindingtable = nullptr;
+  struct tgfx_bindingTable* firstbindingtable = nullptr;
   TGFXCONTENTMANAGER->instantiateBindingTable(shaderdescriptortype_tgfx_BUFFER, 1,
                                               onlycompute_shaderstage, nullptr, &firstbindingtable);
   TGFXCONTENTMANAGER->setBindingTable_Buffer(firstbindingtable, 0, shaderuniformsbuffer, 0, 4096,
                                              nullptr);
 
   // Create a depth buffer
-  buffer_tgfxhnd           texturestagingbuffer;
+  struct tgfx_buffer*           texturestagingbuffer;
   textureUsageFlag_tgfxhnd renderonly_usageflag =
     TGFXHELPER->createUsageFlag_Texture(false, false, true, false, false);
   TGFXCONTENTMANAGER->createTexture(
@@ -87,7 +87,7 @@ int main() {
                                       -1.0, 1.0,  -1.0, 1.0, 0.0, 1.0, 1.0,  -1.0, 1.0, 1.0};
   std::vector<unsigned int> indexbufferdata{2, 6, 7, 2, 3, 7, 0, 4, 5, 0, 1, 5, 0, 2, 6, 0, 4, 6,
                                             1, 3, 7, 1, 5, 7, 0, 2, 3, 0, 1, 3, 4, 6, 7, 4, 5, 7};
-  buffer_tgfxhnd            firstvertexbuffer, firstindexbuffer, firststagingbuffer;
+  struct tgfx_buffer*            firstvertexbuffer, firstindexbuffer, firststagingbuffer;
   TGFXCONTENTMANAGER->createVertexBuffer(vertexattriblayout, 4, devicelocalmemtype_id,
                                          &firstvertexbuffer);
   TGFXCONTENTMANAGER->createIndexBuffer(datatype_tgfx_VAR_UINT32, 6, devicelocalmemtype_id,

@@ -20,7 +20,7 @@
 // Hardware Capability Helpers
 static unsigned char vk_getTextureTypeLimits(
   texture_dimensions_tgfx dims, textureOrder_tgfx dataorder, textureChannels_tgfx chnnltype,
-  textureUsageMask_tgfxflag usageflag, gpu_tgfxhnd GPUHandle, unsigned int* MAXWIDTH,
+  textureUsageMask_tgfxflag usageflag, struct tgfx_gpu* GPUHandle, unsigned int* MAXWIDTH,
   unsigned int* MAXHEIGHT, unsigned int* MAXDEPTH, unsigned int* MAXMIPLEVEL) {
   GPU_VKOBJ*              GPU = getOBJ<GPU_VKOBJ>(GPUHandle);
   VkImageFormatProperties props;
@@ -52,14 +52,14 @@ static unsigned char vk_getTextureTypeLimits(
   return true;
 }
 
-static void vk_getTextureSupportedMemTypes(texture_tgfxhnd texture,
+static void vk_getTextureSupportedMemTypes(struct tgfx_texture* texture,
                                            unsigned int*   SupportedMemoryTypesBitset) {
   *SupportedMemoryTypesBitset = getOBJ<TEXTURE_VKOBJ>(texture)->m_memReqs.vk_memReqs.memoryTypeBits;
 }
 
 // EXTENSION HELPERS
 
-void vk_destroyExtData(extension_tgfxhnd ExtensionToDestroy) {}
+void vk_destroyExtData(struct tgfx_extension* ExtensionToDestroy) {}
 
 void vk_setHelperFuncPtrs() {
   core_tgfx_main->helpers->getTextureTypeLimits        = vk_getTextureTypeLimits;

@@ -3,11 +3,11 @@
 #include "ecs_tapi.h"
 #include "pecfManager/pecfManager.h"
 
-componentManager_ecs ecs_mngr;
+struct ecs_compManager ecs_mngr;
 struct sceneSettingsComponentManager {
-  static componentHnd_ecstapi      createComponent() { return nullptr; }
-  static compType_ecstapi          getComponent(const char* componentName) { return nullptr; }
-  static void                      destroyComponent(componentHnd_ecstapi) {}
+  static tapi_ecs_component*      createComponent() { return nullptr; }
+  static void*          getComponent(const char* componentName) { return nullptr; }
+  static void                      destroyComponent(tapi_ecs_component* comp) {}
   static componentManagerInfo_pecf getManager() {
     ecs_mngr.createComponent  = sceneSettingsComponentManager::createComponent;
     ecs_mngr.destroyComponent = sceneSettingsComponentManager::destroyComponent;
@@ -17,9 +17,8 @@ struct sceneSettingsComponentManager {
     c.ecsManager = &ecs_mngr;
     return c;
   }
-  static compType_ecstapi COMPTYPE;
 };
-compType_ecstapi sceneSettingsComponentManager::COMPTYPE = nullptr;
+void* COMPTYPE = nullptr;
 
 void ThrowFor_PECF_Register(void* result, const char* msg) {
   if (!result) {

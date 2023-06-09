@@ -1,5 +1,3 @@
 #pragma once
-typedef struct tapi_ecs ecs_tapi;
-extern ecs_tapi*        editorECS;
-struct allocator_sys_tapi;
-extern allocator_sys_tapi* allocatorSys;
+extern "C" const struct tapi_ecs* editorECS;
+extern "C" const struct tapi_allocatorSys* allocatorSys;

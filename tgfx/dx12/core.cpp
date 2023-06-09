@@ -31,8 +31,8 @@ static core_private* hidden = nullptr;
 
 void GLFWwindowresizecallback(GLFWwindow* glfwwindow, int width, int height) {
   window_dx* vkwindow = ( window_dx* )glfwGetWindowUserPointer(glfwwindow);
-  vkwindow->resize_cb(( window_tgfxhnd )vkwindow, vkwindow->UserPTR, width, height,
-                      ( texture_tgfxhnd* )vkwindow->Swapchain_Textures);
+  vkwindow->resize_cb(( struct tgfx_window* )vkwindow, vkwindow->UserPTR, width, height,
+                      ( struct tgfx_texture** )vkwindow->Swapchain_Textures);
 }
 bool Create_WindowSwapchain(window_dx* new_window, unsigned int WIDTH, unsigned int HEIGHT,
                             ComPtr<IDXGISwapChain4>* SwapchainOBJ,
@@ -64,12 +64,12 @@ struct core_functions_dx {
  public:
   // SwapchainTextureHandles should point to an array of 2 elements! Triple Buffering is not
   // supported for now.
-  static void createwindow(unsigned int WIDTH, unsigned int HEIGHT, monitor_tgfxhnd monitor,
+  static void createwindow(unsigned int WIDTH, unsigned int HEIGHT, struct tgfx_monitor* monitor,
                            windowmode_tgfx Mode, const char* NAME,
                            textureUsageFlag_tgfxhnd  SwapchainUsage,
                            tgfx_windowResizeCallback ResizeCB, void* UserPointer,
-                           texture_tgfxhnd* SwapchainTextureHandles, window_tgfxhnd* window);
-  static void change_window_resolution(window_tgfxhnd WindowHandle, unsigned int width,
+                           struct tgfx_texture** SwapchainTextureHandles, struct tgfx_window** window);
+  static void change_window_resolution(struct tgfx_window* WindowHandle, unsigned int width,
                                        unsigned int height);
   static void getmonitorlist(monitor_tgfxlsthnd* MonitorList);
   static void getGPUlist(gpu_tgfxlsthnd* GpuList);
@@ -143,17 +143,17 @@ extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi* regsys, c
 #endif
   core_functions_dx::Check_Computer_Specs();
 
-  window_tgfxhnd firstwindow;
+  struct tgfx_window* firstwindow;
   core_functions_dx::createwindow(1280, 720, nullptr, windowmode_tgfx_WINDOWED, "First Window",
                                   nullptr, nullptr, nullptr, nullptr, &firstwindow);
 }
 
 void core_functions_dx::createwindow(unsigned int WIDTH, unsigned int HEIGHT,
-                                     monitor_tgfxhnd monitor, windowmode_tgfx Mode,
+                                     struct tgfx_monitor* monitor, windowmode_tgfx Mode,
                                      const char* NAME, textureUsageFlag_tgfxhnd SwapchainUsage,
                                      tgfx_windowResizeCallback ResizeCB, void* UserPointer,
-                                     texture_tgfxhnd* SwapchainTextureHandles,
-                                     window_tgfxhnd*  window) {
+                                     struct tgfx_texture** SwapchainTextureHandles,
+                                     struct tgfx_window**  window) {
   if (ResizeCB) {
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
   } else {
@@ -205,10 +205,10 @@ void core_functions_dx::createwindow(unsigned int WIDTH, unsigned int HEIGHT,
   SWPCHNTEXTUREHANDLESVK[1]->USAGE  = new_window->SWAPCHAINUSAGE;
   new_window->Swapchain_Textures[0] = SWPCHNTEXTUREHANDLESVK[0];
   new_window->Swapchain_Textures[1] = SWPCHNTEXTUREHANDLESVK[1];
-  SwapchainTextureHandles[0]        = ( texture_tgfxhnd )new_window->Swapchain_Textures[0];
-  SwapchainTextureHandles[1]        = ( texture_tgfxhnd )new_window->Swapchain_Textures[1];
+  SwapchainTextureHandles[0]        = ( struct tgfx_texture* )new_window->Swapchain_Textures[0];
+  SwapchainTextureHandles[1]        = ( struct tgfx_texture* )new_window->Swapchain_Textures[1];
 
-  *window = ( window_tgfxhnd )new_window;
+  *window = ( struct tgfx_window* )new_window;
 }
 
 void core_functions_dx::Check_Computer_Specs() {

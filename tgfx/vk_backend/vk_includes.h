@@ -2,11 +2,13 @@
 #include <stdio.h>
 #include <threadingsys_tapi.h>
 #include <vulkan/vulkan.h>
-
 #include <algorithm>
 #include <glm/glm.hpp>
 #include <iostream>
 #include <mutex>
+
+#include <tgfx_forwarddeclarations.h>
+#include <tgfx_structs.h>
 
 #include "vk_predefinitions.h"
 

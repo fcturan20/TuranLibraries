@@ -162,4 +162,4 @@ void vkext_depthStencil::inspect() {
   }
 }
 void vkext_depthStencil::manage(VkStructureType structType, void* structPtr, unsigned int extCount,
-                                const extension_tgfxhnd* exts) {}
+                                struct tgfx_extension* const* exts) {}

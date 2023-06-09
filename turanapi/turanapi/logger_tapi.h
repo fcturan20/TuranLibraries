@@ -1,8 +1,12 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
+  
 #include "predefinitions_tapi.h"
 #define LOGGER_TAPI_PLUGIN_NAME "tapi_logger"
 #define LOGGER_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
-#define LOGGER_TAPI_PLUGIN_LOAD_TYPE logger_tapi_type*
+#define LOGGER_TAPI_PLUGIN_LOAD_TYPE struct tapi_logger_type*
 
 /*
  * You should init the log system. This will make every log to be saved in the main log file
@@ -20,7 +24,7 @@ typedef enum tapi_log_type {
   log_type_tapi_CRASHING
 } log_type_tapi;
 
-typedef struct logger_tapi {
+struct tapi_logger {
   void (*init)(stringReadArgument_tapi(mainLogFile));
   void (*destroy)();
   // You can set file paths different each time you write to file
@@ -28,10 +32,13 @@ typedef struct logger_tapi {
   // Formats are the same as string api's
   void (*save)(tapi_log_type logType, stringReadArgument_tapi(path));
   void (*log)(tapi_log_type type, unsigned char stopRunning, const wchar_t* format, ...);
-} logger_tapi;
+};
 
-typedef struct logger_tapi_d logger_tapi_d;
-typedef struct logger_tapi_type {
-  logger_tapi_d* data;
-  logger_tapi*   funcs;
-} logger_tapi_type;
+struct tapi_logger_type {
+  const struct tapi_logger_d* data;
+  const struct tapi_logger*   funcs;
+};
+
+#ifdef __cplusplus
+}
+#endif

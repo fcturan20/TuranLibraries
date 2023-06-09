@@ -10,7 +10,7 @@
 #ifdef T_ENVWINDOWS
 #include "windows.h"
 
-static VIRTUALMEMORY_TAPI_PLUGIN_TYPE  memsys    = NULL;
+static VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE memsys    = NULL;
 static ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE allocator = NULL;
 // Reserve address space from virtual memory
 void* virtual_reserve(unsigned long long size) {
@@ -52,23 +52,23 @@ void* get_virtualmemory(unsigned long long reserve_size, unsigned long long firs
 
 extern unsigned int getSizeOfAllocatorSys();
 extern void*        initializeAllocator(void* allocatorSys);
-void                load_virtualmemorysystem(VIRTUALMEMORY_TAPI_PLUGIN_TYPE*  virmemsysPTR,
+void                load_virtualmemorysystem(VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE* virmemsysPTR,
                                              ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE* allocatorsysPTR) {
-                 unsigned int sizeOfAllocation =
-                   sizeof(virtualmemorysys_tapi_type) + sizeof(virtualmemorysys_tapi) + getSizeOfAllocatorSys();
-                 memsys                          = malloc(sizeOfAllocation);
-                 memsys->funcs                   = ( virtualmemorysys_tapi* )(memsys + 1);
-                 memsys->data                    = NULL;
-                 memsys->funcs->get_pagesize     = &get_pagesize;
-                 memsys->funcs->virtual_commit   = &virtual_commit;
-                 memsys->funcs->virtual_free     = &virtual_free;
-                 memsys->funcs->virtual_reserve  = &virtual_reserve;
-                 memsys->funcs->virtual_decommit = &virtual_decommit;
+  unsigned int sizeOfAllocation = sizeof(struct tapi_virtualMemorySys_type) +
+                                  sizeof(struct tapi_virtualMemorySys) + getSizeOfAllocatorSys();
+  memsys                          = malloc(sizeOfAllocation);
+  memsys->funcs                   = ( struct tapi_virtualMemorySys* )(memsys + 1);
+  memsys->data                    = NULL;
+  memsys->funcs->get_pagesize     = &get_pagesize;
+  memsys->funcs->virtual_commit   = &virtual_commit;
+  memsys->funcs->virtual_free     = &virtual_free;
+  memsys->funcs->virtual_reserve  = &virtual_reserve;
+  memsys->funcs->virtual_decommit = &virtual_decommit;
 
-                 allocator = ( ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE )initializeAllocator(memsys->funcs + 1);
+  allocator = ( ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE )initializeAllocator(memsys->funcs + 1);
 
-                 *virmemsysPTR    = memsys;
-                 *allocatorsysPTR = allocator;
+  *virmemsysPTR    = memsys;
+  *allocatorsysPTR = allocator;
 }
 void get_virtualMemory_and_allocator_systems() {}
 

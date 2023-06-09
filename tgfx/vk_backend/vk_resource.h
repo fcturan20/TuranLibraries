@@ -11,7 +11,7 @@
 
 // Represents how it's bind to a heap
 struct memoryBlock_vk {
-  heap_tgfxhnd                 m_heap;
+  struct tgfx_heap*                 m_heap;
   VkDeviceSize                 vk_offset;
   static const memoryBlock_vk& GETINVALID() {
     memoryBlock_vk invalid;
@@ -179,7 +179,7 @@ struct SUBRASTERPASS_VKOBJ {
   static uint16_t                GET_EXTRAFLAGS(SUBRASTERPASS_VKOBJ* obj) { return 0; }
 
   uint32_t     m_subpassIndx;
-  gpu_tgfxhnd  m_gpu;
+  struct tgfx_gpu*  m_gpu;
   VkRenderPass vk_renderPass; // It's same across all subpasses
   bool         isDepthAttachment = false;
   // Extra information to check raster pipeline compilations without relying on validation layer
@@ -262,7 +262,7 @@ struct HEAP_VKOBJ {
 struct cmdPool_vk;
 struct cmdBundleRef_vk {
   cmdPool_vk*           m_cmdPool;
-  commandBundle_tgfxhnd m_cmdBundle;
+  struct tgfx_commandBundle* m_cmdBundle;
   VkCommandBuffer       vk_cmdBuffer;
 };
 
@@ -271,7 +271,7 @@ struct FRAMEBUFFER_VKOBJ {
   vk_handleType    HANDLETYPE = VKHANDLETYPEs::INTERNAL;
   static uint16_t  GET_EXTRAFLAGS(FRAMEBUFFER_VKOBJ* obj) { return 0; }
 
-  texture_tgfxhnd m_textures[VKCONST_MAXRTSLOTCOUNT];
+  struct tgfx_texture* m_textures[VKCONST_MAXRTSLOTCOUNT];
   // Command bundles records a command buffer for each framebuffer
   // For now, proper tracking mechanism isn't implemented.
   static constexpr uint32_t MAXCMDBUNDLECOUNT                  = 32;

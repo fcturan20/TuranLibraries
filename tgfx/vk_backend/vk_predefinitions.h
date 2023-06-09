@@ -25,12 +25,12 @@
 // below and naming should be all upper case
 
 // Systems
-typedef struct tgfx_core core_tgfx;
-extern core_tgfx*        core_tgfx_main;
+typedef struct tgfx_core tgfx_core;
+extern tgfx_core*        core_tgfx_main;
 struct core_public;
 extern core_public* core_vk;
 struct renderer_public;
-extern renderer_public* renderer;
+extern renderer_public* tgfxRenderer;
 struct gpudatamanager_public;
 extern gpudatamanager_public* contentManager;
 struct manager_vk;
@@ -39,19 +39,15 @@ struct imgui_vk;
 extern imgui_vk* imgui;
 struct GPU_VKOBJ;
 // extern GPU_VKOBJ* rendergpu;
-typedef struct threadingsys_tapi threadingsys_tapi;
-extern threadingsys_tapi*        threadingsys;
-extern unsigned int              threadcount;
-struct gpuallocatorsys_vk;
-extern gpuallocatorsys_vk*    gpu_allocator;
-extern virtualmemorysys_tapi* virmemsys;
-typedef struct profiler_tapi  profiler_tapi;
-extern profiler_tapi*         profilerSys;
-extern bitsetsys_tapi*        bitsetSys;
-typedef struct stringSys_tapi tapi_stringSys;
-extern stringSys_tapi*        stringSys;
+extern struct tapi_threadingSys*     threadingsys;
+extern unsigned int                  threadcount;
+extern struct gpuallocatorsys_vk*    gpu_allocator;
+extern struct tapi_virtualMemorySys* virmemsys;
+extern struct tapi_profiler*         profilerSys;
+extern struct tapi_bitsetSys*        bitsetSys;
+extern struct tapi_stringSys*        stringSys;
 
-extern tgfx_logCallback printer_cb;
+extern void (*printer_cb)(unsigned int logCode, const wchar_t* extraInfo);
 result_tgfx             vkPrint(unsigned int logCode, const wchar_t* extraInfo = nullptr);
 
 // <------------------------------------------------------------------------------------>
@@ -275,7 +271,7 @@ class VK_LINEAR_OBJARRAY {
   const unsigned int elementCountPerPage() { return VKCONST_VIRMEMPAGESIZE / sizeof(T); }
   T*                 data = nullptr;
   // Active Object -> 1, Free Object -> 0
-  bitset_tapi*         bitset     = nullptr;
+  struct tapi_bitset** bitset     = nullptr;
   std::atomic_uint32_t maxObjIndx = 0;
   void                 commitNewPage() {
     uint32_t elementIndx = maxObjIndx.fetch_add(elementCountPerPage());

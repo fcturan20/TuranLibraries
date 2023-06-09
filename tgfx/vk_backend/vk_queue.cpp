@@ -42,7 +42,7 @@ struct submit_vk {
   };
 
   uint32_t signalSemaphoreCount = 0, waitSemaphoreCount = 0, cmdBufferCount = 0, windowCount = 0;
-  commandBuffer_tgfxhnd* cmdBuffers = {};
+  struct tgfx_commandBuffer** cmdBuffers = {};
 
   VkSemaphore *vk_signalSemaphores = {}, *vk_waitSemaphores = {};
 
@@ -67,7 +67,7 @@ struct submit_vk {
     uintptr_t lastPos = uintptr_t(submit + 1);
     // Allocate cmd buffer object list
     {
-      submit->cmdBuffers = ( commandBuffer_tgfxhnd* )lastPos;
+      submit->cmdBuffers = ( struct tgfx_commandBuffer** )lastPos;
       lastPos += sizeof(CMDBUFFER_VKOBJ**) * (submit->cmdBufferCount + 1ull);
     }
     // Allocate signal semaphore list
@@ -99,8 +99,8 @@ struct QUEUE_VKOBJ {
   static uint16_t GET_EXTRAFLAGS(QUEUE_VKOBJ* obj) {
     return (obj->m_gpu->gpuIndx() << 8) | (obj->vk_queueFamIndex);
   }
-  static GPU_VKOBJ*   getGPUfromHandle(gpuQueue_tgfxhnd hnd);
-  static QUEUEFAM_VK* getFAMfromHandle(gpuQueue_tgfxhnd hnd);
+  static GPU_VKOBJ*   getGPUfromHandle(struct tgfx_gpuQueue* hnd);
+  static QUEUEFAM_VK* getFAMfromHandle(struct tgfx_gpuQueue* hnd);
 
   uint32_t vk_queueFamIndex = 0, m_queueIndx = 0;
   VkQueue  vk_queue;
@@ -139,19 +139,19 @@ queueflag_vk::operator uint8_t() const {
   }
   return 0;
 };
-inline void vk_getGPUInfoQueues(gpu_tgfxhnd GPUhnd, unsigned int queueFamIndx,
-                                unsigned int* queueCount, gpuQueue_tgfxhnd* queueList) {
+inline void vk_getGPUInfoQueues(struct tgfx_gpu* GPUhnd, unsigned int queueFamIndx,
+                                unsigned int* queueCount, struct tgfx_gpuQueue** queueList) {
   GPU_VKOBJ*   VKGPU = getOBJ<GPU_VKOBJ>(GPUhnd);
   QUEUEFAM_VK* fam   = getQueueFam(VKGPU, queueFamIndx);
   if (*queueCount == VKGPU->vk_propsQueue[queueFamIndx].queueFamilyProperties.queueCount) {
     for (uint32_t i = 0; i < *queueCount; i++) {
-      queueList[i] = getHANDLE<gpuQueue_tgfxhnd>(getQueue(fam, i));
+      queueList[i] = getHANDLE<struct tgfx_gpuQueue*>(getQueue(fam, i));
     }
   }
   *queueCount = VKGPU->vk_propsQueue[queueFamIndx].queueFamilyProperties.queueCount;
 }
 void vk_getWindowSupportedQueues(GPU_VKOBJ* GPU, WINDOW_VKOBJ* window,
-                                 windowGPUsupport_tgfx* info) {
+                                 tgfx_windowGPUsupport* info) {
   uint32_t supportedQueueCount = 0;
   for (uint32_t queueFamIndx = 0; queueFamIndx < GPU->desc.queueFamilyCount; queueFamIndx++) {
     VkBool32 isSupported = false;
@@ -166,7 +166,7 @@ void vk_getWindowSupportedQueues(GPU_VKOBJ* GPU, WINDOW_VKOBJ* window,
            queueIndx < queueCount && supportedQueueCount < TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT;
            queueIndx++) {
         info->queues[supportedQueueCount++] =
-          getHANDLE<gpuQueue_tgfxhnd>(getQueue(queueFam, queueIndx));
+          getHANDLE<struct tgfx_gpuQueue*>(getQueue(queueFam, queueIndx));
       }
     }
   }
@@ -177,7 +177,7 @@ void vk_getWindowSupportedQueues(GPU_VKOBJ* GPU, WINDOW_VKOBJ* window,
 struct CMDBUFFER_VKOBJ {
   vk_handleType     HANDLETYPE = VKHANDLETYPEs::CMDBUFFER;
   static uint16_t   GET_EXTRAFLAGS(CMDBUFFER_VKOBJ* obj) { return uint16_t(obj->m_gpuIndx) << 8; }
-  static GPU_VKOBJ* getGPUfromHandle(commandBuffer_tgfxhnd hnd) {
+  static GPU_VKOBJ* getGPUfromHandle(struct tgfx_commandBuffer* hnd) {
     VKOBJHANDLE handle  = *( VKOBJHANDLE* )&hnd;
     uint32_t    gpuIndx = handle.EXTRA_FLAGs >> 8;
   }
@@ -188,8 +188,8 @@ struct CMDBUFFER_VKOBJ {
 
 struct manager_vk_private {
   VK_ARRAY<QUEUEFAM_VK, void*>                               m_queueFams;
-  VK_ARRAY<QUEUE_VKOBJ, gpuQueue_tgfxhnd>                    m_queues;
-  VK_LINEAR_OBJARRAY<CMDBUFFER_VKOBJ, commandBuffer_tgfxhnd> m_cmdBuffers;
+  VK_ARRAY<QUEUE_VKOBJ, struct tgfx_gpuQueue*>                    m_queues;
+  VK_LINEAR_OBJARRAY<CMDBUFFER_VKOBJ, struct tgfx_commandBuffer*> m_cmdBuffers;
 };
 manager_vk_private* mngrPriv = nullptr;
 void                vk_createManager() {
@@ -292,7 +292,7 @@ void                vk_createManager() {
       // Create internal queue
       {
         QUEUE_VKOBJ* internalQueue      = new (VKGLOBAL_VIRMEM_MANAGER) QUEUE_VKOBJ;
-        gpu->m_internalQueue            = getHANDLE<gpuQueue_tgfxhnd>(internalQueue);
+        gpu->m_internalQueue            = getHANDLE<struct tgfx_gpuQueue*>(internalQueue);
         internalQueue->m_queueIndx      = 0;
         internalQueue->m_gpu            = gpu;
         internalQueue->vk_queueFamIndex = bestQueueFam->vk_queueFamIndex;
@@ -301,7 +301,7 @@ void                vk_createManager() {
       }
     } else {
       // First queue will be internal queue
-      gpu->m_internalQueue = getHANDLE<gpuQueue_tgfxhnd>(mngrPriv->m_queues[totalQueueCount]);
+      gpu->m_internalQueue = getHANDLE<struct tgfx_gpuQueue*>(mngrPriv->m_queues[totalQueueCount]);
     }
 
     // Create user queues
@@ -321,7 +321,7 @@ void                vk_createManager() {
   }
 }
 VkQueue      getQueueVkObj(QUEUE_VKOBJ* queue) { return queue->vk_queue; }
-QUEUE_VKOBJ* getQueue(gpuQueue_tgfxhnd hnd) { return getOBJ<QUEUE_VKOBJ>(hnd); }
+QUEUE_VKOBJ* getQueue(struct tgfx_gpuQueue* hnd) { return getOBJ<QUEUE_VKOBJ>(hnd); }
 QUEUEFAM_VK* getQueueFam(GPU_VKOBJ* gpu, unsigned int queueFamIndx) {
   return mngrPriv->m_queueFams[gpu->m_queueFamPtrs[queueFamIndx]];
 }
@@ -335,7 +335,7 @@ struct cmdPool_vk {
   QUEUEFAM_VK*  m_queueFam     = nullptr;
   std::mutex    m_secondarySync;
 };
-GPU_VKOBJ* QUEUE_VKOBJ::getGPUfromHandle(gpuQueue_tgfxhnd hnd) {
+GPU_VKOBJ* QUEUE_VKOBJ::getGPUfromHandle(struct tgfx_gpuQueue* hnd) {
 #ifdef VK_USE_STD
   QUEUE_VKOBJ* o = getOBJ<QUEUE_VKOBJ>(hnd);
   return o->m_gpu;
@@ -345,7 +345,7 @@ GPU_VKOBJ* QUEUE_VKOBJ::getGPUfromHandle(gpuQueue_tgfxhnd hnd) {
   return core_vk->getGPU(gpuIndx);
 #endif
 }
-QUEUEFAM_VK* QUEUE_VKOBJ::getFAMfromHandle(gpuQueue_tgfxhnd hnd) {
+QUEUEFAM_VK* QUEUE_VKOBJ::getFAMfromHandle(struct tgfx_gpuQueue* hnd) {
 #ifdef VK_USE_STD
   QUEUE_VKOBJ* o = getOBJ<QUEUE_VKOBJ>(hnd);
   return mngrPriv->m_queueFams[o->vk_queueFamIndex];
@@ -781,8 +781,8 @@ bool manager_vk::does_queuefamily_support(QUEUE_VKOBJ* family, const queueflag_v
 
 // Helper functions
 
-void VK_getQueueAndSharingInfos(unsigned int queueList, const gpuQueue_tgfxhnd* i_queueList,
-                                unsigned int extCount, const extension_tgfxhnd* i_exts,
+void VK_getQueueAndSharingInfos(unsigned int queueList, struct tgfx_gpuQueue* const* i_queueList,
+                                unsigned int extCount, struct tgfx_extension* const* i_exts,
                                 uint32_t* o_famList, uint32_t* o_famListSize,
                                 VkSharingMode* o_sharingMode) {
   uint32_t   validQueueFamCount = 0;
@@ -824,8 +824,8 @@ void VK_getQueueAndSharingInfos(unsigned int queueList, const gpuQueue_tgfxhnd* 
 
 // Renderer Command Buffer Functionality
 
-commandBuffer_tgfxhnd vk_beginCommandBuffer(gpuQueue_tgfxhnd i_queue, unsigned int extCount,
-                                            const extension_tgfxhnd* exts) {
+struct tgfx_commandBuffer* vk_beginCommandBuffer(struct tgfx_gpuQueue* i_queue, unsigned int extCount,
+                                            struct tgfx_extension* const* exts) {
   getGPUfromQueueHnd(i_queue);
   QUEUEFAM_VK* queueFam = getQueueFam(gpu, queue->vk_queueFamIndex);
 
@@ -863,7 +863,7 @@ commandBuffer_tgfxhnd vk_beginCommandBuffer(gpuQueue_tgfxhnd i_queue, unsigned i
   cmdBuffer->vk_cb           = cb;
   cmdBuffer->m_gpuIndx       = gpu->gpuIndx();
   cmdBuffer->m_queueFamIndx  = queueFam->vk_queueFamIndex;
-  return getHANDLE<commandBuffer_tgfxhnd>(cmdBuffer);
+  return getHANDLE<struct tgfx_commandBuffer*>(cmdBuffer);
 }
 
 #define getCmdBufferfromHnd(cmdBufferHnd)                             \
@@ -877,7 +877,7 @@ commandBuffer_tgfxhnd vk_beginCommandBuffer(gpuQueue_tgfxhnd i_queue, unsigned i
     return;                                    \
   }
 
-void vk_endCommandBuffer(commandBuffer_tgfxhnd cb) {
+void vk_endCommandBuffer(struct tgfx_commandBuffer* cb) {
   getCmdBufferfromHnd(cb);
 #ifdef VULKAN_DEBUGGING
   checkCmdBufferHnd();
@@ -886,9 +886,9 @@ void vk_endCommandBuffer(commandBuffer_tgfxhnd cb) {
     vkPrint(53, L"at vkEndCommandBuffer()");
   }
 }
-void vk_executeBundles(commandBuffer_tgfxhnd cb, unsigned int bundleCount,
-                       const commandBundle_tgfxhnd* bundles, unsigned int extCount,
-                       const extension_tgfxhnd* exts) {
+void vk_executeBundles(struct tgfx_commandBuffer* cb, unsigned int bundleCount,
+                       struct tgfx_commandBundle* const* bundles, unsigned int extCount,
+                       struct tgfx_extension* const* exts) {
   getCmdBufferfromHnd(cb);
 #ifdef VULKAN_DEBUGGING
   checkCmdBufferHnd();
@@ -906,10 +906,10 @@ void vk_executeBundles(commandBuffer_tgfxhnd cb, unsigned int bundleCount,
   vkCmdExecuteCommands(cmdBuffer->vk_cb, bundleCount, secCmdBuffers);
 }
 
-void vk_beginRasterpass(commandBuffer_tgfxhnd commandBuffer, unsigned int colorAttachmentCount,
-                        const rasterpassBeginSlotInfo_tgfx* colorAttachments,
-                        rasterpassBeginSlotInfo_tgfx depthAttachment, unsigned int extCount,
-                        const extension_tgfxhnd* exts) {
+void vk_beginRasterpass(struct tgfx_commandBuffer* commandBuffer, unsigned int colorAttachmentCount,
+                        const tgfx_rasterpassBeginSlotInfo* colorAttachments,
+                        const tgfx_rasterpassBeginSlotInfo* depthAttachment, unsigned int extCount,
+                        struct tgfx_extension* const* exts) {
   getCmdBufferfromHnd(commandBuffer);
 #ifdef VULKAN_DEBUGGING
   checkCmdBufferHnd();
@@ -918,9 +918,9 @@ void vk_beginRasterpass(commandBuffer_tgfxhnd commandBuffer, unsigned int colorA
   vkext_dynamicRendering* dynRenderingExt =
     ( vkext_dynamicRendering* )gpu->ext()->m_exts[vkext_interface::dynamicRendering_vkExtEnum];
   dynRenderingExt->vk_beginRenderpass(cmdBuffer->vk_cb, colorAttachmentCount, colorAttachments,
-                                      depthAttachment, extCount, exts);
+                                      *depthAttachment, extCount, exts);
 }
-void vk_nextRendersubpass(commandBuffer_tgfxhnd commandBuffer) {
+void vk_nextRendersubpass(struct tgfx_commandBuffer* commandBuffer) {
   getCmdBufferfromHnd(commandBuffer);
 #ifdef VULKAN_DEBUGGING
   checkCmdBufferHnd();
@@ -928,8 +928,8 @@ void vk_nextRendersubpass(commandBuffer_tgfxhnd commandBuffer) {
 
   vkCmdNextSubpass(cmdBuffer->vk_cb, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 }
-void vk_endRasterpass(commandBuffer_tgfxhnd commandBuffer, unsigned int extCount,
-                      const extension_tgfxhnd* exts) {
+void vk_endRasterpass(struct tgfx_commandBuffer* commandBuffer, unsigned int extCount,
+                      struct tgfx_extension* const* exts) {
   getCmdBufferfromHnd(commandBuffer);
 #ifdef VULKAN_DEBUGGING
   checkCmdBufferHnd();
@@ -951,9 +951,9 @@ void vk_addSubmitToUnsentList(QUEUE_VKOBJ* queue, submit_vk* submit) {
 }
 static constexpr VkPipelineStageFlags vk_waitDstStageMask[VKCONST_MAXSEMAPHORECOUNT_PERSUBMIT * 2] =
   {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT};
-void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, unsigned int cmdBufferCount,
-                               const commandBuffer_tgfxhnd* i_cmdBuffers, unsigned int extCount,
-                               const extension_tgfxhnd* exts) {
+void vk_queueExecuteCmdBuffers(struct tgfx_gpuQueue* i_queue, unsigned int cmdBufferCount,
+                               struct tgfx_commandBuffer* const* i_cmdBuffers, unsigned int extCount,
+                               struct tgfx_extension* const* exts) {
   getGPUfromQueueHnd(i_queue);
   getTimelineSemaphoreEXT(gpu, semSys);
 
@@ -974,7 +974,7 @@ void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, unsigned int cmdBufferC
   }
 
   submit_vk* submit = submit_vk::allocateSubmit(0, 0, cmdBufferCount, 0);
-  memcpy(submit->cmdBuffers, i_cmdBuffers, sizeof(commandBuffer_tgfxhnd) * cmdBufferCount);
+  memcpy(submit->cmdBuffers, i_cmdBuffers, sizeof(struct tgfx_commandBuffer*) * cmdBufferCount);
   submit->vk_submit.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   submit->vk_submit.pNext              = nullptr;
   submit->vk_submit.pSignalSemaphores  = submit->vk_signalSemaphores;
@@ -983,9 +983,9 @@ void vk_queueExecuteCmdBuffers(gpuQueue_tgfxhnd i_queue, unsigned int cmdBufferC
   submit->vk_submit.commandBufferCount = cmdBufferCount;
   vk_addSubmitToUnsentList(queue, submit);
 }
-void vk_queueFenceWaitSignal(gpuQueue_tgfxhnd i_queue, unsigned int waitsCount,
-                             const fence_tgfxhnd* waitFences, const unsigned long long* waitValues,
-                             unsigned int signalsCount, const fence_tgfxhnd* signalFences,
+void vk_queueFenceWaitSignal(struct tgfx_gpuQueue* i_queue, unsigned int waitsCount,
+                             struct tgfx_fence* const* waitFences, const unsigned long long* waitValues,
+                             unsigned int signalsCount, struct tgfx_fence* const* signalFences,
                              const unsigned long long* signalValues) {
   getGPUfromQueueHnd(i_queue);
   getTimelineSemaphoreEXT(gpu, semSys);
@@ -1058,12 +1058,12 @@ void vk_queueFenceWaitSignal(gpuQueue_tgfxhnd i_queue, unsigned int waitsCount,
   }
   vk_addSubmitToUnsentList(queue, submit);
 }
-void vk_queueSubmit(gpuQueue_tgfxhnd i_queue) {
+void vk_queueSubmit(struct tgfx_gpuQueue* i_queue) {
   getGPUfromQueueHnd(i_queue);
   manager->queueSubmit(queue);
 }
-void vk_queuePresent(gpuQueue_tgfxhnd i_queue, unsigned int windowCount,
-                     const window_tgfxhnd* windowlist) {
+void vk_queuePresent(struct tgfx_gpuQueue* i_queue, unsigned int windowCount,
+                     struct tgfx_window* const* windowlist) {
   getGPUfromQueueHnd(i_queue);
 
   if (queue->m_activeQueueOp != ERROR_QUEUEOPTYPE && queue->m_activeQueueOp != PRESENT) {

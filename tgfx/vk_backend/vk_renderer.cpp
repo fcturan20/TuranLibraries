@@ -30,13 +30,13 @@ struct CMDBUNDLE_VKOBJ {
   VkDescriptorSetLayout vk_activeDescSets[VKCONST_MAXDESCSET_PERLIST] = {};
   uint8_t               vk_callBuffer[128] = {}; // CallBuffer = Push Constants = 128 byte
 
-  GPU_VKOBJ*          m_gpu                                          = {};
-  vk_cmd*             m_cmds                                         = {};
-  uint64_t            m_cmdCount                                     = 0;
-  pipeline_tgfxhnd    m_defaultPipeline                              = {};
-  VkPipelineBindPoint vk_bindPoint                                   = {};
-  VkCommandBuffer     vk_cmdBuffers[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
-  cmdPool_vk*         vk_cmdPools[VKCONST_MAXQUEUEFAMCOUNT_PERGPU]   = {};
+  GPU_VKOBJ*            m_gpu                                          = {};
+  vk_cmd*               m_cmds                                         = {};
+  uint64_t              m_cmdCount                                     = 0;
+  struct tgfx_pipeline* m_defaultPipeline                              = {};
+  VkPipelineBindPoint   vk_bindPoint                                   = {};
+  VkCommandBuffer       vk_cmdBuffers[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
+  cmdPool_vk*           vk_cmdPools[VKCONST_MAXQUEUEFAMCOUNT_PERGPU]   = {};
 
   void createCmdBuffer(uint64_t cmdCount);
 };
@@ -59,6 +59,7 @@ enum class vk_cmdType : vkEnumType_cmdType(){
   dispatch,
   copyBufferToTexture,
   copyBufferToBuffer,
+  pushConstant,
   error_2 = VK_PRIM_MAX(vkEnumType_cmdType())};
 // Template struct for new cmd structs
 // Then specify the struct in vkCmdStructsLists
@@ -94,9 +95,9 @@ struct vkCmdStruct_bindBindingTables {
     vkCmdBindDescriptorSets(cb, vk_bindPoint, cmdBundle->vk_activePipelineLayout, m_firstSetIndx,
                             m_setCount, sets, 0, nullptr);
   }
-  VkPipelineBindPoint  vk_bindPoint                       = VK_PIPELINE_BIND_POINT_MAX_ENUM;
-  bindingTable_tgfxhnd tables[VKCONST_MAXDESCSET_PERLIST] = {};
-  uint32_t             m_setCount = 0, m_firstSetIndx = 0;
+  VkPipelineBindPoint       vk_bindPoint                       = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+  struct tgfx_bindingTable* tables[VKCONST_MAXDESCSET_PERLIST] = {};
+  uint32_t                  m_setCount = 0, m_firstSetIndx = 0;
 };
 
 struct vkCmdStruct_bindPipeline {
@@ -118,7 +119,7 @@ struct vkCmdStruct_dispatch {
   void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
     vkCmdDispatch(cb, m_dispatchSize.x, m_dispatchSize.y, m_dispatchSize.z);
   };
-  uvec3_tgfx m_dispatchSize;
+  tgfx_uvec3 m_dispatchSize;
 };
 
 struct vkCmdStruct_setViewport {
@@ -239,9 +240,7 @@ struct vkCmdStruct_executeIndirect {
           case indirectOperationType_tgfx_DISPATCH:
             vkCmdDispatchIndirect(cb, vk_buffer, activeOffset);
             break;
-          default:
-            vkPrint(59);
-            return;
+          default: vkPrint(59); return;
         }
         activeOffset += indirectArgumentDataSize * drawCount;
       }
@@ -269,6 +268,17 @@ struct vkCmdStruct_copyBufferToBuffer {
   VkBufferCopy vk_bufCopy = {};
 };
 
+struct vkCmdStruct_pushConstant {
+  static constexpr vk_cmdType cmd_type = vk_cmdType::pushConstant;
+
+  void cmd_execute(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* cmdBundle) {
+    vkCmdPushConstants(cb, cmdBundle->vk_activePipelineLayout, VK_SHADER_STAGE_ALL, offset, size,
+                       data);
+  };
+
+  unsigned char offset, size, data[128];
+};
+
 struct vk_cmd {
   vk_cmdType cmd_type = vk_cmdType::error_2;
 
@@ -281,7 +291,7 @@ struct vk_cmd {
 #define vkCmdStructsLists                                                          \
   vkCmdStruct_example, vkCmdStruct_barrierTexture, vkCmdStruct_bindBindingTables,  \
     vkCmdStruct_bindPipeline, vkCmdStruct_dispatch, vkCmdStruct_bindVertexBuffers, \
-    vkCmdStruct_executeIndirect, vkCmdStruct_copyBufferToTexture
+    vkCmdStruct_executeIndirect, vkCmdStruct_copyBufferToTexture, vkCmdStruct_pushConstant
   static constexpr uint32_t maxCmdStructSize           = max_sizeof<vkCmdStructsLists>();
   uint8_t                   cmd_data[maxCmdStructSize] = {};
   vk_cmd() : cmd_type(vk_cmdType::error) {}
@@ -342,6 +352,9 @@ void vk_executeCmd(VkCommandBuffer cb, CMDBUNDLE_VKOBJ* bundle, const vk_cmd& cm
     case vk_cmdType::copyBufferToBuffer:
       (( vkCmdStruct_copyBufferToBuffer* )cmd.cmd_data)->cmd_execute(cb, bundle);
       break;
+    case vk_cmdType::pushConstant:
+      (( vkCmdStruct_pushConstant* )cmd.cmd_data)->cmd_execute(cb, bundle);
+      break;
     case vk_cmdType::error:
     case vk_cmdType::error_2: vkPrint(60, L"one of the commands in the buffer is not used"); break;
     default: vkPrint(16, L"invalid command type in vk_executeCmd()");
@@ -366,24 +379,23 @@ void CMDBUNDLE_VKOBJ::createCmdBuffer(uint64_t cmdCount) {
 }
 
 struct vk_renderer_private {
-  VK_LINEAR_OBJARRAY<CMDBUNDLE_VKOBJ, commandBundle_tgfxhnd, 1 << 20> m_cmdBundles;
+  VK_LINEAR_OBJARRAY<CMDBUNDLE_VKOBJ, struct tgfx_commandBundle*, 1 << 20> m_cmdBundles;
 };
 vk_renderer_private* hiddenRenderer = nullptr;
 
 // Synchronization Functions
 
-void vk_createFences(gpu_tgfxhnd gpu, unsigned int count, unsigned int initValue,
-                     fence_tgfxhnd* fenceList) {
+void vk_createFences(struct tgfx_gpu* gpu, unsigned int count, unsigned int initValue,
+                     struct tgfx_fence** fenceList) {
   GPU_VKOBJ* GPU = getOBJ<GPU_VKOBJ>(gpu);
   for (uint32_t i = 0; i < count; i++) {
     fenceList[i] = vk_createTGFXFence(GPU, initValue);
   }
 }
-void vk_destroyFence(fence_tgfxhnd fence) {
+void vk_destroyFence(struct tgfx_fence* fence) {
   FENCE_VKOBJ* vkFence = getOBJ<FENCE_VKOBJ>(fence);
   GPU_VKOBJ*   gpu     = core_vk->getGPU(vkFence->m_gpuIndx);
-  vkDestroySemaphore(gpu->vk_logical, vkFence->vk_timelineSemaphore,
-                     nullptr);
+  vkDestroySemaphore(gpu->vk_logical, vkFence->vk_timelineSemaphore, nullptr);
   vkext_timelineSemaphore* ext =
     ( vkext_timelineSemaphore* )gpu->ext()->m_exts[vkext_interface::timelineSemaphores_vkExtEnum];
   ext->fences.destroyObj(ext->fences.getINDEXbyOBJ(vkFence));
@@ -392,9 +404,11 @@ void vk_destroyFence(fence_tgfxhnd fence) {
 // Command Bundle Functions
 ////////////////////////////
 
-commandBundle_tgfxhnd vk_beginCommandBundle(gpu_tgfxhnd gpu, unsigned long long maxCmdCount,
-                                            pipeline_tgfxhnd defaultPipeline, unsigned int extCount,
-                                            const extension_tgfxhnd* exts) {
+struct tgfx_commandBundle* vk_beginCommandBundle(struct tgfx_gpu*              gpu,
+                                                 unsigned long long            maxCmdCount,
+                                                 struct tgfx_pipeline*         defaultPipeline,
+                                                 unsigned int                  extCount,
+                                                 struct tgfx_extension* const* exts) {
   VkCommandBuffer vk_cmdBuffer = VK_NULL_HANDLE;
   cmdPool_vk*     cmdPool;
   GPU_VKOBJ*      GPU = getOBJ<GPU_VKOBJ>(gpu);
@@ -415,15 +429,15 @@ commandBundle_tgfxhnd vk_beginCommandBundle(gpu_tgfxhnd gpu, unsigned long long 
     cmdBundle->vk_bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
   }
 
-  return getHANDLE<commandBundle_tgfxhnd>(cmdBundle);
+  return getHANDLE<struct tgfx_commandBundle*>(cmdBundle);
 }
-void vk_finishCommandBundle(commandBundle_tgfxhnd bndl, unsigned int extCount,
-                            const extension_tgfxhnd* exts) {
+void vk_finishCommandBundle(struct tgfx_commandBundle* bndl, unsigned int extCount,
+                            struct tgfx_extension* const* exts) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
 
   // MOVE THIS RECORDING STAGE BECAUSE FRAMEBUFFER WILL RECORD ALREADY!
 }
-void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
+void vk_destroyCommandBundle(struct tgfx_commandBundle* hnd) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(hnd);
 
   for (uint32_t i = 0; i < bundle->m_cmdCount; i++) {
@@ -439,10 +453,10 @@ void vk_destroyCommandBundle(commandBundle_tgfxhnd hnd) {
   }
 }
 
-void vk_cmdBindBindingTables(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
+void vk_cmdBindBindingTables(struct tgfx_commandBundle* bndl, unsigned long long sortKey,
                              unsigned int firstSetIndx, unsigned int bindingTableCount,
-                             const bindingTable_tgfxhnd* bindingTables,
-                             pipelineType_tgfx           pipelineType) {
+                             struct tgfx_bindingTable* const* bindingTables,
+                             pipelineType_tgfx                pipelineType) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto* cmd = vk_createCmdStruct<vkCmdStruct_bindBindingTables>(&bundle->m_cmds[sortKey]);
 
@@ -464,8 +478,8 @@ void vk_cmdBindBindingTables(commandBundle_tgfxhnd bndl, unsigned long long sort
   cmd->vk_bindPoint   = vk_findPipelineBindPoint(pipelineType);
   cmd->m_firstSetIndx = firstSetIndx;
 }
-void vk_cmdBindPipeline(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
-                        pipeline_tgfxhnd pipeline) {
+void vk_cmdBindPipeline(struct tgfx_commandBundle* bndl, unsigned long long sortKey,
+                        struct tgfx_pipeline* pipeline) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd    = vk_createCmdStruct<vkCmdStruct_bindPipeline>(&bundle->m_cmds[sortKey]);
   PIPELINE_VKOBJ*  pipe   = getOBJ<PIPELINE_VKOBJ>(pipeline);
@@ -477,29 +491,29 @@ void vk_cmdBindPipeline(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
   cmd->vk_pipeline       = pipe->vk_object;
   cmd->vk_pipelineLayout = pipe->vk_layout;
 }
-void vk_cmdSetViewport(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
-                       viewportInfo_tgfx viewport) {
+void vk_cmdSetViewport(struct tgfx_commandBundle* bndl, unsigned long long sortKey,
+                       const tgfx_viewportInfo* viewport) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd    = vk_createCmdStruct<vkCmdStruct_setViewport>(&bundle->m_cmds[sortKey]);
 
-  cmd->vk_viewport.x        = viewport.topLeftCorner.x;
-  cmd->vk_viewport.y        = viewport.topLeftCorner.y;
-  cmd->vk_viewport.width    = viewport.size.x;
-  cmd->vk_viewport.height   = viewport.size.y;
-  cmd->vk_viewport.minDepth = viewport.depthMinMax.x;
-  cmd->vk_viewport.maxDepth = viewport.depthMinMax.y;
+  cmd->vk_viewport.x        = viewport->topLeftCorner.x;
+  cmd->vk_viewport.y        = viewport->topLeftCorner.y;
+  cmd->vk_viewport.width    = viewport->size.x;
+  cmd->vk_viewport.height   = viewport->size.y;
+  cmd->vk_viewport.minDepth = viewport->depthMinMax.x;
+  cmd->vk_viewport.maxDepth = viewport->depthMinMax.y;
 }
-void vk_cmdSetScissor(commandBundle_tgfxhnd bndl, unsigned long long sortKey, ivec2_tgfx offset,
-                      uvec2_tgfx size) {
+void vk_cmdSetScissor(struct tgfx_commandBundle* bndl, unsigned long long sortKey,
+                      const tgfx_ivec2* offset, const tgfx_uvec2* size) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd    = vk_createCmdStruct<vkCmdStruct_setScissor>(&bundle->m_cmds[sortKey]);
 
-  cmd->vk_rect.offset.x      = offset.x;
-  cmd->vk_rect.offset.y      = offset.x;
-  cmd->vk_rect.extent.width  = size.x;
-  cmd->vk_rect.extent.height = size.y;
+  cmd->vk_rect.offset.x      = offset->x;
+  cmd->vk_rect.offset.y      = offset->x;
+  cmd->vk_rect.extent.width  = size->x;
+  cmd->vk_rect.extent.height = size->y;
 }
-void vk_cmdSetDepthBounds(commandBundle_tgfxhnd bndl, unsigned long long sortKey, float min,
+void vk_cmdSetDepthBounds(struct tgfx_commandBundle* bndl, unsigned long long sortKey, float min,
                           float max) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd = vk_createCmdStruct<vkCmdStruct_setDepthBounds>(&bundle->m_cmds[sortKey]);
@@ -507,9 +521,10 @@ void vk_cmdSetDepthBounds(commandBundle_tgfxhnd bndl, unsigned long long sortKey
   cmd->min = min;
   cmd->max = max;
 };
-void vk_cmdBindVertexBuffers(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
+void vk_cmdBindVertexBuffers(struct tgfx_commandBundle* bndl, unsigned long long sortKey,
                              unsigned int firstBinding, unsigned int bindingCount,
-                             const buffer_tgfxhnd* buffers, const unsigned long long* offsets) {
+                             struct tgfx_buffer* const* buffers,
+                             const unsigned long long*  offsets) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto* cmd = vk_createCmdStruct<vkCmdStruct_bindVertexBuffers>(&bundle->m_cmds[sortKey]);
 
@@ -520,8 +535,8 @@ void vk_cmdBindVertexBuffers(commandBundle_tgfxhnd bndl, unsigned long long sort
     cmd->vk_buffers[i]       = getOBJ<BUFFER_VKOBJ>(buffers[i])->vk_buffer;
   }
 }
-void vk_cmdBindIndexBuffer(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
-                           buffer_tgfxhnd buffer, unsigned long long offset,
+void vk_cmdBindIndexBuffer(struct tgfx_commandBundle* bndl, unsigned long long sortKey,
+                           struct tgfx_buffer* buffer, unsigned long long offset,
                            unsigned char IndexTypeSize) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd = vk_createCmdStruct<vkCmdStruct_bindIndexBuffer>(&bundle->m_cmds[sortKey]);
@@ -534,7 +549,7 @@ void vk_cmdBindIndexBuffer(commandBundle_tgfxhnd bndl, unsigned long long sortKe
   }
   cmd->vk_offset = offset;
 }
-void vk_cmdDrawNonIndexedDirect(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
+void vk_cmdDrawNonIndexedDirect(struct tgfx_commandBundle* bndl, unsigned long long sortKey,
                                 unsigned int vertexCount, unsigned int instanceCount,
                                 unsigned int firstVertex, unsigned int firstInstance) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
@@ -545,7 +560,7 @@ void vk_cmdDrawNonIndexedDirect(commandBundle_tgfxhnd bndl, unsigned long long s
   cmd->vertexCount   = vertexCount;
   cmd->instanceCount = instanceCount;
 }
-void vk_cmdDrawIndexedDirect(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
+void vk_cmdDrawIndexedDirect(struct tgfx_commandBundle* bndl, unsigned long long sortKey,
                              unsigned int indexCount, unsigned int instanceCount,
                              unsigned int firstIndex, int vertexOffset,
                              unsigned int firstInstance) {
@@ -558,11 +573,11 @@ void vk_cmdDrawIndexedDirect(commandBundle_tgfxhnd bndl, unsigned long long sort
   cmd->instanceCount = instanceCount;
   cmd->vertexOffset  = vertexOffset;
 }
-void vk_cmdExecuteIndirect(commandBundle_tgfxhnd bndl, unsigned long long sortKey,
+void vk_cmdExecuteIndirect(struct tgfx_commandBundle* bndl, unsigned long long sortKey,
                            unsigned int                      operationCount,
                            const indirectOperationType_tgfx* operationTypes,
-                           buffer_tgfxhnd dataBffr, unsigned long long indirectBufferOffset,
-                           unsigned int extCount, const extension_tgfxhnd* exts) {
+                           struct tgfx_buffer* dataBffr, unsigned long long indirectBufferOffset,
+                           unsigned int extCount, struct tgfx_extension* const* exts) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd = vk_createCmdStruct<vkCmdStruct_executeIndirect>(&bundle->m_cmds[sortKey]);
 
@@ -591,11 +606,11 @@ void vk_cmdExecuteIndirect(commandBundle_tgfxhnd bndl, unsigned long long sortKe
   cmd->vk_buffer       = getOBJ<BUFFER_VKOBJ>(dataBffr)->vk_buffer;
   cmd->vk_bufferOffset = indirectBufferOffset;
 }
-void vk_cmdBarrierTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
-                          texture_tgfxhnd i_texture, image_access_tgfx lastAccess,
+void vk_cmdBarrierTexture(struct tgfx_commandBundle* bndl, unsigned long long key,
+                          struct tgfx_texture* i_texture, image_access_tgfx lastAccess,
                           image_access_tgfx nextAccess, textureUsageMask_tgfxflag lastUsage,
                           textureUsageMask_tgfxflag nextUsage, unsigned int extCount,
-                          const extension_tgfxhnd* exts) {
+                          struct tgfx_extension* const* exts) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmdBar = vk_createCmdStruct<vkCmdStruct_barrierTexture>(&bundle->m_cmds[key]);
   cmdBar->m_imBar.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
@@ -612,16 +627,17 @@ void vk_cmdBarrierTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
   vk_findImageAccessPattern(nextAccess, cmdBar->m_imBar.dstAccessMask, cmdBar->m_imBar.newLayout);
   cmdBar->m_imBar.pNext = nullptr;
 }
-void vk_cmdDispatch(commandBundle_tgfxhnd bndl, unsigned long long key, uvec3_tgfx dispatchSize) {
+void vk_cmdDispatch(struct tgfx_commandBundle* bndl, unsigned long long key,
+                    const tgfx_uvec3* dispatchSize) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd    = vk_createCmdStruct<vkCmdStruct_dispatch>(&bundle->m_cmds[key]);
 
-  cmd->m_dispatchSize = dispatchSize;
+  cmd->m_dispatchSize = *dispatchSize;
 }
-void vk_cmdCopyBufferToTexture(commandBundle_tgfxhnd bndl, unsigned long long key,
-                               buffer_tgfxhnd srcBuffer, unsigned long long bufferOffset,
-                               texture_tgfxhnd dstTexture, image_access_tgfx lastAccess,
-                               unsigned int extCount, const extension_tgfxhnd* exts) {
+void vk_cmdCopyBufferToTexture(struct tgfx_commandBundle* bndl, unsigned long long key,
+                               struct tgfx_buffer* srcBuffer, unsigned long long bufferOffset,
+                               struct tgfx_texture* dstTexture, image_access_tgfx lastAccess,
+                               unsigned int extCount, struct tgfx_extension* const* exts) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd = vk_createCmdStruct<vkCmdStruct_copyBufferToTexture>(&bundle->m_cmds[key]);
 
@@ -652,9 +668,9 @@ void vk_cmdCopyBufferToTexture(commandBundle_tgfxhnd bndl, unsigned long long ke
   cmd->vk_copy.imageSubresource.mipLevel       = 0;
 }
 
-void vk_cmdCopyBufferToBuffer(commandBundle_tgfxhnd bndl, unsigned long long key,
-                              unsigned long long size, buffer_tgfxhnd srcBuffer,
-                              unsigned long long srcOffset, buffer_tgfxhnd dstBuffer,
+void vk_cmdCopyBufferToBuffer(struct tgfx_commandBundle* bndl, unsigned long long key,
+                              unsigned long long size, struct tgfx_buffer* srcBuffer,
+                              unsigned long long srcOffset, struct tgfx_buffer* dstBuffer,
                               unsigned long long dstOffset) {
   CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
   auto*            cmd = vk_createCmdStruct<vkCmdStruct_copyBufferToBuffer>(&bundle->m_cmds[key]);
@@ -665,17 +681,26 @@ void vk_cmdCopyBufferToBuffer(commandBundle_tgfxhnd bndl, unsigned long long key
   cmd->vk_dstBuffer         = getOBJ<BUFFER_VKOBJ>(dstBuffer)->vk_buffer;
   cmd->vk_srcBuffer         = getOBJ<BUFFER_VKOBJ>(srcBuffer)->vk_buffer;
 }
+void vk_cmdPushConstant(struct tgfx_commandBundle* bndl, unsigned long long key,
+                        unsigned char offset, unsigned char size, const void* d) {
+  CMDBUNDLE_VKOBJ* bundle = getOBJ<CMDBUNDLE_VKOBJ>(bndl);
+  auto*            cmd    = vk_createCmdStruct<vkCmdStruct_pushConstant>(&bundle->m_cmds[key]);
+  size                    = std::min(128u, uint32_t(size));
+  cmd->size               = size;
+  cmd->offset             = offset;
+  memcpy(cmd->data, d, size);
+}
 
-
-void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount, const commandBundle_tgfxhnd* cmdBundles,
-                               uint32_t queueFamIndx, VkCommandBuffer* secondaryCmdBuffers) {
+void vk_getSecondaryCmdBuffers(unsigned int                      cmdBundleCount,
+                               struct tgfx_commandBundle* const* cmdBundles, uint32_t queueFamIndx,
+                               VkCommandBuffer* secondaryCmdBuffers) {
   uint32_t bundleCount = 0;
   for (uint32_t bundleListIndx = 0; bundleListIndx < cmdBundleCount; bundleListIndx++) {
     if (!cmdBundles[bundleListIndx]) {
       continue;
     }
-    commandBundle_tgfxhnd bundleHnd = cmdBundles[bundleListIndx];
-    CMDBUNDLE_VKOBJ*      bundle    = getOBJ<CMDBUNDLE_VKOBJ>(bundleHnd);
+    const struct tgfx_commandBundle* bundleHnd = cmdBundles[bundleListIndx];
+    CMDBUNDLE_VKOBJ*                 bundle    = getOBJ<CMDBUNDLE_VKOBJ>(bundleHnd);
 
     if (!bundle || bundleCount >= VKCONST_MAXCMDBUNDLE_PERCALL) {
       continue;
@@ -692,8 +717,8 @@ void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount, const commandBundle_
       VkCommandBufferInheritanceRenderingInfo rInfo = {};
       VkCommandBufferBeginInfo                bi    = {};
       bi.flags                                      = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-      VkCommandBufferInheritanceInfo secInfo = {};
-      secInfo.sType                          = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+      VkCommandBufferInheritanceInfo secInfo        = {};
+      secInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
       if (bundle->vk_bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
         rInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO;
         rInfo.viewMask                = 0;
@@ -734,6 +759,14 @@ void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount, const commandBundle_
 }
 
 void set_VkRenderer_funcPtrs() {
+  core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
+  core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;
+  core_tgfx_main->renderer->createFences         = vk_createFences;
+  core_tgfx_main->renderer->destroyCommandBundle = vk_destroyCommandBundle;
+  core_tgfx_main->renderer->getFenceValue        = vk_getFenceValue;
+  core_tgfx_main->renderer->setFence             = vk_setFenceValue;
+  core_tgfx_main->renderer->destroyFence         = vk_destroyFence;
+
   core_tgfx_main->renderer->cmdBindBindingTables    = vk_cmdBindBindingTables;
   core_tgfx_main->renderer->cmdBindIndexBuffer      = vk_cmdBindIndexBuffer;
   core_tgfx_main->renderer->cmdBindVertexBuffers    = vk_cmdBindVertexBuffers;
@@ -748,14 +781,7 @@ void set_VkRenderer_funcPtrs() {
   core_tgfx_main->renderer->cmdSetDepthBounds       = vk_cmdSetDepthBounds;
   core_tgfx_main->renderer->cmdCopyBufferToTexture  = vk_cmdCopyBufferToTexture;
   core_tgfx_main->renderer->cmdCopyBufferToBuffer   = vk_cmdCopyBufferToBuffer;
-
-  core_tgfx_main->renderer->beginCommandBundle   = vk_beginCommandBundle;
-  core_tgfx_main->renderer->finishCommandBundle  = vk_finishCommandBundle;
-  core_tgfx_main->renderer->createFences         = vk_createFences;
-  core_tgfx_main->renderer->destroyCommandBundle = vk_destroyCommandBundle;
-  core_tgfx_main->renderer->getFenceValue        = vk_getFenceValue;
-  core_tgfx_main->renderer->setFence             = vk_setFenceValue;
-  core_tgfx_main->renderer->destroyFence         = vk_destroyFence;
+  core_tgfx_main->renderer->cmdPushConstant         = vk_cmdPushConstant;
 }
 
 void vk_initRenderer() {

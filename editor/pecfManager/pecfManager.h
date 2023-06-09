@@ -59,17 +59,6 @@ typedef struct primitiveType_pecf* primTypeHnd_pecf;
 typedef struct funcType_pecf*      funcTypeHnd_pecf;
 typedef struct func_pecf*          funcHnd_pecf;
 
-typedef struct ecstapi_idOnlyPointer* entityTypeHnd_ecstapi;
-typedef struct ecstapi_compType*
-  compType_ecstapi; // This should point to a component type defined by user
-typedef struct ecstapi_compTypeID*
-  compTypeID_ecstapi; // This is an ID to find component type internally
-typedef struct ecstapi_component*   componentHnd_ecstapi;
-typedef struct ecstapi_entity*      entityHnd_ecstapi;
-typedef struct ecstapi_plugin*      pluginHnd_ecstapi;
-typedef struct tapi_ecs             ecs_tapi;
-typedef struct ecs_componentManager componentManager_ecs;
-
 // Callbacks
 ////////////////////////////////////
 
@@ -88,9 +77,9 @@ typedef struct pecf_primitiveVariable {
 // This component is added to each entity created by PECF
 // This component won't be overriden, so there is no accessor funcs
 typedef struct pecf_defaultComp {
-  unsigned long long entityPecfId;
-  entityHnd_ecstapi  entityEcsHnd;
-  char               name[MAXPECF_ENTITYNAMECHAR], tag[MAXPECF_ENTITYTAGCHAR];
+  unsigned long long      entityPecfId;
+  struct tapi_ecs_entity* entityEcsHnd;
+  char                    name[MAXPECF_ENTITYNAMECHAR], tag[MAXPECF_ENTITYTAGCHAR];
 } defaultComp_pecf;
 
 typedef enum {
@@ -121,7 +110,7 @@ typedef struct pecf_componentManagerInfo {
   const primTypeHnd_pecf* primList;
   unsigned int            primListSize;
   // ECS Manager should handle creation and destruction of the component
-  const componentManager_ecs* ecsManager;
+  const struct ecs_compManager* ecsManager;
 } componentManagerInfo_pecf;
 
 typedef struct pecf_manager {
@@ -180,8 +169,8 @@ typedef struct pecf_manager {
   // @param reg_orUnreg: 1 if you're registering, 0 if you're unregistering
   /////////////////////////
 
-  unsigned char (*regOnChanged_entity)(entity_onChangedFunc callback, entityHnd_ecstapi entity,
-                                       unsigned char reg_orUnreg);
+  unsigned char (*regOnChanged_entity)(entity_onChangedFunc    callback,
+                                       struct tapi_ecs_entity* entity, unsigned char reg_orUnreg);
   unsigned char (*regOnChanged_comp)(comp_onChangedFunc callback, compHnd_pecf comp,
                                      unsigned char reg_orUnreg);
 } pecf_manager;

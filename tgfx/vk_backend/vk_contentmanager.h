@@ -22,9 +22,9 @@ struct gpudatamanager_private;
 struct gpudatamanager_public {
   gpudatamanager_private* hidden;
 
-  VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>&              GETBUFFER_ARRAY();
-  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>&   GETTEXTURES_ARRAY();
-  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>& GETPIPELINE_ARRAY();
-  VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
+  VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, struct tgfx_buffer*>&              GETBUFFER_ARRAY();
+  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, struct tgfx_texture*, 1 << 24>&   GETTEXTURES_ARRAY();
+  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, struct tgfx_pipeline*, 1 << 24>& GETPIPELINE_ARRAY();
+  VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, struct tgfx_bindingTable*, 1 << 16>&
                                                                            GETBINDINGTABLE_ARRAY();
 };

@@ -1,7 +1,11 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define THREADINGSYS_TAPI_PLUGIN_NAME "tapi_threadedjobsys"
 #define THREADINGSYS_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
-#define THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadingsys_tapi_type*
+#define THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE struct tapi_threadingSys_type*
 
 /*TuranAPI's C Multi-Threading and Job System Library
  * If you created threads before, you can pass them to the Threader. Threader won't create any other
@@ -10,10 +14,8 @@
  * thread as one the threads
  */
 
-// Wait handle is just a pointer
-typedef struct tapi_wait_handle* wait_handle_tapi;
 
-typedef struct threadingsys_tapi {
+struct tapi_threadingSys {
   /*Wait a job; First the thread yields. If it should wait again, executes any other job while
   waiting
   * Be careful of nonwait-in-wait situations such as;
@@ -27,17 +29,17 @@ typedef struct threadingsys_tapi {
   planning all your jobs beforehand) 2) Use WaitJob_empty in Job A, so thread'll keep yielding till
   job finishes
   */
-  wait_handle_tapi (*create_wait)();
-  void (*waitjob_busy)(wait_handle_tapi wait);
-  void (*waitjob_empty)(wait_handle_tapi wait);
-  void (*clear_waitinfo)(wait_handle_tapi wait);
+  struct tapi_wait* (*create_wait)();
+  void (*waitjob_busy)(struct tapi_wait* wait);
+  void (*waitjob_empty)(struct tapi_wait* wait);
+  void (*clear_waitinfo)(struct tapi_wait* wait);
   void (*wait_all_otherjobs)();
 
   // If you want to wait for this job, you can pass a JobWaitInfo
   // But if you won't wait for it, don't use it because there may be crashes because of dangling
   // wait reference Critical Note : You shouldn't use same JobWaitInfo object across
   // Execute_withWait()s without ClearJobWait()!
-  void (*execute_withwait)(void (*func)(), wait_handle_tapi wait);
+  void (*execute_withwait)(void (*func)(), struct tapi_wait* wait);
   void (*execute_withoutwait)(void (*func)());
   // Add this thread to the threading system in a job search state
   // This function doesn't return; either thread'll die or threading system'll close.
@@ -45,10 +47,13 @@ typedef struct threadingsys_tapi {
 
   unsigned int (*this_thread_index)();
   unsigned int (*thread_count)();
-} threadingsys_tapi;
+};
 
-typedef struct threadingsys_tapi_d threadingsys_tapi_d;
-typedef struct threadingsys_tapi_type {
-  threadingsys_tapi_d* data;
-  threadingsys_tapi*   funcs;
-} threadingsys_tapi_type;
+struct tapi_threadingSys_type {
+  struct tapi_threadingSys_d* data;
+  struct tapi_threadingSys*   funcs;
+};
+
+#ifdef __cplusplus
+}
+#endif

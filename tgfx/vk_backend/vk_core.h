@@ -17,21 +17,21 @@ struct GPU_VKOBJ {
   vk_handleType   HANDLETYPE = VKHANDLETYPEs::GPU;
   static uint16_t GET_EXTRAFLAGS(GPU_VKOBJ* obj) { return obj->m_gpuIndx; }
 
-  tgfx_gpu_description desc;
+  tgfx_gpuDescription desc;
 
   VkPhysicalDevice                  vk_physical             = {};
   VkDevice                          vk_logical              = {};
   VkPhysicalDeviceProperties2       vk_propsDev             = {};
   VkPhysicalDeviceFeatures2         vk_featuresDev          = {};
   VkPhysicalDeviceMemoryProperties2 vk_propsMemory          = {};
-  memoryDescription_tgfx            m_memoryDescTGFX[32]    = {};
-  texture_tgfxhnd                   m_invalidStorageTexture = {}, m_invalidShaderReadTexture = {};
-  sampler_tgfxhnd                   m_invalidSampler = {};
-  buffer_tgfxhnd                    m_invalidBuffer  = {};
+  tgfx_memoryDescription            m_memoryDescTGFX[32]    = {};
+  struct tgfx_texture*                   m_invalidStorageTexture = {}, *m_invalidShaderReadTexture = {};
+  struct tgfx_sampler*                   m_invalidSampler = {};
+  struct tgfx_buffer*                    m_invalidBuffer  = {};
 
   VkQueueFamilyProperties2 vk_propsQueue[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
   uint32_t                 m_queueFamPtrs[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
-  gpuQueue_tgfxhnd         m_internalQueue                                = {};
+  struct tgfx_gpuQueue*         m_internalQueue                                = {};
 
  private:
   extManager_vkDevice* m_extensions;
@@ -71,11 +71,11 @@ struct WINDOW_VKOBJ {
   tgfx_windowResizeCallback m_resizeFnc   = nullptr;
   tgfx_windowKeyCallback    m_keyFnc      = nullptr;
   void*                     m_userData    = nullptr;
-  texture_tgfxhnd           m_swapchainTextures[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
+  struct tgfx_texture*           m_swapchainTextures[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
   unsigned char             m_swapchainTextureCount = 0, m_swapchainCurrentTextureIndx = 0;
   bool                      m_isResized = false, m_isSwapped = false;
   // Presentation Fences should only be used for CPU to wait
-  fence_tgfxhnd m_presentationFences[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW];
+  struct tgfx_fence* m_presentationFences[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW];
   VkSemaphore   vk_acquireSemaphore = {};
   bool          m_isMouseButtonPressed[3] = {};
 

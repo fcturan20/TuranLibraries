@@ -48,7 +48,7 @@ struct vkext_interface {
   virtual void inspect() = 0;
   // If functionality is TGFX Extension, then handle it in this function
   virtual void manage(VkStructureType structType, void* structPtr, unsigned int extCount,
-                      const extension_tgfxhnd* exts) = 0;
+                      struct tgfx_extension* const* exts) = 0;
   vkext_types  m_type = vkext_count; // Derived classes should change this
   GPU_VKOBJ*   m_gpu  = nullptr;
 };

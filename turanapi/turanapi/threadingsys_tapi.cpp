@@ -90,11 +90,11 @@ void JobSearch() {
     Job();
   }
 }
-inline std::atomic_bool& WaitHandleConverter(wait_handle_tapi handle) {
+inline std::atomic_bool& WaitHandleConverter(struct tapi_wait* handle) {
   return *( std::atomic_bool* )(handle);
 }
 
-void Execute_withWait(void (*func)(), wait_handle_tapi wait) {
+void Execute_withWait(void (*func)(), struct tapi_wait* wait) {
   // That means job list is full, wake up a thread (if there is anyone sleeping) and yield current
   // thread!
   JOBSYS->Jobs.push_back_strong([&wait, func]() {
@@ -105,8 +105,8 @@ void Execute_withWait(void (*func)(), wait_handle_tapi wait) {
 }
 void Execute_withoutWait(void (*func)()) { JOBSYS->Jobs.push_back_strong(func); }
 
-wait_handle_tapi Create_Wait() { return (wait_handle_tapi) new std::atomic_bool; }
-void             waitJob_busy(wait_handle_tapi wait) {
+struct tapi_wait* Create_Wait() { return (struct tapi_wait*) new std::atomic_bool; }
+void             waitJob_busy(struct tapi_wait* wait) {
               if (WaitHandleConverter(wait).load() != 2) {
                 std::this_thread::yield();
   }
@@ -116,12 +116,12 @@ void             waitJob_busy(wait_handle_tapi wait) {
                 Job();
   }
 }
-void waitJob_empty(wait_handle_tapi wait) {
+void waitJob_empty(struct tapi_wait* wait) {
   while (WaitHandleConverter(wait).load() != 2) {
     std::this_thread::yield();
   }
 }
-void ClearWaitInfo(wait_handle_tapi wait) { WaitHandleConverter(wait).store(0); }
+void ClearWaitInfo(struct tapi_wait* wait) { WaitHandleConverter(wait).store(0); }
 void waitForAllOtherJobs() {
   while (!JOBSYS->Jobs.isEmpty()) {
     std::function<void()> Job;
@@ -162,16 +162,16 @@ void load_in_cpp() {
   }
 }
 
-typedef struct threadingsys_tapi_d {
+typedef struct tapi_threadingSys_d {
   JobSystem*              JOBSYS          = nullptr;
-  threadingsys_tapi_type* plugin_type_ptr = nullptr;
-} threadingsys_tapi_d;
+  tapi_threadingSys_type* plugin_type_ptr = nullptr;
+} tapi_threadingSys_d;
 ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
   load_in_cpp();
 
-  threadingsys_tapi_type* type = ( threadingsys_tapi_type* )malloc(sizeof(threadingsys_tapi_type));
-  type->data                   = ( threadingsys_tapi_d* )malloc(sizeof(threadingsys_tapi_d));
-  type->funcs                  = ( threadingsys_tapi* )malloc(sizeof(threadingsys_tapi));
+  tapi_threadingSys_type* type = ( tapi_threadingSys_type* )malloc(sizeof(tapi_threadingSys_type));
+  type->data                   = ( tapi_threadingSys_d* )malloc(sizeof(tapi_threadingSys_d));
+  type->funcs                  = ( tapi_threadingSys* )malloc(sizeof(tapi_threadingSys));
   type->data->JOBSYS           = JOBSYS;
   type->data->plugin_type_ptr  = type;
 

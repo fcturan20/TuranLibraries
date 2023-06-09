@@ -21,4 +21,4 @@ void vkext_descIndexing::inspect() {
     VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 }
 void vkext_descIndexing::manage(VkStructureType structType, void* structPtr, unsigned int extCount,
-                                const extension_tgfxhnd* exts) {}
+                                struct tgfx_extension* const* exts) {}

@@ -41,7 +41,7 @@ reload!"); return nullptr; } if (!v_pluginInfos[i].pluginDataPtr) { break; }
 #endif // TURAN_DEBUGGING
 
     f_vector->push_back(v_pluginInfos, &info);
-    return (pluginHnd_ecstapi)&v_pluginInfos[pluginCount];
+    return (tapi_ecs_plugin*)&v_pluginInfos[pluginCount];
   }
   pecf_funcProperties* get_pluginInfo(funcHnd_pecf hnd) {
 #ifdef TURAN_DEBUGGING
@@ -63,7 +63,7 @@ static_assert(sizeof(entityHnd) <= sizeof(entityHnd_pecf),
 
 static defaultComp_pecf compType;
 // static compType_ecstapi defaultCompType = (compType_ecstapi)&compType;
-static compTypeID_ecstapi defaultCompTypeID;
+static tapi_ecs_componentTypeID* defaultCompTypeID;
 
 funcTypeHnd_pecf add_funcType(funcProperties_pecf props, primitiveVariable_pecf* inputArgs,
                               unsigned int inputArgsCount, primitiveVariable_pecf* outputArgs,
@@ -118,7 +118,7 @@ const compHnd_pecf* get_componentsOfEntity(entityHnd_pecf entity, unsigned int* 
 //      CALLBACK REGISTRATIONS
 /////////////////////////////////////
 
-unsigned char regOnChanged_entity(entity_onChangedFunc callback, entityHnd_ecstapi entity,
+unsigned char regOnChanged_entity(entity_onChangedFunc callback, tapi_ecs_entity* entity,
                                   unsigned char reg_orUnreg) {
   return 0;
 }

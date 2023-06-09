@@ -37,7 +37,7 @@ struct FRAMEBUFFER_VKOBJ;
 struct SUBRASTERPASS_VKOBJ;
 struct QUEUEFAM_VK;
 
-void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount, const commandBundle_tgfxhnd* cmdBundles,
+void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount, struct tgfx_commandBundle* const* cmdBundles,
                                uint32_t queueFamIndx, VkCommandBuffer* secondaryCmdBuffers);
 /*
 #define getGPUfromQueueHnd(i_queue)                            \

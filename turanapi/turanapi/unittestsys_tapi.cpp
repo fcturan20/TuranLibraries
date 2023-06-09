@@ -5,14 +5,14 @@
 
 #include "ecs_tapi.h"
 
-unittestsys_tapi_type* utsys;
+tapi_unitTestSys_type* utsys;
 
-typedef struct unittestsys_tapi_d {
-  unittest_interface_tapi* tests;
+typedef struct tapi_unitTestSys_d {
+  tapi_unitTest_interface* tests;
 } unittestsys_tapi_d;
 
 void tapi_utAdd(const wchar_t* name, unsigned int classification_flag,
-                 unittest_interface_tapi test_interface) {
+                 tapi_unitTest_interface test_interface) {
   const wchar_t* test_result = L"No result text";
   unsigned char returnValue = test_interface.test(test_interface.data, &test_result);
   wprintf(L"Test Name: %s\n Return value: %u, Result text: %s\n", name, ( unsigned int )returnValue,
@@ -27,7 +27,7 @@ void tapi_utRunTests(unsigned int classification_flag, const wchar_t* name,
 
 #define TAPI_UNITTEST_CLASSFLAG_UT 0
 TAPI_UNITTEST_FUNC(tapi_unitTest_bitset0, input, outputStr) {
-  if ((( UNITTEST_TAPI_PLUGIN_LOAD_TYPE )(( ecs_tapi* )input)->getSystem(UNITTEST_TAPI_PLUGIN_NAME)) !=
+  if ((( UNITTEST_TAPI_PLUGIN_LOAD_TYPE )(( struct tapi_ecs* )input)->getSystem(UNITTEST_TAPI_PLUGIN_NAME)) !=
       utsys) {
     *outputStr = L"Default unit test failed!";
     return 0;
@@ -37,9 +37,9 @@ TAPI_UNITTEST_FUNC(tapi_unitTest_bitset0, input, outputStr) {
 }
 
 ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
-  utsys        = ( unittestsys_tapi_type* )malloc(sizeof(unittestsys_tapi_type));
-  utsys->data  = ( unittestsys_tapi_d* )malloc(sizeof(unittestsys_tapi_d));
-  utsys->funcs = ( unittestsys_tapi* )malloc(sizeof(unittestsys_tapi));
+  utsys        = ( tapi_unitTestSys_type* )malloc(sizeof(tapi_unitTestSys_type));
+  utsys->data  = ( tapi_unitTestSys_d* )malloc(sizeof(tapi_unitTestSys_d));
+  utsys->funcs = ( tapi_unitTestSys* )malloc(sizeof(tapi_unitTestSys));
 
   utsys->funcs->add_unittest    = &tapi_utAdd;
   utsys->funcs->remove_unittest = &tapi_utRemove;
@@ -49,7 +49,7 @@ ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
 
   // Test the system itself
   {
-    unittest_interface_tapi ut;
+    tapi_unitTest_interface ut;
     ut.data = ecsSys;
     ut.test = tapi_unitTest_bitset0;
     utsys->funcs->add_unittest(L"Unit Test Default", TAPI_UNITTEST_CLASSFLAG_UT, ut);

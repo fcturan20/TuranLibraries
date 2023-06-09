@@ -1,13 +1,10 @@
 #pragma once
 #include "predefinitions_tapi.h"
 #define VIRTUALMEMORY_TAPI_PLUGIN_NAME "tapi_virtualmemsys"
-#define VIRTUALMEMORY_TAPI_PLUGIN_TYPE virtualmemorysys_tapi_type*
+#define VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE struct tapi_virtualMemorySys_type*
 #define VIRTUALMEMORY_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
 
-// RegistrySys Documentation: Storing Data for Systems
-typedef struct virtualmemorysys_tapi_d virtualmemorysys_tapi_d;
-
-typedef struct virtualmemorysys_tapi {
+struct tapi_virtualMemorySys {
   // Reserve address space from virtual memory
   // size is in bytes
   void* (*virtual_reserve)(unsigned long long size);
@@ -23,13 +20,13 @@ typedef struct virtualmemorysys_tapi {
 
   // Note: There may be additional functionality here to allocate memory that can be reached across
   // applications.
-} virtualmemorysys_tapi;
+};
 
 // Virtual Memory System
 // System that allows reserve, commit and free operations across platforms
-typedef struct virtualmemorysys_tapi_type {
+struct tapi_virtualMemorySys_type {
   // RegistrySys Documentation: Storing Functions for Systems
-  struct virtualmemorysys_tapi* funcs;
+  struct tapi_virtualMemorySys* funcs;
   // RegistrySys Documentation: Storing Data for Systems
-  struct virtualmemorysys_tapi_d* data;
-} virtualmemorysys_tapi_type;
+  struct tapi_virtualMemorySys_d* data;
+};

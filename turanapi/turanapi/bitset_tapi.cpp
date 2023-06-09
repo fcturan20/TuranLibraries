@@ -10,18 +10,18 @@ struct tapi_bitset {
   unsigned int m_byteLength;
 };
 
-bitset_tapi tapi_createBitset(unsigned int byteLength) {
-  bitset_tapi bitset = ( bitset_tapi )malloc(sizeof(bitset_tapi) + (sizeof(bool) * byteLength));
+struct tapi_bitset* tapi_createBitset(unsigned int byteLength) {
+  struct tapi_bitset* bitset = ( struct tapi_bitset* )malloc(sizeof(struct tapi_bitset*) + (sizeof(bool) * byteLength));
   bitset->m_array     = ( bool* )(bitset + 1);
   memset(bitset->m_array, 0, byteLength);
   bitset->m_byteLength = byteLength;
   return bitset;
 }
-void tapi_destroyBitset(bitset_tapi hnd) {
-  bitset_tapi bitset = ( bitset_tapi )hnd;
+void tapi_destroyBitset(struct tapi_bitset* hnd) {
+  struct tapi_bitset* bitset = ( struct tapi_bitset* )hnd;
   free(bitset);
 }
-void tapi_setBit(bitset_tapi set, unsigned int index, unsigned char setTrue) {
+void tapi_setBit(struct tapi_bitset* set, unsigned int index, unsigned char setTrue) {
   if (index / 8 > set->m_byteLength - 1) {
     std::cout << "There is no such bit, maximum bit index: " << (set->m_byteLength * 8) - 1
               << std::endl;
@@ -44,7 +44,7 @@ void tapi_setBit(bitset_tapi set, unsigned int index, unsigned char setTrue) {
     }
   }
 }
-unsigned char tapi_getBitValue(const bitset_tapi set, unsigned int index) {
+unsigned char tapi_getBitValue(const struct tapi_bitset* set, unsigned int index) {
   unsigned char byte     = ((unsigned char* )set->m_array)[index / 8];
   unsigned char bitindex = (index % 8);
   if (byte & (1 << bitindex)) {
@@ -52,8 +52,8 @@ unsigned char tapi_getBitValue(const bitset_tapi set, unsigned int index) {
   }
   return false;
 }
-unsigned int tapi_getByteLength(const bitset_tapi set) { return set->m_byteLength; }
-unsigned int tapi_getFirstBitIndx(const bitset_tapi set, unsigned char findTrue) {
+unsigned int tapi_getByteLength(const struct tapi_bitset* set) { return set->m_byteLength; }
+unsigned int tapi_getFirstBitIndx(const struct tapi_bitset* set, unsigned char findTrue) {
   if (findTrue) {
     unsigned int byteindex = 0;
     for (unsigned int byte_value = 0; byte_value == 0; byteindex++) {
@@ -82,10 +82,10 @@ unsigned int tapi_getFirstBitIndx(const bitset_tapi set, unsigned char findTrue)
     return (byteindex * 8) + bitindex;
   }
 }
-void tapi_clearBitset(bitset_tapi set, unsigned char setTrue) {
+void tapi_clearBitset(struct tapi_bitset* set, unsigned char setTrue) {
   memset(set->m_array, setTrue, set->m_byteLength);
 }
-void tapi_expandBitset(bitset_tapi set, unsigned int expandSize) {
+void tapi_expandBitset(struct tapi_bitset* set, unsigned int expandSize) {
   bool* new_block = new bool[expandSize + set->m_byteLength];
   if (new_block) {
     // This is a little bit redundant because all memory initialized with 0 at start
@@ -104,15 +104,15 @@ void tapi_expandBitset(bitset_tapi set, unsigned int expandSize) {
   }
 }
 
-void tapi_setUnitTests_bitset(ecs_tapi* ecsSYS);
+void tapi_setUnitTests_bitset(tapi_ecs* ecsSYS);
 
-typedef struct bitsetsys_tapi_d {
-  bitsetsys_tapi_type* type;
-} bitsetsys_tapi_d;
+typedef struct tapi_bitsetSys_d {
+  tapi_bitsetSys_type* type;
+} tapi_bitsetSys_d;
 ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
-  bitsetsys_tapi_type* type = ( bitsetsys_tapi_type* )malloc(sizeof(bitsetsys_tapi_type));
-  type->data                = ( bitsetsys_tapi_d* )malloc(sizeof(bitsetsys_tapi_d));
-  type->funcs               = ( bitsetsys_tapi* )malloc(sizeof(bitsetsys_tapi));
+  tapi_bitsetSys_type* type = ( tapi_bitsetSys_type* )malloc(sizeof(tapi_bitsetSys_type));
+  type->data                = ( tapi_bitsetSys_d* )malloc(sizeof(tapi_bitsetSys_d));
+  type->funcs               = ( tapi_bitsetSys* )malloc(sizeof(tapi_bitsetSys));
   type->data->type          = type;
 
   ecssys->addSystem(BITSET_TAPI_PLUGIN_NAME, BITSET_TAPI_PLUGIN_VERSION, type);
@@ -134,7 +134,7 @@ ECSPLUGIN_EXIT(ecssys, reloadFlag) {}
 #include <vector>
 #define TAPI_UNITTEST_CLASSFLAG_BITSET 1
 
-bitsetsys_tapi* tapi_getBitsetSystem(ecs_tapi* ecsSys) {
+tapi_bitsetSys* tapi_getBitsetSystem(struct tapi_ecs* ecsSys) {
   return
     (( BITSET_TAPI_PLUGIN_LOAD_TYPE )ecsSys->getSystem(BITSET_TAPI_PLUGIN_NAME))->funcs;
 }
@@ -149,10 +149,10 @@ uint32_t findFirst(std::vector<bool>& stdBitset, bool isTrue) {
 }
 
 TAPI_UNITTEST_FUNC(tapi_unitTest_bitset0, data, outputStr) {
-  bitsetsys_tapi* bitsetSys = tapi_getBitsetSystem((ecs_tapi*)data);
+  tapi_bitsetSys* bitsetSys = tapi_getBitsetSystem((struct tapi_ecs*)data);
   static constexpr uint32_t bitsetByteLength = 10 << 10;
   std::vector<bool>         stdBitset(bitsetByteLength * 8, false);
-  bitset_tapi               tBitset = bitsetSys->createBitset(bitsetByteLength);
+  struct tapi_bitset*               tBitset = bitsetSys->createBitset(bitsetByteLength);
 
   time_t t;
   srand(( unsigned )time(&t));
@@ -179,14 +179,14 @@ TAPI_UNITTEST_FUNC(tapi_unitTest_bitset0, data, outputStr) {
   return 1;
 }
 
-void tapi_setUnitTests_bitset(ecs_tapi* ecsSYS) {
+void tapi_setUnitTests_bitset(struct tapi_ecs* ecsSYS) {
   UNITTEST_TAPI_PLUGIN_LOAD_TYPE utSysLoaded =
     ( UNITTEST_TAPI_PLUGIN_LOAD_TYPE )ecsSYS->getSystem(UNITTEST_TAPI_PLUGIN_NAME);
   // If unit test system is available, add unit tests to it
   if (utSysLoaded) {
     auto utSys = utSysLoaded->funcs;
     
-    unittest_interface_tapi u;
+    tapi_unitTest_interface u;
     u.test = tapi_unitTest_bitset0;
     u.data = ecsSYS;
     utSys->add_unittest(L"Bitset0", TAPI_UNITTEST_CLASSFLAG_BITSET, u);

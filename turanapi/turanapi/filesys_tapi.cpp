@@ -129,14 +129,14 @@ void delete_file(stringReadArgument_tapi(path)) {
   }
 }
 
-typedef struct filesys_tapi_d {
-  filesys_tapi_type* type;
+typedef struct tapi_fileSys_d {
+  tapi_fileSys_type* type;
 } filesys_tapi_d;
 
 ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
-  filesys_tapi_type* type = ( filesys_tapi_type* )malloc(sizeof(filesys_tapi_type));
-  type->data              = ( filesys_tapi_d* )malloc(sizeof(filesys_tapi_d));
-  type->funcs             = ( filesys_tapi* )malloc(sizeof(filesys_tapi));
+  tapi_fileSys_type* type = ( tapi_fileSys_type* )malloc(sizeof(tapi_fileSys_type));
+  type->data              = ( tapi_fileSys_d* )malloc(sizeof(tapi_fileSys_d));
+  type->funcs             = ( tapi_fileSys* )malloc(sizeof(tapi_fileSys));
   type->data->type        = type;
 
   type->funcs->read_binaryfile      = &read_binaryfile;

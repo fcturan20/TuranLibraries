@@ -6,7 +6,7 @@
 #include "ecs_tapi.h"
 #include "pecfManager/pecfManager.h"
 #include "threadingsys_tapi.h"
-ecs_tapi*   editorECS = nullptr;
+const tapi_ecs*   editorECS = nullptr;
 extern void initialize_pecfManager();
 extern void load_systems();
 

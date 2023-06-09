@@ -1,10 +1,14 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
+  
 #include "predefinitions_tapi.h"
 #define FILESYS_TAPI_PLUGIN_NAME "tapi_filesys"
 #define FILESYS_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
-#define FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys_tapi_type*
+#define FILESYS_TAPI_PLUGIN_LOAD_TYPE struct tapi_fileSys_type*
 
-typedef struct filesys_tapi {
+struct tapi_fileSys {
   void* (*read_binaryfile)(stringReadArgument_tapi(path), unsigned long* size);
   void (*write_binaryfile)(stringReadArgument_tapi(path), void* data, unsigned long size);
   void (*overwrite_binaryfile)(stringReadArgument_tapi(path), void* data, unsigned long size);
@@ -12,10 +16,13 @@ typedef struct filesys_tapi {
   void (*write_textfile)(stringReadArgument_tapi(text), stringReadArgument_tapi(path),
                          unsigned char writeToEnd);
   void (*delete_file)(stringReadArgument_tapi(path));
-} filesys_tapi;
+};
 
-typedef struct filesys_tapi_d filesys_tapi_d;
-typedef struct filesys_tapi_type {
-  filesys_tapi_d* data;
-  filesys_tapi*   funcs;
-} filesys_tapi_type;
+struct tapi_fileSys_type{
+  struct tapi_fileSys_d* data;
+  struct tapi_fileSys*   funcs;
+};
+
+#ifdef __cplusplus
+}
+#endif

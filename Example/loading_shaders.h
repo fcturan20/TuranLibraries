@@ -3,7 +3,7 @@
 
 extern rasterPipelineType_tgfxhnd     base_3dshadertype        = NULL;
 extern rasterPipelineInstance_tgfxhnd base_3dshaderinst        = NULL;
-extern sampler_tgfxhnd                linear1mip_repeatsampler = NULL;
+extern struct tgfx_sampler*                linear1mip_repeatsampler = NULL;
 extern computeShaderType_tgfxhnd      RT_computeshadertype     = NULL;
 extern computeShaderInstance_tgfxhnd  RT_computeshaderinstance = NULL;
 

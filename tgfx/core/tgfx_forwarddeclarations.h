@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <predefinitions_tapi.h>
 
 //        NAMING RULES:
@@ -16,53 +19,26 @@
 
 // OBJECT HANDLES
 ///////////////////////////////////////
+struct tgfx_gpu;
+struct tgfx_window;
+struct tgfx_texture;
+struct tgfx_monitor;
+struct tgfx_buffer;
+struct tgfx_sampler;
+struct tgfx_shaderSource;
+struct tgfx_bindingTable;
+struct tgfx_commandBuffer;
+struct tgfx_commandBundle;
+struct tgfx_gpuQueue;
+struct tgfx_fence;
+struct tgfx_heap;
+struct tgfx_pipeline;
 
-typedef struct tgfx_gpu_obj*           gpu_tgfxhnd;
-typedef struct tgfx_window_obj*        window_tgfxhnd;
-typedef struct tgfx_texture_obj*       texture_tgfxhnd;
-typedef struct tgfx_monitor_obj*       monitor_tgfxhnd;
-typedef struct tgfx_buffer_obj*        buffer_tgfxhnd;
-typedef struct tgfx_samplingtype_obj*  sampler_tgfxhnd;
-typedef struct tgfx_shadersource_obj*  shaderSource_tgfxhnd;
-typedef struct tgfx_bindingtable_obj*  bindingTable_tgfxhnd;
-typedef struct tgfx_commandbuffer_obj* commandBuffer_tgfxhnd;
-typedef struct tgfx_commandbundle_obj* commandBundle_tgfxhnd;
-typedef struct tgfx_gpuqueue_obj*      gpuQueue_tgfxhnd;
-typedef struct tgfx_fence_obj*         fence_tgfxhnd;
-typedef struct tgfx_heap_obj*          heap_tgfxhnd;
-typedef struct tgfx_pipeline_obj*      pipeline_tgfxhnd;
-
-// DATA HANDLES
-//////////////////////////////////////
-
-typedef struct tgfx_extension_data* extension_tgfxhnd;
-
-// STRUCTS
-/////////////////////////////////////
-
-typedef struct tgfx_uvec2                     uvec2_tgfx;
-typedef struct tgfx_uvec3                     uvec3_tgfx;
-typedef struct tgfx_uvec4                     uvec4_tgfx;
-typedef struct tgfx_vec2                      vec2_tgfx;
-typedef struct tgfx_vec3                      vec3_tgfx;
-typedef struct tgfx_vec4                      vec4_tgfx;
-typedef struct tgfx_ivec2                     ivec2_tgfx;
-typedef struct tgfx_ivec3                     ivec3_tgfx;
-typedef struct tgfx_boxRegion                 boxRegion_tgfx;
-typedef struct tgfx_cubeRegion                cubeRegion_tgfx;
-typedef struct tgfx_memory_description        memoryDescription_tgfx;
-typedef struct tgfx_gpu_description           gpuDescription_tgfx;
-typedef struct tgfx_window_description        windowDescription_tgfx;
-typedef struct tgfx_swapchain_description     swapchainDescription_tgfx;
-typedef struct tgfx_texture_description       textureDescription_tgfx;
-typedef struct tgfx_buffer_description        bufferDescription_tgfx;
-typedef struct tgfx_binding_table_description bindingTableDescription_tgfx;
-typedef struct tgfx_raster_state_description  rasterStateDescription_tgfx;
-typedef struct tgfx_init_secondstage_info     initSecondStageInfo_tgfx;
-typedef struct tgfx_gpu_info                  gpuInfo_tgfx;
-typedef struct tgfx_heap_requirements_info    heapRequirementsInfo_tgfx;
-typedef struct tgfx_window_gpu_support        windowGPUsupport_tgfx;
-typedef struct tgfx_typelessColor             typelessColor_tgfx;
+// SYSTEMS
+struct tgfx_helper;
+struct tgfx_gpuDataManager;
+struct tgfx_renderer;
+struct tgfx_dearImgui;
 
 // ENUMS
 typedef enum result_tgfx {
@@ -292,7 +268,6 @@ typedef enum shaderStage_tgfx {
   shaderStage_tgfx_FRAGMENTSHADER = 1 << 1,
   shaderStage_tgfx_COMPUTESHADER  = 1 << 2
 } shaderStage_tgfx;
-typedef int shaderStage_tgfxflag;
 
 typedef enum pipelineType_tgfx {
   pipelineType_tgfx_RASTER     = 0,
@@ -418,7 +393,7 @@ typedef enum windowpresentation_tgfx {
   windowpresentation_tgfx_MAILBOX
 } windowpresentation_tgfx;
 
-typedef enum texture_component_mask_tgfx {
+typedef enum textureComponentMask_tgfx {
   textureComponentMask_tgfx_R  = 1,
   textureComponentMask_tgfx_G  = 1 << 1,
   textureComponentMask_tgfx_B  = 1 << 2,
@@ -443,16 +418,15 @@ typedef enum texture_component_mask_tgfx {
   textureComponentMask_tgfx_NONE
 } textureComponentMask_tgfx;
 
-typedef enum texture_usage_mask_tgfx {
+typedef enum textureUsageMask_tgfx {
   textureUsageMask_tgfx_COPYFROM         = 1,
   textureUsageMask_tgfx_COPYTO           = 1 << 1,
   textureUsageMask_tgfx_RENDERATTACHMENT = 1 << 2,
   textureUsageMask_tgfx_RASTERSAMPLE     = 1 << 3,
   textureUsageMask_tgfx_RANDOMACCESS     = 1 << 4
 } textureUsageMask_tgfx;
-typedef int textureUsageMask_tgfxflag;
 
-typedef enum buffer_usage_mask_tgfx {
+typedef enum bufferUsageMask_tgfx {
   bufferUsageMask_tgfx_COPYFROM                = 1,
   bufferUsageMask_tgfx_COPYTO                  = 1 << 1,
   bufferUsageMask_tgfx_UNIFORMBUFFER           = 1 << 2,
@@ -462,15 +436,14 @@ typedef enum buffer_usage_mask_tgfx {
   bufferUsageMask_tgfx_INDIRECTBUFFER          = 1 << 6,
   bufferUsageMask_tgfx_accessByPointerInShader = 1 << 7
 } bufferUsageMask_tgfx;
-typedef int bufferUsageMask_tgfxflag;
 
-typedef enum vertex_binding_input_rate_tgfx {
+typedef enum vertexBindingInputRate_tgfx {
   vertexBindingInputRate_tgfx_UNDEF,
   vertexBindingInputRate_tgfx_VERTEX,
   vertexBindingInputRate_tgfx_INSTANCE
 } vertexBindingInputRate_tgfx;
 
-typedef enum indirect_operation_type_tgfx {
+typedef enum indirectOperationType_tgfx {
   indirectOperationType_tgfx_UNDEF,
   indirectOperationType_tgfx_DRAWNONINDEXED,
   indirectOperationType_tgfx_DRAWINDEXED,
@@ -612,13 +585,13 @@ typedef enum key_tgfx {
   key_tgfx_MAX_ENUM
 } key_tgfx;
 
-typedef enum key_action_tgfx {
+typedef enum keyAction_tgfx {
   keyAction_tgfx_RELEASE,
   keyAction_tgfx_PRESS,
   keyAction_tgfx_REPEAT
 } keyAction_tgfx;
 
-typedef enum key_modifier_tgfx {
+typedef enum keyMod_tgfx {
   keyMod_tgfx_NONE,
   keyMod_tgfx_SHIFT,
   keyMod_tgfx_CONTROL,
@@ -628,27 +601,14 @@ typedef enum key_modifier_tgfx {
   keyMod_tgfx_NUMLOCK
 } keyMod_tgfx;
 
-typedef enum cursor_mode_tgfx {
+typedef enum cursorMode_tgfx {
   cursorMode_tgfx_NORMAL,
   cursorMode_tgfx_HIDDEN,
   cursorMode_tgfx_DISABLED,
   cursorMode_tgfx_RAW
 } cursorMode_tgfx;
 
-// CALLBACKS
 
-typedef void (*tgfx_windowResizeCallback)(window_tgfxhnd windowHnd, void* userPtr,
-                                          tgfx_uvec2       resolution,
-                                          texture_tgfxhnd* swapchainTextures);
-// logCode is an index to look up from all tgfx logs. You should use core->getLogMessage() for text
-// extraInfo is the text from the backend, probably contains specific info about your system
-typedef void (*tgfx_logCallback)(unsigned int logCode, const wchar_t* extraInfo);
-// @param scanCode: System-specific scan code
-typedef void (*tgfx_windowKeyCallback)(window_tgfxhnd windowHnd, void* userPointer, key_tgfx key,
-                                       int scanCode, key_action_tgfx action, keyMod_tgfx mode);
-
-// SYSTEMS
-typedef struct tgfx_helper         helper_tgfx;
-typedef struct tgfx_gpudatamanager gpudatamanager_tgfx;
-typedef struct tgfx_renderer       renderer_tgfx;
-typedef struct tgfx_dearimgui      dearimgui_tgfx;
+#ifdef __cplusplus
+}
+#endif

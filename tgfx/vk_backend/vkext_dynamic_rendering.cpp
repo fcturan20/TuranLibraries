@@ -37,11 +37,11 @@ void vkext_dynamicRendering::inspect() {
   }
 }
 void vkext_dynamicRendering::manage(VkStructureType structType, void* structPtr,
-                                    unsigned int extCount, const extension_tgfxhnd* exts) {}
+                                    unsigned int extCount, struct tgfx_extension* const* exts) {}
 
 void vkext_beginDynamicRenderPass(VkCommandBuffer cb, unsigned int colorAttachmentCount,
-                                  const rasterpassBeginSlotInfo_tgfx* colorAttachments,
-                                  rasterpassBeginSlotInfo_tgfx        depthAttachment) {
+                                  const tgfx_rasterpassBeginSlotInfo* colorAttachments,
+                                  tgfx_rasterpassBeginSlotInfo        depthAttachment) {
   TEXTURE_VKOBJ* baseTexture = nullptr;
   if (depthAttachment.texture) {
     baseTexture = getOBJ<TEXTURE_VKOBJ>(depthAttachment.texture);
@@ -51,7 +51,7 @@ void vkext_beginDynamicRenderPass(VkCommandBuffer cb, unsigned int colorAttachme
 
   VkRenderingAttachmentInfo attachmentInfos[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT + 1] = {};
   for (uint32_t colorSlotIndx = 0; colorSlotIndx < colorAttachmentCount; colorSlotIndx++) {
-    const rasterpassBeginSlotInfo_tgfx& colorAttachment = colorAttachments[colorSlotIndx];
+    const tgfx_rasterpassBeginSlotInfo& colorAttachment = colorAttachments[colorSlotIndx];
     TEXTURE_VKOBJ*                      texture = getOBJ<TEXTURE_VKOBJ>(colorAttachment.texture);
 
     VkFormat format = vk_findFormatVk(texture->m_channels);
@@ -115,13 +115,13 @@ void vkext_beginDynamicRenderPass(VkCommandBuffer cb, unsigned int colorAttachme
 }
 
 void vkext_beginStaticRenderPass(VkCommandBuffer cb, unsigned int extCount,
-                                 const extension_tgfxhnd* exts) {}
+                                 struct tgfx_extension* const* exts) {}
 
 void vkext_dynamicRendering::vk_beginRenderpass(
   VkCommandBuffer cb, unsigned int colorAttachmentCount,
-  const rasterpassBeginSlotInfo_tgfx* colorAttachments,
-  rasterpassBeginSlotInfo_tgfx depthAttachment, unsigned int extCount,
-  const extension_tgfxhnd* exts) {
+  const tgfx_rasterpassBeginSlotInfo* colorAttachments,
+  tgfx_rasterpassBeginSlotInfo depthAttachment, unsigned int extCount,
+  struct tgfx_extension* const* exts) {
   if (features.dynamicRendering) {
     vkext_beginDynamicRenderPass(cb, colorAttachmentCount, colorAttachments, depthAttachment);
   } else {
@@ -135,7 +135,7 @@ void vkext_dynamicRendering::vk_beginRenderpass(
 }
 
 void vkext_dynamicRendering::vk_endRenderpass(VkCommandBuffer cb, unsigned int extCount,
-                                              const extension_tgfxhnd* exts) {
+                                              struct tgfx_extension* const* exts) {
   if (features.dynamicRendering) {
     vkCmdEndRenderingKHR_loaded(cb);
   } else {

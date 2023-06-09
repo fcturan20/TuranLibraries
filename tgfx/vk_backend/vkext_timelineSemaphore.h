@@ -26,18 +26,18 @@ struct vkext_timelineSemaphore : public vkext_interface {
   vkext_timelineSemaphore(GPU_VKOBJ* gpu);
   virtual void inspect() override;
   virtual void manage(VkStructureType structType, void* structPtr, unsigned int extCount,
-                      const extension_tgfxhnd* exts) override;
+                      struct tgfx_extension* const* exts) override;
 
   VkPhysicalDeviceTimelineSemaphoreFeatures   features;
   VkPhysicalDeviceTimelineSemaphoreProperties props;
 
-  VK_LINEAR_OBJARRAY<FENCE_VKOBJ, fence_tgfxhnd, 1 << 10> fences;
+  VK_LINEAR_OBJARRAY<FENCE_VKOBJ, struct tgfx_fence*, 1 << 10> fences;
 };
 
-fence_tgfxhnd vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue);
+struct tgfx_fence* vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue);
 
-result_tgfx vk_setFenceValue(fence_tgfxhnd fence, unsigned long long value);
-result_tgfx vk_getFenceValue(fence_tgfxhnd fence, unsigned long long* value);
+result_tgfx vk_setFenceValue(struct tgfx_fence* fence, unsigned long long value);
+result_tgfx vk_getFenceValue(struct tgfx_fence* fence, unsigned long long* value);
 
 #define getTimelineSemaphoreEXT(gpu, extVarName) \
   vkext_timelineSemaphore* extVarName =          \

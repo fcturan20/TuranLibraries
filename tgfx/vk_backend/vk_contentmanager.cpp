@@ -58,17 +58,17 @@ struct SHADERSOURCE_VKOBJ {
   shaderStage_tgfx stage;
   void*            SOURCE_CODE = nullptr;
   unsigned int     DATA_SIZE   = 0;
-  gpu_tgfxhnd      m_gpu;
+  struct tgfx_gpu* m_gpu;
 };
 
 struct gpudatamanager_private {
-  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>               textures;
-  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>             pipelines;
-  VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, shaderSource_tgfxhnd, 1 << 24>     shadersources;
-  VK_LINEAR_OBJARRAY<SAMPLER_VKOBJ, sampler_tgfxhnd, 1 << 16>               samplers;
-  VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>                          buffers;
-  VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16> bindingtableinsts;
-  VK_LINEAR_OBJARRAY<HEAP_VKOBJ, heap_tgfxhnd, 1 << 10>                     heaps;
+  VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, struct tgfx_texture*, 1 << 24>               textures;
+  VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, struct tgfx_pipeline*, 1 << 24>             pipelines;
+  VK_LINEAR_OBJARRAY<SHADERSOURCE_VKOBJ, struct tgfx_shaderSource*, 1 << 24>     shadersources;
+  VK_LINEAR_OBJARRAY<SAMPLER_VKOBJ, struct tgfx_sampler*, 1 << 16>               samplers;
+  VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, struct tgfx_buffer*>                          buffers;
+  VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, struct tgfx_bindingTable*, 1 << 16> bindingtableinsts;
+  VK_LINEAR_OBJARRAY<HEAP_VKOBJ, struct tgfx_heap*, 1 << 10>                     heaps;
 
   gpudatamanager_private() {}
 };
@@ -76,8 +76,8 @@ static gpudatamanager_private* hidden = nullptr;
 
 void vk_destroyAllResources() {}
 
-result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* desc,
-                             sampler_tgfxhnd* hnd) {
+result_tgfx vk_createSampler(struct tgfx_gpu* gpu, const tgfx_samplerDescription* desc,
+                             struct tgfx_sampler** hnd) {
   GPU_VKOBJ* GPU = getOBJ<GPU_VKOBJ>(gpu);
 
   VkSampler sampler;
@@ -92,8 +92,8 @@ result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* des
     s_ci.flags                   = 0;
     s_ci.magFilter               = vk_findFilterVk(desc->magFilter);
     s_ci.minFilter               = vk_findFilterVk(desc->minFilter);
-    s_ci.maxLod                  = static_cast<float>(desc->MaxMipLevel);
-    s_ci.minLod                  = static_cast<float>(desc->MinMipLevel);
+    s_ci.maxLod                  = static_cast<float>(desc->maxMipLevel);
+    s_ci.minLod                  = static_cast<float>(desc->minMipLevel);
     s_ci.mipLodBias              = 0.0f;
     s_ci.mipmapMode              = vk_findMipmapModeVk(desc->minFilter);
     s_ci.pNext                   = nullptr;
@@ -107,10 +107,10 @@ result_tgfx vk_createSampler(gpu_tgfxhnd gpu, const samplerDescription_tgfx* des
   SAMPLER_VKOBJ* SAMPLER = hidden->samplers.create_OBJ();
   SAMPLER->vk_sampler    = sampler;
   SAMPLER->m_gpu         = GPU->gpuIndx();
-  *hnd                   = getHANDLE<sampler_tgfxhnd>(SAMPLER);
+  *hnd                   = getHANDLE<struct tgfx_sampler*>(SAMPLER);
   return result_tgfx_SUCCESS;
 }
-void vk_destroySampler(sampler_tgfxhnd sampler) {
+void vk_destroySampler(struct tgfx_sampler* sampler) {
   SAMPLER_VKOBJ* vkSampler = getOBJ<SAMPLER_VKOBJ>(sampler);
 #ifdef VULKAN_DEBUGGING
   assert(vkSampler && "Invalid sampler!");
@@ -125,8 +125,8 @@ void vk_destroySampler(sampler_tgfxhnd sampler) {
 
 unsigned int vk_calculateSizeOfVertexLayout(const datatype_tgfx* ATTRIBUTEs, unsigned int count);
 
-result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* desc,
-                             texture_tgfxhnd* TextureHandle) {
+result_tgfx vk_createTexture(struct tgfx_gpu* i_gpu, const tgfx_textureDescription* desc,
+                             struct tgfx_texture** TextureHandle) {
   GPU_VKOBJ*        gpu       = getOBJ<GPU_VKOBJ>(i_gpu);
   VkImageUsageFlags usageFlag = vk_findTextureUsageFlagVk(desc->usage);
   if (desc->channelType == texture_channels_tgfx_D24S8 ||
@@ -199,10 +199,10 @@ result_tgfx vk_createTexture(gpu_tgfxhnd i_gpu, const textureDescription_tgfx* d
   texture->vk_imageUsage = im_ci.usage;
   texture->m_memReqs     = memReqs;
 
-  *TextureHandle = getHANDLE<texture_tgfxhnd>(texture);
+  *TextureHandle = getHANDLE<struct tgfx_texture*>(texture);
   return result_tgfx_SUCCESS;
 }
-void vk_destroyTexture(texture_tgfxhnd texture) {
+void vk_destroyTexture(struct tgfx_texture* texture) {
   TEXTURE_VKOBJ* vkTexture = getOBJ<TEXTURE_VKOBJ>(texture);
   assert(vkTexture && "Invalid texture");
   vkDestroyImage(core_vk->getGPU(vkTexture->m_GPU)->vk_logical, vkTexture->vk_image, nullptr);
@@ -211,8 +211,8 @@ void vk_destroyTexture(texture_tgfxhnd texture) {
   hidden->textures.destroyObj(hidden->textures.getINDEXbyOBJ(vkTexture));
 }
 
-result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* desc,
-                            buffer_tgfxhnd* buffer) {
+result_tgfx vk_createBuffer(struct tgfx_gpu* i_gpu, const tgfx_bufferDescription* desc,
+                            struct tgfx_buffer** buffer) {
   GPU_VKOBJ* gpu = getOBJ<GPU_VKOBJ>(i_gpu);
 
   // Create VkBuffer object
@@ -250,10 +250,10 @@ result_tgfx vk_createBuffer(gpu_tgfxhnd i_gpu, const bufferDescription_tgfx* des
     o_buffer->m_memReqs      = memReqs;
   }
 
-  *buffer = getHANDLE<buffer_tgfxhnd>(o_buffer);
+  *buffer = getHANDLE<struct tgfx_buffer*>(o_buffer);
   return result_tgfx_SUCCESS;
 }
-void vk_destroyBuffer(buffer_tgfxhnd buffer) {
+void vk_destroyBuffer(struct tgfx_buffer* buffer) {
   BUFFER_VKOBJ* vkBuffer = getOBJ<BUFFER_VKOBJ>(buffer);
   assert(vkBuffer && "Invalid texture");
   vkDestroyBuffer(core_vk->getGPU(vkBuffer->m_GPU)->vk_logical, vkBuffer->vk_buffer, nullptr);
@@ -273,12 +273,12 @@ void* getInvalidResourceByType(GPU_VKOBJ* gpu, VkDescriptorType descType) {
   }
 }
 VkDescriptorSetLayout createDescriptorSetLayout(
-  GPU_VKOBJ* gpu, const bindingTableDescription_tgfx const* const desc) {
+  GPU_VKOBJ* gpu, const tgfx_bindingTableDescription const* const desc) {
   // Static Immutable Sampler binding
   VkDescriptorSetLayoutBinding bindngs[2] = {};
   VkSampler                    staticSamplers[VKCONST_MAXSTATICSAMPLERCOUNT];
   unsigned int                 dynamicbinding_i = 0;
-  if (desc->DescriptorType == shaderdescriptortype_tgfx_SAMPLER && desc->staticSamplerCount) {
+  if (desc->descriptorType == shaderdescriptortype_tgfx_SAMPLER && desc->staticSamplerCount) {
     for (uint32_t i = 0; i < desc->staticSamplerCount; i++) {
       if (!getOBJ<SAMPLER_VKOBJ>(desc->staticSamplers[i])) {
         vkPrint(10);
@@ -302,8 +302,8 @@ VkDescriptorSetLayout createDescriptorSetLayout(
   // Main binding
   {
     bindngs[dynamicbinding_i].binding            = dynamicbinding_i;
-    bindngs[dynamicbinding_i].descriptorCount    = desc->ElementCount;
-    bindngs[dynamicbinding_i].descriptorType     = vk_findDescTypeVk(desc->DescriptorType);
+    bindngs[dynamicbinding_i].descriptorCount    = desc->elementCount;
+    bindngs[dynamicbinding_i].descriptorType     = vk_findDescTypeVk(desc->descriptorType);
     bindngs[dynamicbinding_i].pImmutableSamplers = nullptr;
     bindngs[dynamicbinding_i].stageFlags         = vk_findShaderStageVk(desc->visibleStagesMask);
   }
@@ -334,16 +334,16 @@ VkDescriptorSetLayout createDescriptorSetLayout(
   }
   return dsl;
 }
-result_tgfx vk_createBindingTable(gpu_tgfxhnd                                     i_gpu,
-                                  const bindingTableDescription_tgfx const* const desc,
-                                  bindingTable_tgfxhnd*                           table) {
+result_tgfx vk_createBindingTable(struct tgfx_gpu*                                i_gpu,
+                                  const tgfx_bindingTableDescription const* const desc,
+                                  struct tgfx_bindingTable**                      table) {
 #ifdef VULKAN_DEBUGGING
   // Check if pool has enough space for the desc set and if there is, then decrease the amount of
   // available descs in the pool for other checks
-  if (!desc->ElementCount && !desc->staticSamplerCount) {
+  if (!desc->elementCount && !desc->staticSamplerCount) {
     return vkPrint(29);
   }
-  if (desc->staticSamplerCount && desc->DescriptorType != shaderdescriptortype_tgfx_SAMPLER) {
+  if (desc->staticSamplerCount && desc->descriptorType != shaderdescriptortype_tgfx_SAMPLER) {
     return vkPrint(30);
   }
 #endif
@@ -358,8 +358,8 @@ result_tgfx vk_createBindingTable(gpu_tgfxhnd                                   
     ci.pNext                      = nullptr;
     ci.poolSizeCount              = 1;
     VkDescriptorPoolSize size     = {};
-    size.descriptorCount          = desc->ElementCount + desc->staticSamplerCount;
-    size.type                     = vk_findDescTypeVk(desc->DescriptorType);
+    size.descriptorCount          = desc->elementCount + desc->staticSamplerCount;
+    size.type                     = vk_findDescTypeVk(desc->descriptorType);
     ci.pPoolSizes                 = &size;
     ci.flags = desc->isDynamic ? VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT : 0;
     if (vkCreateDescriptorPool(gpu->vk_logical, &ci, nullptr, &pool) != VK_SUCCESS) {
@@ -376,7 +376,7 @@ result_tgfx vk_createBindingTable(gpu_tgfxhnd                                   
     VkDescriptorSetVariableDescriptorCountAllocateInfo descIndexing = {};
     {
       descIndexing.descriptorSetCount = 1;
-      descIndexing.pDescriptorCounts  = &desc->ElementCount;
+      descIndexing.pDescriptorCounts  = &desc->elementCount;
       descIndexing.pNext              = nullptr;
       descIndexing.sType =
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
@@ -398,24 +398,24 @@ result_tgfx vk_createBindingTable(gpu_tgfxhnd                                   
   finalobj->vk_set                 = set;
   finalobj->m_isStatic             = !desc->isDynamic;
   finalobj->vk_layout              = DSL;
-  finalobj->vk_descType            = vk_findDescTypeVk(desc->DescriptorType);
+  finalobj->vk_descType            = vk_findDescTypeVk(desc->descriptorType);
   finalobj->vk_stages              = vk_findShaderStageVk(desc->visibleStagesMask);
   finalobj->m_gpu                  = gpu->gpuIndx();
-  finalobj->m_elementCount         = desc->ElementCount;
+  finalobj->m_elementCount         = desc->elementCount;
   switch (finalobj->vk_descType) {
     case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
     case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-      finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) texture_descVK[desc->ElementCount];
+      finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) texture_descVK[desc->elementCount];
       break;
     case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
     case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-      finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) buffer_descVK[desc->ElementCount];
+      finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) buffer_descVK[desc->elementCount];
       break;
     case VK_DESCRIPTOR_TYPE_SAMPLER:
-      finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) sampler_descVK[desc->ElementCount];
+      finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) sampler_descVK[desc->elementCount];
       break;
   }
-  *table = getHANDLE<bindingTable_tgfxhnd>(finalobj);
+  *table = getHANDLE<struct tgfx_bindingTable*>(finalobj);
   /*
   // If descriptor set is static, zero initialize all of the descs
   if (isStatic) {
@@ -457,7 +457,7 @@ result_tgfx vk_createBindingTable(gpu_tgfxhnd                                   
 
   return result_tgfx_SUCCESS;
 }
-void vk_destroyBindingTable(bindingTable_tgfxhnd bindingTable) {
+void vk_destroyBindingTable(struct tgfx_bindingTable* bindingTable) {
   BINDINGTABLEINST_VKOBJ* vkDescSet = getOBJ<BINDINGTABLEINST_VKOBJ>(bindingTable);
   assert(vkDescSet && "Invalid binding table");
   vkDestroyDescriptorPool(core_vk->getGPU(vkDescSet->m_gpu)->vk_logical, vkDescSet->vk_pool,
@@ -467,8 +467,9 @@ void vk_destroyBindingTable(bindingTable_tgfxhnd bindingTable) {
 
 // Don't call this if there is no binding table & call buffer!
 bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, unsigned int descSetCount,
-                              const bindingTableDescription_tgfx const* const descSets,
-                              bool isCallBufferSupported, VkPipelineLayout* layout) {
+                              const tgfx_bindingTableDescription const* const descSets,
+                              unsigned char pushConstantOffset, unsigned char pushConstantSize,
+                              VkPipelineLayout* layout) {
   VkPipelineLayoutCreateInfo pl_ci = {};
   pl_ci.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
   pl_ci.pNext                      = nullptr;
@@ -482,11 +483,11 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, unsigned int descSetCount,
   pl_ci.pSetLayouts         = DESCLAYOUTs;
   VkPushConstantRange range = {};
   // Don't support for now!
-  if (isCallBufferSupported) {
+  if (pushConstantSize) {
     pl_ci.pushConstantRangeCount = 1;
     pl_ci.pPushConstantRanges    = &range;
-    range.offset                 = 0;
-    range.size                   = 128;
+    range.offset                 = pushConstantOffset;
+    range.size                   = pushConstantSize;
     range.stageFlags             = VK_SHADER_STAGE_ALL;
   } else {
     pl_ci.pushConstantRangeCount = 0;
@@ -506,10 +507,10 @@ bool VKPipelineLayoutCreation(GPU_VKOBJ* GPU, unsigned int descSetCount,
 
 const void* vk_compileWithGlslang(shaderStage_tgfx tgfxstage, const void* i_DATA,
                                   unsigned int i_DATA_SIZE, unsigned int* compiledbinary_datasize);
-result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx language,
+result_tgfx vk_compileShaderSource(struct tgfx_gpu* gpu, shaderlanguages_tgfx language,
                                    shaderStage_tgfx shaderstage, const void* DATA,
-                                   unsigned int          DATA_SIZE,
-                                   shaderSource_tgfxhnd* ShaderSourceHandle) {
+                                   unsigned int               DATA_SIZE,
+                                   struct tgfx_shaderSource** ShaderSourceHandle) {
   GPU_VKOBJ*   GPU                   = getOBJ<GPU_VKOBJ>(gpu);
   const void*  binary_spirv_data     = nullptr;
   unsigned int binary_spirv_datasize = 0;
@@ -522,7 +523,7 @@ result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx languag
       binary_spirv_data =
         vk_compileWithGlslang(shaderstage, DATA, DATA_SIZE, &binary_spirv_datasize);
       if (!binary_spirv_datasize) {
-        vkPrint(35, (const wchar_t*)binary_spirv_data);
+        vkPrint(35, ( const wchar_t* )binary_spirv_data);
         delete binary_spirv_data;
         return core_tgfx_main->getLogMessage(35, nullptr);
       }
@@ -548,14 +549,14 @@ result_tgfx vk_compileShaderSource(gpu_tgfxhnd gpu, shaderlanguages_tgfx languag
   SHADERSOURCE->stage              = shaderstage;
   SHADERSOURCE->m_gpu              = gpu;
 
-  *ShaderSourceHandle = getHANDLE<shaderSource_tgfxhnd>(SHADERSOURCE);
+  *ShaderSourceHandle = getHANDLE<struct tgfx_shaderSource*>(SHADERSOURCE);
   return result_tgfx_SUCCESS;
 }
-void                  vk_destroyShaderSource(shaderSource_tgfxhnd ShaderSourceHandle) {}
+void                  vk_destroyShaderSource(struct tgfx_shaderSource* ShaderSourceHandle) {}
 VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls);
 
-result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
-                                    pipeline_tgfxhnd*                     hnd) {
+result_tgfx vk_createRasterPipeline(const tgfx_rasterPipelineDescription* desc,
+                                    struct tgfx_pipeline**                hnd) {
   GPU_VKOBJ* GPU = nullptr;
 
   // Detect GPU & create shader stage infos
@@ -619,7 +620,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     }
 
     for (uint32_t i = 0; i < desc->attribLayout.attribCount; i++) {
-      const vertexAttributeDescription_tgfx& attr     = desc->attribLayout.i_attributes[i];
+      const tgfx_vertexAttributeDescription& attr     = desc->attribLayout.i_attributes[i];
       uint32_t                               attrIndx = attr.attributeIndx;
       if (attrIndx >= desc->attribLayout.attribCount) {
         return vkPrint(41);
@@ -635,7 +636,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     }
 
     for (uint32_t i = 0; i < desc->attribLayout.bindingCount; i++) {
-      const vertexBindingDescription_tgfx& binding     = desc->attribLayout.i_bindings[i];
+      const tgfx_vertexBindingDescription& binding     = desc->attribLayout.i_bindings[i];
       uint32_t                             bindingIndx = binding.bindingIndx;
       if (bindingIndx >= desc->attribLayout.bindingCount) {
         return vkPrint(41);
@@ -711,7 +712,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
       blendState.attachmentCount++;
     }
     for (uint32_t i = 0; i < TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT; i++) {
-      const blendState_tgfx& blendState = desc->mainStates->blendStates[i];
+      const tgfx_blendState& blendState = desc->mainStates->blendStates[i];
       states[i].blendEnable             = blendState.blendEnabled;
       states[i].colorWriteMask =
         vk_findColorComponentsVk(blendState.blendComponents, desc->colorTextureFormats[i]);
@@ -741,7 +742,8 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
   }
 
   VkPipelineLayout layout = {};
-  if (!VKPipelineLayoutCreation(GPU, desc->tableCount, desc->tables, false, &layout)) {
+  if (!VKPipelineLayoutCreation(GPU, desc->tableCount, desc->tables, desc->pushConstantOffset,
+                                desc->pushConstantSize, &layout)) {
     return vkPrint(43, L"raster pipeline at VKPipelineLayoutCreation()");
   }
 
@@ -750,7 +752,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     depthState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthState.flags = 0;
     depthState.pNext = nullptr;
-    const depthStencilState_tgfx& state = desc->mainStates->depthStencilState;
+    const tgfx_depthStencilState& state = desc->mainStates->depthStencilState;
 
     // Depth states
     {
@@ -766,15 +768,15 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     {
       depthState.stencilTestEnable = state.stencilTestEnabled;
       for (uint32_t i = 0; i < 2; i++) {
-        VkStencilOpState&         vkState   = (i == 0) ? depthState.front : depthState.back;
-        const tgfx_stencil_state& tgfxState = (i == 0) ? state.front : state.back;
-        vkState.compareMask                 = tgfxState.compareMask;
-        vkState.compareOp                   = vk_findCompareOpVk(tgfxState.compareOp);
-        vkState.depthFailOp                 = vk_findStencilOpVk(tgfxState.depthFail);
-        vkState.failOp                      = vk_findStencilOpVk(tgfxState.stencilFail);
-        vkState.passOp                      = vk_findStencilOpVk(tgfxState.pass);
-        vkState.reference                   = tgfxState.reference;
-        vkState.writeMask                   = tgfxState.writeMask;
+        VkStencilOpState&        vkState   = (i == 0) ? depthState.front : depthState.back;
+        const tgfx_stencilState& tgfxState = (i == 0) ? state.front : state.back;
+        vkState.compareMask                = tgfxState.compareMask;
+        vkState.compareOp                  = vk_findCompareOpVk(tgfxState.compareOp);
+        vkState.depthFailOp                = vk_findStencilOpVk(tgfxState.depthFail);
+        vkState.failOp                     = vk_findStencilOpVk(tgfxState.stencilFail);
+        vkState.passOp                     = vk_findStencilOpVk(tgfxState.pass);
+        vkState.reference                  = tgfxState.reference;
+        vkState.writeMask                  = tgfxState.writeMask;
       }
     }
   }
@@ -833,7 +835,7 @@ result_tgfx vk_createRasterPipeline(const rasterPipelineDescription_tgfx* desc,
     pipelineObj->vk_colorAttachmentFormats[i] = vk_findFormatVk(desc->colorTextureFormats[i]);
   }
   pipelineObj->vk_depthAttachmentFormat = vk_findFormatVk(desc->depthStencilTextureFormat);
-  *hnd                                  = getHANDLE<pipeline_tgfxhnd>(pipelineObj);
+  *hnd                                  = getHANDLE<struct tgfx_pipeline*>(pipelineObj);
   return result_tgfx_SUCCESS;
 }
 /*
@@ -859,16 +861,16 @@ void vk_destroyRasterPipeline(rasterPipeline_tgfxhnd hnd) {
 }
 */
 result_tgfx vk_createComputePipeline(
-  shaderSource_tgfxhnd Source, unsigned int bindingTableCount,
-  const bindingTableDescription_tgfx const* const bindingTableDescs,
-  unsigned char isCallBufferSupported, pipeline_tgfxhnd* hnd) {
+  struct tgfx_shaderSource* Source, unsigned int bindingTableCount,
+  const tgfx_bindingTableDescription const* const bindingTableDescs,
+  unsigned char pushConstantOffset, unsigned char pushConstantSize, struct tgfx_pipeline** hnd) {
   VkComputePipelineCreateInfo cp_ci  = {};
   SHADERSOURCE_VKOBJ*         SHADER = getOBJ<SHADERSOURCE_VKOBJ>(Source);
   GPU_VKOBJ*                  GPU    = getOBJ<GPU_VKOBJ>(SHADER->m_gpu);
 
   VkPipelineLayout layout = {};
-  if (!VKPipelineLayoutCreation(GPU, bindingTableCount, bindingTableDescs, isCallBufferSupported,
-                                &layout)) {
+  if (!VKPipelineLayoutCreation(GPU, bindingTableCount, bindingTableDescs, pushConstantOffset,
+                                pushConstantSize, &layout)) {
     return vkPrint(43, L"compute pipeline at VKPipelineLayoutCreation()!");
   }
 
@@ -899,15 +901,15 @@ result_tgfx vk_createComputePipeline(
   obj->vk_layout      = layout;
   obj->vk_object      = pipelineObj;
   obj->vk_type        = VK_PIPELINE_BIND_POINT_COMPUTE;
-  *hnd                = getHANDLE<pipeline_tgfxhnd>(obj);
+  *hnd                = getHANDLE<struct tgfx_pipeline*>(obj);
   return result_tgfx_SUCCESS;
 }
 
-result_tgfx vk_copyComputePipeline(pipeline_tgfxhnd src, const extension_tgfxhnd* exts,
-                                   pipeline_tgfxhnd* dst) {
+result_tgfx vk_copyComputePipeline(struct tgfx_pipeline* src, struct tgfx_extension* const* exts,
+                                   struct tgfx_pipeline** dst) {
   return result_tgfx_NOTCODED;
 }
-void vk_destroyPipeline(pipeline_tgfxhnd pipe) {
+void vk_destroyPipeline(struct tgfx_pipeline* pipe) {
   PIPELINE_VKOBJ* vkPipe = getOBJ<PIPELINE_VKOBJ>(pipe);
   assert(vkPipe && "Invalid pipeline!");
   vkDestroyPipelineLayout(core_vk->getGPU(vkPipe->m_gpu)->vk_logical, vkPipe->vk_layout, nullptr);
@@ -919,9 +921,10 @@ static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
 static constexpr wchar_t* VKCONST_MAXDESCCHANGE_TEXT =
   L"Exceeded max number of changable binding, please report this";
 // Set a descriptor of the binding table created with shaderdescriptortype_tgfx_SAMPLER
-result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsigned int bindingCount,
-                                       const unsigned int*    bindingIndices,
-                                       const sampler_tgfxhnd* samplerHandles) {
+result_tgfx vk_setBindingTable_Sampler(struct tgfx_bindingTable*   bindingtable,
+                                       unsigned int                bindingCount,
+                                       const unsigned int*         bindingIndices,
+                                       struct tgfx_sampler* const* samplerHandles) {
   BINDINGTABLEINST_VKOBJ*   set      = getOBJ<BINDINGTABLEINST_VKOBJ>(bindingtable);
   static constexpr wchar_t* funcName = L"at setBindingTable_sampler()";
   if (!set) {
@@ -961,11 +964,11 @@ result_tgfx vk_setBindingTable_Sampler(bindingTable_tgfxhnd bindingtable, unsign
 }
 
 // Set a descriptor of the binding table created with shaderdescriptortype_tgfx_BUFFER
-result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int bindingCount,
-                                      const unsigned int*   bindingIndices,
-                                      const buffer_tgfxhnd* buffers, const unsigned int* offsets,
-                                      const unsigned int* sizes, unsigned int extCount,
-                                      const extension_tgfxhnd* exts) {
+result_tgfx vk_setBindingTable_Buffer(struct tgfx_bindingTable* table, unsigned int bindingCount,
+                                      const unsigned int*        bindingIndices,
+                                      struct tgfx_buffer* const* buffers,
+                                      const unsigned int* offsets, const unsigned int* sizes,
+                                      unsigned int extCount, struct tgfx_extension* const* exts) {
   BINDINGTABLEINST_VKOBJ*   set      = getOBJ<BINDINGTABLEINST_VKOBJ>(table);
   static constexpr wchar_t* funcName = L"at setBindingTable_buffer()";
   if (!set) {
@@ -1009,9 +1012,9 @@ result_tgfx vk_setBindingTable_Buffer(bindingTable_tgfxhnd table, unsigned int b
 
   return result_tgfx_SUCCESS;
 }
-result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int bindingCount,
-                                       const unsigned int*    bindingIndices,
-                                       const texture_tgfxhnd* textures) {
+result_tgfx vk_setBindingTable_Texture(struct tgfx_bindingTable* table, unsigned int bindingCount,
+                                       const unsigned int*         bindingIndices,
+                                       struct tgfx_texture* const* textures) {
   BINDINGTABLEINST_VKOBJ*   set      = getOBJ<BINDINGTABLEINST_VKOBJ>(table);
   static constexpr wchar_t* funcName = L"at setBindingTable_texture()";
   if (!set) {
@@ -1059,9 +1062,9 @@ result_tgfx vk_setBindingTable_Texture(bindingTable_tgfxhnd table, unsigned int 
 
 static constexpr wchar_t* VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT =
   L"Extensions're not supported in heap functions for now";
-result_tgfx vk_createHeap(gpu_tgfxhnd gpu, unsigned char memoryRegionID,
+result_tgfx vk_createHeap(struct tgfx_gpu* gpu, unsigned char memoryRegionID,
                           unsigned long long heapSize, unsigned int extCount,
-                          const extension_tgfxhnd* exts, heap_tgfxhnd* heapHnd) {
+                          struct tgfx_extension* const* exts, struct tgfx_heap** heapHnd) {
   if (exts) {
     return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
   }
@@ -1081,16 +1084,16 @@ result_tgfx vk_createHeap(gpu_tgfxhnd gpu, unsigned char memoryRegionID,
   heap->vk_memoryTypeIndex = memoryRegionID;
   heap->m_size             = heapSize;
   heap->m_GPU              = vkGPU->gpuIndx();
-  *heapHnd                 = getHANDLE<heap_tgfxhnd>(heap);
+  *heapHnd                 = getHANDLE<struct tgfx_heap*>(heap);
   return result_tgfx_SUCCESS;
 }
-result_tgfx vk_getHeapRequirement_Texture(texture_tgfxhnd i_texture, unsigned int extCount,
-                                          const extension_tgfxhnd*   exts,
-                                          heapRequirementsInfo_tgfx* reqs) {
+result_tgfx vk_getHeapRequirement_Texture(struct tgfx_texture* i_texture, unsigned int extCount,
+                                          struct tgfx_extension* const* exts,
+                                          tgfx_heapRequirementsInfo*    reqs) {
   if (exts) {
     return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
   }
-  TEXTURE_VKOBJ* texture  = getOBJ<TEXTURE_VKOBJ>(i_texture);
+  TEXTURE_VKOBJ* texture = getOBJ<TEXTURE_VKOBJ>(i_texture);
   for (uint8_t memTypeIndx = 0; memTypeIndx < 32; memTypeIndx++) {
     if (texture->m_memReqs.vk_memReqs.memoryTypeBits & (1u << memTypeIndx)) {
       reqs->memoryRegionIDs[memTypeIndx] = true;
@@ -1098,18 +1101,18 @@ result_tgfx vk_getHeapRequirement_Texture(texture_tgfxhnd i_texture, unsigned in
       reqs->memoryRegionIDs[memTypeIndx] = false;
     }
   }
-  reqs->offsetAlignment           = texture->m_memReqs.vk_memReqs.alignment;
-  reqs->size                      = texture->m_memReqs.vk_memReqs.size;
+  reqs->offsetAlignment = texture->m_memReqs.vk_memReqs.alignment;
+  reqs->size            = texture->m_memReqs.vk_memReqs.size;
   return result_tgfx_SUCCESS;
 }
-result_tgfx vk_getHeapRequirement_Buffer(buffer_tgfxhnd i_buffer, unsigned int extCount,
-                                         const extension_tgfxhnd*   exts,
-                                         heapRequirementsInfo_tgfx* reqs) {
+result_tgfx vk_getHeapRequirement_Buffer(struct tgfx_buffer* i_buffer, unsigned int extCount,
+                                         struct tgfx_extension* const* exts,
+                                         tgfx_heapRequirementsInfo*    reqs) {
   if (exts) {
     return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
   }
-  BUFFER_VKOBJ* buf      = getOBJ<BUFFER_VKOBJ>(i_buffer);
- 
+  BUFFER_VKOBJ* buf = getOBJ<BUFFER_VKOBJ>(i_buffer);
+
   for (uint8_t memTypeIndx = 0; memTypeIndx < 32; memTypeIndx++) {
     if (buf->m_memReqs.vk_memReqs.memoryTypeBits & (1u << memTypeIndx)) {
       reqs->memoryRegionIDs[memTypeIndx] = true;
@@ -1117,20 +1120,20 @@ result_tgfx vk_getHeapRequirement_Buffer(buffer_tgfxhnd i_buffer, unsigned int e
       reqs->memoryRegionIDs[memTypeIndx] = false;
     }
   }
-  reqs->offsetAlignment           = buf->m_memReqs.vk_memReqs.alignment;
-  reqs->size                      = buf->m_memReqs.vk_memReqs.size;
+  reqs->offsetAlignment = buf->m_memReqs.vk_memReqs.alignment;
+  reqs->size            = buf->m_memReqs.vk_memReqs.size;
   return result_tgfx_SUCCESS;
 }
 // @return FAIL if this feature isn't supported
-result_tgfx vk_getRemainingMemory(gpu_tgfxhnd GPU, unsigned char memoryRegionID,
-                                  unsigned int extCount, const extension_tgfxhnd* exts,
+result_tgfx vk_getRemainingMemory(struct tgfx_gpu* GPU, unsigned char memoryRegionID,
+                                  unsigned int extCount, struct tgfx_extension* const* exts,
                                   unsigned long long* size) {
   return result_tgfx_NOTCODED;
 }
 
-result_tgfx vk_bindToHeap_Buffer(heap_tgfxhnd i_heap, unsigned long long offset,
-                                 buffer_tgfxhnd i_buffer, unsigned int extCount,
-                                 const extension_tgfxhnd* exts) {
+result_tgfx vk_bindToHeap_Buffer(struct tgfx_heap* i_heap, unsigned long long offset,
+                                 struct tgfx_buffer* i_buffer, unsigned int extCount,
+                                 struct tgfx_extension* const* exts) {
   if (exts) {
     return vkPrint(16, VKCONST_HEAP_EXTENSIONS_NOT_SUPPORTED_TEXT);
   }
@@ -1149,9 +1152,9 @@ result_tgfx vk_bindToHeap_Buffer(heap_tgfxhnd i_heap, unsigned long long offset,
   }
   return result_tgfx_SUCCESS;
 }
-result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset,
-                                  texture_tgfxhnd i_texture, unsigned int extCount,
-                                  const extension_tgfxhnd* exts) {
+result_tgfx vk_bindToHeap_Texture(struct tgfx_heap* i_heap, unsigned long long offset,
+                                  struct tgfx_texture* i_texture, unsigned int extCount,
+                                  struct tgfx_extension* const* exts) {
   TEXTURE_VKOBJ* texture = getOBJ<TEXTURE_VKOBJ>(i_texture);
   HEAP_VKOBJ*    heap    = getOBJ<HEAP_VKOBJ>(i_heap);
   GPU_VKOBJ*     gpu     = core_vk->getGPU(texture->m_GPU);
@@ -1208,8 +1211,9 @@ result_tgfx vk_bindToHeap_Texture(heap_tgfxhnd i_heap, unsigned long long offset
   return result_tgfx_SUCCESS;
 }
 
-result_tgfx vk_mapHeap(heap_tgfxhnd i_heap, unsigned long long offset, unsigned long long size,
-                       unsigned int extCount, const extension_tgfxhnd* exts, void** mappedRegion) {
+result_tgfx vk_mapHeap(struct tgfx_heap* i_heap, unsigned long long offset, unsigned long long size,
+                       unsigned int extCount, struct tgfx_extension* const* exts,
+                       void** mappedRegion) {
   HEAP_VKOBJ* heap = getOBJ<HEAP_VKOBJ>(i_heap);
   GPU_VKOBJ*  gpu  = core_vk->getGPU(heap->m_GPU);
   if (vkMapMemory(gpu->vk_logical, heap->vk_memoryHandle, offset, size, 0, mappedRegion) !=
@@ -1219,7 +1223,7 @@ result_tgfx vk_mapHeap(heap_tgfxhnd i_heap, unsigned long long offset, unsigned 
   return result_tgfx_SUCCESS;
 }
 
-result_tgfx vk_unmapHeap(heap_tgfxhnd i_heap) {
+result_tgfx vk_unmapHeap(struct tgfx_heap* i_heap) {
   HEAP_VKOBJ* heap = getOBJ<HEAP_VKOBJ>(i_heap);
   GPU_VKOBJ*  gpu  = core_vk->getGPU(heap->m_GPU);
   vkUnmapMemory(gpu->vk_logical, heap->vk_memoryHandle);
@@ -1262,7 +1266,7 @@ inline void set_functionpointers() {
 }
 
 extern void vk_initGlslang();
-void vk_createContentManager() {
+void        vk_createContentManager() {
   VKGLOBAL_VIRMEM_CONTENTMANAGER = vk_virmem::allocate_dynamicmem(
     sizeof(gpudatamanager_public) + sizeof(gpudatamanager_private) + (10ull << 20));
   contentManager         = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) gpudatamanager_public;
@@ -1275,18 +1279,18 @@ void vk_createContentManager() {
 
 // Helper funcs
 
-VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, texture_tgfxhnd, 1 << 24>&
+VK_LINEAR_OBJARRAY<TEXTURE_VKOBJ, struct tgfx_texture*, 1 << 24>&
 gpudatamanager_public::GETTEXTURES_ARRAY() {
   return hidden->textures;
 }
-VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, pipeline_tgfxhnd, 1 << 24>&
+VK_LINEAR_OBJARRAY<PIPELINE_VKOBJ, struct tgfx_pipeline*, 1 << 24>&
 gpudatamanager_public::GETPIPELINE_ARRAY() {
   return hidden->pipelines;
 }
-VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, buffer_tgfxhnd>& gpudatamanager_public::GETBUFFER_ARRAY() {
+VK_LINEAR_OBJARRAY<BUFFER_VKOBJ, struct tgfx_buffer*>& gpudatamanager_public::GETBUFFER_ARRAY() {
   return hidden->buffers;
 }
-VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, bindingTable_tgfxhnd, 1 << 16>&
+VK_LINEAR_OBJARRAY<BINDINGTABLEINST_VKOBJ, struct tgfx_bindingTable*, 1 << 16>&
 gpudatamanager_public::GETBINDINGTABLE_ARRAY() {
   return hidden->bindingtableinsts;
 }

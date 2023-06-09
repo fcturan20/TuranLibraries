@@ -1,241 +1,257 @@
 #pragma once
-#include "tgfx_forwarddeclarations.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef struct tgfx_uvec4 {
+typedef int textureUsageMask_tgfxflag;
+typedef int bufferUsageMask_tgfxflag;
+typedef int shaderStage_tgfxflag;
+struct tgfx_uvec4 {
   unsigned int x, y, z, w;
-} uvec4_tgfx;
+};
 
-typedef struct tgfx_uvec3 {
+struct tgfx_uvec3 {
   unsigned int x, y, z;
-} uvec3_tgfx;
+};
 
-typedef struct tgfx_uvec2 {
+struct tgfx_uvec2 {
   unsigned int x, y;
-} uvec2_tgfx;
+};
 
-typedef struct tgfx_vec2 {
+struct tgfx_vec2 {
   float x, y;
-} vec2_tgfx;
+};
 
-typedef struct tgfx_vec3 {
+struct tgfx_vec3 {
   float x, y, z;
-} vec3_tgfx;
+};
 
-typedef struct tgfx_vec4 {
+struct tgfx_vec4 {
   float x, y, z, w;
-} vec4_tgfx;
+};
 
-typedef struct tgfx_ivec2 {
+struct tgfx_ivec2 {
   int x, y;
-} ivec2_tgfx;
+};
 
-typedef struct tgfx_ivec3 {
+struct tgfx_ivec3 {
   int x, y, z;
-} ivec3_tgfx;
+};
 
-typedef struct tgfx_boxRegion {
+struct tgfx_boxRegion {
   unsigned int XOffset, YOffset, WIDTH, HEIGHT;
-} boxRegion_tgfx;
+};
 
-typedef struct tgfx_cubeRegion {
+struct tgfx_cubeRegion {
   unsigned int XOffset, YOffset, ZOffset, WIDTH, HEIGHT, DEPTH;
-} cubeRegion_tgfx;
+};
 
-typedef struct tgfx_memory_description {
-  unsigned char             memoryTypeId;
-  memoryallocationtype_tgfx allocationType;
-  unsigned long             maxAllocationSize;
-} memoryDescription_tgfx;
+struct tgfx_memoryDescription {
+  unsigned char                  memoryTypeId;
+  enum memoryallocationtype_tgfx allocationType;
+  unsigned long                  maxAllocationSize;
+};
 
-typedef struct tgfx_gpu_description {
-  const wchar_t*   name;
-  unsigned int  gfxApiVersion, driverVersion;
-  gpu_type_tgfx type;
-  unsigned char operationSupport_raster, operationSupport_compute, operationSupport_transfer,
+struct tgfx_gpuDescription {
+  const wchar_t*     name;
+  unsigned int       gfxApiVersion, driverVersion;
+  enum gpu_type_tgfx type;
+  unsigned char      operationSupport_raster, operationSupport_compute, operationSupport_transfer,
     queueFamilyCount;
-  const memoryDescription_tgfx* memRegions;
-  unsigned char                 memRegionsCount;
-} gpuDescription_tgfx;
+  const struct tgfx_memoryDescription* memRegions;
+  unsigned char                        memRegionsCount;
+};
 
-typedef struct tgfx_window_description {
-  tgfx_uvec2                size;
-  monitor_tgfxhnd           monitor;
-  windowmode_tgfx           mode;
-  const wchar_t*               name;
+typedef void (*tgfx_windowResizeCallback)(struct tgfx_window* windowHnd, void* userPtr,
+                                          tgfx_uvec2            resolution,
+                                          struct tgfx_texture** swapchainTextures);
+// @param scanCode: System-specific scan code
+typedef void (*tgfx_windowKeyCallback)(struct tgfx_window* windowHnd, void* userPointer,
+                                       enum key_tgfx key, int scanCode, enum keyAction_tgfx action,
+                                       enum keyMod_tgfx mode);
+
+struct tgfx_windowDescription {
+  struct tgfx_uvec2         size;
+  struct tgfx_monitor*      monitor;
+  enum windowmode_tgfx      mode;
+  const wchar_t*            name;
   tgfx_windowResizeCallback resizeCb;
   tgfx_windowKeyCallback    keyCb;
-} windowDescription_tgfx;
+};
 
-typedef enum windowpresentation_tgfx windowpresentation_tgfx;
-typedef struct tgfx_swapchain_description {
-  window_tgfxhnd                window;
-  windowpresentation_tgfx       presentationMode;
-  windowcomposition_tgfx        composition;
-  colorspace_tgfx               colorSpace;
-  textureChannels_tgfx          channels;
-  textureUsageMask_tgfxflag     swapchainUsage;
-  unsigned int                  permittedQueueCount;
-  const gpuQueue_tgfxhnd* permittedQueues;
-  unsigned int                  imageCount;
-} swapchainDescription_tgfx;
+struct tgfx_swapchainDescription {
+  struct tgfx_window*          window;
+  enum windowpresentation_tgfx presentationMode;
+  enum windowcomposition_tgfx  composition;
+  enum colorspace_tgfx         colorSpace;
+  enum textureChannels_tgfx    channels;
+  textureUsageMask_tgfxflag    swapchainUsage;
+  unsigned int                 permittedQueueCount;
+  struct tgfx_gpuQueue* const* permittedQueues;
+  unsigned int                 imageCount;
+};
 
 #define TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT 24
 #define TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT 64
 #define TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE 6
-typedef struct tgfx_window_gpu_support {
-  unsigned int              maxImageCount;
-  uvec2_tgfx                minExtent, maxExtent;
-  textureUsageMask_tgfxflag usageFlag;
-  windowpresentation_tgfx   presentationModes[TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE];
-  colorspace_tgfx           colorSpace[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
-  textureChannels_tgfx      channels[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
-  gpuQueue_tgfxhnd          queues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT];
-} windowGPUsupport_tgfx;
+struct tgfx_windowGPUsupport {
+  unsigned int                 maxImageCount;
+  struct tgfx_uvec2            minExtent, maxExtent;
+  textureUsageMask_tgfxflag    usageFlag;
+  enum windowpresentation_tgfx presentationModes[TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE];
+  enum colorspace_tgfx         colorSpace[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
+  enum textureChannels_tgfx    channels[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
+  struct tgfx_gpuQueue*        queues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT];
+};
 
-typedef struct tgfx_sampler_description {
-  unsigned int              MinMipLevel, MaxMipLevel;
-  texture_mipmapfilter_tgfx minFilter, magFilter;
-  texture_wrapping_tgfx     wrapWidth, wrapHeight;
-  texture_wrapping_tgfx     wrapDepth;
-  uvec4_tgfx                bordercolor;
-} samplerDescription_tgfx;
+struct tgfx_samplerDescription {
+  unsigned int                   minMipLevel, maxMipLevel;
+  enum texture_mipmapfilter_tgfx minFilter, magFilter;
+  enum texture_wrapping_tgfx     wrapWidth, wrapHeight, wrapDepth;
+  struct tgfx_uvec4              bordercolor;
+};
 
-typedef struct tgfx_texture_description {
-  texture_dimensions_tgfx       dimension;
-  tgfx_uvec2                    resolution;
-  textureChannels_tgfx          channelType;
-  unsigned char                 mipCount;
-  textureUsageMask_tgfxflag     usage;
-  textureOrder_tgfx             dataOrder;
-  unsigned int                  permittedQueueCount;
-  const gpuQueue_tgfxhnd* permittedQueues;
-} textureDescription_tgfx;
+struct tgfx_textureDescription {
+  enum texture_dimensions_tgfx dimension;
+  struct tgfx_uvec2            resolution;
+  enum textureChannels_tgfx    channelType;
+  unsigned char                mipCount;
+  textureUsageMask_tgfxflag    usage;
+  enum textureOrder_tgfx       dataOrder;
+  unsigned int                 permittedQueueCount;
+  struct tgfx_gpuQueue* const* permittedQueues;
+};
 
-typedef struct tgfx_buffer_description {
+struct tgfx_bufferDescription {
   unsigned int                  dataSize;
   bufferUsageMask_tgfxflag      usageFlag;
   unsigned int                  permittedQueueCount;
-  const gpuQueue_tgfxhnd*        permittedQueues;
-  unsigned int                         extCount;
-  const extension_tgfxhnd* exts;
-} bufferDescription_tgfx;
+  struct tgfx_gpuQueue* const*  permittedQueues;
+  unsigned int                  extCount;
+  struct tgfx_extension* const* exts;
+};
 
-typedef struct tgfx_binding_table_description {
-  shaderdescriptortype_tgfx    DescriptorType;
-  unsigned int                 ElementCount;
-  shaderStage_tgfxflag         visibleStagesMask;
-  unsigned int                 staticSamplerCount;
-  const sampler_tgfxhnd* staticSamplers;
-  unsigned char                isDynamic;
-} bindingTableDescription_tgfx;
+struct tgfx_bindingTableDescription {
+  enum shaderdescriptortype_tgfx descriptorType;
+  unsigned int                   elementCount;
+  shaderStage_tgfxflag           visibleStagesMask;
+  unsigned int                   staticSamplerCount;
+  struct tgfx_sampler* const*    staticSamplers;
+  unsigned char                  isDynamic;
+};
 
 #define TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT 8
-typedef struct tgfx_stencil_state {
-  stencilop_tgfx stencilFail, pass, depthFail;
-  compare_tgfx   compareOp;
-  unsigned int   compareMask, writeMask, reference;
-} stencilState_tgfx;
+struct tgfx_stencilState {
+  enum stencilop_tgfx stencilFail, pass, depthFail;
+  enum compare_tgfx   compareOp;
+  unsigned int        compareMask, writeMask, reference;
+};
 
-typedef struct tgfx_depth_stencil_state {
-  unsigned char      depthTestEnabled, depthWriteEnabled, stencilTestEnabled;
-  compare_tgfx       depthCompare;
-  tgfx_stencil_state front, back;
-} depthStencilState_tgfx;
+struct tgfx_depthStencilState {
+  unsigned char            depthTestEnabled, depthWriteEnabled, stencilTestEnabled;
+  enum compare_tgfx        depthCompare;
+  struct tgfx_stencilState front, back;
+};
 
-typedef struct tgfx_blend_state {
-  unsigned char             blendEnabled;
-  blendfactor_tgfx          srcColorFactor, dstColorFactor, srcAlphaFactor, dstAlphaFactor;
-  blendmode_tgfx            colorMode, alphaMode;
-  textureComponentMask_tgfx blendComponents;
-} blendState_tgfx;
+struct tgfx_blendState {
+  unsigned char                  blendEnabled;
+  enum blendfactor_tgfx          srcColorFactor, dstColorFactor, srcAlphaFactor, dstAlphaFactor;
+  enum blendmode_tgfx            colorMode, alphaMode;
+  enum textureComponentMask_tgfx blendComponents;
+};
 
-typedef struct tgfx_raster_state_description {
-  cullmode_tgfx          culling;
-  polygonmode_tgfx       polygonmode;
-  depthStencilState_tgfx depthStencilState;
-  blendState_tgfx        blendStates[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
-  vertexlisttypes_tgfx   topology;
-} rasterStateDescription_tgfx;
+struct tgfx_rasterStateDescription {
+  enum cullmode_tgfx            culling;
+  enum polygonmode_tgfx         polygonmode;
+  struct tgfx_depthStencilState depthStencilState;
+  struct tgfx_blendState        blendStates[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
+  enum vertexlisttypes_tgfx     topology;
+};
 
-typedef struct tgfx_heap_requirements_info {
+struct tgfx_heapRequirementsInfo {
   // Single GPU can have max 32 regions
   // GPU should be same with the one used in CreateTexture()
   unsigned char      memoryRegionIDs[32];
   unsigned int       offsetAlignment;
   unsigned long long size;
-} heapRequirementsInfo_tgfx;
+};
 
 // 32 byte data to store extreme colors (RGBA64)
-typedef struct tgfx_typelessColor {
+struct tgfx_typelessColor {
   char data[32];
-} typelessColor_tgfx;
+};
 
-typedef struct tgfx_vertex_attribute_description {
-  unsigned int  attributeIndx, bindingIndx, offset;
-  datatype_tgfx dataType;
-} vertexAttributeDescription_tgfx;
+struct tgfx_vertexAttributeDescription {
+  unsigned int       attributeIndx, bindingIndx, offset;
+  enum datatype_tgfx dataType;
+};
 
-typedef struct tgfx_vertex_binding_description {
-  unsigned int                bindingIndx, stride;
-  vertexBindingInputRate_tgfx inputRate;
-} vertexBindingDescription_tgfx;
+struct tgfx_vertexBindingDescription {
+  unsigned int                     bindingIndx, stride;
+  enum vertexBindingInputRate_tgfx inputRate;
+};
 
 // TGFX_SUBPASS_EXTENSION
-typedef struct tgfx_subpass_slot_description {
-  rasterpassStore_tgfx storeType;
-  rasterpassLoad_tgfx  loadType;
-  typelessColor_tgfx   clearValue;
-  textureChannels_tgfx format;
-  image_access_tgfx    layout;
-} subpassSlotDescription_tgfx;
+struct tgfx_subpassSlotDescription {
+  enum rasterpassStore_tgfx storeType;
+  enum rasterpassLoad_tgfx  loadType;
+  struct tgfx_typelessColor clearValue;
+  enum textureChannels_tgfx format;
+  enum image_access_tgfx    layout;
+};
 
-typedef struct tgfx_viewport_info {
-  vec2_tgfx topLeftCorner, size, depthMinMax;
-} viewportInfo_tgfx;
+struct tgfx_viewportInfo {
+  struct tgfx_vec2 topLeftCorner, size, depthMinMax;
+};
 
-typedef struct tgfx_raster_input_assembler_description {
-  unsigned int                           attribCount, bindingCount;
-  const vertexAttributeDescription_tgfx* i_attributes;
-  const vertexBindingDescription_tgfx*   i_bindings;
-} rasterInputAssemblerDescription_tgfx;
+struct tgfx_rasterInputAssemblerDescription {
+  unsigned int                                  attribCount, bindingCount;
+  const struct tgfx_vertexAttributeDescription* i_attributes;
+  const struct tgfx_vertexBindingDescription*   i_bindings;
+};
 
-typedef struct tgfx_raster_pipeline_description {
-  unsigned int                         shaderCount;
-  const shaderSource_tgfxhnd*    shaders;
-  rasterInputAssemblerDescription_tgfx attribLayout;
-  viewportInfo_tgfx                    viewportList;
-  const rasterStateDescription_tgfx*   mainStates;
-  textureChannels_tgfx                 colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
-  const bindingTableDescription_tgfx* tables;
-  unsigned int                              tableCount;
-  textureChannels_tgfx                      depthStencilTextureFormat;
-  unsigned int                              extCount;
-  const extension_tgfxhnd*      exts;
-} rasterPipelineDescription_tgfx;
+struct tgfx_rasterPipelineDescription {
+  unsigned int                                shaderCount;
+  struct tgfx_shaderSource* const*            shaders;
+  struct tgfx_rasterInputAssemblerDescription attribLayout;
+  struct tgfx_viewportInfo                    viewportList;
+  const tgfx_rasterStateDescription*          mainStates;
+  enum textureChannels_tgfx colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
+  const struct tgfx_bindingTableDescription* tables;
+  unsigned int                               tableCount;
+  enum textureChannels_tgfx                  depthStencilTextureFormat;
+  unsigned int                               extCount;
+  struct tgfx_extension* const*              exts;
+  unsigned char                              pushConstantOffset, pushConstantSize;
+};
 
-typedef struct tgfx_rasterpass_begin_slot_info {
-  texture_tgfxhnd      texture;
-  image_access_tgfx    imageAccess;
-  rasterpassLoad_tgfx  loadOp, loadStencilOp;
-  rasterpassStore_tgfx storeOp, storeStencilOp;
-  typelessColor_tgfx   clearValue;
-} rasterpassBeginSlotInfo_tgfx;
+struct tgfx_rasterpassBeginSlotInfo {
+  struct tgfx_texture*      texture;
+  enum image_access_tgfx    imageAccess;
+  enum rasterpassLoad_tgfx  loadOp, loadStencilOp;
+  enum rasterpassStore_tgfx storeOp, storeStencilOp;
+  struct tgfx_typelessColor clearValue;
+};
 
-typedef struct tgfx_indirect_argument_draw_indexed {
+struct tgfx_drawIndexedIndirectArgument {
   unsigned int indexCountPerInstance;
   unsigned int instanceCount;
   unsigned int firstIndex;
   int          vertexOffset;
   unsigned int firstInstance;
-} drawIndexedIndirectArgument_tgfx;
+};
 
-typedef struct tgfx_indirect_argument_draw_nonindexed {
+struct tgfx_drawNonIndexedIndirectArgument {
   unsigned int vertexCountPerInstance;
   unsigned int instanceCount;
   unsigned int firstVertex;
   unsigned int firstInstance;
-} drawNonIndexedIndirectArgument_tgfx;
+};
 
-typedef struct tgfx_indirect_argument_dispatch {
-  uvec3_tgfx threadGroupCount;
-} dispatchIndirectArgument_tgfx;
+struct tgfx_dispatchIndirectArgument {
+  struct tgfx_uvec3 threadGroupCount;
+};
+
+#ifdef __cplusplus
+}
+#endif

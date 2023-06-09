@@ -1,27 +1,25 @@
 #include <assert.h>
 
-// Make sure that all tgfx headers are in C
-extern "C" {
-
+#define TGFX_BACKEND
 #define T_INCLUDE_PLATFORM_LIBS
 #include <ecs_tapi.h>
 #include <logger_tapi.h>
 #include <predefinitions_tapi.h>
 #include <string_tapi.h>
 
+#include <string>
+
 #include "tgfx_core.h"
+#include "tgfx_forwarddeclarations.h"
 #include "tgfx_gpucontentmanager.h"
 #include "tgfx_helper.h"
 #include "tgfx_imgui.h"
 #include "tgfx_renderer.h"
 #include "tgfx_structs.h"
-}
 
-#include <string>
-
-static core_tgfx_type* core_typePtr;
-static ecs_tapi*       core_regSys;
-static logger_tapi*    core_logSys;
+static tgfx_core_type*    core_typePtr;
+static const tapi_ecs*    core_regSys;
+static const tapi_logger* core_logSys;
 
 void defaultPrintCallback(unsigned int logCode, const wchar_t* extraInfo) {
   const wchar_t* logMessage = nullptr;
@@ -47,41 +45,45 @@ constexpr std::size_t  constexpr_slen(const char* s) { return std::char_traits<c
 static constexpr uint32_t maxBackendFileName =
   max(constexpr_slen(backendFileNames[0]), constexpr_slen(backendFileNames[1]));
 
-result_tgfx load_backend(core_tgfx* parent, backends_tgfx backend, tgfx_logCallback printcallback) {
+typedef result_tgfx (*load_backend_fnc)(const struct tapi_ecs* ecsSys, struct tgfx_core_type* core,
+                                    void (*printFnc)(unsigned int   logCode,
+                                                     const wchar_t* extraInfo));
+result_tgfx load_backend(tgfx_core* parent, backends_tgfx backend,
+                         void (*printFnc)(unsigned int logCode, const wchar_t* extraInfo)) {
   const char* path = backendFileNames[( int )backend];
 
-  if (!printcallback) {
-    printcallback = defaultPrintCallback;
+  if (!printFnc) {
+    printFnc = defaultPrintCallback;
   }
 
   auto backend_dll = DLIB_LOAD_TAPI(path);
   if (!backend_dll) {
-    printcallback(22, nullptr);
+    printFnc(22, nullptr);
     return result_tgfx_FAIL;
   }
-  backend_load_func backendloader =
-    ( backend_load_func )DLIB_FUNC_LOAD_TAPI(backend_dll, "BACKEND_LOAD");
+  load_backend_fnc backendloader =
+    ( load_backend_fnc )DLIB_FUNC_LOAD_TAPI(backend_dll, "BACKEND_LOAD");
   if (!backendloader) {
-    printcallback(23, nullptr);
+    printFnc(23, nullptr);
     return result_tgfx_FAIL;
   }
-  return backendloader(core_regSys, core_typePtr, printcallback);
+  return backendloader(core_regSys, core_typePtr, printFnc);
 }
 
 result_tgfx tgfxGetLogMessage(unsigned int logCode, const wchar_t** logMessage);
 ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
-  core_tgfx_type* core = ( core_tgfx_type* )malloc(sizeof(core_tgfx_type) + sizeof(core_tgfx));
+  tgfx_core_type* core = ( tgfx_core_type* )malloc(sizeof(tgfx_core_type) + sizeof(tgfx_core));
   if (core == NULL) {
     printf("TGFX core creation failed because malloc failed");
     exit(-1);
   }
-  core->api                 = ( core_tgfx* )(core + 1);
+  core->api                 = ( tgfx_core* )(core + 1);
   core_typePtr              = core;
   core_regSys               = ecsSys;
-  core->api->contentmanager = new gpudatamanager_tgfx;
-  core->api->helpers        = new helper_tgfx;
-  core->api->imgui          = new dearimgui_tgfx;
-  core->api->renderer       = new renderer_tgfx;
+  core->api->contentmanager = new tgfx_gpuDataManager;
+  core->api->helpers        = new tgfx_helper;
+  core->api->imgui          = new tgfx_dearImgui;
+  core->api->renderer       = new tgfx_renderer;
   core_logSys =
     (( LOGGER_TAPI_PLUGIN_LOAD_TYPE )core_regSys->getSystem(LOGGER_TAPI_PLUGIN_NAME))->funcs;
 

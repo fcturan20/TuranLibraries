@@ -1,30 +1,32 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stdarg.h>
+
 #include "predefinitions_tapi.h"
 
 #define STRINGSYS_TAPI_PLUGIN_NAME "tapi_string"
-#define STRINGSYS_TAPI_PLUGIN_LOAD_TYPE stringSys_tapi_type*
+#define STRINGSYS_TAPI_PLUGIN_LOAD_TYPE struct tapi_stringSys_type*
 #define STRINGSYS_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 1)
 // Create allocator flag (but not coded for now)
 #define ALLOCATOR_FLAG_TAPI() 0
 
-typedef enum tapi_string_type {
-  string_type_tapi_UTF8,
-  string_type_tapi_UTF16,
-  string_type_tapi_UTF32
-} string_type_tapi;
+enum tapi_string_type { string_type_tapi_UTF8, string_type_tapi_UTF16, string_type_tapi_UTF32 };
 
-typedef struct stringSys_tapi {
-  void (*convertString)(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst), 
+struct tapi_stringSys {
+  void (*convertString)(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst),
                         unsigned long long maxLen);
   // Use these to create a single string from variadic input
   // Calling free() is enough to destroy
   // %v Wide string, %s Char string, %u uint32, %d int32, %f f32-64, %p pointer
   // %lld int64, %llu uint64
-  void (*createString)(string_type_tapi targetType, void** target, const wchar_t* format, ...);
-  void (*vCreateString)(string_type_tapi targetType, void** target, const wchar_t* format, va_list arg);
-} tapi_stringSys;
+  void (*createString)(enum tapi_string_type targetType, void** target, const wchar_t* format, ...);
+  void (*vCreateString)(enum tapi_string_type targetType, void** target, const wchar_t* format,
+                        va_list arg);
+};
 
+/*
 typedef struct tapi_array_of_strings* array_of_strings_tapi;
 
 // Uses classic malloc
@@ -62,12 +64,16 @@ typedef struct array_of_strings_virtualallocatorsys_tapi {
   unsigned long long (*delete_string)(array_of_strings_tapi* array,
                                       unsigned long long     element_index);
 } array_of_strings_virtualallocatorsys_tapi;
+*/
 
-typedef struct stringSys_tapi_d stringSys_tapi_d;
 // Array of Strings System
-typedef struct stringSys_tapi_type {
-  stringSys_tapi_d*                          data;
-  stringSys_tapi*                            standardString;
-  array_of_strings_standardallocator_tapi*   standard_allocator;
-  array_of_strings_virtualallocatorsys_tapi* virtual_allocator;
-} stringSys_tapi_type;
+struct tapi_stringSys_type {
+  struct tapi_stringSys_d* data;
+  struct tapi_stringSys*   standardString;
+  // array_of_strings_standardallocator_tapi*   standard_allocator;
+  // array_of_strings_virtualallocatorsys_tapi* virtual_allocator;
+};
+
+#ifdef __cplusplus
+}
+#endif

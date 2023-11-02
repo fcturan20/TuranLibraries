@@ -9,14 +9,14 @@ renderer_public*       tgfxRenderer          = nullptr;
 gpudatamanager_public* contentManager    = nullptr;
 imgui_vk*              imgui             = nullptr;
 GPU_VKOBJ*             rendergpu         = nullptr;
-tapi_threadingSys*     threadingsys      = nullptr;
+const tlJob*     threadingsys      = nullptr;
 unsigned int           threadcount       = 1;
 gpuallocatorsys_vk*    gpu_allocator     = nullptr;
 manager_vk*            queuesys          = nullptr;
-tapi_virtualMemorySys* virmemsys         = nullptr;
-tapi_profiler*         profilerSys       = nullptr;
-tapi_bitsetSys*        bitsetSys         = nullptr;
-tapi_stringSys*        stringSys         = nullptr;
+const tlVM* vm         = nullptr;
+const tlProf*         profilerSys       = nullptr;
+const tlBitsetSys*        bitsetSys         = nullptr;
+const tlString*        stringSys         = nullptr;
 VkInstance             VKGLOBAL_INSTANCE = VK_NULL_HANDLE;
 VkApplicationInfo      VKGLOBAL_APPINFO;
 void (*printer_cb)(unsigned int logCode, const wchar_t* extraInfo) = nullptr;
@@ -46,9 +46,9 @@ static VK_MAIN_ALLOCATOR* allocator_main;
 void vk_createBackendAllocator() {
   // Allocate enough space for all vulkan backend
   {
-    VKCONST_VIRMEMSPACE_BEGIN = virmemsys->virtual_reserve(UINT32_MAX);
-    VKCONST_VIRMEMPAGESIZE    = virmemsys->get_pagesize();
-    virmemsys->virtual_commit(VKCONST_VIRMEMSPACE_BEGIN,
+    VKCONST_VIRMEMSPACE_BEGIN = vm->reserve(UINT32_MAX);
+    VKCONST_VIRMEMPAGESIZE    = vm->pageSize();
+    vm->commit(VKCONST_VIRMEMSPACE_BEGIN,
                               VKCONST_VIRMEMPAGESIZE * VKCONST_VIRMEM_MANAGERONLYPAGECOUNT);
     VKCONST_VIRMEM_MAXALLOCCOUNT =
       ((VKCONST_VIRMEM_MANAGERONLYPAGECOUNT * VKCONST_VIRMEMPAGESIZE) - sizeof(VK_MAIN_ALLOCATOR)) /
@@ -146,7 +146,7 @@ void vk_virmem::free_page(uint32_t suballocation_startoffset) {
   VK_PAGEINFO& alloc = allocator_main->suballocations_list[search_alloc_i];
   void*        free_address =
     ( void* )((VKCONST_VIRMEMPAGESIZE * page_i) + uintptr_t(VKCONST_VIRMEMSPACE_BEGIN));
-  virmemsys->virtual_decommit(free_address, VKCONST_VIRMEMPAGESIZE * alloc.PAGECOUNT);
+  vm->decommit(free_address, VKCONST_VIRMEMPAGESIZE * alloc.PAGECOUNT);
   alloc.isALIVE  = false;
   alloc.isMERGED = false;
 }
@@ -159,7 +159,7 @@ vk_virmem::dynamicmem* vk_virmem::allocate_dynamicmem(uint32_t size, uint32_t* d
   uint32_t               start         = allocatePage(size, &roundedUpSize);
   vk_virmem::dynamicmem* dynamicmem =
     ( vk_virmem::dynamicmem* )(uintptr_t(VKCONST_VIRMEMSPACE_BEGIN) + start);
-  virmemsys->virtual_commit(dynamicmem, VKCONST_VIRMEMPAGESIZE);
+  vm->commit(dynamicmem, VKCONST_VIRMEMPAGESIZE);
   dynamicmem->all_space = roundedUpSize;
   dynamicmem->remaining_space.store(dynamicmem->all_space - sizeof(vk_virmem::dynamicmem));
   if (dynamicmemstart) {
@@ -191,7 +191,7 @@ uint32_t vk_virmem::allocate_from_dynamicmem(dynamicmem* mem, uint32_t size, boo
   uintptr_t loc_of_base_mem = uintptr_t(mem);
   uintptr_t location        = (loc_of_base_mem + sizeof(dynamicmem) + mem->all_space - remaining);
   if (shouldcommit) {
-    virmemsys->virtual_commit(( void* )location, size);
+    vm->commit(( void* )location, size);
   }
   return location - uintptr_t(VKCONST_VIRMEMSPACE_BEGIN);
 }

@@ -9,14 +9,7 @@
 #include "ecs_tapi.h"
 #include "threadingsys_tapi.h"
 
-typedef struct tapi_profiler_d {
-  tapi_profiler_type*        type;
-  profiledscope_handle_tapi* last_handles;
-  unsigned int               threadcount;
-  tapi_threadingSys*         threadsys;
-} profiler_tapi_d;
-
-struct profiledScope {
+struct tlProfiledScope {
  public:
   bool                isRecording : 1;
   unsigned char       timingType : 2;
@@ -24,8 +17,14 @@ struct profiledScope {
   unsigned long long* duration;
   std::string         name;
 };
+typedef struct tlProfPriv {
+  tlProf*        sys;
+  tlProfiledScope** last_handles;
+  unsigned int               threadcount;
+  const tlJob*         threadsys;
+} profiler_tapi_d;
 
-tapi_profiler_d* profiler_data = nullptr;
+tlProfPriv* priv = nullptr;
 
 constexpr long long getTime(unsigned char timingType) {
   switch (timingType) {
@@ -57,34 +56,33 @@ constexpr long long getTime(unsigned char timingType) {
   }
 }
 
-void start_profiling(profiledscope_handle_tapi* handle, const char* name,
+tlProfiledScope* start_profiling(const char* name,
                      unsigned long long* duration, unsigned char timingType) {
   unsigned int threadindex =
-    (profiler_data->threadcount == 1) ? (0) : (profiler_data->threadsys->this_thread_index());
-  profiledScope* profile                   = new profiledScope;
+    (priv->threadcount == 1) ? (0) : (priv->threadsys->thisThreadIndx());
+  tlProfiledScope* profile                   = new tlProfiledScope;
   profile->startPoint                      = getTime(timingType);
   profile->isRecording                     = true;
   profile->duration                        = duration;
   profile->timingType                      = timingType;
   profile->name                            = name;
-  *handle                                  = ( profiledscope_handle_tapi )profile;
-  profiler_data->last_handles[threadindex] = *handle;
+  priv->last_handles[threadindex] = profile;
+  return profile;
 }
 
-void finish_profiling(profiledscope_handle_tapi* handle) {
-  profiledScope* profil = ( profiledScope* )*handle;
+void finish_profiling(tlProfiledScope* profil) {
   *profil->duration     = getTime(profil->timingType) - profil->startPoint;
   delete profil;
 }
 const char* timeNames[] = {"nanoseconds", "microseconds", "milliseconds", "seconds"};
 void        threadlocal_finish_last_profiling(unsigned char shouldPrint) {
   unsigned int threadindex =
-    (profiler_data->threadcount == 1) ? (0) : (profiler_data->threadsys->this_thread_index());
-  profiledScope*      profile  = ( profiledScope* )profiler_data->last_handles[threadindex];
+    (priv->threadcount == 1) ? (0) : (priv->threadsys->thisThreadIndx());
+  tlProfiledScope*      profile  = ( tlProfiledScope* )priv->last_handles[threadindex];
   unsigned long long* duration = profile->duration;
   std::string         name     = profile->name;
   unsigned char       timingType = profile->timingType;
-  finish_profiling(&profiler_data->last_handles[threadindex]);
+  finish_profiling(priv->last_handles[threadindex]);
   if (shouldPrint) {
     printf("%s took %llu %s!\n", name.c_str(), *duration, timeNames[timingType]);
   }
@@ -95,25 +93,24 @@ ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
   THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadsystype =
     ( THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE )ecssys->getSystem(THREADINGSYS_TAPI_PLUGIN_NAME);
   if (threadsystype) {
-    threadcount = threadsystype->funcs->thread_count();
+    threadcount = threadsystype->threadCount();
   }
 
-  tapi_profiler_type* type = ( tapi_profiler_type* )malloc(sizeof(tapi_profiler_type));
-  type->data               = ( tapi_profiler_d* )malloc(sizeof(tapi_profiler_d));
-  type->funcs              = ( tapi_profiler* )malloc(sizeof(tapi_profiler));
-  profiler_data            = type->data;
+  tlProf* type = ( tlProf* )malloc(sizeof(tlProf));
+  priv = ( tlProfPriv* )malloc(sizeof(tlProfPriv));
 
   ecssys->addSystem(PROFILER_TAPI_PLUGIN_NAME, PROFILER_TAPI_PLUGIN_VERSION, type);
 
-  type->funcs->start_profiling                   = &start_profiling;
-  type->funcs->finish_profiling                  = &finish_profiling;
-  type->funcs->threadlocal_finish_last_profiling = &threadlocal_finish_last_profiling;
+  type->start                   = &start_profiling;
+  type->end                  = &finish_profiling;
+  type->endLastLocalProfile     = &threadlocal_finish_last_profiling;
+  type->data                    = priv;
 
-  type->data->threadsys   = threadsystype->funcs;
-  type->data->threadcount = threadcount;
-  type->data->last_handles =
-    ( profiledscope_handle_tapi* )malloc(sizeof(profiledscope_handle_tapi) * threadcount);
-  memset(type->data->last_handles, 0, sizeof(profiledscope_handle_tapi) * threadcount);
+  priv->threadsys   = threadsystype;
+  priv->threadcount        = threadcount;
+  priv->last_handles =
+    ( tlProfiledScope** )malloc(sizeof(tlProfiledScope*) * threadcount);
+  memset(priv->last_handles, 0, sizeof(tlProfiledScope*) * threadcount);
 }
 
 ECSPLUGIN_EXIT(ecssys, reloadFlag) {}

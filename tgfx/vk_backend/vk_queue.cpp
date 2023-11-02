@@ -58,7 +58,7 @@ struct submit_vk {
                                            i_cmdBufferCount + i_windowCount + 4)) +
                          (sizeof(uint64_t) * (i_signalSemaphoreCount + i_waitSemaphoreCount));
     submit_vk* submit = ( submit_vk* )VK_MEMOFFSET_TO_POINTER(vk_virmem::allocatePage(allocSize));
-    virmemsys->virtual_commit(submit, allocSize);
+    vm->commit(submit, allocSize);
     submit->signalSemaphoreCount = i_signalSemaphoreCount;
     submit->waitSemaphoreCount   = i_waitSemaphoreCount;
     submit->cmdBufferCount       = i_cmdBufferCount;
@@ -542,7 +542,7 @@ void createQueueSubmitSubmission(VkFence submitFence, QUEUE_VKOBJ* queue, uint32
                        (sizeof(VkSemaphore) * binarySemCount);
   vk_submitList* list =
     ( vk_submitList* )VK_MEMOFFSET_TO_POINTER(vk_virmem::allocatePage(allocSize));
-  virmemsys->virtual_commit(list, allocSize);
+  vm->commit(list, allocSize);
   list->submitCount    = submitCount;
   list->binarySemCount = binarySemCount;
   list->submits        = ( submit_vk** )(list + 1);

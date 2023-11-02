@@ -13,20 +13,20 @@
 #include "ecs_tapi.h"
 #include "filesys_tapi.h"
 #include "string_tapi.h"
-#include "virtualmemorysys_tapi.h"
 
-tapi_stringSys* stringSys = nullptr;
 
-struct logObject {
+struct tlLogObject {
   std::wstring  logText;
-  tapi_log_type logType;
+  tlLogType logType;
 };
-struct Logger {
-  std::wstring           mainFilePath;
-  std::vector<logObject> logList;
+const tlString*      stringSys = nullptr;
+const tlIO* fileSys = nullptr;
+struct tlLogPriv {
+  tlLog*                   sys;
+  std::wstring             mainFilePath;
+  std::vector<tlLogObject> logList;
 };
-static Logger*       logSys  = nullptr;
-static tapi_fileSys* fileSys = nullptr;
+tlLogPriv* logSys;
 
 #define GET_printer(i) (*GET_LOGLISTTAPI())[i]
 inline void breakpoint() {
@@ -40,13 +40,13 @@ inline void breakpoint() {
   }
 }
 
-void tapi_logSave(tapi_log_type logType, stringReadArgument_tapi(path)) {
+void tlLogSave(tlLogType logType, stringReadArgument_tapi(path)) {
   if (logSys->logList.size() == 0 || !fileSys) {
     return;
   }
   std::wstring textData;
   for (unsigned int i = 0; i < logSys->logList.size(); i++) {
-    const logObject& log = logSys->logList[i];
+    const tlLogObject& log = logSys->logList[i];
     // If logType is INT32_MAX, this is the main log file save
     if (logType == INT32_MAX) {
       textData += log.logText;
@@ -54,7 +54,7 @@ void tapi_logSave(tapi_log_type logType, stringReadArgument_tapi(path)) {
       textData += log.logText;
     }
   }
-  fileSys->write_textfile(string_type_tapi_UTF16, textData.c_str(), pathType, pathData, false);
+  fileSys->writeText(tlStringUTF16, textData.c_str(), pathType, pathData, false);
   logSys->logList.clear();
 }
 
@@ -64,12 +64,12 @@ static constexpr wchar_t* statusNames[]      = {L"Status", L"Warning", L"Error",
 static constexpr int      consoleColors[]    = {2, 6, 12, 14, 64};
 
 HANDLE hConsole = nullptr;
-void   tapi_logLog(tapi_log_type type, unsigned char stopRunning, const wchar_t* format, ...) {
+void   tlLogLog(tlLogType type, unsigned char stopRunning, const wchar_t* format, ...) {
   va_list args;
   va_start(args, format);
 
   wchar_t* buf = nullptr;
-  stringSys->vCreateString(string_type_tapi_UTF16, ( void** )&buf, format, args);
+  stringSys->vCreateString(tlStringUTF16, ( void** )&buf, format, args);
   va_end(args);
 
   if (!buf) {
@@ -77,77 +77,66 @@ void   tapi_logLog(tapi_log_type type, unsigned char stopRunning, const wchar_t*
     return;
   }
 
-  logSys->logList.push_back(logObject());
-  logObject& log = logSys->logList[logSys->logList.size() - 1];
+  logSys->logList.push_back(tlLogObject());
+  tlLogObject& log = logSys->logList[logSys->logList.size() - 1];
   log.logText    = buf;
   log.logType    = type;
   SetConsoleTextAttribute(hConsole, consoleColors[type]);
   wprintf_s(L"%s: %s\n", statusNames[type], buf);
   SetConsoleTextAttribute(hConsole, 7);
-  tapi_logSave(( tapi_log_type )INT32_MAX, string_type_tapi_UTF16, logSys->mainFilePath.c_str());
+  tlLogSave(( tlLogType )INT32_MAX, tlStringUTF16, logSys->mainFilePath.c_str());
 
   if (stopRunning) {
     breakpoint();
   }
 }
 
-void tapi_logInit(stringReadArgument_tapi(mainLogFile)) {
+void tlLogInit(stringReadArgument_tapi(mainLogFile)) {
   hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
   switch (mainLogFileType) {
-    case string_type_tapi_UTF8: {
+    case tlStringUTF8: {
       typedef std::codecvt_utf8<wchar_t>          convert_type;
       std::wstring_convert<convert_type, wchar_t> converter;
       logSys->mainFilePath = converter.from_bytes(( const char* )mainLogFileData);
     } break;
-    case string_type_tapi_UTF16: {
+    case tlStringUTF16: {
       logSys->mainFilePath = ( const wchar_t* )mainLogFileData;
     } break;
   }
   logSys->logList.clear();
 }
-void tapi_logDestroy() {
+void tlLogDestroy() {
   logSys->mainFilePath = {};
   logSys->logList.clear();
 }
 
-typedef struct tapi_logger_d {
-  tapi_logger_type* type;
-  Logger*           log_sys;
-} logger_tapi_d;
 ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
-  VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE virmemsys_type =
-    ( VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE )ecssys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
   STRINGSYS_TAPI_PLUGIN_LOAD_TYPE stringSysType =
     ( STRINGSYS_TAPI_PLUGIN_LOAD_TYPE )ecssys->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
   FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys_type =
     ( FILESYS_TAPI_PLUGIN_LOAD_TYPE )ecssys->getSystem(FILESYS_TAPI_PLUGIN_NAME);
 
-  if (!virmemsys_type || !stringSysType || !filesys_type) {
-    printf("Logger system needs %s, %s and %s loaded. Loading logger has failed",
-           VIRTUALMEMORY_TAPI_PLUGIN_NAME, STRINGSYS_TAPI_PLUGIN_NAME, FILESYS_TAPI_PLUGIN_NAME);
+  if (!stringSysType || !filesys_type) {
+    printf("Log system needs %s and %s loaded. Loading logger has failed",
+           STRINGSYS_TAPI_PLUGIN_NAME, FILESYS_TAPI_PLUGIN_NAME);
     return;
   }
 
-  LOGGER_TAPI_PLUGIN_LOAD_TYPE type =
-    ( LOGGER_TAPI_PLUGIN_LOAD_TYPE )malloc(sizeof(tapi_logger_type));
+  tlLog* type =
+    ( tlLog* )malloc(sizeof(tlLog));
   {
-    tapi_logger_d* d = ( tapi_logger_d* )malloc(sizeof(tapi_logger_d));
-    tapi_logger*   f = ( tapi_logger* )malloc(sizeof(tapi_logger));
+    logSys = new tlLogPriv;
+    logSys->sys = type;
+    type->d     = logSys;
 
-    d->type    = type;
-    logSys     = new Logger;
-    d->log_sys = logSys;
 
-    f->init    = &tapi_logInit;
-    f->destroy = &tapi_logDestroy;
-    f->log     = &tapi_logLog;
-    f->save    = &tapi_logSave;
-
-    type->data  = d;
-    type->funcs = f;
+    type->init    = &tlLogInit;
+    type->destroy = &tlLogDestroy;
+    type->log     = &tlLogLog;
+    type->save    = &tlLogSave;
   }
 
-  stringSys = stringSysType->standardString;
+  stringSys = stringSysType;
 
   ecssys->addSystem(LOGGER_TAPI_PLUGIN_NAME, LOGGER_TAPI_PLUGIN_VERSION, type);
 }

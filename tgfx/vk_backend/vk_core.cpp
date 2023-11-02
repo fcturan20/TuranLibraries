@@ -1,6 +1,7 @@
 #include <vector>
 
 #define TGFX_BACKEND
+#include <allocator_tapi.h>
 #include <ecs_tapi.h>
 #include <profiler_tapi.h>
 #include <stdio.h>
@@ -11,11 +12,9 @@
 #include <tgfx_imgui.h>
 #include <tgfx_renderer.h>
 #include <threadingsys_tapi.h>
-#include <virtualmemorysys_tapi.h>
 
-
-#include "vk_core.h"
 #include "vk_contentmanager.h"
+#include "vk_core.h"
 #include "vk_extension.h"
 #include "vk_helper.h"
 #include "vk_predefinitions.h"
@@ -36,10 +35,10 @@ struct core_private {
   bool isAnyWindowResized = false, // Instead of checking each window each frame, just check this
     isActive_SurfaceKHR = false, isSupported_PhysicalDeviceProperties2 = true;
 };
-static core_private* hidden = nullptr;
+static core_private* priv = nullptr;
 
-GPU_VKOBJ* core_public::getGPU(uint32_t i) { return hidden->m_gpus[i]; }
-uint32_t   core_public::gpuCount() { return hidden->m_gpus.size(); }
+GPU_VKOBJ* core_public::getGPU(uint32_t i) { return priv->m_gpus[i]; }
+uint32_t   core_public::gpuCount() { return priv->m_gpus.size(); }
 
 result_tgfx vk_initGPU(struct tgfx_gpu* gpu) {
   // Create Logical Device
@@ -99,7 +98,7 @@ bool vk_checkInstanceExts() {
   }
 
   if (vk_checkInstExtSupported(VK_KHR_SURFACE_EXTENSION_NAME)) {
-    hidden->isActive_SurfaceKHR            = true;
+    priv->isActive_SurfaceKHR              = true;
     activeInstanceExts[instanceExtCount++] = (VK_KHR_SURFACE_EXTENSION_NAME);
   } else {
     vkPrint(10);
@@ -108,7 +107,7 @@ bool vk_checkInstanceExts() {
   // Check PhysicalDeviceProperties2KHR
   if (VKGLOBAL_APPINFO.apiVersion == VK_API_VERSION_1_0) {
     if (!vk_checkInstExtSupported(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
-      hidden->isSupported_PhysicalDeviceProperties2 = false;
+      priv->isSupported_PhysicalDeviceProperties2 = false;
       vkPrint(8, L"Physical Device Properties 2, so Vulkan device creation has failed!");
       return false;
     } else {
@@ -209,7 +208,7 @@ void vk_analizeGPUmemory(GPU_VKOBJ* VKGPU) {
 
     auto createMemDesc = [memTypeIndx, VKGPU, memType](memoryallocationtype_tgfx allocType) {
       tgfx_memoryDescription& memtype_desc = VKGPU->m_memoryDescTGFX[memTypeIndx];
-      memtype_desc.allocationType           = allocType;
+      memtype_desc.allocationType          = allocType;
       memtype_desc.memoryTypeId            = memTypeIndx;
       memtype_desc.maxAllocationSize =
         VKGPU->vk_propsMemory.memoryProperties.memoryHeaps[memType.heapIndex].size;
@@ -242,7 +241,7 @@ inline void vk_checkComputerSpecs() {
     vkPrint(16, L"System has more GPUs than supported, increase VKCONST_MAXGPUCOUNT!");
     return;
   }
-  hidden->m_gpus.init(gpuCount);
+  priv->m_gpus.init(gpuCount);
 
   VkPhysicalDevice tempDevices[VKCONST_MAXGPUCOUNT];
   vkEnumeratePhysicalDevices(VKGLOBAL_INSTANCE, &gpuCount, tempDevices);
@@ -255,7 +254,7 @@ inline void vk_checkComputerSpecs() {
   // GET GPU INFORMATIONs, QUEUE FAMILIES etc
   for (unsigned int i = 0; i < gpuCount; i++) {
     // GPU initializer handles everything else
-    GPU_VKOBJ* vkgpu   = hidden->m_gpus[i];
+    GPU_VKOBJ* vkgpu   = priv->m_gpus[i];
     vkgpu->vk_physical = tempDevices[i];
     vkgpu->setGPUINDX(i);
 
@@ -279,7 +278,7 @@ void glfwWindowResizeCallback(GLFWwindow* glfwwindow, int width, int height) {
   WINDOW_VKOBJ* vkwindow = ( WINDOW_VKOBJ* )glfwGetWindowUserPointer(glfwwindow);
   tgfx_uvec2    res      = {width, height};
   vkwindow->m_newWidth   = width;
-  vkwindow->m_newHeight   = height;
+  vkwindow->m_newHeight  = height;
   vkwindow->m_resizeFnc(( struct tgfx_window* )vkwindow, vkwindow->m_userData, res,
                         ( struct tgfx_texture** )vkwindow->m_swapchainTextures);
 }
@@ -447,7 +446,12 @@ int vk_findMouseButton(key_tgfx key) {
       return -1;
   }
 }
-void vk_createWindow(const tgfx_windowDescription* desc, void* user_ptr, struct tgfx_window** window) {
+void glfwWindowCloseCallback(GLFWwindow* glfwWindow) {
+  WINDOW_VKOBJ* vkwindow = ( WINDOW_VKOBJ* )glfwGetWindowUserPointer(glfwWindow);
+  vkwindow->m_closeFnc(( struct tgfx_window* )vkwindow, vkwindow->m_userData);
+}
+void vk_createWindow(const tgfx_windowDescription* desc, void* user_ptr,
+                     struct tgfx_window** window) {
   if (desc->resizeCb) {
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
   } else {
@@ -459,7 +463,7 @@ void vk_createWindow(const tgfx_windowDescription* desc, void* user_ptr, struct 
   }
   static constexpr uint32_t VKCONST_MAX_WINDOW_NAME_CHAR              = 256;
   char                      windowCName[VKCONST_MAX_WINDOW_NAME_CHAR] = {};
-  stringSys->convertString(string_type_tapi_UTF16, desc->name, string_type_tapi_UTF8, windowCName,
+  stringSys->convertString(tlStringUTF16, desc->name, tlStringUTF8, windowCName,
                            VKCONST_MAX_WINDOW_NAME_CHAR - 1);
   GLFWwindow* glfwWndw =
     glfwCreateWindow(desc->size.x, desc->size.y, windowCName, monitor, nullptr);
@@ -477,7 +481,7 @@ void vk_createWindow(const tgfx_windowDescription* desc, void* user_ptr, struct 
     return;
   }
 
-  WINDOW_VKOBJ* vkWindow             = hidden->WINDOWs.create_OBJ();
+  WINDOW_VKOBJ* vkWindow             = priv->WINDOWs.create_OBJ();
   vkWindow->m_lastWidth              = desc->size.x;
   vkWindow->m_newWidth               = desc->size.x;
   vkWindow->m_lastHeight             = desc->size.y;
@@ -489,6 +493,7 @@ void vk_createWindow(const tgfx_windowDescription* desc, void* user_ptr, struct 
   vkWindow->vk_swapchainTextureUsage = 0; // This will be set while creating swapchain
   vkWindow->m_resizeFnc              = desc->resizeCb;
   vkWindow->m_keyFnc                 = desc->keyCb;
+  vkWindow->m_closeFnc               = desc->closeCb;
   vkWindow->m_userData               = user_ptr;
   vkWindow->vk_surface               = wndwSurface;
 
@@ -499,8 +504,16 @@ void vk_createWindow(const tgfx_windowDescription* desc, void* user_ptr, struct 
   if (desc->keyCb) {
     glfwSetKeyCallback(vkWindow->vk_glfwWindow, glfwWindowKeyCallback);
   }
+  if (desc->closeCb) {
+    glfwSetWindowCloseCallback(vkWindow->vk_glfwWindow, glfwWindowCloseCallback);
+  }
 
   *window = getHANDLE<struct tgfx_window*>(vkWindow);
+}
+void vk_destroyWindow(struct tgfx_window* twindow) {
+  WINDOW_VKOBJ* vkWindow = getOBJ<WINDOW_VKOBJ>(twindow);
+  glfwDestroyWindow(vkWindow->vk_glfwWindow);
+  priv->WINDOWs.destroyObj(priv->WINDOWs.getINDEXbyOBJ(vkWindow));
 }
 result_tgfx vk_createSwapchain(struct tgfx_gpu* gpu, const tgfx_swapchainDescription* desc,
                                struct tgfx_texture** textures) {
@@ -592,8 +605,8 @@ result_tgfx vk_createSwapchain(struct tgfx_gpu* gpu, const tgfx_swapchainDescrip
     }
   }
 
-  window->m_swapchainTextureCount       = desc->imageCount;
-  window->m_gpu                         = GPU;
+  window->m_swapchainTextureCount = desc->imageCount;
+  window->m_gpu                   = GPU;
 
   vkDeviceWaitIdle(GPU->vk_logical);
 
@@ -771,7 +784,7 @@ result_tgfx vk_createSwapchain(struct tgfx_gpu* gpu, const tgfx_swapchainDescrip
     window->m_swapchainTextures[vkImIndx] = textures[vkImIndx];
   }
   window->m_lastHeight = window->m_newHeight;
-  window->m_lastWidth = window->m_newWidth;
+  window->m_lastWidth  = window->m_newWidth;
   return result_tgfx_SUCCESS;
 }
 result_tgfx vk_getCurrentSwapchainTextureIndex(struct tgfx_window* i_window, uint32_t* index) {
@@ -798,8 +811,8 @@ void vk_takeInputs() {
   glfwPollEvents();
 
   // Handle mouse button states
-  for (uint32_t i = 0; i < hidden->WINDOWs.size(); i++) {
-    WINDOW_VKOBJ* vkwindow = hidden->WINDOWs[i];
+  for (uint32_t i = 0; i < priv->WINDOWs.size(); i++) {
+    WINDOW_VKOBJ* vkwindow = priv->WINDOWs[i];
     for (uint32_t mouseButtonIndx = 0; mouseButtonIndx < 3; mouseButtonIndx++) {
       keyAction_tgfx curAction =
         getKeyActionTgfx(glfwGetMouseButton(vkwindow->vk_glfwWindow, mouseButtonIndx));
@@ -881,8 +894,9 @@ void vk_getCursorPos(struct tgfx_window* windowHnd, tgfx_vec2* pos) {
   pos->x = vec2[0];
   pos->y = vec2[1];
 }
-void vk_setInputMode(struct tgfx_window* windowHnd, cursorMode_tgfx cursorMode, unsigned char stickyKeys,
-                     unsigned char stickyMouseButtons, unsigned char lockKeyMods) {
+void vk_setInputMode(struct tgfx_window* windowHnd, cursorMode_tgfx cursorMode,
+                     unsigned char stickyKeys, unsigned char stickyMouseButtons,
+                     unsigned char lockKeyMods) {
   WINDOW_VKOBJ* window = getOBJ<WINDOW_VKOBJ>(windowHnd);
 
   switch (cursorMode) {
@@ -916,9 +930,9 @@ void vk_saveMonitors() {
 
     // Get monitor name provided by OS! It is a driver based name, so it maybe incorrect!
     const char*    monitorName = glfwGetMonitorName(glfwMonitor);
-    MONITOR_VKOBJ* vkMonitor   = hidden->MONITORs.create_OBJ();
+    MONITOR_VKOBJ* vkMonitor   = priv->MONITORs.create_OBJ();
 
-    stringSys->createString(string_type_tapi_UTF16, ( void** )&vkMonitor->name, L"%s", monitorName);
+    stringSys->createString(tlStringUTF16, ( void** )&vkMonitor->name, L"%s", monitorName);
 
     // Get videomode to detect at which resolution the OS is using the monitor
     const GLFWvidmode* glfwVidMode = glfwGetVideoMode(glfwMonitor);
@@ -1040,44 +1054,43 @@ void        vk_errorCallback(int error_code, const char* description) {
   vkPrint(16, maxLog);
 }
 extern "C" typedef struct tgfx_core_d;
-result_tgfx vk_load(const struct tapi_ecs* ecsSys, struct tgfx_core_type* core,
-                         void (*printFnc)(unsigned int logCode, const wchar_t* extraInfo)) {
+result_tgfx vk_load(const struct tlECS* ecsSys, struct tgfx_core_type* core,
+                    void (*printFnc)(unsigned int logCode, const wchar_t* extraInfo)) {
   if (!ecsSys->getSystem(TGFX_PLUGIN_NAME)) return result_tgfx_FAIL;
 
   printer_cb = printFnc;
-
-  VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE virmemsystype =
-    ( VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE )ecsSys->getSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME);
-  if (!virmemsystype) {
+  ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE allocSys =
+    ( ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE )ecsSys->getSystem(ALLOCATOR_TAPI_PLUGIN_NAME);
+  if (!allocSys) {
     return vkPrint(1);
   } else {
-    virmemsys = virmemsystype->funcs;
+    vm = allocSys->virtualMemory;
   }
 
   // Check if threading system is loaded
   THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadsysloaded =
     ( THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE )ecsSys->getSystem(THREADINGSYS_TAPI_PLUGIN_NAME);
   if (threadsysloaded) {
-    threadingsys = threadsysloaded->funcs;
-    threadcount  = threadingsys->thread_count();
+    threadingsys = threadsysloaded;
+    threadcount  = threadingsys->threadCount();
   }
 
   PROFILER_TAPI_PLUGIN_LOAD_TYPE profilerLoaded =
     ( PROFILER_TAPI_PLUGIN_LOAD_TYPE )ecsSys->getSystem(PROFILER_TAPI_PLUGIN_NAME);
   if (profilerLoaded) {
-    profilerSys = profilerLoaded->funcs;
+    profilerSys = profilerLoaded;
   }
 
   BITSET_TAPI_PLUGIN_LOAD_TYPE bitsetSysLoaded =
     ( BITSET_TAPI_PLUGIN_LOAD_TYPE )ecsSys->getSystem(BITSET_TAPI_PLUGIN_NAME);
   if (bitsetSysLoaded) {
-    bitsetSys = bitsetSysLoaded->funcs;
+    bitsetSys = bitsetSysLoaded;
   }
 
   STRINGSYS_TAPI_PLUGIN_LOAD_TYPE stringSysLoaded =
     ( STRINGSYS_TAPI_PLUGIN_LOAD_TYPE )ecsSys->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
   if (stringSysLoaded) {
-    stringSys = stringSysLoaded->standardString;
+    stringSys = stringSysLoaded;
   }
 
   core_tgfx_main = core->api;
@@ -1086,7 +1099,7 @@ result_tgfx vk_load(const struct tapi_ecs* ecsSys, struct tgfx_core_type* core,
   vk_virmem::dynamicmem* coreDynMem  = vk_virmem::allocate_dynamicmem(malloc_size);
   core_vk                            = new (coreDynMem) core_public;
   core->data                         = ( struct tgfx_core_d* )core_vk;
-  hidden                             = new (coreDynMem) core_private;
+  priv                               = new (coreDynMem) core_private;
 
   // Set function pointers
   {
@@ -1148,7 +1161,7 @@ vk_debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      Message_Severity,
 
   wchar_t debugMessage[maxDebugMessageLen] = {};
   memcpy(debugMessage, messageTypeTitles[messageType], messageTypeTitleLen * sizeof(wchar_t));
-  stringSys->convertString(string_type_tapi_UTF8, pCallback_Data->pMessage, string_type_tapi_UTF16,
+  stringSys->convertString(tlStringUTF8, pCallback_Data->pMessage, tlStringUTF16,
                            debugMessage + messageTypeTitleLen,
                            maxDebugMessageLen - messageTypeTitleLen);
   vkPrint(16, debugMessage);
@@ -1172,7 +1185,7 @@ void vk_setupDebugging() {
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
   dbgMssngrCi.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-                              VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+                            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
   dbgMssngrCi.pfnUserCallback = vk_debugCallback;
   dbgMssngrCi.pNext           = nullptr;
   dbgMssngrCi.pUserData       = nullptr;

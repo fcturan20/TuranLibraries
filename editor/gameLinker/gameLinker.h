@@ -6,7 +6,7 @@ extern "C" {
 // Forward Declarations
 /////////////////////////////////
 
-typedef struct tapi_ecs            ecs_tapi;
+typedef struct tlECS            ecs_tapi;
 typedef struct primitiveData_pecf* primDataHnd_pecf;
 typedef struct primitiveType_pecf* primTypeHnd_pecf;
 typedef struct funcType_pecf*      funcTypeHnd_pecf;

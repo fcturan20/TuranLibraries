@@ -1,3 +1,3 @@
 #pragma once
-extern "C" const struct tapi_ecs* editorECS;
-extern "C" const struct tapi_allocatorSys* allocatorSys;
+extern "C" const struct tlECS* editorECS;
+extern "C" const struct tlAllocator* allocatorSys;

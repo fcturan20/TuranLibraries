@@ -69,6 +69,7 @@ typedef void (*tgfx_windowResizeCallback)(struct tgfx_window* windowHnd, void* u
 typedef void (*tgfx_windowKeyCallback)(struct tgfx_window* windowHnd, void* userPointer,
                                        enum key_tgfx key, int scanCode, enum keyAction_tgfx action,
                                        enum keyMod_tgfx mode);
+typedef void (*tgfx_windowCloseCallback)(struct tgfx_window* windowHnd, void* userPtr);
 
 struct tgfx_windowDescription {
   struct tgfx_uvec2         size;
@@ -77,6 +78,7 @@ struct tgfx_windowDescription {
   const wchar_t*            name;
   tgfx_windowResizeCallback resizeCb;
   tgfx_windowKeyCallback    keyCb;
+  tgfx_windowCloseCallback  closeCb;
 };
 
 struct tgfx_swapchainDescription {
@@ -214,7 +216,6 @@ struct tgfx_rasterPipelineDescription {
   unsigned int                                shaderCount;
   struct tgfx_shaderSource* const*            shaders;
   struct tgfx_rasterInputAssemblerDescription attribLayout;
-  struct tgfx_viewportInfo                    viewportList;
   const tgfx_rasterStateDescription*          mainStates;
   enum textureChannels_tgfx colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
   const struct tgfx_bindingTableDescription* tables;

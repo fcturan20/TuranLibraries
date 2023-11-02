@@ -3,19 +3,19 @@
 extern "C" {
 #endif
 
-#define THREADINGSYS_TAPI_PLUGIN_NAME "tapi_threadedjobsys"
+#define THREADINGSYS_TAPI_PLUGIN_NAME "tlJob"
 #define THREADINGSYS_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
-#define THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE struct tapi_threadingSys_type*
+#define THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE const struct tlJob*
 
-/*TuranAPI's C Multi-Threading and Job System Library
+/* Multi-Threaded Job System
  * If you created threads before, you can pass them to the Threader. Threader won't create any other
  * thread. But you shouldn't destroy any of their objects before destroying Threader, otherwise
  * there will be a dangling pointer issue This ThreadPool system is also capable of using main
  * thread as one the threads
  */
 
-
-struct tapi_threadingSys {
+struct tlJob {
+  const struct tlJobPriv* d;
   /*Wait a job; First the thread yields. If it should wait again, executes any other job while
   waiting
   * Be careful of nonwait-in-wait situations such as;
@@ -29,29 +29,23 @@ struct tapi_threadingSys {
   planning all your jobs beforehand) 2) Use WaitJob_empty in Job A, so thread'll keep yielding till
   job finishes
   */
-  struct tapi_wait* (*create_wait)();
-  void (*waitjob_busy)(struct tapi_wait* wait);
-  void (*waitjob_empty)(struct tapi_wait* wait);
-  void (*clear_waitinfo)(struct tapi_wait* wait);
-  void (*wait_all_otherjobs)();
+  struct tlSemaphore* (*createSemaphore)();
 
-  // If you want to wait for this job, you can pass a JobWaitInfo
-  // But if you won't wait for it, don't use it because there may be crashes because of dangling
-  // wait reference Critical Note : You shouldn't use same JobWaitInfo object across
-  // Execute_withWait()s without ClearJobWait()!
-  void (*execute_withwait)(void (*func)(), struct tapi_wait* wait);
-  void (*execute_withoutwait)(void (*func)());
-  // Add this thread to the threading system in a job search state
-  // This function doesn't return; either thread'll die or threading system'll close.
-  void (*execute_otherjobs)();
+  void (*execute)(void (*func)(), unsigned int signalSemaphoreCount,
+                  struct tlSemaphore** semaphores);
+  // Thread joins into job system
+  // This function will return only when job system destroyed
+  void (*joinThread)();
 
-  unsigned int (*this_thread_index)();
-  unsigned int (*thread_count)();
-};
+  void (*unsignalSemaphore)(struct tlSemaphore* semaphore);
+  // Won't execute any available job while waiting for the signal
+  void (*waitSemaphoreFree)(struct tlSemaphore* semaphore);
+  // Will execute available jobs while waiting for the signal
+  void (*waitSemaphoreBusy)(struct tlSemaphore* semaphore);
+  void (*waitAllJobs)();
 
-struct tapi_threadingSys_type {
-  struct tapi_threadingSys_d* data;
-  struct tapi_threadingSys*   funcs;
+  unsigned int (*thisThreadIndx)();
+  unsigned int (*threadCount)();
 };
 
 #ifdef __cplusplus

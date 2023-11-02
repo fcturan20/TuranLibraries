@@ -3,8 +3,8 @@
 
 #ECS System
 add_library (tapi_ecs SHARED
-"turanapi/ecs_tapi.cpp" "turanapi/virtualmemorysys_tapi.c"
-"turanapi/ecs_tapi.h" "turanapi/virtualmemorysys_tapi.h"
+"turanapi/ecs_tapi.cpp"
+"turanapi/ecs_tapi.h"
 "turanapi/allocator_tapi.cpp" "turanapi/allocator_tapi.h")
 set_target_properties(tapi_ecs PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
 set_target_properties(tapi_ecs PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")

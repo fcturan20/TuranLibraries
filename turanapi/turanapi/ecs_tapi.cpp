@@ -5,7 +5,6 @@
 #include "predefinitions_tapi.h"
 #include "stdint.h"
 #include "stdio.h"
-#include "virtualmemorysys_tapi.h"
 //                   COMPILE EXPRESSIONS
 //////////////////////////////////////////////////////////
 static constexpr uint32_t MAX_PATHCHAR          = 256;
@@ -27,25 +26,12 @@ static constexpr uint64_t virmemAllocSize =
 
 // Because this dll will be loaded once for each dll,
 //  there is no need for a pointer
-static struct tapi_ecs_d*            hidden;
-static struct tapi_ecs*              ecs_funcs;
-static unsigned int                  pagesize;
-static struct tapi_superMemoryBlock* mainMemBlock   = nullptr;
-static struct tapi_bufferAllocator*  standard_alloc = nullptr;
-static tapi_vectorAllocator*         f_vector       = nullptr;
-
-//                 VIRTUAL MEMORY FUNCTIONS
-///////////////////////////////////////////////////////////
-
-extern "C" void*        virtual_reserve(unsigned long long size);
-extern "C" void         virtual_commit(void* ptr, unsigned long long commitsize);
-extern "C" void         virtual_decommit(void* ptr, unsigned long long size);
-extern "C" void         virtual_free(void* ptr, unsigned long long commit);
-extern "C" unsigned int get_pagesize();
-extern "C" void*        get_virtualmemory(unsigned long long reserve_size,
-                                          unsigned long long first_commit_size);
-extern "C" void         load_virtualmemorysystem(VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE* virmemsysPTR,
-                                                 ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE*     allocatorsysPTR);
+static struct tlECSPriv*   priv;
+static struct tlECS*     ecs_funcs;
+static unsigned int         pagesize;
+static struct tlSuperBlock* mainMemBlock   = nullptr;
+static const struct tlBuffer*     standard_alloc = nullptr;
+static const tlVector*            f_vector       = nullptr;
 
 //                  ECS INTERNAL STRUCTURES
 ///////////////////////////////////////////////////////////
@@ -58,7 +44,7 @@ struct ecs_pluginInfo {
 struct ecs_systemInfo {
   char     name[MAX_SYSTEMCHAR];
   uint32_t version = UINT32_MAX;
-  void*    ptr     = nullptr;
+  const void*    ptr     = nullptr;
 };
 
 // This is main component type, so you shouldn't store (overriden) parent types with this
@@ -67,9 +53,9 @@ struct ecs_compType {
   uint32_t                    typeID = UINT32_MAX;
   char                        name[MAX_COMPTYPECHAR];
   void*                       mainTypeHandle;
-  ecs_compManager             manager;
+  tlComponentManagerDescription             manager;
   unsigned int                overridenTypeCount = 0;
-  tapi_ecs_componentTypePair* overridenTypePairs;
+  tlComponentTypePair* overridenTypePairs;
 };
 
 struct ecs_entityType {
@@ -86,29 +72,29 @@ struct ecs_entityType {
   // Allocate list elsewhere, because knowing entityType size will make searching over all entity
   // types faster (and access with ID too) If searches over all entity types are so rare, this could
   // be changed to allocating right after entityType List Size is compCount
-  struct tapi_ecs_componentTypeID** compTypeHndlesList;
+  struct tlComponentTypeID** compTypeHndlesList;
 };
 
-extern "C" struct tapi_ecs_entity {
+extern "C" struct tlEntity {
   uint32_t typeID;
   uint32_t entityID;
 };
 
-extern "C" struct tapi_ecs_componentTypeID {
+extern "C" struct tlComponentTypeID {
   uint32_t typeID           = UINT32_MAX;
   uint32_t padding_to_8byte = UINT32_MAX;
 };
-typedef struct tapi_ecs_componentTypeID ecstapi_idOnlyPointer;
+typedef struct tlComponentTypeID ecstapi_idOnlyPointer;
 
 //                 INTERNAL SYSTEM
 ////////////////////////////////////////////////////////////
 
-typedef struct tapi_ecs_d {
+typedef struct tlECSPriv {
   // Plugins
   //////////////////////
   ecs_pluginInfo* v_pluginInfos;
   // Plugin unloading isn't supported for now!
-  tapi_ecs_plugin* create_pluginInfo(ecs_pluginInfo info) {
+  tlPlugin* create_pluginInfo(ecs_pluginInfo info) {
     uint32_t pluginCount = f_vector->size(v_pluginInfos);
 #ifdef TURAN_DEBUGGING
     // Check if it's already added
@@ -123,10 +109,10 @@ typedef struct tapi_ecs_d {
     }
 #endif // TURAN_DEBUGGING
 
-    f_vector->push_back(v_pluginInfos, &info);
-    return ( tapi_ecs_plugin* )&v_pluginInfos[pluginCount];
+    f_vector->pushBack(v_pluginInfos, &info);
+    return ( tlPlugin* )&v_pluginInfos[pluginCount];
   }
-  ecs_pluginInfo* get_pluginInfo(tapi_ecs_plugin* hnd) {
+  ecs_pluginInfo* get_pluginInfo(tlPlugin* hnd) {
 #ifdef TURAN_DEBUGGING
     uintptr_t hnd_uptr = reinterpret_cast<uintptr_t>(hnd),
               v_uptr   = reinterpret_cast<uintptr_t>(v_pluginInfos);
@@ -142,7 +128,7 @@ typedef struct tapi_ecs_d {
   // Systems
   //////////////////////
   ecs_systemInfo* v_systemInfos;
-  void*           findSystem(const char* name) {
+  const void*           findSystem(const char* name) {
     for (uint32_t i = 0; i < MAXSYSTEMCOUNT; i++) {
       if (v_systemInfos[i].ptr == nullptr) {
         return nullptr;
@@ -174,7 +160,7 @@ typedef struct tapi_ecs_d {
   // These types are main types
   // Only childs are stored, overriden parents aren't
   ecs_compType* v_mainComponentTypes;
-  ecs_compType* find_compType_byID(struct tapi_ecs_componentTypeID* id) {
+  ecs_compType* find_compType_byID(struct tlComponentTypeID* id) {
     ecstapi_idOnlyPointer hndle = *reinterpret_cast<ecstapi_idOnlyPointer*>(&id);
     ecs_compType*         r     = &v_mainComponentTypes[hndle.typeID];
 #ifdef TURAN_DEBUGGING
@@ -193,7 +179,7 @@ typedef struct tapi_ecs_d {
   ///////////////////////
 
   ecs_entityType* v_entityTypes;
-  ecs_entityType* find_entityType_byHnd(struct tapi_ecs_entityType* hnd) {
+  ecs_entityType* find_entityType_byHnd(struct tlEntityType* hnd) {
     ecstapi_idOnlyPointer hndle = *reinterpret_cast<ecstapi_idOnlyPointer*>(&hnd);
     ecs_entityType*       r     = &v_entityTypes[hndle.typeID];
 #ifdef TURAN_DEBUGGING
@@ -205,18 +191,18 @@ typedef struct tapi_ecs_d {
   }
 } tapi_ecs_d;
 
-uint32_t find_overridenCompType(ecs_entityType* eType, tapi_ecs_componentTypeID* base,
+uint32_t find_overridenCompType(ecs_entityType* eType, tlComponentTypeID* base,
                                 void** overriden) {
   for (uint32_t mainCompIndex = 0; mainCompIndex < eType->compCount; mainCompIndex++) {
     // If main type matches
     if (base == eType->compTypeHndlesList[mainCompIndex]) {
-      *overriden = hidden->find_compType_byID(base)->mainTypeHandle;
+      *overriden = priv->find_compType_byID(base)->mainTypeHandle;
       return mainCompIndex;
     }
     ecs_compType* mainCompType =
-      hidden->find_compType_byID(eType->compTypeHndlesList[mainCompIndex]);
+      priv->find_compType_byID(eType->compTypeHndlesList[mainCompIndex]);
     for (uint32_t pairIndx = 0; pairIndx < mainCompType->overridenTypeCount; pairIndx++) {
-      tapi_ecs_componentTypePair& pair = mainCompType->overridenTypePairs[pairIndx];
+      tlComponentTypePair& pair = mainCompType->overridenTypePairs[pairIndx];
       if (pair.base == base) {
         *overriden = pair.overriden;
         return mainCompIndex;
@@ -229,10 +215,10 @@ uint32_t find_overridenCompType(ecs_entityType* eType, tapi_ecs_componentTypeID*
 //                        PLUGIN FUNCTIONS
 ////////////////////////////////////////////////////////////////////
 
-typedef void (*ECSTAPIPLUGIN_loadfnc)(struct tapi_ecs* ecsHnd, unsigned int reload);
+typedef void (*ECSTAPIPLUGIN_loadfnc)(struct tlECS* ecsHnd, unsigned int reload);
 static const char* ECS_ERROR_TEXT_DLL_NOT_FOUND   = "DLL file isn't found: %s\n";
 static const char* ECS_ERROR_TEXT_ENTRY_NOT_FOUND = "DLL file is found but plugin entry isn't\n";
-tapi_ecs_plugin*   loadPlugin(const char* pluginPath) {
+tlPlugin*   loadPlugin(const char* pluginPath) {
   auto dll = DLIB_LOAD_TAPI(pluginPath);
   if (!dll) {
     printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, pluginPath);
@@ -258,10 +244,10 @@ tapi_ecs_plugin*   loadPlugin(const char* pluginPath) {
 
   memcpy(info.PATH, pluginPath + max(0, pathDif), maxcharlen);
   info.pluginDataPtr = dll;
-  return hidden->create_pluginInfo(info);
+  return priv->create_pluginInfo(info);
 }
-void reloadPlugin(tapi_ecs_plugin* plugin) {
-  ecs_pluginInfo* info = hidden->get_pluginInfo(plugin);
+void reloadPlugin(tlPlugin* plugin) {
+  ecs_pluginInfo* info = priv->get_pluginInfo(plugin);
   if (!info) {
     return;
   }
@@ -278,8 +264,8 @@ void reloadPlugin(tapi_ecs_plugin* plugin) {
   }
   dll_loader(ecs_funcs, true);
 }
-unsigned char unloadPlugin(tapi_ecs_plugin* plugin) {
-  typedef void (*ECSTAPIPLUGIN_unloadfnc)(struct tapi_ecs * ecsHnd, unsigned int reload);
+unsigned char unloadPlugin(tlPlugin* plugin) {
+  typedef void (*ECSTAPIPLUGIN_unloadfnc)(struct tlECS * ecsHnd, unsigned int reload);
   printf("Unloading a plugin isn't supported yet!");
 
   return 0;
@@ -288,39 +274,39 @@ unsigned char unloadPlugin(tapi_ecs_plugin* plugin) {
 //                          SYSTEM FUNCTIONS
 ////////////////////////////////////////////////////////////////////////
 
-void addSystem(const char* name, unsigned int version, void* system_ptr) {
+void addSystem(const char* name, unsigned int version, const void* system_ptr) {
   ecs_systemInfo sysInfo;
   unsigned int   maxcharlen = min(strlen(name), MAX_SYSTEMCHAR - 1);
   memcpy(sysInfo.name, name, maxcharlen);
   sysInfo.name[maxcharlen] = 0;
   sysInfo.ptr              = system_ptr;
   sysInfo.version          = version;
-  if (!hidden->registerSystem(sysInfo)) {
+  if (!priv->registerSystem(sysInfo)) {
     printf("A system with the same name is already registered, so this one failed!\n");
   }
 }
 
-void destroySystem(void* systemPtr) { printf("Destroying a system isn't supported yet!\n"); }
+void destroySystem(const void* systemPtr) { printf("Destroying a system isn't supported yet!\n"); }
 
-void* getSystem(const char* name) { return hidden->findSystem(name); }
+const void* getSystem(const char* name) { return priv->findSystem(name); }
 
 //                        COMPONENT FUNCTIONS
 ////////////////////////////////////////////////////////////////////////////
 
-struct tapi_ecs_componentTypeID* addComponentType(const char* name, void* mainType,
-                                                  struct ecs_compManager            manager,
-                                                  const tapi_ecs_componentTypePair* pairList,
+struct tlComponentTypeID* addComponentType(const char* name, void* mainType,
+                                                  struct tlComponentManagerDescription            manager,
+                                                  const tlComponentTypePair* pairList,
                                                   unsigned int                      pairListSize) {
-  f_vector->push_back(hidden->v_mainComponentTypes, hidden->v_mainComponentTypes);
-  uint32_t      indx       = f_vector->size(hidden->v_mainComponentTypes) - 1;
-  ecs_compType* type       = &hidden->v_mainComponentTypes[indx];
+  f_vector->pushBack(priv->v_mainComponentTypes, priv->v_mainComponentTypes);
+  uint32_t      indx       = f_vector->size(priv->v_mainComponentTypes) - 1;
+  ecs_compType* type       = &priv->v_mainComponentTypes[indx];
   type->mainTypeHandle     = mainType;
   type->manager            = manager;
   type->typeID             = indx;
   type->overridenTypeCount = pairListSize;
-  type->overridenTypePairs = ( tapi_ecs_componentTypePair* )standard_alloc->malloc(
-    mainMemBlock, sizeof(tapi_ecs_componentTypePair) * pairListSize);
-  memcpy(type->overridenTypePairs, pairList, sizeof(tapi_ecs_componentTypePair) * pairListSize);
+  type->overridenTypePairs = ( tlComponentTypePair* )standard_alloc->malloc(
+    mainMemBlock, sizeof(tlComponentTypePair) * pairListSize);
+  memcpy(type->overridenTypePairs, pairList, sizeof(tlComponentTypePair) * pairListSize);
   uint32_t namelen = strlen(name) + 1;
   uint32_t copylen = min(namelen + 1, MAX_COMPTYPECHAR - 1);
   memcpy(type->name, name, copylen);
@@ -330,64 +316,64 @@ struct tapi_ecs_componentTypeID* addComponentType(const char* name, void* mainTy
   ecstapi_idOnlyPointer idOnlyPointer;
   idOnlyPointer.typeID           = type->typeID;
   idOnlyPointer.padding_to_8byte = UINT32_MAX;
-  return *reinterpret_cast<tapi_ecs_componentTypeID**>(&idOnlyPointer);
+  return *reinterpret_cast<tlComponentTypeID**>(&idOnlyPointer);
 }
 
 //                          ENTITY FUNCTIONS
 ////////////////////////////////////////////////////////////////////////////
 
-struct tapi_ecs_entityType* addEntityType(
-  const struct tapi_ecs_componentTypeID* const* compTypeList, unsigned int listSize) {
+struct tlEntityType* addEntityType(
+  const struct tlComponentTypeID* const* compTypeList, unsigned int listSize) {
   ecs_entityType type;
   type.compCount = listSize;
-  type.typeID    = f_vector->size(hidden->v_entityTypes);
+  type.typeID    = f_vector->size(priv->v_entityTypes);
   type.v_entityList =
-    f_vector->create_vector(listSize * sizeof(tapi_ecs_component*), mainMemBlock, 0, 1 << 20, 0);
-  type.compTypeHndlesList = ( tapi_ecs_componentTypeID** )standard_alloc->malloc(
-    mainMemBlock, sizeof(tapi_ecs_componentTypeID) * listSize);
-  memcpy(type.compTypeHndlesList, compTypeList, sizeof(tapi_ecs_componentTypeID) * listSize);
+    f_vector->create(mainMemBlock, listSize * sizeof(tlComponent*), 0, 1 << 20, 0);
+  type.compTypeHndlesList = ( tlComponentTypeID** )standard_alloc->malloc(
+    mainMemBlock, sizeof(tlComponentTypeID) * listSize);
+  memcpy(type.compTypeHndlesList, compTypeList, sizeof(tlComponentTypeID) * listSize);
 
-  f_vector->push_back(hidden->v_entityTypes, &type);
+  f_vector->pushBack(priv->v_entityTypes, &type);
   ecstapi_idOnlyPointer hnd;
   hnd.padding_to_8byte = UINT32_MAX;
   hnd.typeID           = type.typeID;
-  return *reinterpret_cast<struct tapi_ecs_entityType**>(&hnd);
+  return *reinterpret_cast<struct tlEntityType**>(&hnd);
 }
-tapi_ecs_entity* createEntity(struct tapi_ecs_entityType* typeHandle) {
-  ecs_entityType* eType = hidden->find_entityType_byHnd(typeHandle);
-  f_vector->push_back(eType->v_entityList, nullptr);
+tlEntity* createEntity(struct tlEntityType* typeHandle) {
+  ecs_entityType* eType = priv->find_entityType_byHnd(typeHandle);
+  f_vector->pushBack(eType->v_entityList, nullptr);
   uint32_t             index        = f_vector->size(eType->v_entityList) - 1;
-  tapi_ecs_component** compHndsList = reinterpret_cast<tapi_ecs_component**>(
+  tlComponent** compHndsList = reinterpret_cast<tlComponent**>(
     reinterpret_cast<uintptr_t>(eType->v_entityList) +
-    (index * eType->compCount * sizeof(tapi_ecs_component*)));
+    (index * eType->compCount * sizeof(tlComponent*)));
   for (uint16_t compIndx = 0; compIndx < eType->compCount; compIndx++) {
-    ecs_compType* compType = hidden->find_compType_byID(eType->compTypeHndlesList[compIndx]);
+    ecs_compType* compType = priv->find_compType_byID(eType->compTypeHndlesList[compIndx]);
     compHndsList[compIndx] = compType->manager.createComponent();
   }
-  tapi_ecs_entity fin_hnd;
+  tlEntity fin_hnd;
   fin_hnd.entityID = index;
   fin_hnd.typeID   = eType->typeID;
-  return *reinterpret_cast<tapi_ecs_entity**>(&fin_hnd);
+  return *reinterpret_cast<tlEntity**>(&fin_hnd);
 }
-struct tapi_ecs_entityType* findEntityType_byEntityHnd(tapi_ecs_entity* entityHnd) {
+struct tlEntityType* findEntityType_byEntityHnd(tlEntity* entityHnd) {
   ecstapi_idOnlyPointer hnd;
-  tapi_ecs_entity       entity = *reinterpret_cast<tapi_ecs_entity*>(&entityHnd);
+  tlEntity       entity = *reinterpret_cast<tlEntity*>(&entityHnd);
 #ifdef TURAN_DEBUGGING
   // If debugging, first access type
   // Then return ID of it
   // With this way, wrong accesses minimized
-  ecs_entityType* type = &hidden->v_entityTypes[entity.typeID];
+  ecs_entityType* type = &priv->v_entityTypes[entity.typeID];
   hnd.typeID           = type->typeID;
 #else
   // If not debugging, just get type ID from entity handle
   hnd.typeID = entity.typeID;
 #endif
   hnd.padding_to_8byte = UINT32_MAX;
-  return *reinterpret_cast<struct tapi_ecs_entityType**>(&hnd);
+  return *reinterpret_cast<struct tlEntityType**>(&hnd);
 }
-unsigned char doesContains_entityType(struct tapi_ecs_entityType*      eTypeHnd,
-                                      struct tapi_ecs_componentTypeID* compType) {
-  ecs_entityType* eType        = hidden->find_entityType_byHnd(eTypeHnd);
+unsigned char doesContains_entityType(struct tlEntityType*      eTypeHnd,
+                                      struct tlComponentTypeID* compType) {
+  ecs_entityType* eType        = priv->find_entityType_byHnd(eTypeHnd);
   void*           empty        = nullptr;
   uint32_t        compTypeIndx = find_overridenCompType(eType, compType, &empty);
   if (compTypeIndx != UINT32_MAX) {
@@ -395,36 +381,36 @@ unsigned char doesContains_entityType(struct tapi_ecs_entityType*      eTypeHnd,
   }
   return 0;
 }
-tapi_ecs_component* get_component_byEntityHnd(tapi_ecs_entity*                 entityHnd,
-                                              struct tapi_ecs_componentTypeID* compTypeID,
+tlComponent* get_component_byEntityHnd(tlEntity*                 entityHnd,
+                                              struct tlComponentTypeID* compTypeID,
                                               void**                           overridenCompType) {
-  struct tapi_ecs_entityType* eTypeHnd = findEntityType_byEntityHnd(entityHnd);
-  ecs_entityType*             eType    = hidden->find_entityType_byHnd(eTypeHnd);
+  struct tlEntityType* eTypeHnd = findEntityType_byEntityHnd(entityHnd);
+  ecs_entityType*             eType    = priv->find_entityType_byHnd(eTypeHnd);
   // Find overriden component type
   uint32_t        compTypeIndx = find_overridenCompType(eType, compTypeID, overridenCompType);
   uintptr_t       eList        = reinterpret_cast<uintptr_t>(eType->v_entityList);
-  tapi_ecs_entity entity       = *reinterpret_cast<tapi_ecs_entity*>(&entityHnd);
-  return *reinterpret_cast<tapi_ecs_component**>(
-    eList + (((entity.entityID * eType->compCount) + compTypeIndx) * sizeof(tapi_ecs_component*)));
+  tlEntity entity       = *reinterpret_cast<tlEntity*>(&entityHnd);
+  return *reinterpret_cast<tlComponent**>(
+    eList + (((entity.entityID * eType->compCount) + compTypeIndx) * sizeof(tlComponent*)));
 }
 
+extern "C" void* initializeAllocator();
 // This is the entry point of the engine
-extern "C" FUNC_DLIB_EXPORT struct tapi_ecs* load_ecstapi() {
+extern "C" FUNC_DLIB_EXPORT struct tlECS* load_ecstapi() {
   // Load virtual memory & allocator systems
-  VIRTUALMEMORY_TAPI_PLUGIN_LOAD_TYPE virmemsys    = nullptr;
-  ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE     allocatorsys = nullptr;
-  load_virtualmemorysystem(&virmemsys, &allocatorsys);
-  f_vector       = allocatorsys->vector_manager;
-  pagesize       = get_pagesize();
-  standard_alloc = allocatorsys->standard;
+  ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE allocSys =
+    ( ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE )initializeAllocator();
+  pagesize       = allocSys->virtualMemory->pageSize();
+  f_vector       = allocSys->vectorManager;
+  standard_alloc = allocSys->standard;
 
-  mainMemBlock = allocatorsys->createSuperMemoryBlock(virmemAllocSize, ECS_TAPI_NAME);
+  mainMemBlock = allocSys->allocateSuperMemoryBlock(virmemAllocSize, L"" ECS_TAPI_NAME);
 
-  ecs_funcs = ( struct tapi_ecs* )allocatorsys->end_of_page->malloc(
-    mainMemBlock, sizeof(struct tapi_ecs) + sizeof(struct tapi_ecs_d));
+  ecs_funcs = ( struct tlECS* )allocSys->endOfPage->malloc(
+    mainMemBlock, sizeof(struct tlECS) + sizeof(struct tlECSPriv));
 
-  hidden                                = ( tapi_ecs_d* )(ecs_funcs + 1);
-  *hidden                               = tapi_ecs_d();
+  priv                                = ( tlECSPriv* )(ecs_funcs + 1);
+  *priv                               = tlECSPriv();
   ecs_funcs->loadPlugin                 = loadPlugin;
   ecs_funcs->reloadPlugin               = reloadPlugin;
   ecs_funcs->unloadPlugin               = unloadPlugin;
@@ -437,17 +423,16 @@ extern "C" FUNC_DLIB_EXPORT struct tapi_ecs* load_ecstapi() {
   ecs_funcs->findEntityType_byEntityHnd = findEntityType_byEntityHnd;
   ecs_funcs->doesContains_entityType    = doesContains_entityType;
   ecs_funcs->get_component_byEntityHnd  = get_component_byEntityHnd;
-  ecs_funcs->data                       = hidden;
+  ecs_funcs->d                       = priv;
 
   // Initialize ECS
   ////////////////////////
-  hidden->v_pluginInfos        = TAPI_VECTOR(ecs_pluginInfo, MAX_PLUGINCOUNT);
-  hidden->v_systemInfos        = TAPI_VECTOR(ecs_systemInfo, MAXSYSTEMCOUNT);
-  hidden->v_mainComponentTypes = TAPI_VECTOR(ecs_compType, MAX_COMPTYPECOUNT);
-  hidden->v_entityTypes        = TAPI_VECTOR(ecs_entityType, MAX_ENTITYTYPECOUNT);
+  priv->v_pluginInfos        = tlVectorCreate(ecs_pluginInfo, mainMemBlock, MAX_PLUGINCOUNT);
+  priv->v_systemInfos        = tlVectorCreate(ecs_systemInfo, mainMemBlock, MAXSYSTEMCOUNT);
+  priv->v_mainComponentTypes = tlVectorCreate(ecs_compType, mainMemBlock, MAX_COMPTYPECOUNT);
+  priv->v_entityTypes = tlVectorCreate(ecs_entityType, mainMemBlock, MAX_ENTITYTYPECOUNT);
 
-  addSystem(VIRTUALMEMORY_TAPI_PLUGIN_NAME, VIRTUALMEMORY_TAPI_PLUGIN_VERSION, virmemsys);
-  addSystem(ALLOCATOR_TAPI_PLUGIN_NAME, ALLOCATOR_TAPI_PLUGIN_VERSION, allocatorsys);
+  addSystem(ALLOCATOR_TAPI_PLUGIN_NAME, ALLOCATOR_TAPI_PLUGIN_VERSION, allocSys);
 
   return ecs_funcs;
 }

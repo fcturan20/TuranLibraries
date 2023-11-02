@@ -1,5 +1,6 @@
 #include "allocator_tapi.h"
 
+#include <Windows.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -8,7 +9,6 @@
 #include <algorithm>
 
 #include "ecs_tapi.h"
-#include "virtualmemorysys_tapi.h"
 static constexpr uint64_t maxVectorAllocation_IfNotSpecified = uint64_t(1) << uint64_t(34);
 static constexpr uint64_t maxSuperMemoryBlockName            = 62; // You should use null terminator
 static constexpr uint64_t maxVirmemPerSuperBlock =
@@ -17,23 +17,50 @@ static constexpr uint64_t maxSuperBlockCount         = 1 << 10;
 static constexpr uint64_t maxVirmemForAllSuperBlocks = maxVirmemPerSuperBlock * maxSuperBlockCount;
 
 // These can be gathered after reload too
-static tapi_allocatorSys* sys;
-static unsigned long long  pagesize = 0;
-static tapi_allocator_d*   hidden   = nullptr;
+static unsigned long long pagesize = 0;
 
+#ifdef T_ENVWINDOWS
+#include "windows.h"
 // Virtual Memory Functions
-extern "C" void*        virtual_reserve(unsigned long long size);
-extern "C" void         virtual_commit(void* ptr, unsigned long long commitsize);
-extern "C" void         virtual_decommit(void* ptr, unsigned long long size);
-extern "C" void         virtual_free(void* ptr, unsigned long long commit);
-extern "C" unsigned int get_pagesize();
-extern "C" void*        get_virtualmemory(unsigned long long reserve_size,
-                                          unsigned long long first_commit_size);
+// Reserve address space from virtual memory
+void* tlReserve(unsigned long long size) {
+  return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_READWRITE);
+}
+
+// Initialize the reserved memory with zeros.
+void tlCommit(void* ptr, unsigned long long commitsize) {
+  if (VirtualAlloc(ptr, commitsize, MEM_COMMIT, PAGE_READWRITE) == NULL && commitsize) {
+    LPVOID msgBuf;
+    DWORD  dw = GetLastError();
+
+    FormatMessage(
+      FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+      NULL, dw, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), ( LPTSTR )&msgBuf, 0, NULL);
+
+    printf("Virtual Alloc failed: %s", msgBuf);
+  }
+}
+
+// Return back the committed memory to reserved state
+// This will help if you want to catch some bugs that points to memory you just freed.
+void tlDecommit(void* ptr, unsigned long long size) { VirtualFree(ptr, size, MEM_DECOMMIT); }
+
+// Free the pages allocated
+void tlFree(void* ptr, unsigned long long commit) { VirtualFree(ptr, commit, MEM_RELEASE); }
+
+unsigned int tlGetPageSize() {
+  SYSTEM_INFO si;
+  GetSystemInfo(&si);
+  return si.dwPageSize;
+}
+#else
+#error Virtual memory system isn't supported for your platform, virtualmemorysys_tapi.c for more information
+#endif
 
 // Size of this structure should be approximately equal to maxVirmemPerSuperBlock
-struct tapi_superMemoryBlock {
+struct tlSuperBlock {
   struct superBlockInfo {
-    char               name[maxSuperMemoryBlockName];
+    wchar_t            name[maxSuperMemoryBlockName];
     unsigned char      isFreed = true;
     unsigned long long blockSize;
     unsigned int       activeBlockCount = 0;
@@ -52,25 +79,28 @@ struct tapi_superMemoryBlock {
 static uint32_t firstPageMemBlockCount;
 static uint32_t memBlockCountPerPage;
 
-struct tapi_allocator_d {
-  uint32_t               createdSuperBlockCount;
-  tapi_superMemoryBlock* superBlocks;
-  tapi_allocator_d() : createdSuperBlockCount(0), superBlocks(nullptr) {
-    superBlocks = ( tapi_superMemoryBlock* )virtual_reserve(maxVirmemForAllSuperBlocks);
+struct tlAllocatorPriv {
+  tlAllocator*  sys;
+  uint32_t      createdSuperBlockCount;
+  tlSuperBlock* superBlocks;
+  tlAllocatorPriv() : createdSuperBlockCount(0), superBlocks(nullptr) {
+    superBlocks = ( tlSuperBlock* )tlReserve(maxVirmemForAllSuperBlocks);
   }
 };
+static tlAllocatorPriv* priv = nullptr;
 
-tapi_superMemoryBlock* createSuperMemoryBlock(unsigned long long blockSize,
-                                              const char*        superMemBlockName) {
-  void* alloc = virtual_reserve(blockSize);
+tlSuperBlock* allocateSuperMemoryBlock(unsigned long long blockSize,
+                                       const wchar_t*     superMemBlockName) {
+  void* alloc = tlReserve(blockSize);
   if (!alloc) {
     printf("Super Memory Block creation failed because virtual memory reserve failed\n");
     return nullptr;
   }
 
   // Search for a freed super memory block
-  for (uint32_t i = 0; i < hidden->createdSuperBlockCount; i++) {
-    tapi_superMemoryBlock* super = &hidden->superBlocks[i];
+  uint32_t namelen = min(wcslen(superMemBlockName), maxSuperMemoryBlockName);
+  for (uint32_t i = 0; i < priv->createdSuperBlockCount; i++) {
+    tlSuperBlock* super = &priv->superBlocks[i];
     if (!super->info.isFreed) {
       continue;
     }
@@ -78,39 +108,36 @@ tapi_superMemoryBlock* createSuperMemoryBlock(unsigned long long blockSize,
     super->info.blockSize = blockSize;
     super->info.isFreed   = false;
     super->info.ptr       = alloc;
-    uint32_t namelen      = std::min(strlen(superMemBlockName), maxSuperMemoryBlockName);
-    memcpy(super->info.name, superMemBlockName, namelen);
+    memcpy(super->info.name, superMemBlockName, namelen * sizeof(super->info.name));
     return super;
   }
 
   // There is no freed super memory block, so allocate new one
-  tapi_superMemoryBlock* super = &hidden->superBlocks[hidden->createdSuperBlockCount++];
-  virtual_commit(super, pagesize);
+  tlSuperBlock* super = &priv->superBlocks[priv->createdSuperBlockCount++];
+  tlCommit(super, pagesize);
   super->info.blockSize = blockSize;
   super->info.isFreed   = false;
   super->info.ptr       = alloc;
-  uint32_t namelen      = std::min(strlen(superMemBlockName), maxSuperMemoryBlockName);
   memcpy(super->info.name, superMemBlockName, namelen);
 
   for (unsigned int i = 0; i < firstPageMemBlockCount; i++) {
-    super->blocks[i] = tapi_superMemoryBlock::memBlock();
+    super->blocks[i] = tlSuperBlock::memBlock();
   }
   super->info.activeBlockCount = firstPageMemBlockCount;
   // Committed memory will be 0 initialized, so memBlocks will be 0 initialized too
   return super;
 }
-void freeSuperMemoryBlock(tapi_superMemoryBlock* superMemBlock) {
-  if (uintptr_t(superMemBlock) - uintptr_t(hidden->superBlocks) % sizeof(tapi_superMemoryBlock)) {
+void freeSuperMemoryBlock(tlSuperBlock* superMemBlock) {
+  if (uintptr_t(superMemBlock) - uintptr_t(priv->superBlocks) % sizeof(tlSuperBlock)) {
     printf("freeSuperMemoryBlock failed because super memory block pointer is invalid!");
   }
   // Free all memory that superMemBlock externally has
-  virtual_free(superMemBlock->info.ptr, superMemBlock->info.blockSize);
+  tlFree(superMemBlock->info.ptr, superMemBlock->info.blockSize);
   // Decommit superMemBlock's internal memory block infos except first page
-  virtual_decommit(( void* )(uintptr_t(superMemBlock) + pagesize),
-                   sizeof(tapi_superMemoryBlock) - pagesize);
+  tlDecommit(( void* )(uintptr_t(superMemBlock) + pagesize), sizeof(tlSuperBlock) - pagesize);
   // Default initialize first page's memory block infos
   for (unsigned int i = 0; i < firstPageMemBlockCount; i++) {
-    superMemBlock->blocks[i] = tapi_superMemoryBlock::memBlock();
+    superMemBlock->blocks[i] = tlSuperBlock::memBlock();
   }
   // Info: Set as freed, memset name as 0
   superMemBlock->info.activeBlockCount = firstPageMemBlockCount;
@@ -119,14 +146,14 @@ void freeSuperMemoryBlock(tapi_superMemoryBlock* superMemBlock) {
   memset(superMemBlock->info.name, 0, maxSuperMemoryBlockName);
   superMemBlock->info.ptr = nullptr;
 }
-void* allocateFromSuperMemoryBlock(tapi_superMemoryBlock* superMemBlock, unsigned int blockSize) {
-  if ((uintptr_t(superMemBlock) - uintptr_t(hidden->superBlocks)) % sizeof(tapi_superMemoryBlock)) {
+void* allocateFromSuperMemoryBlock(tlSuperBlock* superMemBlock, unsigned int blockSize) {
+  if ((uintptr_t(superMemBlock) - uintptr_t(priv->superBlocks)) % sizeof(tlSuperBlock)) {
     printf("allocateFromSuperMemoryBlock failed because super memory block pointer is invalid!\n");
   }
   uintptr_t lastVirmemAddress = reinterpret_cast<uintptr_t>(superMemBlock->info.ptr);
   uint32_t  memBlockIndex     = UINT32_MAX;
   for (uint32_t i = 0; i < superMemBlock->info.activeBlockCount; i++) {
-    tapi_superMemoryBlock::memBlock& curBlock = superMemBlock->blocks[i];
+    tlSuperBlock::memBlock& curBlock = superMemBlock->blocks[i];
     // This is an unused block info
     if (curBlock.size == 0) {
       memBlockIndex = i;
@@ -148,27 +175,27 @@ void* allocateFromSuperMemoryBlock(tapi_superMemoryBlock* superMemBlock, unsigne
   // If all active memory blocks does allocate memory, create new block info with commiting a page
   if (memBlockIndex == UINT32_MAX) {
     memBlockIndex = superMemBlock->info.activeBlockCount++;
-    virtual_commit(superMemBlock->blocks + memBlockIndex, pagesize);
+    tlCommit(superMemBlock->blocks + memBlockIndex, pagesize);
     for (uint32_t i = 1; i < memBlockCountPerPage; i++) {
-      superMemBlock->blocks[i + memBlockIndex] = tapi_superMemoryBlock::memBlock();
+      superMemBlock->blocks[i + memBlockIndex] = tlSuperBlock::memBlock();
     }
     superMemBlock->info.activeBlockCount += memBlockCountPerPage;
   }
-  tapi_superMemoryBlock::memBlock& finalBlock = superMemBlock->blocks[memBlockIndex];
-  finalBlock.isFree                           = false;
-  finalBlock.size                             = blockSize;
+  tlSuperBlock::memBlock& finalBlock = superMemBlock->blocks[memBlockIndex];
+  finalBlock.isFree                  = false;
+  finalBlock.size                    = blockSize;
   return reinterpret_cast<void*>(lastVirmemAddress);
 }
-void freeFromSuperMemoryBlock(tapi_superMemoryBlock* superMemBlock, void* allocation) {
-  if (uintptr_t(superMemBlock) - uintptr_t(hidden->superBlocks) % sizeof(tapi_superMemoryBlock)) {
+void freeFromSuperMemoryBlock(tlSuperBlock* superMemBlock, void* allocation) {
+  if (uintptr_t(superMemBlock) - uintptr_t(priv->superBlocks) % sizeof(tlSuperBlock)) {
     printf("freeSuperMemoryBlock failed because super memory block pointer is invalid!\n");
   }
   uintptr_t lastVirmemAddress = reinterpret_cast<uintptr_t>(superMemBlock->info.ptr);
   for (uint32_t i = 0; i < superMemBlock->info.activeBlockCount; i++) {
-    tapi_superMemoryBlock::memBlock& curBlock = superMemBlock->blocks[i];
+    tlSuperBlock::memBlock& curBlock = superMemBlock->blocks[i];
     if (lastVirmemAddress == reinterpret_cast<uintptr_t>(allocation)) {
       curBlock.isFree = true;
-      virtual_decommit(allocation, curBlock.size);
+      tlDecommit(allocation, curBlock.size);
       return;
     }
     if (lastVirmemAddress >= reinterpret_cast<uintptr_t>(allocation) || !curBlock.size) {
@@ -180,7 +207,7 @@ void freeFromSuperMemoryBlock(tapi_superMemoryBlock* superMemBlock, void* alloca
 }
 
 // Based on The Machinery's end of page allocator
-void* endofpage_malloc(tapi_superMemoryBlock* memBlock, unsigned int size) {
+void* eopMalloc(tlSuperBlock* memBlock, unsigned int size) {
   const unsigned long long requestedAllocSize = size + sizeof(unsigned int);
   // Requested size is rounded up to pagesize (these pages will be committed)
   //  Then adds a new page (this page won't be committed)
@@ -188,7 +215,7 @@ void* endofpage_malloc(tapi_superMemoryBlock* memBlock, unsigned int size) {
     requestedAllocSize + (pagesize - (requestedAllocSize % pagesize)) + pagesize;
 
   void* base = allocateFromSuperMemoryBlock(memBlock, end_of_page_size);
-  virtual_commit(base, end_of_page_size - pagesize);
+  tlCommit(base, end_of_page_size - pagesize);
   // Memory Layout: offsettedSpace (less than a page) - sizeVariable (unsigned int) - data
   // (requestedSize) - reserved (non-committed) last page (page size)
   void* offsetted = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(base) +
@@ -197,7 +224,7 @@ void* endofpage_malloc(tapi_superMemoryBlock* memBlock, unsigned int size) {
   *((( unsigned int* )offsetted) - 1) = size + sizeof(unsigned int);
   return offsetted;
 }
-void endofpage_free(tapi_superMemoryBlock* memBlock, void* returnedAllocPTR) {
+void eopFree(tlSuperBlock* memBlock, void* returnedAllocPTR) {
   const uint32_t requestedAllocSize = *((( unsigned int* )returnedAllocPTR) - 1);
   if (!requestedAllocSize || requestedAllocSize == UINT32_MAX) {
     printf("End of Page allocator failed to free the allocation!");
@@ -211,14 +238,14 @@ void endofpage_free(tapi_superMemoryBlock* memBlock, void* returnedAllocPTR) {
 }
 
 // Standard alloc
-void* standard_malloc(tapi_superMemoryBlock* memBlock, unsigned int size) {
+void* stdMalloc(tlSuperBlock* memBlock, unsigned int size) {
   const unsigned long long requestedAllocSize = size + sizeof(unsigned int);
 
   void* base = allocateFromSuperMemoryBlock(memBlock, requestedAllocSize);
-  virtual_commit(base, requestedAllocSize);
+  tlCommit(base, requestedAllocSize);
   return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(base) + sizeof(unsigned int));
 }
-void standard_free(tapi_superMemoryBlock* memBlock, void* returnedAllocPTR) {
+void stdFree(tlSuperBlock* memBlock, void* returnedAllocPTR) {
   const uint32_t requestedAllocSize = *((( unsigned int* )returnedAllocPTR) - 1);
   if (!requestedAllocSize || requestedAllocSize == UINT32_MAX) {
     printf("Standard allocator failed to free the allocation!");
@@ -238,36 +265,36 @@ struct vector_tapi {
 vector_tapi* getVectorTapi(const void* data) {
   return reinterpret_cast<vector_tapi*>(reinterpret_cast<uintptr_t>(data) - sizeof(vector_tapi));
 }
-tapi_vectorElementConstructorFnc find_constructor(void* data) {
+tlVectorElementConstructorFnc find_constructor(void* data) {
   uintptr_t loc = reinterpret_cast<uintptr_t>(getVectorTapi(data));
-  return *reinterpret_cast<tapi_vectorElementConstructorFnc*>(loc - sizeof(void*));
+  return *reinterpret_cast<tlVectorElementConstructorFnc*>(loc - sizeof(void*));
 }
-tapi_vectorElementCopyFnc find_copyfunc(void* data) {
+tlVectorElementCopyFnc find_copyfunc(void* data) {
   uintptr_t    loc = reinterpret_cast<uintptr_t>(getVectorTapi(data));
   vector_tapi* hnd = getVectorTapi(data);
-  if (hnd->flag & vector_flagbit_constructor_tapi) {
+  if (hnd->flag & tlVectorFlagBit_constructor) {
     loc -= sizeof(void*);
   }
-  return *reinterpret_cast<tapi_vectorElementCopyFnc*>(loc - sizeof(void*));
+  return *reinterpret_cast<tlVectorElementCopyFnc*>(loc - sizeof(void*));
 }
-tapi_vectorElementDestructorFnc find_destructor(void* data) {
+tlVectorElementDestructorFnc find_destructor(void* data) {
   uintptr_t    loc = reinterpret_cast<uintptr_t>(getVectorTapi(data));
   vector_tapi* hnd = getVectorTapi(data);
-  if (hnd->flag & vector_flagbit_constructor_tapi) {
+  if (hnd->flag & tlVectorFlagBit_constructor) {
     loc -= sizeof(void*);
   }
-  if (hnd->flag & vector_flagbit_copy_tapi) {
+  if (hnd->flag & tlVectorFlagBit_copy) {
     loc -= sizeof(void*);
   }
-  return *reinterpret_cast<tapi_vectorElementDestructorFnc*>(loc - sizeof(void*));
+  return *reinterpret_cast<tlVectorElementDestructorFnc*>(loc - sizeof(void*));
 }
 
 void destroyElements(void* data, uint64_t destroyCount) {
   uintptr_t    loc = reinterpret_cast<uintptr_t>(data) - sizeof(vector_tapi);
   vector_tapi* hnd = getVectorTapi(data);
   // If there is a destructor, use it for old element
-  if (hnd->flag & vector_flagbit_destructor_tapi) {
-    tapi_vectorElementDestructorFnc destructor = find_destructor(data);
+  if (hnd->flag & tlVectorFlagBit_destructor) {
+    tlVectorElementDestructorFnc destructor = find_destructor(data);
     for (uint64_t i = hnd->count - destroyCount; i < hnd->count; i++) {
       destructor(( unsigned char* )data + (hnd->elementSize * i));
     }
@@ -282,17 +309,17 @@ void destroyElements(void* data, uint64_t destroyCount) {
 void addElements(void* data, uint64_t elementCount) {
   vector_tapi* hnd = getVectorTapi(data);
   uintptr_t    d   = reinterpret_cast<uintptr_t>(data);
-  virtual_commit(reinterpret_cast<void*>(d + (hnd->elementSize * hnd->count)),
-                 elementCount * hnd->elementSize);
-  if (hnd->flag & vector_flagbit_constructor_tapi) {
-    tapi_vectorElementConstructorFnc constructor = find_constructor(data);
+  tlCommit(reinterpret_cast<void*>(d + (hnd->elementSize * hnd->count)),
+           elementCount * hnd->elementSize);
+  if (hnd->flag & tlVectorFlagBit_constructor) {
+    tlVectorElementConstructorFnc constructor = find_constructor(data);
     for (uint64_t i = hnd->count; i < elementCount + hnd->count; i++) {
       constructor(reinterpret_cast<void*>(d + (hnd->elementSize * i)));
     }
   }
   hnd->count += elementCount;
 }
-unsigned char resize(void* data, unsigned int newItemCount) {
+unsigned char tlVectorResizeFnc(void* data, unsigned int newItemCount) {
   vector_tapi* hnd = getVectorTapi(data);
   int64_t      dif = int64_t(newItemCount) - int64_t(hnd->count);
   if (dif < 0) {
@@ -302,26 +329,25 @@ unsigned char resize(void* data, unsigned int newItemCount) {
     addElements(data, dif);
   }
 }
-void* create_vector(unsigned int elementSize, tapi_superMemoryBlock* memblock,
-                    unsigned int initialSize, unsigned int maxSize, vector_flags_tapi vectorFlag,
-                    ...) {
+void* tlVectorCreateFnc(tlSuperBlock* memblock, unsigned int elementSize, unsigned int initialSize,
+                        unsigned int maxSize, tlVectorFlag vectorFlag, ...) {
   // Calculate size of vector struct and allocate it
   uint32_t sizeof_vectorFuncs = 0;
-  if (vectorFlag & vector_flagbit_constructor_tapi) {
+  if (vectorFlag & tlVectorFlagBit_constructor) {
     sizeof_vectorFuncs += sizeof(void*);
   }
-  if (vectorFlag & vector_flagbit_copy_tapi) {
+  if (vectorFlag & tlVectorFlagBit_copy) {
     sizeof_vectorFuncs += sizeof(void*);
   }
-  if (vectorFlag & vector_flagbit_destructor_tapi) {
+  if (vectorFlag & tlVectorFlagBit_destructor) {
     sizeof_vectorFuncs += sizeof(void*);
   }
-  if (vectorFlag & vector_flagbit_invalidator_tapi) {
+  if (vectorFlag & tlVectorFlagBit_invalidator) {
     sizeof_vectorFuncs += sizeof(void*);
   }
   void* alloc = ( void* )allocateFromSuperMemoryBlock(
     memblock, sizeof_vectorFuncs + sizeof(vector_tapi) + (elementSize * maxSize));
-  virtual_commit(alloc, sizeof_vectorFuncs + sizeof(vector_tapi));
+  tlCommit(alloc, sizeof_vectorFuncs + sizeof(vector_tapi));
   vector_tapi* vector =
     reinterpret_cast<vector_tapi*>(reinterpret_cast<uintptr_t>(alloc) + sizeof_vectorFuncs);
 
@@ -333,49 +359,47 @@ void* create_vector(unsigned int elementSize, tapi_superMemoryBlock* memblock,
   va_list args;
   va_start(args, vectorFlag);
   void* lastFuncPtr = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(vector) - sizeof(void*));
-  if (vectorFlag & vector_flagbit_constructor_tapi) {
-    tapi_vectorElementConstructorFnc constructor =
-      va_arg(args, tapi_vectorElementConstructorFnc);
-    memcpy(lastFuncPtr, &constructor, sizeof(tapi_vectorElementConstructorFnc));
+  if (vectorFlag & tlVectorFlagBit_constructor) {
+    tlVectorElementConstructorFnc constructor = va_arg(args, tlVectorElementConstructorFnc);
+    memcpy(lastFuncPtr, &constructor, sizeof(tlVectorElementConstructorFnc));
     lastFuncPtr = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(lastFuncPtr) - sizeof(void*));
   }
-  if (vectorFlag & vector_flagbit_copy_tapi) {
-    tapi_vectorElementCopyFnc copyFunc = va_arg(args, tapi_vectorElementCopyFnc);
-    memcpy(lastFuncPtr, &copyFunc, sizeof(tapi_vectorElementCopyFnc));
+  if (vectorFlag & tlVectorFlagBit_copy) {
+    tlVectorElementCopyFnc copyFunc = va_arg(args, tlVectorElementCopyFnc);
+    memcpy(lastFuncPtr, &copyFunc, sizeof(tlVectorElementCopyFnc));
     lastFuncPtr = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(lastFuncPtr) - sizeof(void*));
   }
-  if (vectorFlag & vector_flagbit_destructor_tapi) {
-    tapi_vectorElementDestructorFnc destructor =
-      va_arg(args, tapi_vectorElementDestructorFnc);
-    memcpy(lastFuncPtr, &destructor, sizeof(tapi_vectorElementDestructorFnc));
+  if (vectorFlag & tlVectorFlagBit_destructor) {
+    tlVectorElementDestructorFnc destructor = va_arg(args, tlVectorElementDestructorFnc);
+    memcpy(lastFuncPtr, &destructor, sizeof(tlVectorElementDestructorFnc));
     lastFuncPtr = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(lastFuncPtr) - sizeof(void*));
   }
-  if (vectorFlag & vector_flagbit_invalidator_tapi) {
-    tapi_vectorElementCopyFnc invalidator = va_arg(args, tapi_vectorElementCopyFnc);
-    memcpy(lastFuncPtr, &invalidator, sizeof(tapi_vectorElementCopyFnc));
+  if (vectorFlag & tlVectorFlagBit_invalidator) {
+    tlVectorElementCopyFnc invalidator = va_arg(args, tlVectorElementCopyFnc);
+    memcpy(lastFuncPtr, &invalidator, sizeof(tlVectorElementCopyFnc));
     lastFuncPtr = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(lastFuncPtr) - sizeof(void*));
   }
   va_end(args);
 
-  if (!resize(vector + 1, initialSize)) {
-    virtual_free(alloc, sizeof_vectorFuncs + sizeof(vector_tapi) + (elementSize * maxSize));
+  if (!tlVectorResizeFnc(vector + 1, initialSize)) {
+    tlFree(alloc, sizeof_vectorFuncs + sizeof(vector_tapi) + (elementSize * maxSize));
   }
   return vector + 1;
 }
-unsigned int get_vector_elementcount(const void* data) {
+unsigned int tlVectorSizeFnc(const void* data) {
   vector_tapi* hnd = getVectorTapi(data);
   return hnd->count;
 }
-unsigned int get_vector_capacity(const void* data) {
+unsigned int tlVectorCapacityFnc(const void* data) {
   vector_tapi* hnd = getVectorTapi(data);
   return hnd->capacity;
 }
-unsigned char push_back(void* data, const void* src) {
+unsigned char tlVectorPushBackFnc(void* data, const void* src) {
   vector_tapi* hnd        = getVectorTapi(data);
   void*        dstElement = ( unsigned char* )data + (hnd->elementSize * hnd->count++);
-  virtual_commit(dstElement, hnd->elementSize);
+  tlCommit(dstElement, hnd->elementSize);
   if (src) {
-    if (hnd->flag & vector_flagbit_copy_tapi) {
+    if (hnd->flag & tlVectorFlagBit_copy) {
       find_copyfunc(hnd)(src, dstElement);
     } else {
       memcpy(dstElement, src, hnd->elementSize);
@@ -383,14 +407,14 @@ unsigned char push_back(void* data, const void* src) {
   }
   return 1;
 }
-unsigned char erase(void* data, unsigned int elementIndex) {
+unsigned char tlVectorEraseFnc(void* data, unsigned int elementIndex) {
   vector_tapi* hnd = getVectorTapi(data);
   if (elementIndex >= hnd->count) {
     return 0;
   }
   // If there is a copy func, use it for moving memory
-  if (hnd->flag & vector_flagbit_copy_tapi) {
-    tapi_vectorElementCopyFnc copyFunc = find_copyfunc(hnd);
+  if (hnd->flag & tlVectorFlagBit_copy) {
+    tlVectorElementCopyFnc copyFunc = find_copyfunc(hnd);
     for (uint64_t i = elementIndex; i < hnd->count - 1; i++) {
       copyFunc(( unsigned char* )data + (hnd->elementSize * (i + 1)),
                ( unsigned char* )data + (hnd->elementSize * i));
@@ -402,48 +426,65 @@ unsigned char erase(void* data, unsigned int elementIndex) {
             hnd->elementSize * (hnd->count - elementIndex - 1));
   }
   if (((hnd->elementSize * hnd->count) % pagesize) == 0) {
-    virtual_decommit(( unsigned char* )data + hnd->elementSize * hnd->count, pagesize);
+    tlDecommit(( unsigned char* )data + hnd->elementSize * hnd->count, pagesize);
   }
   return 1;
 }
 
-extern "C" unsigned int getSizeOfAllocatorSys() {
-  return sizeof(tapi_allocatorSys) + sizeof(tapi_allocator_d);
-}
-tapi_allocatorSys* initialize(void* allocatorSys) {
+tlAllocator* initialize() {
   // Static variables
-  pagesize               = get_pagesize();
-  firstPageMemBlockCount = (pagesize - sizeof(tapi_superMemoryBlock::superBlockInfo)) /
-                           sizeof(tapi_superMemoryBlock::memBlock);
-  memBlockCountPerPage = pagesize / sizeof(tapi_superMemoryBlock::memBlock);
+  pagesize = tlGetPageSize();
+  firstPageMemBlockCount =
+    (pagesize - sizeof(tlSuperBlock::superBlockInfo)) / sizeof(tlSuperBlock::memBlock);
+  memBlockCountPerPage = pagesize / sizeof(tlSuperBlock::memBlock);
 
   // System struct allocation
-  sys                         = ( tapi_allocatorSys* )allocatorSys;
-  sys->d                      = ( struct tapi_allocator_d* )(sys + 1);
-  hidden                      = sys->d;
-  *hidden                     = tapi_allocator_d();
-  sys->standard               = ( tapi_bufferAllocator* )malloc(sizeof(tapi_bufferAllocator));
-  sys->end_of_page            = ( tapi_bufferAllocator* )malloc(sizeof(tapi_bufferAllocator));
-  sys->vector_manager         = ( tapi_vectorAllocator* )malloc(sizeof(tapi_vectorAllocator));
-  sys->createSuperMemoryBlock = createSuperMemoryBlock;
-  sys->freeSuperMemoryBlock   = freeSuperMemoryBlock;
+  priv                          = new tlAllocatorPriv;
+  priv->sys                     = new tlAllocator;
+  tlAllocator* sys              = priv->sys;
+  sys->d                        = priv;
+  sys->allocateSuperMemoryBlock = allocateSuperMemoryBlock;
+  sys->freeSuperMemoryBlock     = freeSuperMemoryBlock;
+
+  // Virtual memory system
+  {
+    tlVM* vm           = ( tlVM* )malloc(sizeof(tlVM));
+    vm->pageSize       = &tlGetPageSize;
+    vm->commit         = &tlCommit;
+    vm->free           = &tlFree;
+    vm->reserve        = &tlReserve;
+    vm->decommit       = &tlDecommit;
+    sys->virtualMemory = vm;
+  }
 
   // Standard Allocator
-  sys->standard->malloc = standard_malloc;
-  sys->standard->free   = standard_free;
+  {
+    tlBuffer* bufAllocator = ( tlBuffer* )malloc(sizeof(tlBuffer));
+    bufAllocator->malloc   = stdMalloc;
+    bufAllocator->free     = stdFree;
+    sys->standard          = bufAllocator;
+  }
 
   // End of Page Buffer Allocator
-  sys->end_of_page->malloc = &endofpage_malloc;
-  sys->end_of_page->free   = &endofpage_free;
+  {
+    tlBuffer* bufAllocator = ( tlBuffer* )malloc(sizeof(tlBuffer));
+    bufAllocator->malloc   = &eopMalloc;
+    bufAllocator->free     = &eopFree;
+    sys->endOfPage         = bufAllocator;
+  }
 
   // Vector Allocator
-  sys->vector_manager->create_vector = &create_vector;
-  sys->vector_manager->erase         = &erase;
-  sys->vector_manager->capacity      = get_vector_capacity;
-  sys->vector_manager->size          = get_vector_elementcount;
-  sys->vector_manager->push_back     = push_back;
-  sys->vector_manager->resize        = resize;
+  {
+    tlVector* f_vector = ( tlVector* )malloc(sizeof(tlVector));
+    f_vector->create   = &tlVectorCreateFnc;
+    f_vector->erase    = &tlVectorEraseFnc;
+    f_vector->capacity = &tlVectorCapacityFnc;
+    f_vector->size     = &tlVectorSizeFnc;
+    f_vector->pushBack = &tlVectorPushBackFnc;
+    f_vector->resize   = &tlVectorResizeFnc;
+    sys->vectorManager = f_vector;
+  }
 
   return sys;
 }
-extern "C" void* initializeAllocator(void* allocatorSys) { return initialize(allocatorSys); }
+extern "C" void* initializeAllocator() { return initialize(); }

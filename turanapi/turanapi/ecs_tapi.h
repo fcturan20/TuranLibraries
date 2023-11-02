@@ -28,69 +28,71 @@ extern "C" {
 #define ECS_TAPI_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
 // To help users to minimize accessing issues, each type name has its pointer
 // With this way, users can't use an entityTypeID mistakenly as entityID etc.
-struct tapi_ecs_entityType;
-struct tapi_ecs_componentTypeID; // Identifier for component types
-struct tapi_ecs_component;
-struct tapi_ecs_entity;
-struct tapi_ecs_plugin;
+struct tlEntityType;
+struct tlComponentTypeID; // Identifier for component types
+struct tlComponent;
+struct tlEntity;
+struct tlPlugin;
 
 // Use this to match base of a component type with a overriden one
-struct tapi_ecs_componentTypePair {
-  struct tapi_ecs_componentTypeID* base;
-  void*                            overriden; // Pointer to overriden type
+struct tlComponentTypePair {
+  struct tlComponentTypeID* base;
+  void*                     overriden; // Pointer to overriden type
 };
 
 // Each component should handle its allocations in its own manager
 // So there is no general componentManager for all components
 // If a system will use a component; it should include the header that has component's type
-struct ecs_compManager {
-  struct tapi_ecs_component* (*createComponent)();
+struct tlComponentManagerDescription {
+  struct tlComponent* (*createComponent)();
   unsigned char (*validateComponent)();
-  void (*destroyComponent)(struct tapi_ecs_component* hnd);
+  void (*destroyComponent)(struct tlComponent* hnd);
 };
 
-struct tapi_ecs {
+struct tlECS {
+  struct tlECSPriv* d;
   // PLUGIN
   ////////////////////////////
 
   // Load a dll from the path and calls plugin initialization function to integrate
-  struct tapi_ecs_plugin* (*loadPlugin)(const char* pluginPath);
+  struct tlPlugin* (*loadPlugin)(const char* pluginPath);
   // Reload a dll from the previous path by its ID
-  void (*reloadPlugin)(struct tapi_ecs_plugin* plugin);
+  void (*reloadPlugin)(struct tlPlugin* plugin);
   // Unload a dll (it's better not to use for reloading)
-  unsigned char (*unloadPlugin)(struct tapi_ecs_plugin* plugin);
+  unsigned char (*unloadPlugin)(struct tlPlugin* plugin);
 
   // SYSTEM
   ////////////////////////////
 
   // Get the system registered by a plugin
-  void* (*getSystem)(const char* name);
+  const void* (*getSystem)(const char* name);
   // Make a system accessible from other systems
-  void (*addSystem)(const char* name, unsigned int version, void* system_ptr);
-  void (*destroySystem)(void* systemPTR);
+  void (*addSystem)(const char* name, unsigned int version, const void* system_ptr);
+  void (*destroySystem)(const void* systemPTR);
 
   // COMPONENT
   ////////////////////////////
 
   // @param mainType: If main type can't be inherited, set NULL.
   // @return NULL if there is any component inheritance conflicts
-  struct tapi_ecs_componentTypeID* (*addComponentType)(
-    const char* name, void* mainType, struct ecs_compManager manager,
-    const struct tapi_ecs_componentTypePair* pairList, unsigned int pairListSize);
-  struct ecs_compManager (*getCompManager)(struct tapi_ecs_componentTypeID* compType);
+  struct tlComponentTypeID* (*addComponentType)(const char* name, void* mainType,
+                                                struct tlComponentManagerDescription manager,
+                                                const struct tlComponentTypePair*    pairList,
+                                                unsigned int                         pairListSize);
+  struct tlComponentManagerDescription (*getCompManager)(struct tlComponentTypeID* compType);
 
   // ENTITY
   ////////////////////////////
 
-  struct tapi_ecs_entityType* (*addEntityType)(
-    const struct tapi_ecs_componentTypeID* const* compTypeList, unsigned int listSize);
+  struct tlEntityType* (*addEntityType)(const struct tlComponentTypeID* const* compTypeList,
+                                        unsigned int                           listSize);
   // Create an entity
-  struct tapi_ecs_entity* (*createEntity)(struct tapi_ecs_entityType* typeHandle);
+  struct tlEntity* (*createEntity)(struct tlEntityType* typeHandle);
   // Find entity type handle
-  struct tapi_ecs_entityType* (*findEntityType_byEntityHnd)(struct tapi_ecs_entity* entityHnd);
+  struct tlEntityType* (*findEntityType_byEntityHnd)(struct tlEntity* entityHnd);
   //@return 1 if entity type contains the component type; otherwise 0
-  unsigned char (*doesContains_entityType)(struct tapi_ecs_entityType*      entityType,
-                                           struct tapi_ecs_componentTypeID* compType);
+  unsigned char (*doesContains_entityType)(struct tlEntityType*      entityType,
+                                           struct tlComponentTypeID* compType);
   // Get a specific type of component of an entity
   // @param compTypeID: ID of the component type user wants to access
   // @param returnedCompType: Pointer to overriden component type, you should cast and use this to
@@ -105,24 +107,22 @@ struct tapi_ecs {
   // Don't do ->    int ABCvarValue =
   // ((XXX*)XXXCompManager->GetComponentType())->get_ABCvar(compData);
   //  because it will break inheritance
-  struct tapi_ecs_component* (*get_component_byEntityHnd)(
-    struct tapi_ecs_entity* entityID, struct tapi_ecs_componentTypeID* compTypeID,
-    void** returnedCompType);
-
-  struct tapi_ecs_d* data;
+  struct tlComponent* (*get_component_byEntityHnd)(struct tlEntity*          entityID,
+                                                   struct tlComponentTypeID* compTypeID,
+                                                   void**                    returnedCompType);
 };
 
 // Program that owns the ECS should use these types to convert loaded function pointer
-typedef struct tapi_ecs* (*load_ecstapi_func)();
-typedef unsigned char (*unload_ecstapi_func)();
+typedef struct tlECS* (*tlECSloadFnc)();
+typedef unsigned char (*tlECSunloadFnc)();
 
 // ECS TAPI MACROS
 
 // Plugin should define this function to get initialized
 #define ECSPLUGIN_ENTRY(ecsHndName, reloadFlagName) \
-  FUNC_DLIB_EXPORT void ECSTAPIPLUGIN_load(struct tapi_ecs* ecsHndName, unsigned int reloadFlagName)
+  FUNC_DLIB_EXPORT void ECSTAPIPLUGIN_load(struct tlECS* ecsHndName, unsigned int reloadFlagName)
 #define ECSPLUGIN_EXIT(ecsHndName, reloadFlagName)                        \
-  FUNC_DLIB_EXPORT void ECSTAPIPLUGIN_unload(struct tapi_ecs* ecsHndName, \
+  FUNC_DLIB_EXPORT void ECSTAPIPLUGIN_unload(struct tlECS* ecsHndName, \
                                              unsigned int     reloadFlagName)
 
 #ifdef __cplusplus

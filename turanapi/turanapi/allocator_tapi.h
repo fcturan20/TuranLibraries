@@ -2,8 +2,7 @@
 #include "predefinitions_tapi.h"
 #define ALLOCATOR_TAPI_PLUGIN_NAME "tapi_allocator"
 #define ALLOCATOR_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
-#define ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE struct tapi_allocatorSys*
-
+#define ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE const struct tlAllocator*
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,18 +17,33 @@ extern "C" {
 //  SuperMemoryBlock: A very big address space possibly for a system
 //   Allocators allocates for a system by using a SuperMemoryBlock pointer
 //   AllocatorSystem has its own address space for storing internal structures of SuperMemoryBlocks
+struct tlSuperBlock;
 
-struct tapi_bufferAllocator {
-  void* (*malloc)(struct tapi_superMemoryBlock* memBlock, unsigned int size);
-  // @param returnedAllocPTR: This should be the same pointer as returned by malloc()
-  void (*free)(struct tapi_superMemoryBlock* memBlock, void* returnedAllocPTR);
-  void (*setMallocName)(void* allocation, const char* name);
+struct tlVM {
+  // Reserve address space from virtual memory
+  // size is in bytes
+  void* (*reserve)(unsigned long long size);
+  // Initialize the reserved memory with zeros.
+  void (*commit)(void* reservedmem, unsigned long long commitsize);
+  // Return back the committed memory to reserved state
+  // This will help if you want to catch some bugs that points to memory you just freed.
+  void (*decommit)(void* committedmem, unsigned long long size);
+  // Return allocated address space back to OS
+  void (*free)(void* ptr, unsigned long long size);
+  // Get page size of the system
+  unsigned int (*pageSize)();
 };
-struct tapi_superMemoryBlock;
 
-typedef void (*tapi_vectorElementConstructorFnc)(void* elementPtr);
-typedef void (*tapi_vectorElementCopyFnc)(const void* srcElement, void* dstElement);
-typedef void (*tapi_vectorElementDestructorFnc)(void* elementPtr);
+struct tlBuffer {
+  void* (*malloc)(struct tlSuperBlock* memBlock, unsigned int size);
+  // @param returnedAllocPTR: This should be the same pointer as returned by malloc()
+  void (*free)(struct tlSuperBlock* memBlock, void* returnedAllocPTR);
+  void (*setMallocName)(void* allocation, const wchar_t* name);
+};
+
+typedef void (*tlVectorElementConstructorFnc)(void* elementPtr);
+typedef void (*tlVectorElementCopyFnc)(const void* srcElement, void* dstElement);
+typedef void (*tlVectorElementDestructorFnc)(void* elementPtr);
 
 //         VECTOR ALLOCATOR API
 /////////////////////////////////////
@@ -37,14 +51,14 @@ typedef void (*tapi_vectorElementDestructorFnc)(void* elementPtr);
 // run-time Vectors allocate an adress space of "maxSize * elementSize" bytes from the allocator
 // Then manages commitment of
 
-typedef enum vector_flagbits_tapi {
-  vector_flagbit_constructor_tapi = 1,
-  vector_flagbit_copy_tapi        = 2,
-  vector_flagbit_destructor_tapi  = 4,
-  vector_flagbit_invalidator_tapi = 8
-} vector_flagbits_tapi;
-typedef int vector_flags_tapi;
-struct tapi_vectorAllocator {
+enum tlVectorFlagBits {
+  tlVectorFlagBit_constructor = 1,
+  tlVectorFlagBit_copy        = 2,
+  tlVectorFlagBit_destructor  = 4,
+  tlVectorFlagBit_invalidator = 8
+};
+typedef int tlVectorFlag;
+struct tlVector {
   // Use maxSize as much as you can because vector struct and data will be right back each other.
   // So overall faster access etc.
   // @param elementSize: Size of a single element
@@ -53,15 +67,14 @@ struct tapi_vectorAllocator {
   // @param maxSize: Define an upper limit for element count
   // @param vectorFlag: Defines how variadic arguments are interpreted
   // @return Array pointer, so cast it to your own type
-  void* (*create_vector)(unsigned int elementSize, struct tapi_superMemoryBlock* memblock,
-                         unsigned int initialSize, unsigned int maxSize,
-                         vector_flags_tapi vectorFlag, ...);
+  void* (*create)(struct tlSuperBlock* memblock, unsigned int elementSize, unsigned int initialSize,
+                  unsigned int maxSize, tlVectorFlag vectorFlag, ...);
   unsigned int (*size)(const void* hnd);
   unsigned int (*capacity)(const void* hnd);
   // @param src: Source data to copy from
   // @param copyFunc: Used to copy the element
   // @return 0 if fails; 1 if succeeds. May fail if mem commit fails or upper limit is reached.
-  unsigned char (*push_back)(void* hnd, const void* src);
+  unsigned char (*pushBack)(void* hnd, const void* src);
   // @return 0 if there is no such object, 1 if succeeds
   unsigned char (*erase)(void* hnd, unsigned int elementIndex);
   // @param constructor: if new items will be added, this is used to initialize
@@ -69,23 +82,25 @@ struct tapi_vectorAllocator {
   // @return 0 if fails; 1 if succeeds. May fail if mem allocation fais or upper limit is reached.
   unsigned char (*resize)(void* hnd, unsigned int newItemCount);
 };
-#define TAPI_CREATEVECTOR(vectorAllocator, type, memblock, maxSize) \
-  (( type* )vectorAllocator->create_vector(sizeof(type), memblock, 0, maxSize, 0))
-// Macro of TAPI_CREATEVECTOR. Vector allocator should be named f_vector, Super Memory Block should
-// be named mainMemBlock.
-#define TAPI_VECTOR(type, maxSize) \
-  (( type* )f_vector->create_vector(sizeof(type), mainMemBlock, 0, maxSize, 0))
-
-typedef struct tapi_allocatorSys {
-  struct tapi_allocator_d* d;
-  struct tapi_superMemoryBlock* (*createSuperMemoryBlock)(unsigned long long blockSize,
-                                                   const char*        superMemBlockName);
-  void (*freeSuperMemoryBlock)(struct tapi_superMemoryBlock* superMemBlock);
-  struct tapi_vectorAllocator* vector_manager;
-  struct tapi_bufferAllocator* standard;
+// Vector allocator should be named f_vector
+#define tlVectorCreate(type, memblock, maxSize) \
+  (( type* )f_vector->create(memblock, sizeof(type), 0, maxSize, 0))
+#define tlVectorSize(vectorHnd) f_vector->size(vectorHnd)
+#define tlVectorPushBack(vectorHnd, src) f_vector->pushBack(vectorHnd, src)
+#define tlVectorCapacity(vectorHnd) f_vector->capacity(vectorHnd)
+#define tlVectorErase(vectorHnd, elementIndx) f_vector->erase(vectorHnd, elementIndx)
+#define tlVectorResize(vectorHnd, newItemCount) f_vector->erase(vectorHnd, newItemCount)
+typedef struct tlAllocator {
+  const struct tlAllocatorPriv* d;
+  struct tlSuperBlock* (*allocateSuperMemoryBlock)(unsigned long long blockSize,
+                                                   const wchar_t*     superMemBlockName);
+  void (*freeSuperMemoryBlock)(struct tlSuperBlock* superMemBlock);
+  const struct tlVM*     virtualMemory;
+  const struct tlVector* vectorManager;
+  const struct tlBuffer* standard;
   // Allocations are rounded up to pagesize and an extra page is allocated
   // Use for debugging (out of space accesses will be crashes etc.)
-  struct tapi_bufferAllocator* end_of_page;
+  const struct tlBuffer* endOfPage;
 };
 
 #ifdef __cplusplus

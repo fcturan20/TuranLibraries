@@ -371,7 +371,7 @@ void vk_destroyCmd(vk_cmd& cmd) {
 void CMDBUNDLE_VKOBJ::createCmdBuffer(uint64_t cmdCount) {
   uint32_t allocSize = sizeof(vk_cmd) * cmdCount;
   m_cmds             = ( vk_cmd* )VK_MEMOFFSET_TO_POINTER(vk_virmem::allocatePage(allocSize));
-  virmemsys->virtual_commit(m_cmds, allocSize);
+  vm->commit(m_cmds, allocSize);
   m_cmdCount = cmdCount;
   for (uint32_t i = 0; i < cmdCount; i++) {
     m_cmds[i] = {};
@@ -593,7 +593,7 @@ void vk_cmdExecuteIndirect(struct tgfx_commandBundle* bndl, unsigned long long s
   cmd->opStates =
     ( vkCmdStruct_executeIndirect::vk_indirectOperationState* )VK_MEMOFFSET_TO_POINTER(
       vk_virmem::allocatePage(allocSize, &allocSize));
-  virmemsys->virtual_commit(cmd->opStates, allocSize);
+  vm->commit(cmd->opStates, allocSize);
   for (uint32_t i = 0, stateIndx = 0; i < operationCount;) {
     indirectOperationType_tgfx opType = operationTypes[i];
     cmd->opStates[stateIndx].opType   = opType;

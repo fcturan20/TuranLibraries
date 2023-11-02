@@ -17,21 +17,20 @@
 #include "pecfManager/pecfManager.h"
 #include "profiler_tapi.h"
 #include "string_tapi.h"
-#include "tgfx_forwarddeclarations.h"
-#include "tgfx_structs.h"
 #include "tgfx_core.h"
+#include "tgfx_forwarddeclarations.h"
 #include "tgfx_gpucontentmanager.h"
 #include "tgfx_helper.h"
 #include "tgfx_renderer.h"
 #include "tgfx_structs.h"
 #include "threadingsys_tapi.h"
 
-const tapi_allocatorSys* allocatorSys     = nullptr;
-uint64_t            destructionCount = 0;
+const tlAllocator* allocatorSys     = nullptr;
+uint64_t           destructionCount = 0;
 struct pluginElement {
-  tapi_ecs_plugin* pluginPTR;
-  const char*       pluginMainSysName;
-  unsigned char     copyCount;
+  tlPlugin*     pluginPTR;
+  const char*   pluginMainSysName;
+  unsigned char copyCount;
   /*
   pluginElement() : pluginPTR(nullptr), pluginMainSysName(nullptr), copyCount(0){}
   ~pluginElement() {
@@ -61,72 +60,54 @@ struct pluginElement {
 };
 
 tgfx_core*                     tgfx           = {};
-tgfx_renderer*                 tgfxRenderer       = {};
+tgfx_renderer*                 tgfxRenderer   = {};
 tgfx_gpuDataManager*           contentManager = {};
 FILESYS_TAPI_PLUGIN_LOAD_TYPE  fileSys        = {};
 PROFILER_TAPI_PLUGIN_LOAD_TYPE profilerSys    = {};
 
-void load_plugins() {
-  tapi_ecs_plugin* threadingPlugin = editorECS->loadPlugin("tapi_threadedjobsys.dll");
-  auto              threadingSys =
+void loadPlugins() {
+  tlPlugin* threadingPlugin = editorECS->loadPlugin("tapi_threadedjobsys.dll");
+  auto      threadingSys =
     ( THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(THREADINGSYS_TAPI_PLUGIN_NAME);
-  printf("Thread Count: %u\n", threadingSys->funcs->thread_count());
+  printf("Thread Count: %u\n", threadingSys->threadCount());
 
-  tapi_ecs_plugin* stringSysPlugin = editorECS->loadPlugin(STRINGSYS_TAPI_PLUGIN_NAME ".dll");
-  auto              stringSysType =
+  tlPlugin* stringSysPlugin = editorECS->loadPlugin(STRINGSYS_TAPI_PLUGIN_NAME ".dll");
+  auto      stringSysType =
     ( STRINGSYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
 
-  tapi_ecs_plugin* profilerPlugin = editorECS->loadPlugin("tapi_profiler.dll");
+  tlPlugin* profilerPlugin = editorECS->loadPlugin("tapi_profiler.dll");
   profilerSys = ( PROFILER_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(PROFILER_TAPI_PLUGIN_NAME);
 
-  tapi_ecs_plugin* filesysPlugin = editorECS->loadPlugin("tapi_filesys.dll");
+  tlPlugin* filesysPlugin = editorECS->loadPlugin("tapi_filesys.dll");
   fileSys = ( FILESYS_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(FILESYS_TAPI_PLUGIN_NAME);
 
-  tapi_ecs_plugin* loggerPlugin = editorECS->loadPlugin("tapi_logger.dll");
+  tlPlugin* loggerPlugin = editorECS->loadPlugin("tapi_logger.dll");
   auto loggerSys = ( LOGGER_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(LOGGER_TAPI_PLUGIN_NAME);
 
-  tapi_ecs_plugin* bitsetPlugin = editorECS->loadPlugin("tapi_bitset.dll");
+  tlPlugin* bitsetPlugin = editorECS->loadPlugin("tapi_bitset.dll");
   auto bitsetSys = ( BITSET_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(BITSET_TAPI_PLUGIN_NAME);
 
   allocatorSys =
     ( ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE )editorECS->getSystem(ALLOCATOR_TAPI_PLUGIN_NAME);
-  unsigned long long        Resizes[1000];
-  static constexpr uint64_t vectorMaxSize = uint64_t(1) << uint64_t(36);
-  for (unsigned int i = 0; i < 1000; i++) {
-    Resizes[i] = rand() % vectorMaxSize;
-  }
 
-  auto superMemBlock =
-    allocatorSys->createSuperMemoryBlock(1ull << 30, "Vector Perf Test");
-  pluginElement* v_pluginElements = nullptr;
-  {
-    unsigned long long duration = 0;
-    TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "Vector Custom", &duration);
-    v_pluginElements = ( pluginElement* )allocatorSys->vector_manager->create_vector(
-      sizeof(pluginElement), superMemBlock, 10, 1000, 0
-      //(vector_flagbits_tapi)(vector_flagbit_constructor_tapi | vector_flagbit_copy_tapi |
-      // vector_flagbit_destructor_tapi), pluginElement::defaultInitializePluginStruct,
-      // pluginElement::defaultCopyFuncPluginStruct, pluginElement::defaultDestructorPluginStruct
-    );
-    for (uint32_t i = 0; i < 1000; i++) {
-      allocatorSys->vector_manager->resize(v_pluginElements, Resizes[i]);
-    }
-    STOP_PROFILE_TAPI(profilerSys->funcs);
-  }
+  auto superMemBlock = allocatorSys->allocateSuperMemoryBlock(1ull << 30, L"Plugin memory block");
+  pluginElement* v_pluginElements =
+    ( pluginElement* )allocatorSys->vectorManager->create(superMemBlock, sizeof(pluginElement), 10,
+                                                          1000, 0);
 
   {
-    tapi_ecs_plugin* tgfxPlugin = editorECS->loadPlugin("tgfx_core.dll");
-    auto              tgfxSys    = ( TGFX_PLUGIN_LOAD_TYPE )editorECS->getSystem(TGFX_PLUGIN_NAME);
+    tlPlugin* tgfxPlugin = editorECS->loadPlugin("tgfx_core.dll");
+    auto      tgfxSys    = ( TGFX_PLUGIN_LOAD_TYPE )editorECS->getSystem(TGFX_PLUGIN_NAME);
     if (tgfxSys) {
       tgfx           = tgfxSys->api;
-      tgfxRenderer       = tgfx->renderer;
+      tgfxRenderer   = tgfx->renderer;
       contentManager = tgfx->contentmanager;
     }
   }
 }
 
 struct tgfx_gpu*          gpu;
-tgfx_gpuDescription      gpuDesc;
+tgfx_gpuDescription       gpuDesc;
 textureUsageMask_tgfxflag textureAllUsages = textureUsageMask_tgfx_COPYFROM |
                                              textureUsageMask_tgfx_COPYTO |
                                              textureUsageMask_tgfx_RANDOMACCESS |
@@ -134,11 +115,11 @@ textureUsageMask_tgfxflag textureAllUsages = textureUsageMask_tgfx_COPYFROM |
                                              textureUsageMask_tgfx_RENDERATTACHMENT,
                           storageImageUsage =
                             textureUsageMask_tgfx_COPYTO | textureUsageMask_tgfx_RANDOMACCESS;
-struct tgfx_gpuQueue*      allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
-struct tgfx_window*        mainWindowRT;
+struct tgfx_gpuQueue*     allQueues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT] = {};
+struct tgfx_window*       mainWindowRT;
 tgfx_swapchainDescription swpchnDesc;
-static constexpr uint32_t  swapchainTextureCount = 2;
-static constexpr uint32_t  INIT_GPUINDEX         = 0;
+static constexpr uint32_t swapchainTextureCount = 2;
+static constexpr uint32_t INIT_GPUINDEX         = 0;
 
 void createGPU() {
   tgfx->load_backend(nullptr, backends_tgfx_VULKAN, nullptr);
@@ -153,9 +134,9 @@ void createGPU() {
   tgfx->initGPU(gpu);
 }
 
-static tgfx_windowGPUsupport swapchainSupport                      = {};
-static textureChannels_tgfx    depthRTFormat                         = texture_channels_tgfx_D24S8;
-struct tgfx_texture*           swpchnTextures[swapchainTextureCount] = {};
+static tgfx_windowGPUsupport swapchainSupport = {};
+static textureChannels_tgfx  depthRTFormat    = texture_channels_tgfx_D24S8;
+struct tgfx_texture*         m_swapchainTextures[swapchainTextureCount] = {};
 
 void keyCB(struct tgfx_window* windowHnd, void* userPointer, key_tgfx key, int scanCode,
            keyAction_tgfx action, keyMod_tgfx mode) {
@@ -163,6 +144,8 @@ void keyCB(struct tgfx_window* windowHnd, void* userPointer, key_tgfx key, int s
     exit(-1);
   }
 };
+int  frameIndx = 0;
+void closeCB(struct tgfx_window* windowHnd, void* userPtr) { frameIndx = 1000000; }
 void createFirstWindow() {
   // Create window and the swapchain
   struct tgfx_monitor* monitors[4];
@@ -177,12 +160,13 @@ void createFirstWindow() {
   // Create window (OS operation) on first monitor
   {
     tgfx_windowDescription windowDesc = {};
-    windowDesc.size                    = {1280, 720};
-    windowDesc.mode                    = windowmode_tgfx_WINDOWED;
-    windowDesc.monitor                 = monitors[0];
-    windowDesc.name                    = gpuDesc.name;
-    windowDesc.resizeCb                = nullptr;
-    windowDesc.keyCb                   = keyCB;
+    windowDesc.size                   = {1280, 720};
+    windowDesc.mode                   = windowmode_tgfx_WINDOWED;
+    windowDesc.monitor                = monitors[0];
+    windowDesc.name                   = gpuDesc.name;
+    windowDesc.resizeCb               = nullptr;
+    windowDesc.keyCb                  = keyCB;
+    windowDesc.closeCb                = closeCB;
     tgfx->createWindow(&windowDesc, nullptr, &mainWindowRT);
   }
 
@@ -208,7 +192,7 @@ void createFirstWindow() {
     }
     swpchnDesc.permittedQueues = allQueues;
     // Create swapchain
-    tgfx->createSwapchain(gpu, &swpchnDesc, swpchnTextures);
+    tgfx->createSwapchain(gpu, &swpchnDesc, m_swapchainTextures);
   }
 #ifdef NDEBUG
   printf("createGPUandFirstWindow() finished!\n");
@@ -342,8 +326,8 @@ struct tgfx_sampler* firstSampler             = {};
 void compileShadersandPipelines() {
   // Compile compute shader, create binding table type & compute pipeline
   {
-    const char* shaderText = ( const char* )fileSys->funcs->read_textfile(
-      string_type_tapi_UTF8, SOURCE_DIR "/shaders/firstComputeShader.comp", string_type_tapi_UTF8);
+    const char* shaderText = ( const char* )fileSys->readText(
+      tlStringUTF8, SOURCE_DIR "/shaders/firstComputeShader.comp", tlStringUTF8);
     struct tgfx_shaderSource* firstComputeShader = nullptr;
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderStage_tgfx_COMPUTESHADER, ( void* )shaderText,
@@ -364,9 +348,9 @@ void compileShadersandPipelines() {
     // Create binding table types
     {
       tgfx_bindingTableDescription desc = {};
-      desc.descriptorType                 = shaderdescriptortype_tgfx_BUFFER;
-      desc.elementCount                   = 1;
-      desc.staticSamplerCount             = 0;
+      desc.descriptorType               = shaderdescriptortype_tgfx_BUFFER;
+      desc.elementCount                 = 1;
+      desc.staticSamplerCount           = 0;
       desc.visibleStagesMask = shaderStage_tgfx_COMPUTESHADER | shaderStage_tgfx_VERTEXSHADER |
                                shaderStage_tgfx_FRAGMENTSHADER;
       bufferBindingType = desc;
@@ -388,8 +372,8 @@ void compileShadersandPipelines() {
   // Compile first vertex-fragment shader & raster pipeline
   {
     struct tgfx_shaderSource* shaderSources[2] = {};
-    const char*               vertShaderText   = ( const char* )fileSys->funcs->read_textfile(
-      string_type_tapi_UTF8, SOURCE_DIR "/shaders/firstShader.vert", string_type_tapi_UTF8);
+    const char*               vertShaderText   = ( const char* )fileSys->readText(
+      tlStringUTF8, SOURCE_DIR "/shaders/firstShader.vert", tlStringUTF8);
     struct tgfx_shaderSource*& firstVertShader = shaderSources[0];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderStage_tgfx_VERTEXSHADER, ( void* )vertShaderText,
@@ -397,8 +381,8 @@ void compileShadersandPipelines() {
                                         // vertShaderBin, vertDataSize,
                                         &firstVertShader);
 
-    const char* fragShaderText = ( const char* )fileSys->funcs->read_textfile(
-      string_type_tapi_UTF8, SOURCE_DIR "/shaders/firstShader.frag", string_type_tapi_UTF8);
+    const char* fragShaderText = ( const char* )fileSys->readText(
+      tlStringUTF8, SOURCE_DIR "/shaders/firstShader.frag", tlStringUTF8);
     struct tgfx_shaderSource*& firstFragShader = shaderSources[1];
     contentManager->compileShaderSource(gpu, shaderlanguages_tgfx_GLSL,
                                         shaderStage_tgfx_FRAGMENTSHADER, ( void* )fragShaderText,
@@ -491,24 +475,25 @@ struct tgfx_commandBundle *standardDrawBundle, *initBundle;
 tgfx_viewportInfo viewportInfo  = {0, 0, 1280, 720, 0.0f, 1.0f};
 tgfx_ivec2        scissorOffset = {0, 0};
 tgfx_uvec2        scissorSize   = {1280, 720};
-void recordCommandBundles() {
+void              recordCommandBundles() {
   initBundle = tgfxRenderer->beginCommandBundle(gpu, 3, nullptr, 0, nullptr);
   tgfxRenderer->cmdBarrierTexture(initBundle, 0, reiChikitaTexture, image_access_tgfx_NO_ACCESS,
-                              image_access_tgfx_TRANSFER_DIST, textureAllUsages, textureAllUsages,
-                              0, nullptr);
+                                               image_access_tgfx_TRANSFER_DIST, textureAllUsages,
+                                               textureAllUsages, 0, nullptr);
   tgfxRenderer->cmdCopyBufferToTexture(initBundle, 1, firstBuffer, 2048, reiChikitaTexture,
-                                   image_access_tgfx_TRANSFER_DIST, 0, nullptr);
+                                                    image_access_tgfx_TRANSFER_DIST, 0, nullptr);
   tgfxRenderer->cmdBarrierTexture(initBundle, 2, reiChikitaTexture, image_access_tgfx_TRANSFER_DIST,
-                              image_access_tgfx_SHADER_SAMPLEONLY, textureAllUsages,
-                              textureAllUsages, 0, nullptr);
+                                               image_access_tgfx_SHADER_SAMPLEONLY, textureAllUsages,
+                                               textureAllUsages, 0, nullptr);
   tgfxRenderer->finishCommandBundle(initBundle, 0, nullptr);
   static constexpr uint32_t cmdCount = 10;
   // Record command bundle
-  standardDrawBundle = tgfxRenderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, 0, nullptr);
+  standardDrawBundle =
+    tgfxRenderer->beginCommandBundle(gpu, cmdCount, firstRasterPipeline, 0, nullptr);
   {
     struct tgfx_bindingTable* bindingTables[3] = {bufferBindingTable, textureBindingTable,
-                                                  samplerBindingTable};
-    uint32_t                  cmdKey           = 0;
+                                                               samplerBindingTable};
+    uint32_t                  cmdKey = 0;
 
     unsigned int values[32] = {0};
     tgfxRenderer->cmdPushConstant(standardDrawBundle, cmdKey++, 0, 128, values);
@@ -522,13 +507,13 @@ void recordCommandBundles() {
     // renderer->cmdBindIndexBuffer(standardDrawBundle, cmdKey++, firstBuffer,
     // offsetof(firstUboStruct, indices), 2);
     tgfxRenderer->cmdBindBindingTables(standardDrawBundle, cmdKey++, 0, 3, bindingTables,
-                                   pipelineType_tgfx_RASTER);
+                                                    pipelineType_tgfx_RASTER);
     indirectOperationType_tgfx firstOp[5] = {
       indirectOperationType_tgfx_DRAWNONINDEXED, indirectOperationType_tgfx_DRAWNONINDEXED,
       indirectOperationType_tgfx_DRAWNONINDEXED, indirectOperationType_tgfx_DRAWNONINDEXED,
       indirectOperationType_tgfx_DRAWNONINDEXED};
     tgfxRenderer->cmdExecuteIndirect(standardDrawBundle, cmdKey++, 5, firstOp, firstBuffer,
-                                 sizeof(firstUboStruct), 0, nullptr);
+                                                  sizeof(firstUboStruct), 0, nullptr);
 
     assert(cmdKey <= cmdCount && "Cmd count doesn't match!");
   }
@@ -547,8 +532,8 @@ void recordSwpchnCmdBundles() {
       uint32_t cmdKey = 0;
 
       tgfxRenderer->cmdBindPipeline(perSwpchnCmdBundles[i], cmdKey++, firstRasterPipeline);
-      tgfxRenderer->cmdBindBindingTables(perSwpchnCmdBundles[i], cmdKey++, 0, 1, &bufferBindingTable,
-                                     pipelineType_tgfx_COMPUTE);
+      tgfxRenderer->cmdBindBindingTables(perSwpchnCmdBundles[i], cmdKey++, 0, 1,
+                                         &bufferBindingTable, pipelineType_tgfx_COMPUTE);
       tgfxRenderer->cmdSetViewport(perSwpchnCmdBundles[i], cmdKey++, &viewportInfo);
       tgfxRenderer->cmdSetScissor(perSwpchnCmdBundles[i], cmdKey++, &scissorOffset, &scissorSize);
       tgfxRenderer->cmdDrawNonIndexedDirect(perSwpchnCmdBundles[i], cmdKey++, 3, 1, 0, 0);
@@ -560,7 +545,7 @@ void recordSwpchnCmdBundles() {
 }
 
 void load_systems() {
-  load_plugins();
+  loadPlugins();
 
   createGPU();
 
@@ -605,7 +590,7 @@ void load_systems() {
 
   struct tgfx_gpuQueue* queue    = queuesPerFam[0];
   uint64_t              duration = 0;
-  TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "queueSignal", &duration);
+  TURAN_PROFILE_SCOPE_MCS(profilerSys, "queueSignal", &duration);
   static uint64_t waitValue = 0, signalValue = 1;
   tgfxRenderer->queueFenceSignalWait(queue, 1, &fence, &waitValue, 1, &fence, &signalValue);
 
@@ -646,13 +631,12 @@ void load_systems() {
     tgfxRenderer->queueSubmit(queue);
   }
 
-  STOP_PROFILE_TAPI(profilerSys->funcs);
+  STOP_PROFILE_TAPI(profilerSys);
   waitValue++;
   signalValue++;
 
-  int i = 0;
-  while (++i && i < 10000) {
-    TURAN_PROFILE_SCOPE_MCS(profilerSys->funcs, "presentation", &duration);
+  while (++frameIndx < 10000) {
+    TURAN_PROFILE_SCOPE_MCS(profilerSys, "presentation", &duration);
     uint64_t currentFenceValue = 0;
     while (currentFenceValue < signalValue - 2) {
       tgfxRenderer->getFenceValue(fence, &currentFenceValue);
@@ -664,15 +648,16 @@ void load_systems() {
 
     // Record frame's command buffer
     {
-      struct tgfx_commandBuffer* frameCmdBuffer = tgfxRenderer->beginCommandBuffer(queue, 0, nullptr);
-      colorAttachmentInfo.texture               = swpchnTextures[i % 2];
-      tgfxRenderer->beginRasterpass(frameCmdBuffer, 1, &colorAttachmentInfo, &depthAttachmentInfo, 0,
-                                nullptr);
+      struct tgfx_commandBuffer* frameCmdBuffer =
+        tgfxRenderer->beginCommandBuffer(queue, 0, nullptr);
+      colorAttachmentInfo.texture = m_swapchainTextures[frameIndx % 2];
+      tgfxRenderer->beginRasterpass(frameCmdBuffer, 1, &colorAttachmentInfo, &depthAttachmentInfo,
+                                    0, nullptr);
       tgfxRenderer->executeBundles(frameCmdBuffer, 1, &standardDrawBundle, 0, nullptr);
       tgfxRenderer->endRasterpass(frameCmdBuffer, 0, nullptr);
       tgfxRenderer->endCommandBuffer(frameCmdBuffer);
 
-      ubo.translate[0] = {sinf(i / 360.0), cosf(i / 360.0)};
+      ubo.translate[0] = {sinf(frameIndx / 360.0), cosf(frameIndx / 360.0)};
 
       tgfxRenderer->queueExecuteCmdBuffers(queue, 1, &frameCmdBuffer, 0, nullptr);
       tgfxRenderer->queueFenceSignalWait(queue, 1, &fence, &waitValue, 1, &fence, &signalValue);
@@ -682,7 +667,7 @@ void load_systems() {
       signalValue++;
       tgfxRenderer->queuePresent(queue, 1, &mainWindowRT);
       tgfxRenderer->queueSubmit(queue);
-      STOP_PROFILE_TAPI(profilerSys->funcs);
+      STOP_PROFILE_TAPI(profilerSys);
       printf("Finished and index: %u\n", swpchnIndx);
       tgfx->takeInputs();
     }

@@ -5,30 +5,30 @@
 
 #include "ecs_tapi.h"
 
-tapi_unitTestSys_type* utsys;
+struct tlUnitTestPriv {
+  tlUnitTest*            sys;
+  tlUnitTestDescription* v_tests;
 
-typedef struct tapi_unitTestSys_d {
-  tapi_unitTest_interface* tests;
-} unittestsys_tapi_d;
+  static void add(const wchar_t* name, unsigned int classification_flag,
+                  tlUnitTestDescription test_interface) {
+    const wchar_t* test_result = L"No result text";
+    unsigned char  returnValue = test_interface.test(test_interface.data, &test_result);
+    wprintf(L"Test Name: %s\n Return value: %u, Result text: %s\n", name,
+            ( unsigned int )returnValue, test_result);
+  }
 
-void tapi_utAdd(const wchar_t* name, unsigned int classification_flag,
-                 tapi_unitTest_interface test_interface) {
-  const wchar_t* test_result = L"No result text";
-  unsigned char returnValue = test_interface.test(test_interface.data, &test_result);
-  wprintf(L"Test Name: %s\n Return value: %u, Result text: %s\n", name, ( unsigned int )returnValue,
-         test_result);
-}
+  static void remove(const wchar_t* name, unsigned int classification_flag) {}
 
-void tapi_utRemove(const wchar_t* name, unsigned int classification_flag) {}
-
-void tapi_utRunTests(unsigned int classification_flag, const wchar_t* name,
-                     void (*testoutput_visualization)(unsigned char unittest_result,
-                                                      const wchar_t*   output_string)) {}
+  static void run(unsigned int classification_flag, const wchar_t* name,
+                  void (*testoutput_visualization)(unsigned char  unittest_result,
+                                                   const wchar_t* output_string)) {}
+};
+tlUnitTestPriv* priv;
 
 #define TAPI_UNITTEST_CLASSFLAG_UT 0
-TAPI_UNITTEST_FUNC(tapi_unitTest_bitset0, input, outputStr) {
-  if ((( UNITTEST_TAPI_PLUGIN_LOAD_TYPE )(( struct tapi_ecs* )input)->getSystem(UNITTEST_TAPI_PLUGIN_NAME)) !=
-      utsys) {
+tlUnitTestFnc(tapi_unitTest_bitset0, input, outputStr) {
+  if ((( UNITTEST_TAPI_PLUGIN_LOAD_TYPE )(( struct tlECS* )input)
+         ->getSystem(UNITTEST_TAPI_PLUGIN_NAME)) != priv->sys) {
     *outputStr = L"Default unit test failed!";
     return 0;
   }
@@ -37,26 +37,24 @@ TAPI_UNITTEST_FUNC(tapi_unitTest_bitset0, input, outputStr) {
 }
 
 ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
-  utsys        = ( tapi_unitTestSys_type* )malloc(sizeof(tapi_unitTestSys_type));
-  utsys->data  = ( tapi_unitTestSys_d* )malloc(sizeof(tapi_unitTestSys_d));
-  utsys->funcs = ( tapi_unitTestSys* )malloc(sizeof(tapi_unitTestSys));
+  priv              = ( tlUnitTestPriv* )malloc(sizeof(tlUnitTestPriv));
+  priv->sys         = ( tlUnitTest* )malloc(sizeof(tlUnitTest));
+  priv->sys->d      = priv;
+  priv->sys->add    = &tlUnitTestPriv::add;
+  priv->sys->remove = &tlUnitTestPriv::remove;
+  priv->sys->run    = &tlUnitTestPriv::run;
 
-  utsys->funcs->add_unittest    = &tapi_utAdd;
-  utsys->funcs->remove_unittest = &tapi_utRemove;
-  utsys->funcs->run_tests       = &tapi_utRunTests;
-
-  ecsSys->addSystem(UNITTEST_TAPI_PLUGIN_NAME, 0, utsys);
+  ecsSys->addSystem(UNITTEST_TAPI_PLUGIN_NAME, 0, priv->sys);
 
   // Test the system itself
   {
-    tapi_unitTest_interface ut;
+    tlUnitTestDescription ut;
     ut.data = ecsSys;
     ut.test = tapi_unitTest_bitset0;
-    utsys->funcs->add_unittest(L"Unit Test Default", TAPI_UNITTEST_CLASSFLAG_UT, ut);
+    priv->sys->add(L"Unit Test Default", TAPI_UNITTEST_CLASSFLAG_UT, ut);
   }
 }
 ECSPLUGIN_EXIT(ecssys, reloadFlag) {
-  free(utsys->data);
-  free(utsys->funcs);
-  free(utsys);
+  free(priv->sys);
+  free(priv);
 }

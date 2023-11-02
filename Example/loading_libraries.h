@@ -12,7 +12,6 @@ takes one step-.
 #include "filesys_tapi.h"
 #include "logger_tapi.h"
 #include "profiler_tapi.h"
-#include "registrysys_tapi.h"
 #include "threadingsys_tapi.h"
 #include "unittestsys_tapi.h"
 #include "virtualmemorysys_tapi.h"

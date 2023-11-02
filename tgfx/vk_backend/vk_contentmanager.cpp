@@ -72,7 +72,7 @@ struct gpudatamanager_private {
 
   gpudatamanager_private() {}
 };
-static gpudatamanager_private* hidden = nullptr;
+static gpudatamanager_private* priv = nullptr;
 
 void vk_destroyAllResources() {}
 
@@ -104,7 +104,7 @@ result_tgfx vk_createSampler(struct tgfx_gpu* gpu, const tgfx_samplerDescription
     }
   }
 
-  SAMPLER_VKOBJ* SAMPLER = hidden->samplers.create_OBJ();
+  SAMPLER_VKOBJ* SAMPLER = priv->samplers.create_OBJ();
   SAMPLER->vk_sampler    = sampler;
   SAMPLER->m_gpu         = GPU->gpuIndx();
   *hnd                   = getHANDLE<struct tgfx_sampler*>(SAMPLER);
@@ -208,7 +208,7 @@ void vk_destroyTexture(struct tgfx_texture* texture) {
   vkDestroyImage(core_vk->getGPU(vkTexture->m_GPU)->vk_logical, vkTexture->vk_image, nullptr);
   vkDestroyImageView(core_vk->getGPU(vkTexture->m_GPU)->vk_logical, vkTexture->vk_imageView,
                      nullptr);
-  hidden->textures.destroyObj(hidden->textures.getINDEXbyOBJ(vkTexture));
+  priv->textures.destroyObj(priv->textures.getINDEXbyOBJ(vkTexture));
 }
 
 result_tgfx vk_createBuffer(struct tgfx_gpu* i_gpu, const tgfx_bufferDescription* desc,
@@ -241,7 +241,7 @@ result_tgfx vk_createBuffer(struct tgfx_gpu* i_gpu, const tgfx_bufferDescription
   }
 
   // Get buffer requirements and fill BUFFER_VKOBJ
-  BUFFER_VKOBJ* o_buffer = hidden->buffers.create_OBJ();
+  BUFFER_VKOBJ* o_buffer = priv->buffers.create_OBJ();
   {
     o_buffer->vk_buffer      = vkBufObj;
     o_buffer->m_GPU          = gpu->gpuIndx();
@@ -257,7 +257,7 @@ void vk_destroyBuffer(struct tgfx_buffer* buffer) {
   BUFFER_VKOBJ* vkBuffer = getOBJ<BUFFER_VKOBJ>(buffer);
   assert(vkBuffer && "Invalid texture");
   vkDestroyBuffer(core_vk->getGPU(vkBuffer->m_GPU)->vk_logical, vkBuffer->vk_buffer, nullptr);
-  hidden->buffers.destroyObj(hidden->buffers.getINDEXbyOBJ(vkBuffer));
+  priv->buffers.destroyObj(priv->buffers.getINDEXbyOBJ(vkBuffer));
 }
 
 vk_uint32c VKCONST_MAXSTATICSAMPLERCOUNT = 128;
@@ -393,7 +393,7 @@ result_tgfx vk_createBindingTable(struct tgfx_gpu*                              
     }
   }
 
-  BINDINGTABLEINST_VKOBJ* finalobj = hidden->bindingtableinsts.create_OBJ();
+  BINDINGTABLEINST_VKOBJ* finalobj = priv->bindingtableinsts.create_OBJ();
   finalobj->vk_pool                = pool;
   finalobj->vk_set                 = set;
   finalobj->m_isStatic             = !desc->isDynamic;
@@ -462,7 +462,7 @@ void vk_destroyBindingTable(struct tgfx_bindingTable* bindingTable) {
   assert(vkDescSet && "Invalid binding table");
   vkDestroyDescriptorPool(core_vk->getGPU(vkDescSet->m_gpu)->vk_logical, vkDescSet->vk_pool,
                           nullptr);
-  hidden->bindingtableinsts.destroyObj(hidden->bindingtableinsts.getINDEXbyOBJ(vkDescSet));
+  priv->bindingtableinsts.destroyObj(priv->bindingtableinsts.getINDEXbyOBJ(vkDescSet));
 }
 
 // Don't call this if there is no binding table & call buffer!
@@ -544,7 +544,7 @@ result_tgfx vk_compileShaderSource(struct tgfx_gpu* gpu, shaderlanguages_tgfx la
     return vkPrint(36);
   }
 
-  SHADERSOURCE_VKOBJ* SHADERSOURCE = hidden->shadersources.create_OBJ();
+  SHADERSOURCE_VKOBJ* SHADERSOURCE = priv->shadersources.create_OBJ();
   SHADERSOURCE->Module             = Module;
   SHADERSOURCE->stage              = shaderstage;
   SHADERSOURCE->m_gpu              = gpu;
@@ -826,7 +826,7 @@ result_tgfx vk_createRasterPipeline(const tgfx_rasterPipelineDescription* desc,
     }
   }
 
-  PIPELINE_VKOBJ* pipelineObj = hidden->pipelines.create_OBJ();
+  PIPELINE_VKOBJ* pipelineObj = priv->pipelines.create_OBJ();
   pipelineObj->m_gpu          = GPU->gpuIndx();
   pipelineObj->vk_layout      = layout;
   pipelineObj->vk_object      = pipeline;
@@ -896,7 +896,7 @@ result_tgfx vk_createComputePipeline(
     }
   }
 
-  PIPELINE_VKOBJ* obj = hidden->pipelines.create_OBJ();
+  PIPELINE_VKOBJ* obj = priv->pipelines.create_OBJ();
   obj->m_gpu          = GPU->gpuIndx();
   obj->vk_layout      = layout;
   obj->vk_object      = pipelineObj;
@@ -914,7 +914,7 @@ void vk_destroyPipeline(struct tgfx_pipeline* pipe) {
   assert(vkPipe && "Invalid pipeline!");
   vkDestroyPipelineLayout(core_vk->getGPU(vkPipe->m_gpu)->vk_logical, vkPipe->vk_layout, nullptr);
   vkDestroyPipeline(core_vk->getGPU(vkPipe->m_gpu)->vk_logical, vkPipe->vk_object, nullptr);
-  hidden->pipelines.destroyObj(hidden->pipelines.getINDEXbyOBJ(vkPipe));
+  priv->pipelines.destroyObj(priv->pipelines.getINDEXbyOBJ(vkPipe));
 }
 
 static constexpr uint32_t VKCONST_MAXDESCCHANGE_PERCALL = 1024;
@@ -1079,7 +1079,7 @@ result_tgfx vk_createHeap(struct tgfx_gpu* gpu, unsigned char memoryRegionID,
     return vkPrint(44, L"at vkAllocateMemory()");
   }
 
-  HEAP_VKOBJ* heap         = hidden->heaps.create_OBJ();
+  HEAP_VKOBJ* heap         = priv->heaps.create_OBJ();
   heap->vk_memoryHandle    = vkDevMem;
   heap->vk_memoryTypeIndex = memoryRegionID;
   heap->m_size             = heapSize;
@@ -1271,7 +1271,7 @@ void        vk_createContentManager() {
     sizeof(gpudatamanager_public) + sizeof(gpudatamanager_private) + (10ull << 20));
   contentManager         = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) gpudatamanager_public;
   contentManager->hidden = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) gpudatamanager_private;
-  hidden                 = contentManager->hidden;
+  priv                 = contentManager->hidden;
 
   set_functionpointers();
   vk_initGlslang();

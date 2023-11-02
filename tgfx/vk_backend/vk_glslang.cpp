@@ -24,7 +24,7 @@ static EShLanguage Find_EShShaderStage_byTGFXShaderStage(shaderStage_tgfx stage)
 
 static wchar_t* glslangGetErrorMessage(glslang::TShader& shader) {
   wchar_t* wLog = nullptr;
-  stringSys->createString(string_type_tapi_UTF16, ( void** )&wLog,
+  stringSys->createString(tlStringUTF16, ( void** )&wLog,
                           L"Shader compilation failed! %s %s", shader.getInfoLog(),
                           shader.getInfoDebugLog());
   return wLog;

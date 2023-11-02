@@ -6,7 +6,7 @@
 #include "ecs_tapi.h"
 #include "pecfManager/pecfManager.h"
 #include "threadingsys_tapi.h"
-const tapi_ecs*   editorECS = nullptr;
+const tlECS*   editorECS = nullptr;
 extern void initialize_pecfManager();
 extern void load_systems();
 
@@ -16,8 +16,8 @@ int main() {
     printf("There is no tapi_ecs.dll, initialization failed!");
     exit(-1);
   }
-  load_ecstapi_func ecsloader =
-    ( load_ecstapi_func )DLIB_FUNC_LOAD_TAPI(ecs_tapi_dll, "load_ecstapi");
+  tlECSloadFnc ecsloader =
+    ( tlECSloadFnc )DLIB_FUNC_LOAD_TAPI(ecs_tapi_dll, "load_ecstapi");
   if (!ecsloader) {
     printf("tapi_ecs.dll is loaded but ecsloader func isn't found!");
     exit(-1);

@@ -25,13 +25,13 @@ struct GPU_VKOBJ {
   VkPhysicalDeviceFeatures2         vk_featuresDev          = {};
   VkPhysicalDeviceMemoryProperties2 vk_propsMemory          = {};
   tgfx_memoryDescription            m_memoryDescTGFX[32]    = {};
-  struct tgfx_texture*                   m_invalidStorageTexture = {}, *m_invalidShaderReadTexture = {};
-  struct tgfx_sampler*                   m_invalidSampler = {};
-  struct tgfx_buffer*                    m_invalidBuffer  = {};
+  struct tgfx_texture *             m_invalidStorageTexture = {}, *m_invalidShaderReadTexture = {};
+  struct tgfx_sampler*              m_invalidSampler = {};
+  struct tgfx_buffer*               m_invalidBuffer  = {};
 
-  VkQueueFamilyProperties2 vk_propsQueue[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
+  VkQueueFamilyProperties2 vk_propsQueue[VKCONST_MAXQUEUEFAMCOUNT_PERGPU]  = {};
   uint32_t                 m_queueFamPtrs[VKCONST_MAXQUEUEFAMCOUNT_PERGPU] = {};
-  struct tgfx_gpuQueue*         m_internalQueue                                = {};
+  struct tgfx_gpuQueue*    m_internalQueue                                 = {};
 
  private:
   extManager_vkDevice* m_extensions;
@@ -51,10 +51,10 @@ struct MONITOR_VKOBJ {
 
   MONITOR_VKOBJ() = default;
   MONITOR_VKOBJ(const MONITOR_VKOBJ& copyFrom) { *this = copyFrom; }
-  tgfx_uvec2   res, physicalSize;
-  unsigned int color_bites = 0, refresh_rate = 00;
-  const wchar_t*  name            = NULL;
-  GLFWmonitor* monitorobj      = NULL;
+  tgfx_uvec2     res, physicalSize;
+  unsigned int   color_bites = 0, refresh_rate = 00;
+  const wchar_t* name       = NULL;
+  GLFWmonitor*   monitorobj = NULL;
 };
 
 struct WINDOW_VKOBJ {
@@ -67,17 +67,18 @@ struct WINDOW_VKOBJ {
   windowmode_tgfx           m_displayMode = windowmode_tgfx_WINDOWED;
   MONITOR_VKOBJ*            m_monitor     = nullptr;
   GPU_VKOBJ*                m_gpu         = nullptr;
-  const wchar_t*               m_name        = nullptr;
+  const wchar_t*            m_name        = nullptr;
   tgfx_windowResizeCallback m_resizeFnc   = nullptr;
   tgfx_windowKeyCallback    m_keyFnc      = nullptr;
+  tgfx_windowCloseCallback  m_closeFnc    = nullptr;
   void*                     m_userData    = nullptr;
-  struct tgfx_texture*           m_swapchainTextures[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
+  struct tgfx_texture*      m_swapchainTextures[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW] = {};
   unsigned char             m_swapchainTextureCount = 0, m_swapchainCurrentTextureIndx = 0;
   bool                      m_isResized = false, m_isSwapped = false;
   // Presentation Fences should only be used for CPU to wait
   struct tgfx_fence* m_presentationFences[VKCONST_MAXSWPCHNTXTURECOUNT_PERWINDOW];
-  VkSemaphore   vk_acquireSemaphore = {};
-  bool          m_isMouseButtonPressed[3] = {};
+  VkSemaphore        vk_acquireSemaphore       = {};
+  bool               m_isMouseButtonPressed[3] = {};
 
   VkSurfaceKHR    vk_surface    = {};
   VkSwapchainKHR  vk_swapchain  = {};

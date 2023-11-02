@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <tgfx_core.h>
 #include <tgfx_forwarddeclarations.h>
-#include <virtualmemorysys_tapi.h>
+#include <allocator_tapi.h>
 
 #include <atomic>
 #include <limits>
@@ -39,13 +39,13 @@ struct imgui_vk;
 extern imgui_vk* imgui;
 struct GPU_VKOBJ;
 // extern GPU_VKOBJ* rendergpu;
-extern struct tapi_threadingSys*     threadingsys;
+extern const struct tlJob*     threadingsys;
 extern unsigned int                  threadcount;
 extern struct gpuallocatorsys_vk*    gpu_allocator;
-extern struct tapi_virtualMemorySys* virmemsys;
-extern struct tapi_profiler*         profilerSys;
-extern struct tapi_bitsetSys*        bitsetSys;
-extern struct tapi_stringSys*        stringSys;
+extern const struct tlVM* vm;
+extern const struct tlProf*         profilerSys;
+extern const struct tlBitsetSys*        bitsetSys;
+extern const struct tlString*        stringSys;
 
 extern void (*printer_cb)(unsigned int logCode, const wchar_t* extraInfo);
 result_tgfx             vkPrint(unsigned int logCode, const wchar_t* extraInfo = nullptr);

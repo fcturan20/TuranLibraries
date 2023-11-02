@@ -78,7 +78,7 @@ typedef struct pecf_primitiveVariable {
 // This component won't be overriden, so there is no accessor funcs
 typedef struct pecf_defaultComp {
   unsigned long long      entityPecfId;
-  struct tapi_ecs_entity* entityEcsHnd;
+  struct tlEntity* entityEcsHnd;
   char                    name[MAXPECF_ENTITYNAMECHAR], tag[MAXPECF_ENTITYTAGCHAR];
 } defaultComp_pecf;
 
@@ -110,7 +110,7 @@ typedef struct pecf_componentManagerInfo {
   const primTypeHnd_pecf* primList;
   unsigned int            primListSize;
   // ECS Manager should handle creation and destruction of the component
-  const struct ecs_compManager* ecsManager;
+  const struct tlComponentManagerDescription* ecsManager;
 } componentManagerInfo_pecf;
 
 typedef struct pecf_manager {
@@ -170,7 +170,7 @@ typedef struct pecf_manager {
   /////////////////////////
 
   unsigned char (*regOnChanged_entity)(entity_onChangedFunc    callback,
-                                       struct tapi_ecs_entity* entity, unsigned char reg_orUnreg);
+                                       struct tlEntity* entity, unsigned char reg_orUnreg);
   unsigned char (*regOnChanged_comp)(comp_onChangedFunc callback, compHnd_pecf comp,
                                      unsigned char reg_orUnreg);
 } pecf_manager;

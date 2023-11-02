@@ -52,7 +52,7 @@ sizeof(ecs_pluginInfo)) != 0 || offset < 0) { printf("Plugin handle is invalid!"
     return (ecs_pluginInfo*)hnd;
   */}
 };
-static pecf_manager_private hidden;
+static pecf_manager_private priv;
 static pecf_manager*        mngr;
 
 struct entityHnd {
@@ -63,7 +63,7 @@ static_assert(sizeof(entityHnd) <= sizeof(entityHnd_pecf),
 
 static defaultComp_pecf compType;
 // static compType_ecstapi defaultCompType = (compType_ecstapi)&compType;
-static tapi_ecs_componentTypeID* defaultCompTypeID;
+static tlComponentTypeID* meshCompTypeID;
 
 funcTypeHnd_pecf add_funcType(funcProperties_pecf props, primitiveVariable_pecf* inputArgs,
                               unsigned int inputArgsCount, primitiveVariable_pecf* outputArgs,
@@ -118,7 +118,7 @@ const compHnd_pecf* get_componentsOfEntity(entityHnd_pecf entity, unsigned int* 
 //      CALLBACK REGISTRATIONS
 /////////////////////////////////////
 
-unsigned char regOnChanged_entity(entity_onChangedFunc callback, tapi_ecs_entity* entity,
+unsigned char regOnChanged_entity(entity_onChangedFunc callback, tlEntity* entity,
                                   unsigned char reg_orUnreg) {
   return 0;
 }

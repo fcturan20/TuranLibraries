@@ -62,7 +62,7 @@ void extManager_vkDevice::inspect() {
   uint32_t allocSize  = sizeof(const char*) * extCount;
   m_activeDevExtNames = ( const char** )VK_MEMOFFSET_TO_POINTER(
     vk_virmem::allocatePage(allocSize));
-  virmemsys->virtual_commit(m_activeDevExtNames, sizeof(allocSize));
+  vm->commit(m_activeDevExtNames, sizeof(allocSize));
 
   VkPhysicalDeviceSubgroupProperties subgroupProps;
   subgroupProps.pNext = nullptr;
@@ -74,7 +74,7 @@ void extManager_vkDevice::inspect() {
 
   // SAVE BASIC INFOs TO THE GPU DESC
   {
-    stringSys->createString(string_type_tapi_UTF16, ( void** )&m_GPU->desc.name, L"%s",
+    stringSys->createString(tlStringUTF16, ( void** )&m_GPU->desc.name, L"%s",
                             m_GPU->vk_propsDev.properties.deviceName);
     m_GPU->desc.driverVersion = m_GPU->vk_propsDev.properties.driverVersion;
     m_GPU->desc.gfxApiVersion = m_GPU->vk_propsDev.properties.apiVersion;

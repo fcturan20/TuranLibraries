@@ -12,20 +12,16 @@
 
 void failedToRead_tapi(stringReadArgument_tapi(path)) {
   switch (pathType) {
-    case string_type_tapi_UTF8:
-      printf("There is no such file: %s\n", ( const char* )pathData);
-      break;
-    case string_type_tapi_UTF16:
-      wprintf(L"There is no such file %s\n", ( const wchar_t* )pathData);
-      break;
+    case tlStringUTF8: printf("There is no such file: %s\n", ( const char* )pathData); break;
+    case tlStringUTF16: wprintf(L"There is no such file %s\n", ( const wchar_t* )pathData); break;
     default: break;
   }
 }
 template <typename T>
 void openFile_tapi(T& file, stringReadArgument_tapi(path), std::ios::openmode openMode = 1) {
   switch (pathType) {
-    case string_type_tapi_UTF8: file.open(( const char* )pathData, openMode); break;
-    case string_type_tapi_UTF16: file.open(( const wchar_t* )pathData, openMode); break;
+    case tlStringUTF8: file.open(( const char* )pathData, openMode); break;
+    case tlStringUTF16: file.open(( const wchar_t* )pathData, openMode); break;
     default: break;
   }
 }
@@ -69,7 +65,7 @@ void overwrite_binaryfile(stringReadArgument_tapi(path), void* data, unsigned lo
 
 void* read_textfile(stringReadArgument_tapi(path), string_type_tapi fileTextType) {
   switch (fileTextType) {
-    case string_type_tapi_UTF8: {
+    case tlStringUTF8: {
       std::ifstream cTextFile;
       openFile_tapi(cTextFile, pathType, pathData);
       std::stringstream stringData;
@@ -83,7 +79,7 @@ void* read_textfile(stringReadArgument_tapi(path), string_type_tapi fileTextType
       }
       return finaltext;
     } break;
-    case string_type_tapi_UTF16: {
+    case tlStringUTF16: {
       std::ifstream wTextFile;
       openFile_tapi(wTextFile, pathType, pathData);
       std::wstringstream stringData;
@@ -108,13 +104,13 @@ void write_textfile(stringReadArgument_tapi(text), stringReadArgument_tapi(path)
     openMode = std::ios::out | std::ios::trunc;
   }
   switch (textType) {
-    case string_type_tapi_UTF8: {
+    case tlStringUTF8: {
       std::ofstream outputFile;
       openFile_tapi(outputFile, pathType, pathData, openMode);
       outputFile << ( const char* )textData << std::endl;
       outputFile.close();
     } break;
-    case string_type_tapi_UTF16: {
+    case tlStringUTF16: {
       std::wofstream outputFile;
       openFile_tapi(outputFile, pathType, pathData, openMode);
       outputFile << ( const wchar_t* )textData << std::endl;
@@ -124,27 +120,27 @@ void write_textfile(stringReadArgument_tapi(text), stringReadArgument_tapi(path)
 }
 void delete_file(stringReadArgument_tapi(path)) {
   switch (pathType) {
-    case string_type_tapi_UTF8: std::filesystem::remove(( const char* )pathData); break;
-    case string_type_tapi_UTF16: std::filesystem::remove(( wchar_t* )pathData); break;
+    case tlStringUTF8: std::filesystem::remove(( const char* )pathData); break;
+    case tlStringUTF16: std::filesystem::remove(( wchar_t* )pathData); break;
   }
 }
 
-typedef struct tapi_fileSys_d {
-  tapi_fileSys_type* type;
+typedef struct tlIOPriv {
+  tlIO* type;
 } filesys_tapi_d;
 
 ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
-  tapi_fileSys_type* type = ( tapi_fileSys_type* )malloc(sizeof(tapi_fileSys_type));
-  type->data              = ( tapi_fileSys_d* )malloc(sizeof(tapi_fileSys_d));
-  type->funcs             = ( tapi_fileSys* )malloc(sizeof(tapi_fileSys));
-  type->data->type        = type;
+  tlIO*     type   = ( tlIO* )malloc(sizeof(tlIO));
+  tlIOPriv* priv   = ( tlIOPriv* )malloc(sizeof(tlIOPriv));
+  priv->type       = type;
 
-  type->funcs->read_binaryfile      = &read_binaryfile;
-  type->funcs->overwrite_binaryfile = &overwrite_binaryfile;
-  type->funcs->write_binaryfile     = &overwrite_binaryfile;
-  type->funcs->read_textfile        = &read_textfile;
-  type->funcs->write_textfile       = &write_textfile;
-  type->funcs->delete_file          = &delete_file;
+  type->readBinary      = &read_binaryfile;
+  type->overwriteBinary = &overwrite_binaryfile;
+  type->overwriteBinary = &overwrite_binaryfile;
+  type->readText        = &read_textfile;
+  type->writeText       = &write_textfile;
+  type->deleteFile      = &delete_file;
+  type->d               = priv;
 
   ecssys->addSystem(FILESYS_TAPI_PLUGIN_NAME, FILESYS_TAPI_PLUGIN_VERSION, type);
 }

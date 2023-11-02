@@ -18,20 +18,20 @@
 #include "tgfx_structs.h"
 
 static tgfx_core_type*    core_typePtr;
-static const tapi_ecs*    core_regSys;
-static const tapi_logger* core_logSys;
+static const tlECS*    core_regSys;
+static const tlLog* core_logSys;
 
 void defaultPrintCallback(unsigned int logCode, const wchar_t* extraInfo) {
   const wchar_t* logMessage = nullptr;
   result_tgfx    result     = core_typePtr->api->getLogMessage(logCode, &logMessage);
-  tapi_log_type  logType    = log_type_tapi_STATUS;
+  tlLogType  logType    = tlLogStatus;
   switch (result) {
-    case result_tgfx_SUCCESS: logType = log_type_tapi_STATUS; break;
+    case result_tgfx_SUCCESS: logType = tlLogStatus; break;
     case result_tgfx_FAIL:
     case result_tgfx_INVALIDARGUMENT:
-    case result_tgfx_WRONGTIMING: logType = log_type_tapi_ERROR; break;
-    case result_tgfx_NOTCODED: logType = log_type_tapi_NOTCODED; break;
-    case result_tgfx_WARNING: logType = log_type_tapi_WARNING; break;
+    case result_tgfx_WRONGTIMING: logType = tlLogError; break;
+    case result_tgfx_NOTCODED: logType = tlLogNotCoded; break;
+    case result_tgfx_WARNING: logType = tlLogWarning; break;
   }
   if (extraInfo) {
     core_logSys->log(logType, false, L"[TGFX] %v; %v", logMessage, extraInfo);
@@ -45,7 +45,7 @@ constexpr std::size_t  constexpr_slen(const char* s) { return std::char_traits<c
 static constexpr uint32_t maxBackendFileName =
   max(constexpr_slen(backendFileNames[0]), constexpr_slen(backendFileNames[1]));
 
-typedef result_tgfx (*load_backend_fnc)(const struct tapi_ecs* ecsSys, struct tgfx_core_type* core,
+typedef result_tgfx (*load_backend_fnc)(const struct tlECS* ecsSys, struct tgfx_core_type* core,
                                     void (*printFnc)(unsigned int   logCode,
                                                      const wchar_t* extraInfo));
 result_tgfx load_backend(tgfx_core* parent, backends_tgfx backend,
@@ -85,7 +85,7 @@ ECSPLUGIN_ENTRY(ecsSys, reloadFlag) {
   core->api->imgui          = new tgfx_dearImgui;
   core->api->renderer       = new tgfx_renderer;
   core_logSys =
-    (( LOGGER_TAPI_PLUGIN_LOAD_TYPE )core_regSys->getSystem(LOGGER_TAPI_PLUGIN_NAME))->funcs;
+    (( LOGGER_TAPI_PLUGIN_LOAD_TYPE )core_regSys->getSystem(LOGGER_TAPI_PLUGIN_NAME));
 
   core->api->load_backend  = &load_backend;
   core->api->getLogMessage = &tgfxGetLogMessage;

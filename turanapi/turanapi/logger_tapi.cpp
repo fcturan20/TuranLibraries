@@ -3,7 +3,9 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <wchar.h>
+#if defined(_WIN32)
 #include <windows.h> // WinApi header
+#endif
 
 #include <codecvt>
 #include <iostream>
@@ -63,7 +65,9 @@ static constexpr wchar_t* statusNames[]      = {L"Status", L"Warning", L"Error",
                                                 L"Crashing"};
 static constexpr int      consoleColors[]    = {2, 6, 12, 14, 64};
 
+#if defined(_WIN32)
 HANDLE hConsole = nullptr;
+#endif
 void   tlLogLog(tlLogType type, unsigned char stopRunning, const wchar_t* format, ...) {
   va_list args;
   va_start(args, format);
@@ -81,9 +85,13 @@ void   tlLogLog(tlLogType type, unsigned char stopRunning, const wchar_t* format
   tlLogObject& log = logSys->logList[logSys->logList.size() - 1];
   log.logText    = buf;
   log.logType    = type;
+#if defined(_WIN32)
   SetConsoleTextAttribute(hConsole, consoleColors[type]);
-  wprintf_s(L"%s: %s\n", statusNames[type], buf);
+  wprintf(L"%ls: %ls\n", statusNames[type], buf);
   SetConsoleTextAttribute(hConsole, 7);
+#else
+  wprintf(L"%ls: %ls\n", statusNames[type], buf);
+#endif
   tlLogSave(( tlLogType )INT32_MAX, tlStringUTF16, logSys->mainFilePath.c_str());
 
   if (stopRunning) {
@@ -92,7 +100,9 @@ void   tlLogLog(tlLogType type, unsigned char stopRunning, const wchar_t* format
 }
 
 void tlLogInit(stringReadArgument_tapi(mainLogFile)) {
+#if defined(_WIN32)
   hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+#endif
   switch (mainLogFileType) {
     case tlStringUTF8: {
       typedef std::codecvt_utf8<wchar_t>          convert_type;

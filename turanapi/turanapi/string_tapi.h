@@ -10,7 +10,11 @@ extern "C" {
 #define STRINGSYS_TAPI_PLUGIN_LOAD_TYPE const struct tlString*
 #define STRINGSYS_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 1)
 
+#if defined(__cplusplus)
+enum tlStringType : int { tlStringUTF8, tlStringUTF16, tlStringUTF32 };
+#else
 enum tlStringType { tlStringUTF8, tlStringUTF16, tlStringUTF32 };
+#endif
 
 struct tlString {
   const struct tlStringPriv* d;

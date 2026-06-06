@@ -1,5 +1,6 @@
 #define T_INCLUDE_PLATFORM_LIBS
 #include "main.h"
+#include <cstdlib>
 #include <stdio.h>
 
 #include "allocator_tapi.h"
@@ -11,15 +12,15 @@ extern void initialize_pecfManager();
 extern void load_systems();
 
 int main() {
-  auto ecs_tapi_dll = DLIB_LOAD_TAPI("tapi_ecs.dll");
+  auto ecs_tapi_dll = DLIB_LOAD_TAPI("tapi_ecs" DLIB_EXTENSION_TAPI);
   if (!ecs_tapi_dll) {
-    printf("There is no tapi_ecs.dll, initialization failed!");
+    printf("There is no tapi_ecs" DLIB_EXTENSION_TAPI ", initialization failed!");
     exit(-1);
   }
   tlECSloadFnc ecsloader =
     ( tlECSloadFnc )DLIB_FUNC_LOAD_TAPI(ecs_tapi_dll, "load_ecstapi");
   if (!ecsloader) {
-    printf("tapi_ecs.dll is loaded but ecsloader func isn't found!");
+    printf("tapi_ecs" DLIB_EXTENSION_TAPI " is loaded but ecsloader func isn't found!");
     exit(-1);
   }
   editorECS = ecsloader();

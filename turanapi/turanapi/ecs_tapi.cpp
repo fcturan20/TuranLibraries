@@ -1,6 +1,9 @@
 #define T_INCLUDE_PLATFORM_LIBS
 #include "ecs_tapi.h"
 
+#include <algorithm>
+#include <cstring>
+
 #include "allocator_tapi.h"
 #include "predefinitions_tapi.h"
 #include "stdint.h"
@@ -37,7 +40,7 @@ static const tlVector*            f_vector       = nullptr;
 ///////////////////////////////////////////////////////////
 
 struct ecs_pluginInfo {
-  HINSTANCE pluginDataPtr; // To call FreeLibrary while reload-destroying
+  void* pluginDataPtr; // dlopen/LoadLibrary-compatible opaque handle
   char      PATH[MAX_PATHCHAR];
 };
 
@@ -99,7 +102,7 @@ typedef struct tlECSPriv {
 #ifdef TURAN_DEBUGGING
     // Check if it's already added
     for (uint32_t i = 0; i < pluginCount; i++) {
-      if (!strcmp(v_pluginInfos[i].PATH, info.PATH)) {
+      if (!std::strcmp(v_pluginInfos[i].PATH, info.PATH)) {
         printf("Plugin is already loaded, call reload!");
         return nullptr;
       }
@@ -133,7 +136,7 @@ typedef struct tlECSPriv {
       if (v_systemInfos[i].ptr == nullptr) {
         return nullptr;
       }
-      if (!strcmp(v_systemInfos[i].name, name)) {
+      if (!std::strcmp(v_systemInfos[i].name, name)) {
         return v_systemInfos[i].ptr;
       }
     }
@@ -233,16 +236,16 @@ tlPlugin*   loadPlugin(const char* pluginPath) {
   dll_loader(ecs_funcs, false);
 
   ecs_pluginInfo info;
-  uint32_t       pathLen    = strlen(pluginPath);
+  uint32_t       pathLen    = std::strlen(pluginPath);
   int32_t        pathDif    = int32_t(pathLen) - MAX_PATHCHAR;
-  uint32_t       maxcharlen = min(strlen(pluginPath), MAX_PATHCHAR - 1);
+  uint32_t       maxcharlen = std::min<uint32_t>(std::strlen(pluginPath), MAX_PATHCHAR - 1);
   if (maxcharlen > MAX_PATHCHAR - 1) {
     printf("Plugin isn't loaded because it exceeds max char length of path\n");
     DLIB_UNLOAD_TAPI(dll);
     return nullptr;
   }
 
-  memcpy(info.PATH, pluginPath + max(0, pathDif), maxcharlen);
+  std::memcpy(info.PATH, pluginPath + std::max(0, pathDif), maxcharlen);
   info.pluginDataPtr = dll;
   return priv->create_pluginInfo(info);
 }
@@ -276,8 +279,8 @@ unsigned char unloadPlugin(tlPlugin* plugin) {
 
 void addSystem(const char* name, unsigned int version, const void* system_ptr) {
   ecs_systemInfo sysInfo;
-  unsigned int   maxcharlen = min(strlen(name), MAX_SYSTEMCHAR - 1);
-  memcpy(sysInfo.name, name, maxcharlen);
+  unsigned int   maxcharlen = std::min<unsigned int>(std::strlen(name), MAX_SYSTEMCHAR - 1);
+  std::memcpy(sysInfo.name, name, maxcharlen);
   sysInfo.name[maxcharlen] = 0;
   sysInfo.ptr              = system_ptr;
   sysInfo.version          = version;
@@ -306,10 +309,10 @@ struct tlComponentTypeID* addComponentType(const char* name, void* mainType,
   type->overridenTypeCount = pairListSize;
   type->overridenTypePairs = ( tlComponentTypePair* )standard_alloc->malloc(
     mainMemBlock, sizeof(tlComponentTypePair) * pairListSize);
-  memcpy(type->overridenTypePairs, pairList, sizeof(tlComponentTypePair) * pairListSize);
-  uint32_t namelen = strlen(name) + 1;
-  uint32_t copylen = min(namelen + 1, MAX_COMPTYPECHAR - 1);
-  memcpy(type->name, name, copylen);
+  std::memcpy(type->overridenTypePairs, pairList, sizeof(tlComponentTypePair) * pairListSize);
+  uint32_t namelen = std::strlen(name) + 1;
+  uint32_t copylen = std::min<uint32_t>(namelen + 1, MAX_COMPTYPECHAR - 1);
+  std::memcpy(type->name, name, copylen);
   for (uint32_t i = copylen; i < MAX_COMPTYPECHAR; i++) {
     type->name[i] = '\0';
   }
@@ -331,7 +334,7 @@ struct tlEntityType* addEntityType(
     f_vector->create(mainMemBlock, listSize * sizeof(tlComponent*), 0, 1 << 20, 0);
   type.compTypeHndlesList = ( tlComponentTypeID** )standard_alloc->malloc(
     mainMemBlock, sizeof(tlComponentTypeID) * listSize);
-  memcpy(type.compTypeHndlesList, compTypeList, sizeof(tlComponentTypeID) * listSize);
+  std::memcpy(type.compTypeHndlesList, compTypeList, sizeof(tlComponentTypeID) * listSize);
 
   f_vector->pushBack(priv->v_entityTypes, &type);
   ecstapi_idOnlyPointer hnd;
@@ -394,12 +397,18 @@ tlComponent* get_component_byEntityHnd(tlEntity*                 entityHnd,
     eList + (((entity.entityID * eType->compCount) + compTypeIndx) * sizeof(tlComponent*)));
 }
 
-extern "C" void* initializeAllocator();
 // This is the entry point of the engine
 extern "C" FUNC_DLIB_EXPORT struct tlECS* load_ecstapi() {
+  typedef void* (*initializeAllocatorFnc)();
+  initializeAllocatorFnc initializeAllocatorPtr =
+    ( initializeAllocatorFnc )dlsym(RTLD_DEFAULT, "initializeAllocator");
+  if (!initializeAllocatorPtr) {
+    printf("Allocator bootstrap function is not found: initializeAllocator\n");
+    return nullptr;
+  }
   // Load virtual memory & allocator systems
   ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE allocSys =
-    ( ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE )initializeAllocator();
+    ( ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE )initializeAllocatorPtr();
   pagesize       = allocSys->virtualMemory->pageSize();
   f_vector       = allocSys->vectorManager;
   standard_alloc = allocSys->standard;

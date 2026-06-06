@@ -1,6 +1,7 @@
 #pragma once
-
-#define TURAN_DEBUGGING
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define MAKE_PLUGIN_VERSION_TAPI(major, mid, minor) (((major < 255 ? major : 255) << 16) | \
 ((mid < 255 ? mid : 255) << 8) | ((minor < 255 ? minor : 255)))
@@ -14,11 +15,18 @@
 #else
 #define T_ENV32BIT
 #endif
+#elif defined(__APPLE__) || defined(__MACH__)
+#define T_ENVMACOS
+#if __x86_64__ || __ppc64__ || __aarch64__
+#define T_ENV64BIT
+#else
+#define T_ENV32BIT
+#endif
 #endif
 
 // Check GCC
 #if __GNUC__
-#if __x86_64__ || __ppc64__
+#if __x86_64__ || __ppc64__ || __aarch64__
 #define T_ENV64BIT
 #else
 #define T_ENV32BIT
@@ -42,7 +50,6 @@
 #else
 #define FUNC_DLIB_EXPORT __declspec(dllexport)
 #endif
-
 // GCC
 #elif defined(__GNUC__)
 //Add extern "C" for C++ compilers
@@ -53,25 +60,34 @@
 #endif
 #endif
 
-
+#define T_INCLUDE_PLATFORM_LIBS
 #if defined(T_SUPPORTEDPLATFORM) & defined(T_INCLUDE_PLATFORM_LIBS)
 #if defined(_WIN32)
 #include "windows.h"
-
-
     #define DLIB_LOAD_TAPI(dlib_path) LoadLibrary(TEXT(dlib_path))
     #define DLIB_FUNC_LOAD_TAPI(dlib_var_name, func_name) GetProcAddress(dlib_var_name, func_name)
     #define DLIB_UNLOAD_TAPI(dlib_var_name) FreeLibrary(dlib_var_name)
-    
+    #define DLIB_EXTENSION_TAPI ".dll"
+#elif defined(__APPLE__) || defined(__MACH__) || defined(__GNUC__)
+    #include <dlfcn.h>
+    #define DLIB_LOAD_TAPI(dlib_path) dlopen(dlib_path, RTLD_LAZY)
+    #define DLIB_FUNC_LOAD_TAPI(dlib_var_name, func_name) dlsym(dlib_var_name, func_name)
+    #define DLIB_UNLOAD_TAPI(dlib_var_name) dlclose(dlib_var_name)
+    #define DLIB_EXTENSION_TAPI ".dylib"
 #else
     #error Dynamic library build is failed because compiler's function export attribute isn't supported. Please go to API_includes.h for more info.
 #endif
-
-
 #endif
 
-
-
+#if defined(__cplusplus)
+enum tlStringType : int;
 typedef enum tlStringType string_type_tapi;
+#else
+typedef enum tlStringType string_type_tapi;
+#endif
 #define stringReadArgument_tapi(name) string_type_tapi name##Type, const void* name##Data
 #define stringWriteArgument_tapi(name) string_type_tapi name##Type, void* name##Data
+
+#ifdef __cplusplus
+}
+#endif

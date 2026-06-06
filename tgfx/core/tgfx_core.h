@@ -3,6 +3,8 @@
 extern "C" {
 #endif
 
+#include "tgfx_forwarddeclarations.h"
+
 #define TGFX_PLUGIN_NAME "tgfx_core"
 #define TGFX_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
 #define TGFX_PLUGIN_LOAD_TYPE struct tgfx_core_type*

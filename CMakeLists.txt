@@ -3,7 +3,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Check if executed by the regen.py script
 if (NOT DEFINED TCMAKE_INVOKER)
-    warning(WARNING "CMakeLists.txt is being executed directly. Please run the regen.py script to ensure proper setup and dependency management.")
+    message(WARNING "CMakeLists.txt is being executed directly. Please run the regen.py script to ensure proper setup and dependency management.")
 endif()
 
 if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)

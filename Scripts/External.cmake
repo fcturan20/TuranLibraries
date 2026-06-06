@@ -1,6 +1,14 @@
 message(STATUS "External.cmake included")
 
-set(VCPKG_TARGET_TRIPLET x64-windows)
+if (DEFINED VCPKG_TARGET_TRIPLET)
+    message(STATUS "VCPKG_TARGET_TRIPLET is set to ${VCPKG_TARGET_TRIPLET}")
+elseif (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+    set(VCPKG_TARGET_TRIPLET x64-windows)
+    message(WARNING "VCPKG_TARGET_TRIPLET is not defined. Defaulting to ${VCPKG_TARGET_TRIPLET}.")
+elseif (CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    set(VCPKG_TARGET_TRIPLET x64-osx)
+    message(WARNING "VCPKG_TARGET_TRIPLET is not defined. Defaulting to ${VCPKG_TARGET_TRIPLET}.")
+endif()
 
 # Vcpkg integration
 # Resolve vcpkg toolchain in this order:
@@ -61,19 +69,19 @@ function(run_regen_script)
     endif()
 endfunction()
 
-function(add_vcpkg_dependency target_name dependency imported_target_name)
+function(add_vcpkg_dependency target_name dependency target_dep_name)
     find_package(${dependency} CONFIG QUIET)
 
-    if (NOT TARGET ${imported_target_name})
+    if (NOT TARGET ${target_dep_name})
         message(STATUS "Dependency ${dependency} not found. Attempting to install via vcpkg...")
         run_regen_script(--install ${dependency})
         find_package(${dependency} CONFIG QUIET)
     endif()
-
-    if (TARGET ${imported_target_name})
-        message(STATUS "${target_name} is linking to ${dependency} via targets: ${imported_target_name}")
-        target_link_libraries(${target_name} PRIVATE ${imported_target_name})
+    
+    if (TARGET ${target_dep_name} OR (DEFINED ${target_dep_name} AND ${target_dep_name}))
+        message(STATUS "Dependency ${dependency} found with target ${target_dep_name}. Linking to ${target_name}.")
+        target_link_libraries(${target_name} PRIVATE ${target_dep_name})
     else()
-        message(WARNING "Failed to resolve an imported target for ${dependency}. Check that the vcpkg triplet matches (VCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET}) and the toolchain is active.")
+        message(FATAL_ERROR "Dependency ${dependency} could not be linked: target ${target_dep_name} was not found and variable ${target_dep_name} is empty or undefined.")
     endif()
 endfunction()

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/common.hpp>
 #include <glm/gtx/common.hpp>
 #include <random>
@@ -300,7 +301,7 @@ void createBuffersAndTextures() {
 
   // DevLocal heap
   uint32_t lastMemPoint        = 0;
-  auto&    calculateHeapOffset = [&lastMemPoint](const tgfx_heapRequirementsInfo& heapReq) -> void {
+  auto     calculateHeapOffset = [&lastMemPoint](const tgfx_heapRequirementsInfo& heapReq) -> void {
     lastMemPoint = ((lastMemPoint / heapReq.offsetAlignment) +
                     ((lastMemPoint % heapReq.offsetAlignment) ? 1 : 0)) *
                    heapReq.offsetAlignment;

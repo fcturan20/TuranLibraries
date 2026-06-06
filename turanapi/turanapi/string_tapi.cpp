@@ -1,11 +1,13 @@
 #include "string_tapi.h"
 
 #include <assert.h>
+#include <algorithm>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 #include <string>
 
@@ -26,9 +28,9 @@ tlString*                            stringSys;
 
 #define tStrPrint(buf, bufIter, count, format, p)                           \
   if (targetType == tlStringUTF8) {                                         \
-    count = snprintf((( char* )##buf) + bufIter, count, format, p);         \
+    count = snprintf((( char* )(buf)) + bufIter, count, format, p);         \
   } else if (targetType == tlStringUTF16) {                        \
-    count = _snwprintf((( wchar_t* )##buf) + bufIter, count, L##format, p); \
+    count = swprintf((( wchar_t* )(buf)) + bufIter, count, L##format, p); \
   }
 struct tlStringPriv {
   static void convertString(stringReadArgument_tapi(src), stringWriteArgument_tapi(dst),
@@ -36,7 +38,7 @@ struct tlStringPriv {
     switch (srcType) {
       case tlStringUTF8: {
         uint64_t wholeSrcStrLen = strlen(( const char* )srcData) + 1;
-        uint64_t copyLen        = __min(wholeSrcStrLen, maxLen);
+        uint64_t copyLen        = std::min(wholeSrcStrLen, maxLen);
         switch (dstType) {
           case tlStringUTF8: {
             memcpy(dstData, srcData, copyLen);
@@ -49,7 +51,7 @@ struct tlStringPriv {
       } break;
       case tlStringUTF16: {
         uint64_t wholeSrcStrLen = wcslen(( const wchar_t* )srcData) + 1;
-        uint64_t copyLen        = __min(wholeSrcStrLen, maxLen);
+        uint64_t copyLen        = std::min(wholeSrcStrLen, maxLen);
         switch (dstType) {
           case tlStringUTF8: {
             wcstombs(( char* )dstData, ( const wchar_t* )srcData, copyLen);

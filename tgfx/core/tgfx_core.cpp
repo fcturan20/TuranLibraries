@@ -1,5 +1,7 @@
 #include <assert.h>
 
+#include <algorithm>
+
 #define TGFX_BACKEND
 #define T_INCLUDE_PLATFORM_LIBS
 #include <ecs_tapi.h>
@@ -43,7 +45,7 @@ void defaultPrintCallback(unsigned int logCode, const wchar_t* extraInfo) {
 static constexpr char* backendFileNames[] = {"", "TGFXVulkan.dll", "TGFXD3D12.dll"};
 constexpr std::size_t  constexpr_slen(const char* s) { return std::char_traits<char>::length(s); }
 static constexpr uint32_t maxBackendFileName =
-  max(constexpr_slen(backendFileNames[0]), constexpr_slen(backendFileNames[1]));
+  std::max(constexpr_slen(backendFileNames[0]), constexpr_slen(backendFileNames[1]));
 
 typedef result_tgfx (*load_backend_fnc)(const struct tlECS* ecsSys, struct tgfx_core_type* core,
                                     void (*printFnc)(unsigned int   logCode,

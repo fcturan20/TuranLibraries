@@ -17,4 +17,6 @@ add_subdirectory("rendergraph")
 add_subdirectory("vk_backend")
 
 #D3D12
-add_subdirectory("dx12")
+if (WIN32)
+    add_subdirectory("dx12")
+endif()

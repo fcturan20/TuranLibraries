@@ -1,4 +1,4 @@
-﻿cmake_minimum_required (VERSION 4.0)
+﻿cmake_minimum_required (VERSION 3.8)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Check if executed by the regen.py script

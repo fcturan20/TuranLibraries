@@ -1,11 +1,12 @@
 cmake_minimum_required (VERSION 3.8)
 
 file(GLOB_RECURSE dx12backendfiles "*.cpp" "*.h" "*.c")
-create_dynamic_target(TGFXD3D12
-${dx12backendfiles}
+create_dynamic_target(tgfx_dx12
+"${dx12backendfiles}"
     "TuranLibraries/tgfx")
-add_vcpkg_dependency(TGFXD3D12 directx-headers Microsoft::DirectX-Headers)
-
+add_vcpkg_dependency(tgfx_dx12 directx-headers Microsoft::DirectX-Headers)
+add_vcpkg_dependency(tgfx_dx12 directxmath Microsoft::DirectXMath)
+target_link_libraries(tgfx_dx12 PRIVATE tgfx_core tapi_ecs tapi_string tapi_bitset tapi_filesys tapi_logger tapi_profiler tapi_threadedjobsys tapi_unittest)
 
 ##file(GLOB_RECURSE d3d12backendfiles "*.cpp" "*.h" "*.c")
 ##add_library(TGFXD3D12 SHARED ${d3d12backendfiles})

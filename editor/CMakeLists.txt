@@ -12,12 +12,8 @@ install(TARGETS editor RUNTIME DESTINATION ${CMAKE_SOURCE_DIR}/dynamic_libs)
 target_compile_definitions(editor PUBLIC SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../")
 target_link_libraries(editor PRIVATE tgfx_core TGFXVulkan tapi_ecs tapi_string tapi_bitset tapi_filesys tapi_logger tapi_profiler tapi_threadedjobsys tapi_unittest)
 
-find_package(glm REQUIRED)
-target_include_directories(editor PUBLIC ${glm_INCLUDE_DIRS})
-target_link_libraries(editor PUBLIC glm::glm)
-
-find_package(Stb REQUIRED)
-target_include_directories(editor PRIVATE ${Stb_INCLUDE_DIR})
+add_vcpkg_dependency(editor glm glm::glm)
+add_vcpkg_dependency(editor Stb stb::stb)
 
 add_subdirectory("scene")
 add_subdirectory("UI")

@@ -1,7 +1,10 @@
 cmake_minimum_required (VERSION 3.8)
 
-
-find_package(directx-headers CONFIG REQUIRED)
+file(GLOB_RECURSE dx12backendfiles "*.cpp" "*.h" "*.c")
+create_dynamic_target(TGFXD3D12
+${dx12backendfiles}
+    "TuranLibraries/tgfx")
+add_vcpkg_dependency(TGFXD3D12 directx-headers Microsoft::DirectX-Headers)
 
 
 ##file(GLOB_RECURSE d3d12backendfiles "*.cpp" "*.h" "*.c")

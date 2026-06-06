@@ -63,16 +63,12 @@ extern "C" {
 #define T_INCLUDE_PLATFORM_LIBS
 #if defined(T_SUPPORTEDPLATFORM) & defined(T_INCLUDE_PLATFORM_LIBS)
 #if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include "windows.h"
-    #define DLIB_LOAD_TAPI(dlib_path) LoadLibrary(TEXT(dlib_path))
-    #define DLIB_FUNC_LOAD_TAPI(dlib_var_name, func_name) GetProcAddress(dlib_var_name, func_name)
-    #define DLIB_UNLOAD_TAPI(dlib_var_name) FreeLibrary(dlib_var_name)
     #define DLIB_EXTENSION_TAPI ".dll"
 #elif defined(__APPLE__) || defined(__MACH__) || defined(__GNUC__)
     #include <dlfcn.h>
-    #define DLIB_LOAD_TAPI(dlib_path) dlopen(dlib_path, RTLD_LAZY)
-    #define DLIB_FUNC_LOAD_TAPI(dlib_var_name, func_name) dlsym(dlib_var_name, func_name)
-    #define DLIB_UNLOAD_TAPI(dlib_var_name) dlclose(dlib_var_name)
     #define DLIB_EXTENSION_TAPI ".dylib"
 #else
     #error Dynamic library build is failed because compiler's function export attribute isn't supported. Please go to API_includes.h for more info.

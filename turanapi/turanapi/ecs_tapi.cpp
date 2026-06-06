@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <dylib.hpp>
 
 #include "allocator_tapi.h"
 #include "predefinitions_tapi.h"
@@ -222,51 +223,58 @@ typedef void (*ECSTAPIPLUGIN_loadfnc)(struct tlECS* ecsHnd, unsigned int reload)
 static const char* ECS_ERROR_TEXT_DLL_NOT_FOUND   = "DLL file isn't found: %s\n";
 static const char* ECS_ERROR_TEXT_ENTRY_NOT_FOUND = "DLL file is found but plugin entry isn't\n";
 tlPlugin*   loadPlugin(const char* pluginPath) {
-  auto dll = DLIB_LOAD_TAPI(pluginPath);
-  if (!dll) {
+  try{
+    dylib::library dll(pluginPath);
+    ECSTAPIPLUGIN_loadfnc dll_loader = dll.get_function<ECSTAPIPLUGIN_loadfnc>("ECSTAPIPLUGIN_load");
+    if (!dll_loader) {
+      printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
+      return nullptr;
+    }
+    dll_loader(ecs_funcs, false);
+
+    ecs_pluginInfo info;
+    uint32_t       pathLen    = std::strlen(pluginPath);
+    int32_t        pathDif    = int32_t(pathLen) - MAX_PATHCHAR;
+    uint32_t       maxcharlen = std::min<uint32_t>(std::strlen(pluginPath), MAX_PATHCHAR - 1);
+    if (maxcharlen > MAX_PATHCHAR - 1) {
+      printf("Plugin isn't loaded because it exceeds max char length of path\n");
+      return nullptr;
+    }
+
+    std::memcpy(info.PATH, pluginPath + std::max(0, pathDif), maxcharlen);
+    info.pluginDataPtr = dll.native_handle();
+    return priv->create_pluginInfo(info);
+  }
+  catch (const dylib::load_error& e) {
     printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, pluginPath);
     return nullptr;
   }
-  ECSTAPIPLUGIN_loadfnc dll_loader =
-    ( ECSTAPIPLUGIN_loadfnc )DLIB_FUNC_LOAD_TAPI(dll, "ECSTAPIPLUGIN_load");
-  if (!dll_loader) {
-    printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
+  catch (const dylib::symbol_error &) {
+    printf("failed to get 'ECSTAPIPLUGIN_load' symbol\n");
     return nullptr;
   }
-  dll_loader(ecs_funcs, false);
-
-  ecs_pluginInfo info;
-  uint32_t       pathLen    = std::strlen(pluginPath);
-  int32_t        pathDif    = int32_t(pathLen) - MAX_PATHCHAR;
-  uint32_t       maxcharlen = std::min<uint32_t>(std::strlen(pluginPath), MAX_PATHCHAR - 1);
-  if (maxcharlen > MAX_PATHCHAR - 1) {
-    printf("Plugin isn't loaded because it exceeds max char length of path\n");
-    DLIB_UNLOAD_TAPI(dll);
-    return nullptr;
-  }
-
-  std::memcpy(info.PATH, pluginPath + std::max(0, pathDif), maxcharlen);
-  info.pluginDataPtr = dll;
-  return priv->create_pluginInfo(info);
 }
+
 void reloadPlugin(tlPlugin* plugin) {
   ecs_pluginInfo* info = priv->get_pluginInfo(plugin);
   if (!info) {
     return;
   }
-  auto dll = DLIB_LOAD_TAPI(info->PATH);
-  if (!dll) {
+  try{
+    dylib::library dll(info->PATH);
+    ECSTAPIPLUGIN_loadfnc dll_loader = dll.get_function<ECSTAPIPLUGIN_loadfnc>("ECSTAPIPLUGIN_load");
+    dll_loader(ecs_funcs, true);
+  }
+  catch (const dylib::load_error& e) {
     printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, info->PATH);
     return;
   }
-  ECSTAPIPLUGIN_loadfnc dll_loader =
-    ( ECSTAPIPLUGIN_loadfnc )DLIB_FUNC_LOAD_TAPI(dll, "ECSTAPIPLUGIN_load");
-  if (!dll_loader) {
-    printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
+  catch (const dylib::symbol_error &) {
+    printf("failed to get 'ECSTAPIPLUGIN_load' symbol\n");
     return;
   }
-  dll_loader(ecs_funcs, true);
 }
+
 unsigned char unloadPlugin(tlPlugin* plugin) {
   typedef void (*ECSTAPIPLUGIN_unloadfnc)(struct tlECS * ecsHnd, unsigned int reload);
   printf("Unloading a plugin isn't supported yet!");
@@ -401,7 +409,7 @@ tlComponent* get_component_byEntityHnd(tlEntity*                 entityHnd,
 extern "C" FUNC_DLIB_EXPORT struct tlECS* load_ecstapi() {
   typedef void* (*initializeAllocatorFnc)();
   initializeAllocatorFnc initializeAllocatorPtr =
-    ( initializeAllocatorFnc )dlsym(RTLD_DEFAULT, "initializeAllocator");
+    ( initializeAllocatorFnc )(RTLD_DEFAULT, "initializeAllocator");
   if (!initializeAllocatorPtr) {
     printf("Allocator bootstrap function is not found: initializeAllocator\n");
     return nullptr;

@@ -608,6 +608,7 @@ typedef enum cursorMode_tgfx {
   cursorMode_tgfx_RAW
 } cursorMode_tgfx;
 
+typedef void (*tgfx_PrintLogCallback)(unsigned int logCode, const char* extraInfo);
 
 #ifdef __cplusplus
 }

@@ -26,7 +26,7 @@ using namespace Microsoft::WRL;
 #include <DirectXMath.h>
 #include <d3d12.h>
 #include <d3dcompiler.h>
-#include <d3dx12.h>
+#include <directx/d3dx12.h>
 #include <dxgi1_6.h>
 #include <tgfx_forwarddeclarations.h>
 
@@ -80,7 +80,6 @@ static constexpr fence_idtype_dx invalid_fenceid = nullptr;
 
 // Structs
 
-struct texture_dx;
 struct memorytype_dx;
 struct queuefam_dx;
 struct extManager_vkDevice; // Stores activated extensions and set function pointers according to

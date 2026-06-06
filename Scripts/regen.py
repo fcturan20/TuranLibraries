@@ -120,6 +120,23 @@ def generate_project():
 
     print("CMake generation completed. You can now build the project using your preferred method (e.g., cmake --build build).")
 
+def build_project():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, '..'))
+    platform_name = sys.platform
+    architecture = platform.machine() or os.environ.get('PROCESSOR_ARCHITECTURE', 'unknown')
+    build_dir = os.path.join(project_root, 'Project', platform_name + '_' + architecture)
+
+    if not os.path.isdir(build_dir):
+        print("Build directory does not exist. Please run the generation step first.")
+        sys.exit(1)
+
+    build_status = subprocess.run(['cmake', '--build', build_dir])
+    if build_status.returncode != 0:
+        print("Build failed with return code:", build_status.returncode)
+        sys.exit(1)
+
+    print("Build completed successfully.")
 
 if __name__ == "__main__":
     check_vcpkg()
@@ -129,6 +146,7 @@ if __name__ == "__main__":
     # --install to install dependencies using vcpkg, usage is python regen.py --install glfw3 glm imgui will install these dependencies using vcpkg
     parser.add_argument('--gen', action='store_true', help='Generate CMake files using vcpkg toolchain')
     parser.add_argument('--install', nargs='+', help='Install dependencies using vcpkg (e.g., --install glfw3 glm imgui)')
+    parser.add_argument('--build', action='store_true', help='Build the project after generating CMake files')
     args = parser.parse_args()
 
     if args.install:
@@ -147,3 +165,6 @@ if __name__ == "__main__":
 
     if args.gen:
         generate_project()
+
+    if args.build:
+        build_project()

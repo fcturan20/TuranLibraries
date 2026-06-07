@@ -6,5 +6,5 @@ dynamic_libs
 Example_runnables
 CMakeSettings.json
 Project
-External
+External/vcpkg
 Binaries

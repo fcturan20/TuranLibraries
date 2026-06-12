@@ -1,0 +1,3 @@
+[submodule "External/dynalo"]
+	path = External/dynalo
+	url = https://github.com/maddouri/dynalo.git

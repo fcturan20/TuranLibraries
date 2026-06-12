@@ -8,6 +8,24 @@ import subprocess
 vcpkg_toolchain = None
 vcpkg_executable = None
 
+
+def get_default_triplet():
+    env_triplet = os.getenv('VCPKG_TARGET_TRIPLET')
+    if env_triplet:
+        return env_triplet
+
+    system = platform.system()
+    machine = (platform.machine() or '').lower()
+    is_arm64 = machine in ('arm64', 'aarch64')
+
+    if system == 'Windows':
+        return 'arm64-windows' if is_arm64 else 'x64-windows'
+    if system == 'Darwin':
+        return 'arm64-osx' if is_arm64 else 'x64-osx'
+    if system == 'Linux':
+        return 'arm64-linux' if is_arm64 else 'x64-linux'
+    return 'x64-windows'
+
 # Given a vcpkg root directory, search for vcpkg.cmake file
 def search_in_vcpkg_root(vcpkg_root):
     potential_path = os.path.join(vcpkg_root, 'scripts', 'buildsystems', 'vcpkg.cmake')
@@ -93,7 +111,7 @@ def check_vcpkg():
         print("Could not locate vcpkg executable. Please bootstrap vcpkg or add it to PATH.")
         sys.exit(1)
 
-def generate_project():
+def generate_project(args):
     if not vcpkg_toolchain:
         print("vcpkg toolchain path is not initialized.")
         sys.exit(1)
@@ -107,13 +125,15 @@ def generate_project():
     build_dir = os.path.join(project_root, 'Project', platform_name + '_' + architecture)
     toolchain_argument = '-DCMAKE_TOOLCHAIN_FILE=' + vcpkg_toolchain
 
-    cmake_status = subprocess.run([
-                'cmake',
-                '-S', project_root,
-                '-B', build_dir,
-                toolchain_argument,
-                '-DTCMAKE_INVOKER=regen.py'
-            ])
+    cmake_cmd = [
+        'cmake',
+        '-S', project_root,
+        '-B', build_dir,
+        toolchain_argument,
+        '-DTCMAKE_INVOKER=regen.py'
+    ]
+    
+    cmake_status = subprocess.run(cmake_cmd)
     if cmake_status.returncode != 0:
         print("CMake generation failed with return code:", cmake_status.returncode)
         sys.exit(1)
@@ -146,6 +166,7 @@ if __name__ == "__main__":
     # --install to install dependencies using vcpkg, usage is python regen.py --install glfw3 glm imgui will install these dependencies using vcpkg
     parser.add_argument('--gen', action='store_true', help='Generate CMake files using vcpkg toolchain')
     parser.add_argument('--install', nargs='+', help='Install dependencies using vcpkg (e.g., --install glfw3 glm imgui)')
+    parser.add_argument('--triplet', default=get_default_triplet(), help='vcpkg triplet used for dependency installation')
     parser.add_argument('--build', action='store_true', help='Build the project after generating CMake files')
     args = parser.parse_args()
 
@@ -156,15 +177,16 @@ if __name__ == "__main__":
 
         vcpkg_cwd = os.path.dirname(vcpkg_executable)
         for dep in args.install:
-            print(f"Installing {dep} using vcpkg...")
-            install_status = subprocess.run([vcpkg_executable, 'install', dep], cwd=vcpkg_cwd)
+            dep_spec = f"{dep}:{args.triplet}" if ':' not in dep else dep
+            print(f"Installing {dep_spec} using vcpkg...")
+            install_status = subprocess.run([vcpkg_executable, 'install', dep_spec], cwd=vcpkg_cwd)
             if install_status.returncode != 0:
                 print(f"Failed to install {dep} with return code:", install_status.returncode)
                 sys.exit(1)
         print("All dependencies installed successfully.")
 
     if args.gen:
-        generate_project()
+        generate_project(args)
 
     if args.build:
         build_project()

@@ -4,6 +4,7 @@
 #ECS System
 set(TAPI_ECS_SOURCES "turanapi/ecs_tapi.cpp" "turanapi/ecs_tapi.h" "turanapi/allocator_tapi.cpp" "turanapi/allocator_tapi.h")
 create_dynamic_target(tapi_ecs "${TAPI_ECS_SOURCES}" "TuranLibraries/tapi")
+target_link_libraries(tapi_ecs PRIVATE dynalo)
 
 #Unit Test System
 set(TAPI_UNITTEST_SOURCES "turanapi/unittestsys_tapi.cpp" "turanapi/unittestsys_tapi.h")

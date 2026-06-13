@@ -3,7 +3,7 @@
 
 #include <algorithm>
 #include <cstring>
-#include <dylib.hpp>
+#include <dynalo/dynalo.hpp>
 
 #include "allocator_tapi.h"
 #include "predefinitions_tapi.h"
@@ -224,13 +224,13 @@ static const char* ECS_ERROR_TEXT_DLL_NOT_FOUND   = "DLL file isn't found: %s\n"
 static const char* ECS_ERROR_TEXT_ENTRY_NOT_FOUND = "DLL file is found but plugin entry isn't\n";
 tlPlugin*   loadPlugin(const char* pluginPath) {
   try{
-    dylib::library dll(pluginPath);
-    ECSTAPIPLUGIN_loadfnc dll_loader = dll.get_function<ECSTAPIPLUGIN_loadfnc>("ECSTAPIPLUGIN_load");
-    if (!dll_loader) {
+    dynalo::library dll(pluginPath);
+    ECSTAPIPLUGIN_loadfnc* dll_loader = dll.get_function<ECSTAPIPLUGIN_loadfnc>("ECSTAPIPLUGIN_load");
+    if (!dll_loader || !(*dll_loader)) {
       printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
       return nullptr;
     }
-    dll_loader(ecs_funcs, false);
+    (*dll_loader)(ecs_funcs, false);
 
     ecs_pluginInfo info;
     uint32_t       pathLen    = std::strlen(pluginPath);
@@ -242,15 +242,11 @@ tlPlugin*   loadPlugin(const char* pluginPath) {
     }
 
     std::memcpy(info.PATH, pluginPath + std::max(0, pathDif), maxcharlen);
-    info.pluginDataPtr = dll.native_handle();
+    info.pluginDataPtr = dll.get_native_handle();
     return priv->create_pluginInfo(info);
   }
-  catch (const dylib::load_error& e) {
+  catch (std::exception& e) {
     printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, pluginPath);
-    return nullptr;
-  }
-  catch (const dylib::symbol_error &) {
-    printf("failed to get 'ECSTAPIPLUGIN_load' symbol\n");
     return nullptr;
   }
 }
@@ -261,16 +257,16 @@ void reloadPlugin(tlPlugin* plugin) {
     return;
   }
   try{
-    dylib::library dll(info->PATH);
-    ECSTAPIPLUGIN_loadfnc dll_loader = dll.get_function<ECSTAPIPLUGIN_loadfnc>("ECSTAPIPLUGIN_load");
-    dll_loader(ecs_funcs, true);
+    dynalo::library dll(info->PATH);
+    ECSTAPIPLUGIN_loadfnc* dll_loader = dll.get_function<ECSTAPIPLUGIN_loadfnc>("ECSTAPIPLUGIN_load");
+    if (!dll_loader || !(*dll_loader)) {
+      printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
+      return;
+    }
+    (*dll_loader)(ecs_funcs, true);
   }
-  catch (const dylib::load_error& e) {
+  catch (const std::exception& e) {
     printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, info->PATH);
-    return;
-  }
-  catch (const dylib::symbol_error &) {
-    printf("failed to get 'ECSTAPIPLUGIN_load' symbol\n");
     return;
   }
 }
@@ -405,11 +401,12 @@ tlComponent* get_component_byEntityHnd(tlEntity*                 entityHnd,
     eList + (((entity.entityID * eType->compCount) + compTypeIndx) * sizeof(tlComponent*)));
 }
 
+extern "C" void* initializeAllocator();
+
 // This is the entry point of the engine
 extern "C" FUNC_DLIB_EXPORT struct tlECS* load_ecstapi() {
   typedef void* (*initializeAllocatorFnc)();
-  initializeAllocatorFnc initializeAllocatorPtr =
-    ( initializeAllocatorFnc )(RTLD_DEFAULT, "initializeAllocator");
+  initializeAllocatorFnc initializeAllocatorPtr = &initializeAllocator;
   if (!initializeAllocatorPtr) {
     printf("Allocator bootstrap function is not found: initializeAllocator\n");
     return nullptr;

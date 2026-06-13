@@ -57,6 +57,7 @@ function(run_regen_script)
     message(STATUS "Running regen.py with arguments: ${ARGN}")
     execute_process(COMMAND python3 ${CMAKE_SOURCE_DIR}/Scripts/regen.py ${ARGN}
         RESULT_VARIABLE result
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         OUTPUT_VARIABLE output
         ERROR_VARIABLE error_output
         ECHO_OUTPUT_VARIABLE   # prints AND captures stdout

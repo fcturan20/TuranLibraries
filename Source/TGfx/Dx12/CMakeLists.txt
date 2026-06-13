@@ -1,22 +1,7 @@
 cmake_minimum_required (VERSION 3.8)
 
 file(GLOB_RECURSE dx12backendfiles "*.cpp" "*.h" "*.c")
-create_dynamic_target(tgfx_dx12
-"${dx12backendfiles}"
-    "TuranLibraries/tgfx")
-add_vcpkg_dependency(tgfx_dx12 directx-headers Microsoft::DirectX-Headers)
-add_vcpkg_dependency(tgfx_dx12 directxmath Microsoft::DirectXMath)
-target_link_libraries(tgfx_dx12 PRIVATE tgfx_core tapi_ecs tapi_string tapi_bitset tapi_filesys tapi_logger tapi_profiler tapi_threadedjobsys tapi_unittest)
-
-##file(GLOB_RECURSE d3d12backendfiles "*.cpp" "*.h" "*.c")
-##add_library(TGFXD3D12 SHARED ${d3d12backendfiles})
-##target_include_directories(TGFXD3D12 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../turanapi/turanapi ${CMAKE_CURRENT_SOURCE_DIR}/../core)
-##set_target_properties(TGFXD3D12 PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug)
-##set_target_properties(TGFXD3D12 PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release PREFIX "")
-##set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DTD3D12_DEBUGGING")
-
-##target_link_libraries(TGFXD3D12 PRIVATE Microsoft::DirectX-Guids Microsoft::DirectX-Headers)
-##target_link_libraries(TGFXD3D12 PRIVATE "d3d12.lib" "dxgi.lib" "d3dcompiler.lib")
-
-##find_path(D3DX12_INCLUDE_DIRS "d3dx12.h")
-##target_include_directories(TGFXD3D12 PRIVATE ${D3DX12_INCLUDE_DIRS})
+tcmake_create_dynamic_target(TGfxDx12 "${dx12backendfiles}" "TGfx")
+tcmake_add_vcpkg_dependency(TGfxDx12 directx-headers Microsoft::DirectX-Headers)
+tcmake_add_vcpkg_dependency(TGfxDx12 directxmath Microsoft::DirectXMath)
+target_link_libraries(TGfxDx12 PRIVATE TGfxCore TCoreECS TCoreString TCoreBitset TCoreFilesys TCoreLogger TCoreProfiler TCoreThreadedJobSys TCoreUnitTest)

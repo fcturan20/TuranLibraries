@@ -1,10 +1,10 @@
-#include "unittestsys_tapi.h"
+#include "UnitTestSystem.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
 
-#include "ecs_tapi.h"
+#include "ECS.h"
 
 struct tlUnitTestPriv {
   tlUnitTest*            sys;

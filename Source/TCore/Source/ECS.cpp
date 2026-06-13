@@ -1,12 +1,12 @@
 #define T_INCLUDE_PLATFORM_LIBS
-#include "ecs_tapi.h"
+#include "ECS.h"
 
 #include <algorithm>
 #include <cstring>
 #include <dynalo/dynalo.hpp>
 
-#include "allocator_tapi.h"
-#include "predefinitions_tapi.h"
+#include "Allocator.h"
+#include "TCorePredefinitions.h"
 #include "stdint.h"
 #include "stdio.h"
 //                   COMPILE EXPRESSIONS

@@ -1,5 +1,5 @@
 #pragma once
-#include "predefinitions_tapi.h"
+#include "TCorePredefinitions.h"
 #define ALLOCATOR_TAPI_PLUGIN_NAME "tapi_allocator"
 #define ALLOCATOR_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
 #define ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE const struct tlAllocator*

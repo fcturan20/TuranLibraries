@@ -1,4 +1,4 @@
-#include "logger_tapi.h"
+#include "Logger.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -12,9 +12,9 @@
 #include <string>
 #include <vector>
 
-#include "ecs_tapi.h"
-#include "filesys_tapi.h"
-#include "string_tapi.h"
+#include "ECS.h"
+#include "FileSystem.h"
+#include "String.h"
 
 
 struct tlLogObject {

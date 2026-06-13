@@ -23,7 +23,7 @@ extern "C" {
 //    When user wants to access pos of comp C, it will get BType of comp C
 //    Returned BType will store readPos func pointer as the func that returns (0,0,0)
 
-#include "predefinitions_tapi.h"
+#include "TCorePredefinitions.h"
 #define ECS_TAPI_NAME "ecs_tapi"
 #define ECS_TAPI_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
 // To help users to minimize accessing issues, each type name has its pointer

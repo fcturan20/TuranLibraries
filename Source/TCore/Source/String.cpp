@@ -1,4 +1,4 @@
-#include "string_tapi.h"
+#include "String.h"
 
 #include <assert.h>
 #include <algorithm>
@@ -11,10 +11,10 @@
 
 #include <string>
 
-#include "ecs_tapi.h"
-#include "predefinitions_tapi.h"
-#include "unittestsys_tapi.h"
-#include "allocator_tapi.h"
+#include "ECS.h"
+#include "TCorePredefinitions.h"
+#include "UnitTestSys.h"
+#include "Allocator.h"
 
 // FIX: This should be specified by the flag!
 #define tapi_average_string_len 100

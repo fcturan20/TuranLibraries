@@ -1,4 +1,4 @@
-#include "threadingsys_tapi.h"
+#include "Threading.h"
 
 #include <algorithm>
 #include <atomic>
@@ -11,7 +11,7 @@
 #include <thread>
 #include <vector>
 
-#include "ecs_tapi.h"
+#include "ECS.h"
 
 inline std::atomic_bool& WaitHandleConverter(struct tlSemaphore* handle) {
   return *( std::atomic_bool* )(handle);

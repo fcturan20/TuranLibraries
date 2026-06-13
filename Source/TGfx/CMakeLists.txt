@@ -1,20 +1,17 @@
 cmake_minimum_required (VERSION 3.8)
 
 # Core system
-file(GLOB_RECURSE tgfxcorefiles "core/*.cpp" "core/*.h" "core/*.c")
-create_dynamic_target(tgfx_core
-"${tgfxcorefiles}"
-    "TuranLibraries/tgfx")
-file(GLOB_RECURSE tgfxcorefiles "core/*.cpp" "core/*.h" "core/*.c")
-target_link_libraries(tgfx_core PRIVATE tapi_ecs tapi_string tapi_bitset tapi_filesys tapi_logger tapi_profiler tapi_threadedjobsys tapi_unittest)
+file(GLOB_RECURSE tgfxcorefiles "Core/Source/*.cpp" "Core/Include/*.h" "Core/Source/*.c")
+tcmake_create_dynamic_target(TGfxCore "${tgfxcorefiles}" "TGfx")
+target_link_libraries(TGfxCore PRIVATE TCoreECS TCoreString TCoreBitset TCoreFilesys TCoreLogger TCoreProfiler TCoreThreadedJobSys TCoreUnitTest)
 
 #RenderGraph
-add_subdirectory("rendergraph")
+tcmake_add_subdirectory_if_exists("RenderGraph")
 
 #Vulkan
-add_subdirectory("vk_backend")
+tcmake_add_subdirectory_if_exists("Vk")
 
 #D3D12
 if (WIN32)
-    add_subdirectory("dx12")
+    tcmake_add_subdirectory_if_exists("Dx12")
 endif()

@@ -10,6 +10,8 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     message(WARNING "CMAKE_TOOLCHAIN_FILE is not defined. Please run the regen.py script to set up the vcpkg toolchain file.")
 endif()
 
+project ("TuranLibraries")
+set(CMAKE_CXX_STANDARD 17)
 # Support for CMake versions older than 3.5
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
@@ -22,12 +24,6 @@ foreach(f IN LISTS CMK_FILES)
   include("${f}")
 endforeach()
 
-project ("TuranLibraries")
-set(CMAKE_CXX_STANDARD 17)
-
 # Include sub-projects.
-add_subdirectory ("turanapi")
-add_subdirectory ("tgfx")
-add_subdirectory ("Example")
-add_subdirectory ("editor")
+add_subdirectory ("Source")
 add_subdirectory ("External")

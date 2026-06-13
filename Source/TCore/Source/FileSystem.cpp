@@ -1,4 +1,4 @@
-#include "filesys_tapi.h"
+#include "FileSystem.h"
 
 #include <filesystem>
 #include <fstream>
@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "ecs_tapi.h"
-#include "string_tapi.h"
+#include "ECS.h"
+#include "String.h"
 
 void failedToRead_tapi(stringReadArgument_tapi(path)) {
   switch (pathType) {

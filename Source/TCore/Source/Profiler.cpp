@@ -1,4 +1,4 @@
-#include "profiler_tapi.h"
+#include "Profiler.h"
 
 #include <assert.h>
 
@@ -6,8 +6,8 @@
 #include <iostream>
 #include <string>
 
-#include "ecs_tapi.h"
-#include "threadingsys_tapi.h"
+#include "ECS.h"
+#include "Threading.h"
 
 struct tlProfiledScope {
  public:

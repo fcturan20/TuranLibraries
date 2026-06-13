@@ -1,4 +1,4 @@
-#include "allocator_tapi.h"
+#include "Allocator.h"
 
 #include <Windows.h>
 #include <stdarg.h>
@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-#include "ecs_tapi.h"
+#include "ECS.h"
 static constexpr uint64_t maxVectorAllocation_IfNotSpecified = uint64_t(1) << uint64_t(34);
 static constexpr uint64_t maxSuperMemoryBlockName            = 62; // You should use null terminator
 static constexpr uint64_t maxVirmemPerSuperBlock =

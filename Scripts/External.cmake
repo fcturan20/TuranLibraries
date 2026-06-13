@@ -53,7 +53,7 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     endif()
 endif()
 
-function(run_regen_script)
+function(tcmake_run_regen_script)
     message(STATUS "Running regen.py with arguments: ${ARGN}")
     execute_process(COMMAND python3 ${CMAKE_SOURCE_DIR}/Scripts/regen.py ${ARGN}
         RESULT_VARIABLE result
@@ -70,7 +70,7 @@ function(run_regen_script)
     endif()
 endfunction()
 
-function(add_vcpkg_dependency target_name dependency target_dep_name)
+function(tcmake_add_vcpkg_dependency target_name dependency target_dep_name)
     find_package(${dependency} CONFIG QUIET)
 
     if (NOT TARGET ${target_dep_name} AND (NOT DEFINED ${target_dep_name} OR NOT ${target_dep_name}))
@@ -81,7 +81,7 @@ function(add_vcpkg_dependency target_name dependency target_dep_name)
 
     if (NOT TARGET ${target_dep_name})
         message(STATUS "Dependency ${dependency} not found. Attempting to install via vcpkg...")
-        run_regen_script(--install ${dependency})
+        tcmake_run_regen_script(--install ${dependency})
         find_package(${dependency} CONFIG QUIET)
 
         if (NOT TARGET ${target_dep_name} AND (NOT DEFINED ${target_dep_name} OR NOT ${target_dep_name}))

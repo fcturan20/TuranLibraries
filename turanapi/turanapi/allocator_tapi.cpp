@@ -98,7 +98,7 @@ tlSuperBlock* allocateSuperMemoryBlock(unsigned long long blockSize,
   }
 
   // Search for a freed super memory block
-  uint32_t namelen = min(wcslen(superMemBlockName), maxSuperMemoryBlockName);
+  uint32_t namelen = std::min(wcslen(superMemBlockName), maxSuperMemoryBlockName);
   for (uint32_t i = 0; i < priv->createdSuperBlockCount; i++) {
     tlSuperBlock* super = &priv->superBlocks[i];
     if (!super->info.isFreed) {

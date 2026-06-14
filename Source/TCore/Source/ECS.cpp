@@ -4,9 +4,9 @@
 #include <algorithm>
 #include <cstring>
 #include <dynalo/dynalo.hpp>
+#include <string>
 
 #include "Allocator.h"
-#include "TCorePredefinitions.h"
 #include "stdint.h"
 #include "stdio.h"
 //                   COMPILE EXPRESSIONS
@@ -404,7 +404,7 @@ tlComponent* get_component_byEntityHnd(tlEntity*                 entityHnd,
 extern "C" void* initializeAllocator();
 
 // This is the entry point of the engine
-extern "C" FUNC_DLIB_EXPORT struct tlECS* load_ecstapi() {
+extern "C" TCORE_FUN_EXPORT struct tlECS* load_ecstapi() {
   typedef void* (*initializeAllocatorFnc)();
   initializeAllocatorFnc initializeAllocatorPtr = &initializeAllocator;
   if (!initializeAllocatorPtr) {
@@ -451,4 +451,4 @@ extern "C" FUNC_DLIB_EXPORT struct tlECS* load_ecstapi() {
   return ecs_funcs;
 }
 
-extern "C" FUNC_DLIB_EXPORT unsigned char unload_ecstapi() { return 0; }
+extern "C" TCORE_FUN_EXPORT unsigned char unload_ecstapi() { return 0; }

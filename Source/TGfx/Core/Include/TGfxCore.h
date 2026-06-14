@@ -63,7 +63,7 @@ struct tgfx_core_type {
 #ifdef TGFX_BACKEND
 // This function should be exported by the backend dll
 #define TGFX_BACKEND_ENTRY()                                    \
-  FUNC_DLIB_EXPORT result_tgfx BACKEND_LOAD(                    \
+  TCORE_FUNC_EXPORT result_tgfx BACKEND_LOAD(                    \
     const struct tlECS* ecsSys, struct tgfx_core_type* core, \
     void (*printFnc)(unsigned int logCode, const wchar_t* extraInfo))
 #endif

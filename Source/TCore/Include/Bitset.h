@@ -1,14 +1,11 @@
 #pragma once
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "TCore.h"
+TCORE_BEGIN_C_LINKAGE
 
-#define BITSET_TAPI_PLUGIN_NAME "tapi_bitset"
-#define BITSET_TAPI_PLUGIN_LOAD_TYPE const struct tlBitsetSys*
-#define BITSET_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
+TCORE_PLUGIN_DEFINE(tsBitset, "tcBitsetSystem", tcBitsetSys, TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
 
-struct tlBitset;
-struct tlBitsetSys {
+struct tcBitset;
+struct tcBitsetSys {
   struct tlBitsetSysPriv* d;
   struct tlBitset* (*createBitset)(unsigned int byte_length);
   void (*destroyBitset)(struct tlBitset* bitset);
@@ -27,6 +24,4 @@ struct tlBitsetSys {
   void (*expand)(struct tlBitset* set, unsigned int newSize);
 };
 
-#ifdef __cplusplus
-}
-#endif
+TCORE_END_C_LINKAGE

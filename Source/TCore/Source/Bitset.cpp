@@ -1,9 +1,14 @@
+#define T_INCLUDE_PLATFORM_LIBS
+#include "Bitset.h"
+
 #include <atomic>
 #include <iostream>
+#include <cstring>
+#include <string>
 
-#include "ecs_tapi.h"
-#include "unittestsys_tapi.h"
-#include "bitset_tapi.h"
+#include "ECS.h"
+#include "String.h"
+#include "UnitTestSystem.h"
 
 struct tlBitset {
   bool*        m_array;
@@ -22,6 +27,7 @@ void tapi_destroyBitset(struct tlBitset* hnd) {
   free(bitset);
 }
 void tapi_setBit(struct tlBitset* set, unsigned int index, unsigned char setTrue) {
+  tsBitset->
   if (index / 8 > set->m_byteLength - 1) {
     std::cout << "There is no such bit, maximum bit index: " << (set->m_byteLength * 8) - 1
               << std::endl;

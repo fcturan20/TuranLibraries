@@ -179,7 +179,7 @@ char** list_plugin(const char* name){
 }
 
 //Loads both registrysys_tapi_type and virtualmemorysys_tapi_type (because plugin data storage is handled with virtual memory)
-FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* unused, unsigned char reload){
+TCORE_FUNC_EXPORT void* load_plugin(registrysys_tapi* unused, unsigned char reload){
     //256MB address space is allocated and first 4KB of it is committed so we are free to use 4KB
     void* registry_sys_all_mem = get_virtualmemory(tapi_first_allocation_size, tapi_first_commit_size);
 
@@ -215,7 +215,7 @@ FUNC_DLIB_EXPORT void* load_plugin(registrysys_tapi* unused, unsigned char reloa
     return registry_system;
 }
 
-FUNC_DLIB_EXPORT void unload_plugin(registrysys_tapi* unused, unsigned char reload){
+TCORE_FUNC_EXPORT void unload_plugin(registrysys_tapi* unused, unsigned char reload){
     unsigned int i;
     i = 0;
     while(i < regsys_d->plugin_capacity){

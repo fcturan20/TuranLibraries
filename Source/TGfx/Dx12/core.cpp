@@ -102,7 +102,7 @@ void vk_errorCallback(int error_code, const char* description) {
   printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
 }
 extern void                             set_helper_functions();
-extern "C" FUNC_DLIB_EXPORT result_tgfx backend_load(registrysys_tapi* regsys, core_tgfx_type* core,
+extern "C" TCORE_FUNC_EXPORT result_tgfx backend_load(registrysys_tapi* regsys, core_tgfx_type* core,
                                                      tgfx_PrintLogCallback printcallback) {
   if (!regsys->get(TGFX_PLUGIN_NAME, TGFX_PLUGIN_VERSION, 0)) return result_tgfx_FAIL;
 

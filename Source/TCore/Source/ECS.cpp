@@ -6,7 +6,6 @@
 #include <dynalo/dynalo.hpp>
 #include <string>
 
-#include "Allocator.h"
 #include "stdint.h"
 #include "stdio.h"
 //                   COMPILE EXPRESSIONS
@@ -30,8 +29,6 @@ static constexpr uint64_t virmemAllocSize =
 
 // Because this dll will be loaded once for each dll,
 //  there is no need for a pointer
-static struct tlECSPriv*   priv;
-static struct tlECS*     ecs_funcs;
 static unsigned int         pagesize;
 static struct tlSuperBlock* mainMemBlock   = nullptr;
 static const struct tlBuffer*     standard_alloc = nullptr;
@@ -222,61 +219,7 @@ uint32_t find_overridenCompType(ecs_entityType* eType, tlComponentTypeID* base,
 typedef void (*ECSTAPIPLUGIN_loadfnc)(struct tlECS* ecsHnd, unsigned int reload);
 static const char* ECS_ERROR_TEXT_DLL_NOT_FOUND   = "DLL file isn't found: %s\n";
 static const char* ECS_ERROR_TEXT_ENTRY_NOT_FOUND = "DLL file is found but plugin entry isn't\n";
-tlPlugin*   loadPlugin(const char* pluginPath) {
-  try{
-    dynalo::library dll(pluginPath);
-    ECSTAPIPLUGIN_loadfnc* dll_loader = dll.get_function<ECSTAPIPLUGIN_loadfnc>("ECSTAPIPLUGIN_load");
-    if (!dll_loader || !(*dll_loader)) {
-      printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
-      return nullptr;
-    }
-    (*dll_loader)(ecs_funcs, false);
 
-    ecs_pluginInfo info;
-    uint32_t       pathLen    = std::strlen(pluginPath);
-    int32_t        pathDif    = int32_t(pathLen) - MAX_PATHCHAR;
-    uint32_t       maxcharlen = std::min<uint32_t>(std::strlen(pluginPath), MAX_PATHCHAR - 1);
-    if (maxcharlen > MAX_PATHCHAR - 1) {
-      printf("Plugin isn't loaded because it exceeds max char length of path\n");
-      return nullptr;
-    }
-
-    std::memcpy(info.PATH, pluginPath + std::max(0, pathDif), maxcharlen);
-    info.pluginDataPtr = dll.get_native_handle();
-    return priv->create_pluginInfo(info);
-  }
-  catch (std::exception& e) {
-    printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, pluginPath);
-    return nullptr;
-  }
-}
-
-void reloadPlugin(tlPlugin* plugin) {
-  ecs_pluginInfo* info = priv->get_pluginInfo(plugin);
-  if (!info) {
-    return;
-  }
-  try{
-    dynalo::library dll(info->PATH);
-    ECSTAPIPLUGIN_loadfnc* dll_loader = dll.get_function<ECSTAPIPLUGIN_loadfnc>("ECSTAPIPLUGIN_load");
-    if (!dll_loader || !(*dll_loader)) {
-      printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
-      return;
-    }
-    (*dll_loader)(ecs_funcs, true);
-  }
-  catch (const std::exception& e) {
-    printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, info->PATH);
-    return;
-  }
-}
-
-unsigned char unloadPlugin(tlPlugin* plugin) {
-  typedef void (*ECSTAPIPLUGIN_unloadfnc)(struct tlECS * ecsHnd, unsigned int reload);
-  printf("Unloading a plugin isn't supported yet!");
-
-  return 0;
-}
 
 //                          SYSTEM FUNCTIONS
 ////////////////////////////////////////////////////////////////////////
@@ -404,12 +347,12 @@ tlComponent* get_component_byEntityHnd(tlEntity*                 entityHnd,
 extern "C" void* initializeAllocator();
 
 // This is the entry point of the engine
-extern "C" TCORE_FUN_EXPORT struct tlECS* load_ecstapi() {
+TCResult InitializeECS(const void** outECSAPI) {
   typedef void* (*initializeAllocatorFnc)();
   initializeAllocatorFnc initializeAllocatorPtr = &initializeAllocator;
   if (!initializeAllocatorPtr) {
     printf("Allocator bootstrap function is not found: initializeAllocator\n");
-    return nullptr;
+    return TC_RESULT_FAILURE;
   }
   // Load virtual memory & allocator systems
   ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE allocSys =
@@ -420,24 +363,19 @@ extern "C" TCORE_FUN_EXPORT struct tlECS* load_ecstapi() {
 
   mainMemBlock = allocSys->allocateSuperMemoryBlock(virmemAllocSize, L"" ECS_TAPI_NAME);
 
-  ecs_funcs = ( struct tlECS* )allocSys->endOfPage->malloc(
-    mainMemBlock, sizeof(struct tlECS) + sizeof(struct tlECSPriv));
+  TCEcs* ecs = ( TCEcs* )allocSys->endOfPage->malloc(mainMemBlock, sizeof(TCEcs));
 
-  priv                                = ( tlECSPriv* )(ecs_funcs + 1);
-  *priv                               = tlECSPriv();
-  ecs_funcs->loadPlugin                 = loadPlugin;
-  ecs_funcs->reloadPlugin               = reloadPlugin;
-  ecs_funcs->unloadPlugin               = unloadPlugin;
-  ecs_funcs->getSystem                  = getSystem;
-  ecs_funcs->addSystem                  = addSystem;
-  ecs_funcs->destroySystem              = destroySystem;
-  ecs_funcs->addComponentType           = addComponentType;
-  ecs_funcs->addEntityType              = addEntityType;
-  ecs_funcs->createEntity               = createEntity;
-  ecs_funcs->findEntityType_byEntityHnd = findEntityType_byEntityHnd;
-  ecs_funcs->doesContains_entityType    = doesContains_entityType;
-  ecs_funcs->get_component_byEntityHnd  = get_component_byEntityHnd;
-  ecs_funcs->d                       = priv;
+  ecs->getSystem                  = getSystem;
+  ecs->addSystem                  = addSystem;
+  ecs->destroySystem              = destroySystem;
+  ecs->addComponentType           = addComponentType;
+  ecs->addEntityType              = addEntityType;
+  ecs->createEntity               = createEntity;
+  ecs->findEntityType_byEntityHnd = findEntityType_byEntityHnd;
+  ecs->doesContains_entityType    = doesContains_entityType;
+  ecs->get_component_byEntityHnd  = get_component_byEntityHnd;
+  TSEcs = ecs;
+  *outECSAPI = ecs;
 
   // Initialize ECS
   ////////////////////////
@@ -451,4 +389,23 @@ extern "C" TCORE_FUN_EXPORT struct tlECS* load_ecstapi() {
   return ecs_funcs;
 }
 
-extern "C" TCORE_FUN_EXPORT unsigned char unload_ecstapi() { return 0; }
+void OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded) {
+}
+
+TCResult OnPreShutdown() {
+  return TC_RESULT_SUCCESS;
+}
+
+void Shutdown(TCPluginHandle plugin) {
+  
+}
+
+void FillPluginFunctions(TCPluginFunctions* outPluginFunctions) {
+  outPluginFunctions->Initialize   = InitializeECS;
+  outPluginFunctions->OnPluginLoadStateChange = OnPluginLoadStateChange;
+  outPluginFunctions->OnPreShutdown = OnPreShutdown;
+  outPluginFunctions->Shutdown = Shutdown;
+}
+
+TCORE_PLUGIN_ENTRY_POINT_START(TSEcs)
+TCORE_PLUGIN_ENTRY_POINT_END()

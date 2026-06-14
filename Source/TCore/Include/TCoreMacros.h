@@ -71,3 +71,20 @@ TCORE_BEGIN_C_LINKAGE
     #error Dynamic library build is failed because compiler's function export attribute isn't supported. Please go to API_includes.h for more info.
 #endif
 #endif
+
+typedef enum TCResult {
+    TC_RESULT_SUCCESS = 0,
+    TC_RESULT_FAILURE = 1,
+    TC_RESULT_UNKNOWN = 2,
+    TC_RESULT_INVALID_ARGUMENT = 3,
+    TC_RESULT_OUT_OF_MEMORY = 4,
+    TC_RESULT_NOT_FOUND = 5,
+    TC_RESULT_ALREADY_EXISTS = 6,
+    TC_RESULT_UNSUPPORTED = 7,
+    TC_RESULT_TIMEOUT = 8,
+    TC_RESULT_PERMISSION_DENIED = 9,
+    TC_RESULT_UNIMPLEMENTED = 10,
+    TC_RESULT_ABSENT_DEPENDENCY = 11
+} TCResult;
+
+TCORE_END_C_LINKAGE

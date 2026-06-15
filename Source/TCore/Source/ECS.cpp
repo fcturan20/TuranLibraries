@@ -217,8 +217,6 @@ uint32_t find_overridenCompType(ecs_entityType* eType, tlComponentTypeID* base,
 ////////////////////////////////////////////////////////////////////
 
 typedef void (*ECSTAPIPLUGIN_loadfnc)(struct tlECS* ecsHnd, unsigned int reload);
-static const char* ECS_ERROR_TEXT_DLL_NOT_FOUND   = "DLL file isn't found: %s\n";
-static const char* ECS_ERROR_TEXT_ENTRY_NOT_FOUND = "DLL file is found but plugin entry isn't\n";
 
 
 //                          SYSTEM FUNCTIONS

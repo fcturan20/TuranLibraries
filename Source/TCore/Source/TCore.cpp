@@ -1,43 +1,86 @@
 #include "TCore.h"
 
+// External
 #include <assert.h>
 #include <stdio.h>
+#include <string>
+#include <vector>
+#include <cstring>
+#include <unordered_map>
+#include <dynalo/dynalo.hpp>  
 
-TCPluginHandle   LoadPlugin(const TCPluginInfo* info) {
+TCORE_PLUGIN_INIT(TS, TC)
+
+static const char* TCORE_ERROR_TEXT_DLL_NOT_FOUND   = "DLL file isn't found: %s\n";
+static const char* TCORE_ERROR_TEXT_ENTRY_NOT_FOUND = "DLL file is found but plugin entry isn't\n";
+
+struct TCContext{
+  struct TCPluginStored{
+    dynalo::native::handle NativeHandle;
+    TCPluginInfo Info;
+    TCPluginFunctions Functions;
+  };
+  std::unordered_map<std::string, TCPluginStored> Plugins;
+};
+
+static TCContext* TSContext = nullptr;
+
+void StrCopy(char** dst, const char* src){
+  size_t srclen = std::strlen(src);
+  *dst = new char[srclen + 1];
+  std::memcpy(*dst, src, srclen);
+  (*dst)[srclen] = '\0';
+}
+
+TCResult LoadPlugin(const char* path, const TCPluginInfo** outInfo) {
   try{
-    dynalo::library dll(pluginPath);
-    ECSTAPIPLUGIN_loadfnc* dll_loader = dll.get_function<ECSTAPIPLUGIN_loadfnc>("ECSTAPIPLUGIN_load");
-    if (!dll_loader || !(*dll_loader)) {
-      printf(ECS_ERROR_TEXT_ENTRY_NOT_FOUND);
-      return nullptr;
-    }
-    (*dll_loader)(ecs_funcs, false);
-
-    ecs_pluginInfo info;
-    uint32_t       pathLen    = std::strlen(pluginPath);
-    int32_t        pathDif    = int32_t(pathLen) - MAX_PATHCHAR;
-    uint32_t       maxcharlen = std::min<uint32_t>(std::strlen(pluginPath), MAX_PATHCHAR - 1);
-    if (maxcharlen > MAX_PATHCHAR - 1) {
-      printf("Plugin isn't loaded because it exceeds max char length of path\n");
-      return nullptr;
+    auto handle = dynalo::open(path);
+    auto entryPoint = dynalo::get_function<void(const TC* core, TCPluginInfo* outPluginInfo, TCPluginFunctions* outPluginFunctions)>(handle, "TCORE_PLUGIN_ENTRY_FUNC");
+    if (!entryPoint) {
+      printf(TCORE_ERROR_TEXT_ENTRY_NOT_FOUND);
+      return TC_RESULT_FAILURE;
     }
 
-    std::memcpy(info.PATH, pluginPath + std::max(0, pathDif), maxcharlen);
-    info.pluginDataPtr = dll.get_native_handle();
-    return priv->create_pluginInfo(info);
+    TCPluginInfo info;
+    TCPluginFunctions functions;
+    entryPoint(TS, &info, &functions);
+
+    StrCopy((char**)&info.Name, info.Name);
+    StrCopy((char**)&info.RootFolderPath, info.RootFolderPath);
+    info.Version = info.Version;
+
+    TSContext->Plugins[path] = { handle, info, functions };
+    *outInfo = &TSContext->Plugins[path].Info;
+    return TC_RESULT_SUCCESS;
   }
   catch (std::exception& e) {
-    printf(ECS_ERROR_TEXT_DLL_NOT_FOUND, pluginPath);
-    return nullptr;
+    printf(TCORE_ERROR_TEXT_DLL_NOT_FOUND, path);
+    return TC_RESULT_FAILURE;
   }
 }
 
-void UnloadPlugin(TCPluginHandle plugin) {
-  assert(0 && "Unloading a plugin is not supported yet!\n");
+TCResult UnloadPlugin(const char* pluginName) {
+  auto it = TSContext->Plugins.find(pluginName);
+  if (it == TSContext->Plugins.end()) {
+    printf("Plugin isn't found: %s\n", pluginName);
+    return TC_RESULT_FAILURE;
+  }
+  auto plugin = it->second;
+  plugin.Functions.OnPreShutdown();
+  plugin.Functions.Shutdown();
+  dynalo::close(plugin.NativeHandle);
+
+  TCPluginInfo info = plugin.Info;
+  TSContext->Plugins.erase(it);
+  for(auto& [name, stored] : TSContext->Plugins) 
+    stored.Functions.OnPluginLoadStateChange(&plugin.Info, false);
+  delete[] plugin.Info.Name;
+  delete[] plugin.Info.RootFolderPath;
 }
 
 TCResult InitializeCore(const void** outPluginAPI){
     TC* newTC = new TC;
+    TSContext = new TCContext();
     newTC->GetVersion = []() -> unsigned int {
         return TS_PLUGIN_VERSION;
     };
@@ -48,11 +91,23 @@ TCResult InitializeCore(const void** outPluginAPI){
     return TC_RESULT_SUCCESS;
 }
 
-void FillPluginFunctions(TCPluginFunctions* outPluginFunctions){
+TCResult OnPreShutdownCore() {
+    for(auto& [name, stored] : TSContext->Plugins) 
+      TS->UnloadPlugin(name.c_str());
+    return TC_RESULT_SUCCESS;
+}
+
+TCResult ShutdownCore() {
+    delete TSContext;
+    delete TS;
+    return TC_RESULT_SUCCESS;
+}
+
+void BindPluginFunctions(TCPluginFunctions* outPluginFunctions){
     outPluginFunctions->Initialize   = InitializeCore;
-    outPluginFunctions->OnPluginLoadStateChange = OnPluginLoadStateChange;
-    outPluginFunctions->OnPreShutdown = OnPreShutdown;
-    outPluginFunctions->Shutdown = Shutdown;
+    outPluginFunctions->OnPluginLoadStateChange = [](const TCPluginInfo* pluginInfo, bool isLoaded){};
+    outPluginFunctions->OnPreShutdown = OnPreShutdownCore;
+    outPluginFunctions->Shutdown = ShutdownCore;
 }
 
 TCORE_PLUGIN_ENTRY_POINT_START(TS)

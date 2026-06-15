@@ -1,24 +1,17 @@
 #pragma once
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "TCore.h"
+TCORE_BEGIN_C_LINKAGE
   
-#include "predefinitions_tapi.h"
-#define FILESYS_TAPI_PLUGIN_NAME "tapi_filesys"
-#define FILESYS_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
-#define FILESYS_TAPI_PLUGIN_LOAD_TYPE const struct tlIO*
+TCORE_PLUGIN_DEFINE(TSFS, "tcFileSystem", TCFileSystem, TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
 
-struct tlIO {
-  const struct tlIOPriv* d;
-  void* (*readBinary)(stringReadArgument_tapi(path), unsigned long* size);
-  void (*writeBinary)(stringReadArgument_tapi(path), void* data, unsigned long size);
-  void (*overwriteBinary)(stringReadArgument_tapi(path), void* data, unsigned long size);
-  void* (*readText)(stringReadArgument_tapi(path), string_type_tapi fileTextType);
-  void (*writeText)(stringReadArgument_tapi(text), stringReadArgument_tapi(path),
-                         unsigned char writeToEnd);
-  void (*deleteFile)(stringReadArgument_tapi(path));
+// All path and texts should be UTF-8 encoded with null terminator
+struct TCFileSystem {
+  void* (*ReadBinaryFile)(const char* path, unsigned long* size);
+  void (*WriteBinaryFile)(const char* path, void* data, unsigned long size);
+  void (*OverwriteBinaryFile)(const char* path, void* data, unsigned long size);
+  void* (*ReadTextFile)(const char* path, unsigned long* size);
+  void (*WriteTextFile)(const char* text, const char* path, TBool writeToEnd);
+  void (*DeleteFile)(const char* path);
 };
 
-#ifdef __cplusplus
-}
-#endif
+TCORE_END_C_LINKAGE

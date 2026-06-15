@@ -11,7 +11,7 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
 endif()
 
 project ("TuranLibraries")
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 # Support for CMake versions older than 3.5
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 

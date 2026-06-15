@@ -87,4 +87,18 @@ typedef enum TCResult {
     TC_RESULT_ABSENT_DEPENDENCY = 11
 } TCResult;
 
+typedef unsigned char TBool;
+#define TTRUE 1
+#define TFALSE 0
+
+typedef struct TCBuffer {
+    void* data;
+    unsigned long size;
+} TCBuffer;
+
+typedef struct TCReadBuffer {
+    const void* data;
+    unsigned long size;
+} TCReadBuffer;
+
 TCORE_END_C_LINKAGE

@@ -4,19 +4,20 @@
 set(TCoreFiles "Source/TCore.cpp" "Include/TCore.h" "Include/TCoreMacros.h")
 tcmake_create_dynamic_target(TCore "${TCoreFiles}" "TCore")
 set_target_properties(TCore PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/Include")
+target_link_libraries(TCore PRIVATE dynalo)
 
 #ECS System
 set(TCoreECS_SOURCES "Source/ECS.cpp" "Source/Allocator.cpp" "Include/ECS.h" "Include/Allocator.h")
 tcmake_create_dynamic_target(TCoreECS "${TCoreECS_SOURCES}" "TCore")
-target_link_libraries(TCoreECS PRIVATE dynalo TCore)
+target_link_libraries(TCoreECS PRIVATE TCore)
 
 #Unit Test System
 set(TCoreUNITTEST_SOURCES "Source/UnitTestSystem.cpp" "Include/UnitTestSystem.h")
 tcmake_create_dynamic_target(TCoreUnitTest "${TCoreUNITTEST_SOURCES}" "TCore")
 target_link_libraries(TCoreUnitTest PRIVATE TCore)
 
-#Array of Strings System
-set(TCoreSTRING_SOURCES "Source/String.cpp" "Include/String.h")
+##Array of Strings System
+set(TCoreSTRING_SOURCES "Source/TString.cpp" "Include/TString.h")
 tcmake_create_dynamic_target(TCoreString "${TCoreSTRING_SOURCES}" "TCore")
 target_link_libraries(TCoreString PRIVATE TCore)
 

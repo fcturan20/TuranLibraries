@@ -4,7 +4,7 @@ extern "C" {
 #endif
 #include <stdarg.h>
 
-#include "TCorePredefinitions.h"
+#include "TCore.h"
 
 #define STRINGSYS_TAPI_PLUGIN_NAME "tapi_string"
 #define STRINGSYS_TAPI_PLUGIN_LOAD_TYPE const struct tlString*

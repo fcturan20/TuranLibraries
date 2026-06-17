@@ -1,12 +1,8 @@
 #pragma once
-#ifdef __cplusplus
-extern "C" {
-#endif
-  
-#include "predefinitions_tapi.h"
-#define LOGGER_TAPI_PLUGIN_NAME "tapi_logger"
-#define LOGGER_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
-#define LOGGER_TAPI_PLUGIN_LOAD_TYPE const struct tlLog*
+#include "TCore.h"
+
+TCORE_BEGIN_C_LINKAGE
+TCORE_PLUGIN_DEFINE(TCLog, "tcLog", TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
 
 /*
  * You should init the log system. This will make every log to be saved in the main log file
@@ -16,25 +12,22 @@ extern "C" {
  * There is a limit of characters per log. It is defined with maxCharPerLog_tapi constant.
  */
 
-enum tlLogType {
-  tlLogStatus,
-  tlLogWarning,
-  tlLogError,
-  tlLogNotCoded,
-  tlLogCrashing
+typedef enum TCLogType {
+  TC_LOG_STATUS,
+  TC_LOG_WARNING,
+  TC_LOG_ERROR,
+  TC_LOG_NOT_CODED,
+  TC_LOG_CRASHING
 };
 
-struct tlLog {
-  const struct tlLogPriv* d;
-  void (*init)(stringReadArgument_tapi(mainLogFile));
-  void (*destroy)();
+typedef struct TCLogServices {
+  void (*Initialize)(const char* logFilePath);
+  void (*Destroy)();
   // You can set file paths different each time you write to file
   // Also you can set paths NULL if you don't want to change file path
   // Formats are the same as string api's
-  void (*save)(enum tlLogType logType, stringReadArgument_tapi(path));
-  void (*log)(enum tlLogType type, unsigned char stopRunning, const wchar_t* format, ...);
-};
+  void (*Save)(enum TCLogType logType, const char* filePath);
+  void (*Log)(enum TCLogType type, unsigned char stopRunning, const wchar_t* format, ...);
+} TCLogServices;
 
-#ifdef __cplusplus
-}
-#endif
+TCORE_END_C_LINKAGE

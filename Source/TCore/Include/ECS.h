@@ -22,7 +22,7 @@ TCORE_BEGIN_C_LINKAGE
 //    When user wants to access pos of comp C, it will get BType of comp C
 //    Returned BType will store readPos func pointer as the func that returns (0,0,0)
 
-TCORE_PLUGIN_DEFINE(TSEcs, "tcEcs", TCEcs, TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
+TCORE_PLUGIN_DEFINE(TCECS, "tcEcs", TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
 
 // To help users to minimize accessing issues, each type name has its pointer
 // With this way, users can't use an entityTypeID mistakenly as entityID etc.
@@ -46,14 +46,15 @@ struct tcComponentManagerDescription {
   void (*destroyComponent)(struct tcComponent* hnd);
 };
 
-typedef struct TCEcs {
+typedef struct TCECSServices {
   // SYSTEM
   ////////////////////////////
 
   // Get the system registered by a plugin
   const void* (*getSystem)(const char* name);
   // Make a system accessible from other systems
-  void (*addSystem)(TCPlugin, const char* name, unsigned int version, const void* system_ptr);
+  void (*addSystem)(const char* pluginName, const char* name, unsigned int version,
+                    const void* system_ptr);
   void (*destroySystem)(const void* systemPTR);
 
   // COMPONENT
@@ -96,6 +97,6 @@ typedef struct TCEcs {
   struct tcComponent* (*get_component_byEntityHnd)(struct tcEntity*          entityID,
                                                    struct tcComponentTypeID* compTypeID,
                                                    void**                    returnedCompType);
-} TCEcs;
+} TCECSServices;
 
 TCORE_END_C_LINKAGE

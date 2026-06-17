@@ -1,12 +1,9 @@
 #pragma once
-#include "TCorePredefinitions.h"
-#define ALLOCATOR_TAPI_PLUGIN_NAME "tapi_allocator"
-#define ALLOCATOR_TAPI_PLUGIN_VERSION MAKE_PLUGIN_VERSION_TAPI(0, 0, 0)
-#define ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE const struct tlAllocator*
+#include "TCore.h"
+TCORE_BEGIN_C_LINKAGE
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+TCORE_PLUGIN_DEFINE(TCAllocator, "tcAllocator", TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
+
 //        ALLOCATOR API
 /////////////////////////////////////
 //  This API is used to provide memory allocator functionality as simple as possible
@@ -17,33 +14,17 @@ extern "C" {
 //  SuperMemoryBlock: A very big address space possibly for a system
 //   Allocators allocates for a system by using a SuperMemoryBlock pointer
 //   AllocatorSystem has its own address space for storing internal structures of SuperMemoryBlocks
-struct tlSuperBlock;
+TCORE_DEFINE_HANDLE(TCSuperBlock);
 
-struct tlVM {
-  // Reserve address space from virtual memory
-  // size is in bytes
-  void* (*reserve)(unsigned long long size);
-  // Initialize the reserved memory with zeros.
-  void (*commit)(void* reservedmem, unsigned long long commitsize);
-  // Return back the committed memory to reserved state
-  // This will help if you want to catch some bugs that points to memory you just freed.
-  void (*decommit)(void* committedmem, unsigned long long size);
-  // Return allocated address space back to OS
-  void (*free)(void* ptr, unsigned long long size);
-  // Get page size of the system
-  unsigned int (*pageSize)();
-};
-
-struct tlBuffer {
-  void* (*malloc)(struct tlSuperBlock* memBlock, unsigned int size);
+typedef struct TCBufferServices {
+  void* (*Malloc)(TCSuperBlockHandle memBlock, unsigned int size, const char* name);
   // @param returnedAllocPTR: This should be the same pointer as returned by malloc()
-  void (*free)(struct tlSuperBlock* memBlock, void* returnedAllocPTR);
-  void (*setMallocName)(void* allocation, const wchar_t* name);
-};
+  void (*Free)(TCSuperBlockHandle memBlock, void* returnedAllocPTR);
+} TCBufferServices;
 
-typedef void (*tlVectorElementConstructorFnc)(void* elementPtr);
-typedef void (*tlVectorElementCopyFnc)(const void* srcElement, void* dstElement);
-typedef void (*tlVectorElementDestructorFnc)(void* elementPtr);
+typedef void (*TCVectorElementConstructorFnc)(void* elementPtr);
+typedef void (*TCVectorElementCopyFnc)(const void* srcElement, void* dstElement);
+typedef void (*TCVectorElementDestructorFnc)(void* elementPtr);
 
 //         VECTOR ALLOCATOR API
 /////////////////////////////////////
@@ -51,14 +32,15 @@ typedef void (*tlVectorElementDestructorFnc)(void* elementPtr);
 // run-time Vectors allocate an adress space of "maxSize * elementSize" bytes from the allocator
 // Then manages commitment of
 
-enum tlVectorFlagBits {
-  tlVectorFlagBit_constructor = 1,
-  tlVectorFlagBit_copy        = 2,
-  tlVectorFlagBit_destructor  = 4,
-  tlVectorFlagBit_invalidator = 8
-};
-typedef int tlVectorFlag;
-struct tlVector {
+typedef enum TCVectorFlagBits {
+  TC_VECTOR_FLAGBIT_CONSTRUCTOR = 1,
+  TC_VECTOR_FLAGBIT_COPY        = 2,
+  TC_VECTOR_FLAGBIT_DESTRUCTOR  = 4,
+  TC_VECTOR_FLAGBIT_INVALIDATOR = 8
+} TCVectorFlagBits;
+typedef int TCVectorFlag;
+
+typedef struct TCVectorServices {
   // Use maxSize as much as you can because vector struct and data will be right back each other.
   // So overall faster access etc.
   // @param elementSize: Size of a single element
@@ -67,42 +49,31 @@ struct tlVector {
   // @param maxSize: Define an upper limit for element count
   // @param vectorFlag: Defines how variadic arguments are interpreted
   // @return Array pointer, so cast it to your own type
-  void* (*create)(struct tlSuperBlock* memblock, unsigned int elementSize, unsigned int initialSize,
-                  unsigned int maxSize, tlVectorFlag vectorFlag, ...);
-  unsigned int (*size)(const void* hnd);
-  unsigned int (*capacity)(const void* hnd);
+  void* (*Create)(TCSuperBlockHandle memblock, unsigned int elementSize, unsigned int initialSize,
+                  unsigned int maxSize, TCVectorFlag vectorFlag, ...);
+  unsigned int (*Size)(const void* hnd);
+  unsigned int (*Capacity)(const void* hnd);
   // @param src: Source data to copy from
   // @param copyFunc: Used to copy the element
   // @return 0 if fails; 1 if succeeds. May fail if mem commit fails or upper limit is reached.
-  unsigned char (*pushBack)(void* hnd, const void* src);
+  unsigned char (*PushBack)(void* hnd, const void* src);
   // @return 0 if there is no such object, 1 if succeeds
-  unsigned char (*erase)(void* hnd, unsigned int elementIndex);
+  unsigned char (*Erase)(void* hnd, unsigned int elementIndex);
   // @param constructor: if new items will be added, this is used to initialize
   // @param destructor: if old items will be destroyed, this is used to destroy
   // @return 0 if fails; 1 if succeeds. May fail if mem allocation fais or upper limit is reached.
-  unsigned char (*resize)(void* hnd, unsigned int newItemCount);
-};
-// Vector allocator should be named f_vector
-#define tlVectorCreate(type, memblock, maxSize) \
-  (( type* )f_vector->create(memblock, sizeof(type), 0, maxSize, 0))
-#define tlVectorSize(vectorHnd) f_vector->size(vectorHnd)
-#define tlVectorPushBack(vectorHnd, src) f_vector->pushBack(vectorHnd, src)
-#define tlVectorCapacity(vectorHnd) f_vector->capacity(vectorHnd)
-#define tlVectorErase(vectorHnd, elementIndx) f_vector->erase(vectorHnd, elementIndx)
-#define tlVectorResize(vectorHnd, newItemCount) f_vector->erase(vectorHnd, newItemCount)
-typedef struct tlAllocator {
-  const struct tlAllocatorPriv* d;
-  struct tlSuperBlock* (*allocateSuperMemoryBlock)(unsigned long long blockSize,
-                                                   const wchar_t*     superMemBlockName);
-  void (*freeSuperMemoryBlock)(struct tlSuperBlock* superMemBlock);
-  const struct tlVM*     virtualMemory;
-  const struct tlVector* vectorManager;
-  const struct tlBuffer* standard;
+  unsigned char (*Resize)(void* hnd, unsigned int newItemCount);
+} TCVectorServices;
+
+typedef struct TCAllocatorServices {
+  TCSuperBlockHandle (*AllocateSuperMemoryBlock)(unsigned long long blockSize,
+                                                 const char*        superMemBlockName);
+  void (*FreeSuperMemoryBlock)(TCSuperBlockHandle superMemBlock);
+  const TCVectorServices* VectorManager;
+  const TCBufferServices* StandardAllocator;
   // Allocations are rounded up to pagesize and an extra page is allocated
   // Use for debugging (out of space accesses will be crashes etc.)
-  const struct tlBuffer* endOfPage;
-};
+  const TCBufferServices* EndOfPageAllocator;
+} TCAllocatorServices;
 
-#ifdef __cplusplus
-}
-#endif
+TCORE_END_C_LINKAGE

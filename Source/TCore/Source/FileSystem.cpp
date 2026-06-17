@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-TCORE_PLUGIN_INIT(TS, TC)
-TCORE_PLUGIN_INIT(TSFS, TCFileSystem)
+TCORE_PLUGIN_INIT(TC)
+TCORE_PLUGIN_INIT(TCFileSystem)
 
 void* ReadBinaryFile(const char* path, unsigned long* size) {
   std::ifstream binaryFile;
@@ -59,7 +59,7 @@ void* ReadTextFile(const char* path, unsigned long* size) {
   std::stringstream stringData;
   stringData << cTextFile.rdbuf();
   cTextFile.close();
-  
+
   // Allocate memory for the text data and copy it there
   char*        finaltext = new char[stringData.str().length() + 1]{'\n'};
   unsigned int i         = 0;
@@ -68,17 +68,16 @@ void* ReadTextFile(const char* path, unsigned long* size) {
     i++;
   }
   finaltext[i] = '\0';
-  *size = i;
+  *size        = i;
   return finaltext;
 }
 
 void WriteTextFile(const char* text, const char* path, TBool writeToEnd) {
   std::ios::openmode openMode = std::ios::out;
-  if (writeToEnd) 
-     openMode |= std::ios::app;
+  if (writeToEnd) openMode |= std::ios::app;
   else
     openMode |= std::ios::trunc;
-  
+
   std::ofstream outputFile;
   outputFile.open(path, openMode);
   if (!outputFile.is_open()) {
@@ -89,29 +88,34 @@ void WriteTextFile(const char* text, const char* path, TBool writeToEnd) {
   outputFile.close();
 }
 
-void DeleteFile(const char* path) {
-  std::filesystem::remove(path);
+void DeleteFile(const char* path) { std::filesystem::remove(path); }
+
+TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCFileSystem)
+TCORE_PLUGIN_ENTRY_POINT_END()
+
+TCResult TCFileSystem_Initialize(const void** outPluginAPI) {
+  auto services                 = new TCFileSystemServices;
+  services->ReadBinaryFile      = ReadBinaryFile;
+  services->OverwriteBinaryFile = OverwriteBinaryFile;
+  services->ReadTextFile        = ReadTextFile;
+  services->WriteTextFile       = WriteTextFile;
+  services->DeleteFile          = DeleteFile;
+
+  TCFileSystem  = services;
+  *outPluginAPI = TCFileSystem;
+  return TC_RESULT_SUCCESS;
 }
 
-void BindPluginFunctions(TCPluginFunctions* funcs){
-  funcs->Initialize = [](const void** outPluginAPI) -> TCResult {
-    TCFileSystem* api = new TCFileSystem;
-    api->ReadBinaryFile = ReadBinaryFile;
-    api->WriteBinaryFile = OverwriteBinaryFile;
-    api->OverwriteBinaryFile = OverwriteBinaryFile;
-    api->ReadTextFile = ReadTextFile;
-    api->WriteTextFile = WriteTextFile;
-    api->DeleteFile = DeleteFile;
-    *outPluginAPI = api;
-    return TC_RESULT_SUCCESS;
-  };
-  funcs->OnPreShutdown = []() -> TCResult {
-    return TC_RESULT_SUCCESS;
-  };
-  funcs->Shutdown = []() -> TCResult {
-    delete TSFS;
-    return TC_RESULT_SUCCESS;
-  };
+TCResult TCFileSystem_OnPreShutdown() { return TC_RESULT_SUCCESS; }
+
+TCResult TCFileSystem_Shutdown() {
+  if (TCFileSystem) {
+    delete TCFileSystem;
+    TCFileSystem = nullptr;
+  }
+  return TC_RESULT_SUCCESS;
 }
-TCORE_PLUGIN_ENTRY_POINT_START(TSFS)
-TCORE_PLUGIN_ENTRY_POINT_END()
+
+void TCFileSystem_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded) {
+  // This plugin doesn't react to other plugins being loaded or unloaded, so this function is empty.
+}

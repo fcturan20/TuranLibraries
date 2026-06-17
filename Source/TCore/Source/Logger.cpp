@@ -1,13 +1,12 @@
+#define TCORE_INCLUDE_PLATFORM_LIBS
 #include "Logger.h"
 
 #include <assert.h>
 #include <stdarg.h>
 #include <wchar.h>
-#if defined(_WIN32)
-#include <windows.h> // WinApi header
-#endif
 
 #include <codecvt>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -16,19 +15,28 @@
 #include "FileSystem.h"
 #include "String.h"
 
+TCORE_PLUGIN_INIT(TSLog, TCLog)
 
-struct tlLogObject {
-  std::wstring  logText;
-  tlLogType logType;
+TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TSLog)
+TCORE_PLUGIN_ENTRY_POINT_END()
+
+struct TCLogRecord {
+  std::string Text;
+  TCLogType   Type;
 };
-const tlString*      stringSys = nullptr;
-const tlIO* fileSys = nullptr;
-struct tlLogPriv {
-  tlLog*                   sys;
-  std::wstring             mainFilePath;
-  std::vector<tlLogObject> logList;
+
+struct TCLogContext {
+  std::filesystem::path    mainFilePath;
+  std::vector<TCLogRecord> logList;
 };
-tlLogPriv* logSys;
+
+struct TCLogServices {
+  static void Initialize(const char* logFilePath) {}
+  static void Destroy() {}
+  static void Save(enum TCLogType logType, const char* filePath) {}
+  static void Log(enum TCLogType type, unsigned char stopRunning, const wchar_t* format, ...) {}
+};
+TCLogContext* Context = nullptr;
 
 #define GET_printer(i) (*GET_LOGLISTTAPI())[i]
 inline void breakpoint() {
@@ -43,12 +51,12 @@ inline void breakpoint() {
 }
 
 void tlLogSave(tlLogType logType, stringReadArgument_tapi(path)) {
-  if (logSys->logList.size() == 0 || !fileSys) {
+  if (Context->logList.size() == 0 || !fileSys) {
     return;
   }
   std::wstring textData;
-  for (unsigned int i = 0; i < logSys->logList.size(); i++) {
-    const tlLogObject& log = logSys->logList[i];
+  for (unsigned int i = 0; i < Context->logList.size(); i++) {
+    const TCLogRecord& log = Context->logList[i];
     // If logType is INT32_MAX, this is the main log file save
     if (logType == INT32_MAX) {
       textData += log.logText;
@@ -57,7 +65,7 @@ void tlLogSave(tlLogType logType, stringReadArgument_tapi(path)) {
     }
   }
   fileSys->writeText(tlStringUTF16, textData.c_str(), pathType, pathData, false);
-  logSys->logList.clear();
+  Context->logList.clear();
 }
 
 static constexpr uint32_t maxCharPerLog_tapi = 1 << 12;
@@ -68,7 +76,7 @@ static constexpr int      consoleColors[]    = {2, 6, 12, 14, 64};
 #if defined(_WIN32)
 HANDLE hConsole = nullptr;
 #endif
-void   tlLogLog(tlLogType type, unsigned char stopRunning, const wchar_t* format, ...) {
+void tlLogLog(tlLogType type, unsigned char stopRunning, const wchar_t* format, ...) {
   va_list args;
   va_start(args, format);
 
@@ -81,10 +89,10 @@ void   tlLogLog(tlLogType type, unsigned char stopRunning, const wchar_t* format
     return;
   }
 
-  logSys->logList.push_back(tlLogObject());
-  tlLogObject& log = logSys->logList[logSys->logList.size() - 1];
-  log.logText    = buf;
-  log.logType    = type;
+  Context->logList.push_back(TCLogRecord());
+  TCLogRecord& log = Context->logList[Context->logList.size() - 1];
+  log.logText      = buf;
+  log.logType      = type;
 #if defined(_WIN32)
   SetConsoleTextAttribute(hConsole, consoleColors[type]);
   wprintf(L"%ls: %ls\n", statusNames[type], buf);
@@ -92,7 +100,7 @@ void   tlLogLog(tlLogType type, unsigned char stopRunning, const wchar_t* format
 #else
   wprintf(L"%ls: %ls\n", statusNames[type], buf);
 #endif
-  tlLogSave(( tlLogType )INT32_MAX, tlStringUTF16, logSys->mainFilePath.c_str());
+  tlLogSave(( tlLogType )INT32_MAX, tlStringUTF16, Context->mainFilePath.c_str());
 
   if (stopRunning) {
     breakpoint();
@@ -107,47 +115,43 @@ void tlLogInit(stringReadArgument_tapi(mainLogFile)) {
     case tlStringUTF8: {
       typedef std::codecvt_utf8<wchar_t>          convert_type;
       std::wstring_convert<convert_type, wchar_t> converter;
-      logSys->mainFilePath = converter.from_bytes(( const char* )mainLogFileData);
+      Context->mainFilePath = converter.from_bytes(( const char* )mainLogFileData);
     } break;
     case tlStringUTF16: {
-      logSys->mainFilePath = ( const wchar_t* )mainLogFileData;
+      Context->mainFilePath = ( const wchar_t* )mainLogFileData;
     } break;
   }
-  logSys->logList.clear();
+  Context->logList.clear();
 }
 void tlLogDestroy() {
-  logSys->mainFilePath = {};
-  logSys->logList.clear();
+  Context->mainFilePath = {};
+  Context->logList.clear();
 }
 
-ECSPLUGIN_ENTRY(ecssys, reloadFlag) {
-  STRINGSYS_TAPI_PLUGIN_LOAD_TYPE stringSysType =
-    ( STRINGSYS_TAPI_PLUGIN_LOAD_TYPE )ecssys->getSystem(STRINGSYS_TAPI_PLUGIN_NAME);
-  FILESYS_TAPI_PLUGIN_LOAD_TYPE filesys_type =
-    ( FILESYS_TAPI_PLUGIN_LOAD_TYPE )ecssys->getSystem(FILESYS_TAPI_PLUGIN_NAME);
-
-  if (!stringSysType || !filesys_type) {
-    printf("Log system needs %s and %s loaded. Loading logger has failed",
-           STRINGSYS_TAPI_PLUGIN_NAME, FILESYS_TAPI_PLUGIN_NAME);
-    return;
+TCResult TSLog_Initialize(const void** outPluginAPI) {
+  if (!outPluginAPI) {
+    return TC_RESULT_FAILURE;
   }
-
-  tlLog* type =
-    ( tlLog* )malloc(sizeof(tlLog));
-  {
-    logSys = new tlLogPriv;
-    logSys->sys = type;
-    type->d     = logSys;
-
-
-    type->init    = &tlLogInit;
-    type->destroy = &tlLogDestroy;
-    type->log     = &tlLogLog;
-    type->save    = &tlLogSave;
-  }
-
-  stringSys = stringSysType;
-
-  ecssys->addSystem(LOGGER_TAPI_PLUGIN_NAME, LOGGER_TAPI_PLUGIN_VERSION, type);
+  Context              = new TCLogContext();
+  auto services        = new TCLog;
+  services->Initialize = tlLogInit;
+  services->Destroy    = tlLogDestroy;
+  services->Save       = tlLogSave;
+  services->Log        = tlLogLog;
+  TSLog                = services;
+  *outPluginAPI        = TSLog;
+  return TC_RESULT_SUCCESS;
 }
-ECSPLUGIN_EXIT(ecssys, reloadFlag) { printf("Not coded!"); }
+
+TCResult TSLog_OnPreShutdown() { return TC_RESULT_SUCCESS; }
+
+TCResult TSLog_Shutdown() {
+  if (Context) {
+    delete Context;
+    Context = nullptr;
+  }
+  return TC_RESULT_SUCCESS;
+}
+void TSLog_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded) {
+  // This plugin doesn't react to other plugins being loaded or unloaded, so this function is empty.
+}

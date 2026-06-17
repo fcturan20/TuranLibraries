@@ -1,0 +1,1 @@
+Always follow Docs/CppNamingConventions.md for naming conventions in C++ code inside Source folder.

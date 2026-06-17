@@ -4,14 +4,13 @@
 #include <stdlib.h>
 #include <wchar.h>
 
-TCORE_PLUGIN_INIT(TS, TC)
-TCORE_PLUGIN_INIT(TSUT, TCUnitTest)
+TCORE_PLUGIN_INIT(TC)
+TCORE_PLUGIN_INIT(TCUnitTest)
+
+TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCUnitTest)
+TCORE_PLUGIN_ENTRY_POINT_END()
 
 struct TCUnitTestContext {
-};
-TCUnitTestContext* TSUTContext = nullptr;
-
-struct TCUnitTestServices{
   static void RegisterTest(const TCUnitTestDescription* desc) {
     printf("Registered unit test: %s\n", desc->Name);
   }
@@ -20,29 +19,32 @@ struct TCUnitTestServices{
 
   static void RunTest(const char* name, TCReadBuffer inputData) {}
 };
+TCUnitTestContext* Context = nullptr;
 
-void BindPluginFunctions(TCPluginFunctions* outPluginFunctions){
-  outPluginFunctions->Initialize = [](const void** outPluginAPI) -> TCResult {
-    TSUTContext = new TCUnitTestContext();
-    auto sys = new TCUnitTest();
-    sys->RegisterTest = TCUnitTestServices::RegisterTest;
-    sys->UnregisterTest = TCUnitTestServices::UnregisterTest;
-    sys->RunAllTests = nullptr;
-    sys->RunTests   = nullptr;
-    sys->RunTest    = TCUnitTestServices::RunTest;
+TCResult TCUnitTest_Initialize(const void** outPluginAPI) {
+  Context                 = new TCUnitTestContext();
+  TCUnitTestServices* sys = new TCUnitTestServices();
+  sys->RegisterTest       = TCUnitTestContext::RegisterTest;
+  sys->UnregisterTest     = TCUnitTestContext::UnregisterTest;
+  sys->RunAllTests        = nullptr;
+  sys->RunTests           = nullptr;
+  sys->RunTest            = TCUnitTestContext::RunTest;
 
-    TSUT = sys;
-    *outPluginAPI = TSUT;
-    return TC_RESULT_SUCCESS;
-  };
-  outPluginFunctions->OnPreShutdown = []() -> TCResult {
-    delete TSUTContext;
-    TSUTContext = nullptr;
-    return TC_RESULT_SUCCESS;
-  };
-  outPluginFunctions->Shutdown            = []() -> TCResult { return TC_RESULT_SUCCESS; };
-  outPluginFunctions->OnPluginLoadStateChange = [](const TCPluginInfo* pluginInfo, bool isLoaded) {};
+  TCUnitTest    = sys;
+  *outPluginAPI = TCUnitTest;
+  return TC_RESULT_SUCCESS;
 }
 
-TCORE_PLUGIN_ENTRY_POINT_START(TSUT)
-TCORE_PLUGIN_ENTRY_POINT_END()
+TCResult TCUnitTest_OnPreShutdown() { return TC_RESULT_SUCCESS; }
+
+TCResult TCUnitTest_Shutdown() {
+  if (Context) {
+    delete Context;
+    Context = nullptr;
+  }
+  return TC_RESULT_SUCCESS;
+}
+
+void TCUnitTest_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded) {
+  // This plugin doesn't react to other plugins being loaded or unloaded, so this function is empty.
+}

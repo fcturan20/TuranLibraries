@@ -3,11 +3,17 @@
 
 #include <algorithm>
 #include <cstring>
-#include <dynalo/dynalo.hpp>
 #include <string>
 
 #include "stdint.h"
 #include "stdio.h"
+
+TCORE_PLUGIN_INIT(TC)
+TCORE_PLUGIN_INIT(TCECS)
+
+TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCECS)
+TCORE_PLUGIN_ENTRY_POINT_END()
+
 //                   COMPILE EXPRESSIONS
 //////////////////////////////////////////////////////////
 static constexpr uint32_t MAX_PATHCHAR          = 256;
@@ -29,34 +35,34 @@ static constexpr uint64_t virmemAllocSize =
 
 // Because this dll will be loaded once for each dll,
 //  there is no need for a pointer
-static unsigned int         pagesize;
-static struct tlSuperBlock* mainMemBlock   = nullptr;
-static const struct tlBuffer*     standard_alloc = nullptr;
-static const tlVector*            f_vector       = nullptr;
+static unsigned int           pagesize;
+static struct tlSuperBlock*   mainMemBlock   = nullptr;
+static const struct tlBuffer* standard_alloc = nullptr;
+static const tlVector*        f_vector       = nullptr;
 
 //                  ECS INTERNAL STRUCTURES
 ///////////////////////////////////////////////////////////
 
 struct ecs_pluginInfo {
   void* pluginDataPtr; // dlopen/LoadLibrary-compatible opaque handle
-  char      PATH[MAX_PATHCHAR];
+  char  PATH[MAX_PATHCHAR];
 };
 
 struct ecs_systemInfo {
-  char     name[MAX_SYSTEMCHAR];
-  uint32_t version = UINT32_MAX;
-  const void*    ptr     = nullptr;
+  char        name[MAX_SYSTEMCHAR];
+  uint32_t    version = UINT32_MAX;
+  const void* ptr     = nullptr;
 };
 
 // This is main component type, so you shouldn't store (overriden) parent types with this
 // Manager will return the (overriden) parent types with getComponentType anyway
 struct ecs_compType {
-  uint32_t                    typeID = UINT32_MAX;
-  char                        name[MAX_COMPTYPECHAR];
-  void*                       mainTypeHandle;
-  tlComponentManagerDescription             manager;
-  unsigned int                overridenTypeCount = 0;
-  tlComponentTypePair* overridenTypePairs;
+  uint32_t                      typeID = UINT32_MAX;
+  char                          name[MAX_COMPTYPECHAR];
+  void*                         mainTypeHandle;
+  tlComponentManagerDescription manager;
+  unsigned int                  overridenTypeCount = 0;
+  tlComponentTypePair*          overridenTypePairs;
 };
 
 struct ecs_entityType {
@@ -129,7 +135,7 @@ typedef struct tlECSPriv {
   // Systems
   //////////////////////
   ecs_systemInfo* v_systemInfos;
-  const void*           findSystem(const char* name) {
+  const void*     findSystem(const char* name) {
     for (uint32_t i = 0; i < MAXSYSTEMCOUNT; i++) {
       if (v_systemInfos[i].ptr == nullptr) {
         return nullptr;
@@ -192,16 +198,14 @@ typedef struct tlECSPriv {
   }
 } tapi_ecs_d;
 
-uint32_t find_overridenCompType(ecs_entityType* eType, tlComponentTypeID* base,
-                                void** overriden) {
+uint32_t find_overridenCompType(ecs_entityType* eType, tlComponentTypeID* base, void** overriden) {
   for (uint32_t mainCompIndex = 0; mainCompIndex < eType->compCount; mainCompIndex++) {
     // If main type matches
     if (base == eType->compTypeHndlesList[mainCompIndex]) {
       *overriden = priv->find_compType_byID(base)->mainTypeHandle;
       return mainCompIndex;
     }
-    ecs_compType* mainCompType =
-      priv->find_compType_byID(eType->compTypeHndlesList[mainCompIndex]);
+    ecs_compType* mainCompType = priv->find_compType_byID(eType->compTypeHndlesList[mainCompIndex]);
     for (uint32_t pairIndx = 0; pairIndx < mainCompType->overridenTypeCount; pairIndx++) {
       tlComponentTypePair& pair = mainCompType->overridenTypePairs[pairIndx];
       if (pair.base == base) {
@@ -213,16 +217,11 @@ uint32_t find_overridenCompType(ecs_entityType* eType, tlComponentTypeID* base,
   return UINT32_MAX;
 }
 
-//                        PLUGIN FUNCTIONS
-////////////////////////////////////////////////////////////////////
-
-typedef void (*ECSTAPIPLUGIN_loadfnc)(struct tlECS* ecsHnd, unsigned int reload);
-
-
 //                          SYSTEM FUNCTIONS
 ////////////////////////////////////////////////////////////////////////
 
-void addSystem(const char* name, unsigned int version, const void* system_ptr) {
+void addSystem(const char* pluginName, const char* name, unsigned int version,
+               const void* system_ptr) {
   ecs_systemInfo sysInfo;
   unsigned int   maxcharlen = std::min<unsigned int>(std::strlen(name), MAX_SYSTEMCHAR - 1);
   std::memcpy(sysInfo.name, name, maxcharlen);
@@ -242,9 +241,9 @@ const void* getSystem(const char* name) { return priv->findSystem(name); }
 ////////////////////////////////////////////////////////////////////////////
 
 struct tlComponentTypeID* addComponentType(const char* name, void* mainType,
-                                                  struct tlComponentManagerDescription            manager,
-                                                  const tlComponentTypePair* pairList,
-                                                  unsigned int                      pairListSize) {
+                                           struct tlComponentManagerDescription manager,
+                                           const tlComponentTypePair*           pairList,
+                                           unsigned int                         pairListSize) {
   f_vector->pushBack(priv->v_mainComponentTypes, priv->v_mainComponentTypes);
   uint32_t      indx       = f_vector->size(priv->v_mainComponentTypes) - 1;
   ecs_compType* type       = &priv->v_mainComponentTypes[indx];
@@ -270,8 +269,8 @@ struct tlComponentTypeID* addComponentType(const char* name, void* mainType,
 //                          ENTITY FUNCTIONS
 ////////////////////////////////////////////////////////////////////////////
 
-struct tlEntityType* addEntityType(
-  const struct tlComponentTypeID* const* compTypeList, unsigned int listSize) {
+struct tlEntityType* addEntityType(const struct tlComponentTypeID* const* compTypeList,
+                                   unsigned int                           listSize) {
   ecs_entityType type;
   type.compCount = listSize;
   type.typeID    = f_vector->size(priv->v_entityTypes);
@@ -290,10 +289,10 @@ struct tlEntityType* addEntityType(
 tlEntity* createEntity(struct tlEntityType* typeHandle) {
   ecs_entityType* eType = priv->find_entityType_byHnd(typeHandle);
   f_vector->pushBack(eType->v_entityList, nullptr);
-  uint32_t             index        = f_vector->size(eType->v_entityList) - 1;
-  tlComponent** compHndsList = reinterpret_cast<tlComponent**>(
-    reinterpret_cast<uintptr_t>(eType->v_entityList) +
-    (index * eType->compCount * sizeof(tlComponent*)));
+  uint32_t      index = f_vector->size(eType->v_entityList) - 1;
+  tlComponent** compHndsList =
+    reinterpret_cast<tlComponent**>(reinterpret_cast<uintptr_t>(eType->v_entityList) +
+                                    (index * eType->compCount * sizeof(tlComponent*)));
   for (uint16_t compIndx = 0; compIndx < eType->compCount; compIndx++) {
     ecs_compType* compType = priv->find_compType_byID(eType->compTypeHndlesList[compIndx]);
     compHndsList[compIndx] = compType->manager.createComponent();
@@ -305,7 +304,7 @@ tlEntity* createEntity(struct tlEntityType* typeHandle) {
 }
 struct tlEntityType* findEntityType_byEntityHnd(tlEntity* entityHnd) {
   ecstapi_idOnlyPointer hnd;
-  tlEntity       entity = *reinterpret_cast<tlEntity*>(&entityHnd);
+  tlEntity              entity = *reinterpret_cast<tlEntity*>(&entityHnd);
 #ifdef TURAN_DEBUGGING
   // If debugging, first access type
   // Then return ID of it
@@ -329,15 +328,14 @@ unsigned char doesContains_entityType(struct tlEntityType*      eTypeHnd,
   }
   return 0;
 }
-tlComponent* get_component_byEntityHnd(tlEntity*                 entityHnd,
-                                              struct tlComponentTypeID* compTypeID,
-                                              void**                           overridenCompType) {
+tlComponent* get_component_byEntityHnd(tlEntity* entityHnd, struct tlComponentTypeID* compTypeID,
+                                       void** overridenCompType) {
   struct tlEntityType* eTypeHnd = findEntityType_byEntityHnd(entityHnd);
-  ecs_entityType*             eType    = priv->find_entityType_byHnd(eTypeHnd);
+  ecs_entityType*      eType    = priv->find_entityType_byHnd(eTypeHnd);
   // Find overriden component type
-  uint32_t        compTypeIndx = find_overridenCompType(eType, compTypeID, overridenCompType);
-  uintptr_t       eList        = reinterpret_cast<uintptr_t>(eType->v_entityList);
-  tlEntity entity       = *reinterpret_cast<tlEntity*>(&entityHnd);
+  uint32_t  compTypeIndx = find_overridenCompType(eType, compTypeID, overridenCompType);
+  uintptr_t eList        = reinterpret_cast<uintptr_t>(eType->v_entityList);
+  tlEntity  entity       = *reinterpret_cast<tlEntity*>(&entityHnd);
   return *reinterpret_cast<tlComponent**>(
     eList + (((entity.entityID * eType->compCount) + compTypeIndx) * sizeof(tlComponent*)));
 }
@@ -345,34 +343,33 @@ tlComponent* get_component_byEntityHnd(tlEntity*                 entityHnd,
 extern "C" void* initializeAllocator();
 
 // This is the entry point of the engine
-TCResult InitializeECS(const void** outECSAPI) {
-  typedef void* (*initializeAllocatorFnc)();
-  initializeAllocatorFnc initializeAllocatorPtr = &initializeAllocator;
-  if (!initializeAllocatorPtr) {
-    printf("Allocator bootstrap function is not found: initializeAllocator\n");
-    return TC_RESULT_FAILURE;
-  }
+TCResult TCECS_Initialize(const void** outECSAPI) {
+  auto services                        = new TCECSServices;
+  services->getSystem                  = getSystem;
+  services->addSystem                  = addSystem;
+  services->destroySystem              = destroySystem;
+  services->addComponentType           = addComponentType;
+  services->addEntityType              = addEntityType;
+  services->createEntity               = createEntity;
+  services->findEntityType_byEntityHnd = findEntityType_byEntityHnd;
+  services->doesContains_entityType    = doesContains_entityType;
+  services->get_component_byEntityHnd  = get_component_byEntityHnd;
+  TCECS                                = services;
+  *outECSAPI                           = TCECS;
+
   // Load virtual memory & allocator systems
   ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE allocSys =
     ( ALLOCATOR_TAPI_PLUGIN_LOAD_TYPE )initializeAllocatorPtr();
   pagesize       = allocSys->virtualMemory->pageSize();
-  f_vector       = allocSys->vectorManager;
+  f_vector       = allocSys->VectorManager;
   standard_alloc = allocSys->standard;
 
   mainMemBlock = allocSys->allocateSuperMemoryBlock(virmemAllocSize, L"" ECS_TAPI_NAME);
 
-  TCEcs* ecs = ( TCEcs* )allocSys->endOfPage->malloc(mainMemBlock, sizeof(TCEcs));
+  TCECSServices* ecs =
+    ( TCECSServices* )allocSys->endOfPage->malloc(mainMemBlock, sizeof(TCECSServices));
 
-  ecs->getSystem                  = getSystem;
-  ecs->addSystem                  = addSystem;
-  ecs->destroySystem              = destroySystem;
-  ecs->addComponentType           = addComponentType;
-  ecs->addEntityType              = addEntityType;
-  ecs->createEntity               = createEntity;
-  ecs->findEntityType_byEntityHnd = findEntityType_byEntityHnd;
-  ecs->doesContains_entityType    = doesContains_entityType;
-  ecs->get_component_byEntityHnd  = get_component_byEntityHnd;
-  TSEcs = ecs;
+  TSEcs      = ecs;
   *outECSAPI = ecs;
 
   // Initialize ECS
@@ -380,30 +377,15 @@ TCResult InitializeECS(const void** outECSAPI) {
   priv->v_pluginInfos        = tlVectorCreate(ecs_pluginInfo, mainMemBlock, MAX_PLUGINCOUNT);
   priv->v_systemInfos        = tlVectorCreate(ecs_systemInfo, mainMemBlock, MAXSYSTEMCOUNT);
   priv->v_mainComponentTypes = tlVectorCreate(ecs_compType, mainMemBlock, MAX_COMPTYPECOUNT);
-  priv->v_entityTypes = tlVectorCreate(ecs_entityType, mainMemBlock, MAX_ENTITYTYPECOUNT);
+  priv->v_entityTypes        = tlVectorCreate(ecs_entityType, mainMemBlock, MAX_ENTITYTYPECOUNT);
 
   addSystem(ALLOCATOR_TAPI_PLUGIN_NAME, ALLOCATOR_TAPI_PLUGIN_VERSION, allocSys);
 
-  return ecs_funcs;
-}
-
-void OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded) {
-}
-
-TCResult OnPreShutdown() {
   return TC_RESULT_SUCCESS;
 }
 
-void Shutdown(TCPluginHandle plugin) {
-  
-}
+void TCECS_OnPreShutdown(const TCPluginInfo* pluginInfo, bool isLoaded) {}
 
-void FillPluginFunctions(TCPluginFunctions* outPluginFunctions) {
-  outPluginFunctions->Initialize   = InitializeECS;
-  outPluginFunctions->OnPluginLoadStateChange = OnPluginLoadStateChange;
-  outPluginFunctions->OnPreShutdown = OnPreShutdown;
-  outPluginFunctions->Shutdown = Shutdown;
-}
+TCResult TCECS_OnPreShutdown() { return TC_RESULT_SUCCESS; }
 
-TCORE_PLUGIN_ENTRY_POINT_START(TSEcs)
-TCORE_PLUGIN_ENTRY_POINT_END()
+TCResult TCECS_Shutdown() { return TC_RESULT_SUCCESS; }

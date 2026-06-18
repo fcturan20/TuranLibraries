@@ -37,44 +37,44 @@ using namespace Microsoft::WRL;
 // Systems
 
 struct core_tgfx;
-extern core_tgfx* core_tgfx_main;
+extern core_tgfx* gCoreTgfxMain;
 struct core_public;
-extern core_public* core_dx;
+extern core_public* gCoreDx;
 struct renderer_public;
-extern renderer_public* renderer;
+extern renderer_public* gRenderer;
 struct gpudatamanager_public;
-extern gpudatamanager_public* contentmanager;
+extern gpudatamanager_public* gContentManager;
 struct imgui_dx;
-extern imgui_dx* imgui;
+extern imgui_dx* gImgui;
 struct GPU_VKOBJ;
-extern GPU_VKOBJ*                rendergpu;
+extern GPU_VKOBJ* gRenderGpu;
 typedef struct threadingsys_tapi threadingsys_tapi;
-extern threadingsys_tapi*        threadingsys;
-extern unsigned int              threadcount;
+extern threadingsys_tapi* gThreadingSystem;
+extern unsigned int gThreadCount;
 struct allocatorsys_dx;
-extern allocatorsys_dx* gpu_allocator;
+extern allocatorsys_dx* gGpuAllocator;
 struct queuesys_dx;
-extern queuesys_dx* queuesys;
+extern queuesys_dx* gQueueSystem;
 
 extern tgfx_PrintLogCallback printer;
 
 // Synchronization systems and objects
 
 struct semaphoresys_dx;
-extern semaphoresys_dx* semaphoresys;
+extern semaphoresys_dx* gSemaphoreSystem;
 struct fencesys_dx;
-extern fencesys_dx* fencesys;
+extern fencesys_dx* gFenceSystem;
 #ifdef VULKAN_DEBUGGING
-typedef unsigned int                 semaphore_idtype_dx;
+typedef unsigned int semaphore_idtype_dx;
 static constexpr semaphore_idtype_dx invalid_semaphoreid = UINT32_MAX;
-typedef unsigned int                 fence_idtype_dx;
-static constexpr fence_idtype_dx     invalid_fenceid = UINT32_MAX;
+typedef unsigned int fence_idtype_dx;
+static constexpr fence_idtype_dx invalid_fenceid = UINT32_MAX;
 #else
 struct semaphore_dx;
-typedef semaphore_dx*                semaphore_idtype_dx;
+typedef semaphore_dx* semaphore_idtype_dx;
 static constexpr semaphore_idtype_dx invalid_semaphoreid = nullptr;
 struct fence_dx;
-typedef fence_dx*                fence_idtype_dx;
+typedef fence_dx* fence_idtype_dx;
 static constexpr fence_idtype_dx invalid_fenceid = nullptr;
 #endif
 
@@ -83,7 +83,7 @@ static constexpr fence_idtype_dx invalid_fenceid = nullptr;
 struct memorytype_dx;
 struct queuefam_dx;
 struct extManager_vkDevice; // Stores activated extensions and set function pointers according to
-                            // that
+							// that
 struct pass_dx;
 struct drawpass_dx;
 struct transferpass_dx;
@@ -97,13 +97,19 @@ struct rtslotset_dx;
 struct window_dx;
 
 // Enums
-enum class desctype_dx : unsigned char { SAMPLER = 0, IMAGE = 1, SBUFFER = 2, UBUFFER = 3 };
+enum class desctype_dx : unsigned char
+{
+	SAMPLER = 0,
+	IMAGE = 1,
+	SBUFFER = 2,
+	UBUFFER = 3
+};
 
 // Resources
 struct texture_dx;
 
-extern HINSTANCE             hInstance;
-extern UINT                  g_RTVDescriptorSize;
+extern HINSTANCE gHInstance;
+extern UINT gRtvDescriptorSize;
 extern ComPtr<IDXGIFactory4> dxgiFactory;
 
 #define TD3D12_WCLASSNAME L"TGFXD3D12"

@@ -3,7 +3,10 @@
 //        GAME FUNCTIONs
 /////////////////////////////////////////////
 
-unsigned char regPlugin_toGame(const char* path) { return 0; }
+unsigned char regPlugin_toGame(const char* path)
+{
+	return 0;
+}
 
 void setFuncPtrs_gameLinker() {}
 

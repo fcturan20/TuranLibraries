@@ -14,23 +14,28 @@
 //   because editor is already built upon TuranEngine.
 
 // CompHnd_pecf should be cast to this type
-struct compID {
-  unsigned int typeID, compID;
+struct compID
+{
+	unsigned int typeID, compID;
 };
 static_assert(sizeof(compID) <= sizeof(void*), "sizeof compID can't be larger than pointer size!");
 
-struct idOnlyHnd {
-  unsigned int ID = 0, padding_8bytes = UINT32_MAX;
+struct idOnlyHnd
+{
+	unsigned int ID = 0, padding_8bytes = UINT32_MAX;
 };
-struct funcInfo {
-  pecf_funcProperties props;
+struct funcInfo
+{
+	pecf_funcProperties props;
 };
 
-struct pecf_manager_private {
-  pecf_funcProperties* v_funcs;
-  // Plugin unloading isn't supported for now!
-  pecf_funcProperties create_funcInfo(pecf_funcProperties info) {
-    /*
+struct pecf_manager_private
+{
+	pecf_funcProperties* v_funcs;
+	// Plugin unloading isn't supported for now!
+	pecf_funcProperties create_funcInfo(pecf_funcProperties info)
+	{
+	/*
     uint32_t pluginCount = f_vector->size(v_pluginInfos);
 #ifdef TURAN_DEBUGGING
     //Check if it's already added
@@ -53,103 +58,121 @@ sizeof(ecs_pluginInfo)) != 0 || offset < 0) { printf("Plugin handle is invalid!"
   */}
 };
 static pecf_manager_private priv;
-static pecf_manager*        mngr;
+static pecf_manager* mngr;
 
-struct entityHnd {
-  unsigned int entityID, padding_to_8bytes;
+struct entityHnd
+{
+	unsigned int entityID, padding_to_8bytes;
 };
-static_assert(sizeof(entityHnd) <= sizeof(entityHnd_pecf),
-              "EntityHnd can't be larger than pointer size");
+static_assert(sizeof(entityHnd) <= sizeof(entityHnd_pecf), "EntityHnd can't be larger than pointer size");
 
 static defaultComp_pecf compType;
 // static compType_ecstapi defaultCompType = (compType_ecstapi)&compType;
 static tlComponentTypeID* meshCompTypeID;
 
-funcTypeHnd_pecf add_funcType(funcProperties_pecf props, primitiveVariable_pecf* inputArgs,
-                              unsigned int inputArgsCount, primitiveVariable_pecf* outputArgs,
-                              unsigned int outputArgsCount) {
-  return nullptr;
+funcTypeHnd_pecf add_funcType(funcProperties_pecf props,
+							  primitiveVariable_pecf* inputArgs,
+							  unsigned int inputArgsCount,
+							  primitiveVariable_pecf* outputArgs,
+							  unsigned int outputArgsCount)
+{
+	return nullptr;
 }
 
 //        PRIMITIVE FUNCTIONs
 /////////////////////////////////////////////
 
-primTypeHnd_pecf add_primitiveType(const char* primName, unsigned int primDataSize,
-                                   const primitiveVariable_pecf* varList, unsigned int varCount) {
-  return nullptr;
+primTypeHnd_pecf add_primitiveType(const char* primName,
+								   unsigned int primDataSize,
+								   const primitiveVariable_pecf* varList,
+								   unsigned int varCount)
+{
+	return nullptr;
 }
 // To display a component's variables, a window needs these informations
 // But this doesn't help in programming side, because primitive variable should be created in
 // proper C struct
-void get_primitiveTypeInfo(primTypeHnd_pecf hnd, const char** primName, unsigned int* primDataSize,
-                           primitiveVariable_pecf** varList, unsigned int* varCount) {}
+void get_primitiveTypeInfo(primTypeHnd_pecf hnd,
+						   const char** primName,
+						   unsigned int* primDataSize,
+						   primitiveVariable_pecf** varList,
+						   unsigned int* varCount)
+{
+}
 
 //        COMPONENT FUNCTIONs
 /////////////////////////////////////////////
 
-compTypeHnd_pecf add_componentType(componentManagerInfo_pecf mngr) { return nullptr; }
-void             get_componentPrimInfo(compTypeHnd_pecf comp, unsigned int index,
-                                       primitiveVariable_pecf* primInfo) {}
-void             get_componentPrimData(compHnd_pecf comp, unsigned int index, void* dst) {}
-void             set_componentPrimData(compHnd_pecf comp, unsigned int index, const void* src) {}
+compTypeHnd_pecf add_componentType(componentManagerInfo_pecf mngr)
+{
+	return nullptr;
+}
+void get_componentPrimInfo(compTypeHnd_pecf comp, unsigned int index, primitiveVariable_pecf* primInfo) {}
+void get_componentPrimData(compHnd_pecf comp, unsigned int index, void* dst) {}
+void set_componentPrimData(compHnd_pecf comp, unsigned int index, const void* src) {}
 
 //          ENTITY FUNCTIONs
 ////////////////////////////////////////////
 
-entityHnd_pecf add_entity(const char* entityTypeName) {
-  // Create an entity with default PECF component
-  return nullptr;
+entityHnd_pecf add_entity(const char* entityTypeName)
+{
+	// Create an entity with default PECF component
+	return nullptr;
 }
 // @return 1 if succeeds, 0 if fails
-compHnd_pecf add_componentToEntity(entityHnd_pecf entity, compTypeHnd_pecf compType) {
-  // Unlike ECS entities, PECF entities are unique so there is no PECF Entity Type
-  // Also that means each componentHnd of an entity should be stored by user too
+compHnd_pecf add_componentToEntity(entityHnd_pecf entity, compTypeHnd_pecf compType)
+{
+	// Unlike ECS entities, PECF entities are unique so there is no PECF Entity Type
+	// Also that means each componentHnd of an entity should be stored by user too
 
-  // Create new entity type with the extra component type
-  // Create new entity from the type
-  // Copy all components to new entity
-  // Fix default PECF component to point to new entityHnd
-  return 0;
+	// Create new entity type with the extra component type
+	// Create new entity from the type
+	// Copy all components to new entity
+	// Fix default PECF component to point to new entityHnd
+	return 0;
 }
-const compHnd_pecf* get_componentsOfEntity(entityHnd_pecf entity, unsigned int* compListSize) {
-  return nullptr;
+const compHnd_pecf* get_componentsOfEntity(entityHnd_pecf entity, unsigned int* compListSize)
+{
+	return nullptr;
 }
 
 //      CALLBACK REGISTRATIONS
 /////////////////////////////////////
 
-unsigned char regOnChanged_entity(entity_onChangedFunc callback, tlEntity* entity,
-                                  unsigned char reg_orUnreg) {
-  return 0;
+unsigned char regOnChanged_entity(entity_onChangedFunc callback, tlEntity* entity, unsigned char reg_orUnreg)
+{
+	return 0;
 }
-unsigned char regOnChanged_comp(comp_onChangedFunc callback, compHnd_pecf comp,
-                                unsigned char reg_orUnreg) {
-  return 0;
+unsigned char regOnChanged_comp(comp_onChangedFunc callback, compHnd_pecf comp, unsigned char reg_orUnreg)
+{
+	return 0;
 }
 
-void setFuncPtrs_pecf() {
-  /*
-  mngr->add_funcType = add_funcType;
+void setFuncPtrs_pecf()
+{
+	/*
+	mngr->add_funcType = add_funcType;
 
-  mngr->add_primitiveType = add_primitiveType;
-  mngr->get_primitiveTypeInfo = get_primitiveTypeInfo;
+	mngr->add_primitiveType = add_primitiveType;
+	mngr->get_primitiveTypeInfo = get_primitiveTypeInfo;
 
-  mngr->add_componentType = add_componentType;
-  mngr->get_componentPrimInfo = get_componentPrimInfo;
-  mngr->get_componentPrimData = get_componentPrimData;
-  mngr->set_componentPrimData = set_componentPrimData;
+	mngr->add_componentType = add_componentType;
+	mngr->get_componentPrimInfo = get_componentPrimInfo;
+	mngr->get_componentPrimData = get_componentPrimData;
+	mngr->set_componentPrimData = set_componentPrimData;
 
-  mngr->add_entity = add_entity;
-  mngr->add_componentToEntity = add_componentToEntity;
-  mngr->get_componentsOfEntity = get_componentsOfEntity;
+	mngr->add_entity = add_entity;
+	mngr->add_componentToEntity = add_componentToEntity;
+	mngr->get_componentsOfEntity = get_componentsOfEntity;
 
-  mngr->regOnChanged_comp = regOnChanged_comp;
-  mngr->regOnChanged_entity = regOnChanged_entity;
-  */
+	mngr->regOnChanged_comp = regOnChanged_comp;
+	mngr->regOnChanged_entity = regOnChanged_entity;
+	*/
 }
-void initialize_pecfManager() {
-  mngr = new pecf_manager;
-  setFuncPtrs_pecf();
-  // Now other plugins can access PECF Manager using editor ECS
-  editorECS->addSystem(PECF_MANAGER_PLUGIN_NAME, PECF_MANAGER_PLUGIN_VERSION, mngr);
+void initialize_pecfManager()
+{
+	mngr = new pecf_manager;
+	setFuncPtrs_pecf();
+	// Now other plugins can access PECF Manager using editor ECS
+	editorECS->addSystem(PECF_MANAGER_PLUGIN_NAME, PECF_MANAGER_PLUGIN_VERSION, mngr);
 }

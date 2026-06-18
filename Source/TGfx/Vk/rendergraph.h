@@ -4,9 +4,9 @@
 #include "queue.h"
 #include "resource.h"
 #include <vector>
-//Don't include this header except rendergraph algorithm source files
+// Don't include this header except rendergraph algorithm source files
 
-					//Forward declarations and ID type definitions
+// Forward declarations and ID type definitions
 
 struct passLinkedList_vk;
 struct submitwaitinfo_vk;
@@ -27,13 +27,14 @@ typedef submit_vk* SubmitIDType;
 static constexpr SubmitIDType INVALID_SubmitID = nullptr;
 #endif
 
-					//Enums
+// Enums
 
-//There are 2 categories of SubmitTypes: Preparation Types and Final Types
-//Preparation Types are used while attaching branches
-//Final Types are used while sending the submit
-enum class SubmitType : unsigned char {
-	//THESE ARE PREPARATION TYPES
+// There are 2 categories of SubmitTypes: Preparation Types and Final Types
+// Preparation Types are used while attaching branches
+// Final Types are used while sending the submit
+enum class SubmitType : unsigned char
+{
+	// THESE ARE PREPARATION TYPES
 	UNDEFINED = 0,
 	NoMoreBranch = 1,
 
@@ -48,61 +49,63 @@ enum class SubmitType : unsigned char {
 	NonRoot_EndSubmit,
 	Root_EndSubmit
 };
-enum class SubmitWaitType : unsigned char {
+enum class SubmitWaitType : unsigned char
+{
 	LASTFRAME = 0,
 	CURRENTFRAME = 1
 };
 
-//Branch type is a way to mark a branch to reduce amount of times to classify the branch
-//Static types means they can not be changed, not even become UNDEFINED when there is no workload
-//Dynamic types means their type depends on the workload and pass list, becomes UNDEFINED when there is no workload
-//Processible types means the branch's dynamic dependencies are found. The type depends on workload, pass list and the type of dynamic dependencies.
-enum class BranchType : unsigned char {
-	WindowBranch = 0,						//Static type. A Window Pass has its own branch always.
+// Branch type is a way to mark a branch to reduce amount of times to classify the branch
+// Static types means they can not be changed, not even become UNDEFINED when there is no workload
+// Dynamic types means their type depends on the workload and pass list, becomes UNDEFINED when there is no workload
+// Processible types means the branch's dynamic dependencies are found. The type depends on workload, pass list and the
+// type of dynamic dependencies.
+enum class BranchType : unsigned char
+{
+	WindowBranch = 0, // Static type. A Window Pass has its own branch always.
 
-	BarrierTPOnlyBranch = 1,				//Dynamic Type. There are only Barrier TP active passes.
-	RenderBranch,							//Dynamic Type. There are active passes either Copy, Draw or Compute. There may be Barrier passes too.
+	BarrierTPOnlyBranch = 1, // Dynamic Type. There are only Barrier TP active passes.
+	RenderBranch, // Dynamic Type. There are active passes either Copy, Draw or Compute. There may be Barrier passes
+				  // too.
 
-	RootBranch,								//Processible Type. This branch can't be attached to any submit so create a submit.
-	//Because it doesn't have any CFDynamicDependent. They may have LFDynamicDependent(s) or DynamicLaterExecute(s), they aren't important.
+	RootBranch, // Processible Type. This branch can't be attached to any submit so create a submit.
+	// Because it doesn't have any CFDynamicDependent. They may have LFDynamicDependent(s) or DynamicLaterExecute(s),
+	// they aren't important.
 
-	NoDynLaterExec,							//Processible Type. This branch can be attached to a submit or create a submit.
-	//It doesn't have any DynamicLaterExecute. It has only one CFDynamicDependent. There is not any LFDynamicDependent.
+	NoDynLaterExec, // Processible Type. This branch can be attached to a submit or create a submit.
+	// It doesn't have any DynamicLaterExecute. It has only one CFDynamicDependent. There is not any LFDynamicDependent.
 
-	DynLaterExecs,							//Processible Type. This branch can be attached to a submit or creates a submit.
-	//It has DynamicLaterExecute(s). It has only one CFDynamicDependent. There is not any LFDynamicDependent.
-	//If it has more than one DynamicLaterExecutes, it ends attached the submit.
+	DynLaterExecs, // Processible Type. This branch can be attached to a submit or creates a submit.
+	// It has DynamicLaterExecute(s). It has only one CFDynamicDependent. There is not any LFDynamicDependent.
+	// If it has more than one DynamicLaterExecutes, it ends attached the submit.
 
-	SeperateBranch,							//Processible Type. This type of branches can't be attached to any submit, so have to create a submit.
-	//It has LFDynamicDependent(s) or more than one CFDynamicDependents. DynamicLaterExecute(s) are not important.
+	SeperateBranch, // Processible Type. This type of branches can't be attached to any submit, so have to create a
+					// submit.
+	// It has LFDynamicDependent(s) or more than one CFDynamicDependents. DynamicLaterExecute(s) are not important.
 
 	UNDEFINED
 };
 
+// STRUCTS
 
-
-
-
-
-
-							//STRUCTS
-
-
-
-struct submitwaitinfo_vk {
+struct submitwaitinfo_vk
+{
 	SubmitIDType WaitedSubmit;
 	VkPipelineStageFlags WaitedStage;
 	SubmitWaitType WaitType;
 };
 
-struct branch_vk {
+struct branch_vk
+{
 	const queueflag_vk& GetNeededQueueFlag() { return supportflag; }
+
 private:
 	queueflag_vk supportflag;
 };
 
-struct submit_vk {
-	//Creates an invalidated submit
+struct submit_vk
+{
+	// Creates an invalidated submit
 	submit_vk();
 	void Invalidate();
 	void Initialize(commandbuffer_idtype_vk CommandBufferID, BranchIDType FirstBranchID, SubmitIDType SubmitID);
@@ -118,6 +121,7 @@ struct submit_vk {
 	SubmitType Get_SubmitType() const;
 	queueflag_vk& Get_QueueFlag();
 	queuefam_vk* Get_RunQueue() const;
+
 private:
 	std::vector<submitwaitinfo_vk> WaitInfos;
 	std::vector<semaphore_idtype_vk> SignalSemaphoreIDs;
@@ -130,19 +134,21 @@ private:
 #endif // VULKAN_DEBUGGING
 };
 
-struct branchsys_vk {
-
+struct branchsys_vk
+{
 };
 
-struct submitsys_vk {
+struct submitsys_vk
+{
 	inline void SortByID();
 	void ClearList();
 	submit_vk& CreateSubmit(commandbuffer_idtype_vk CommandBufferID, BranchIDType FirstBranchID);
 	inline submit_vk& GetSubmit_byID(SubmitIDType ID);
-	//A submit object isn't completely destroyed, this just invalidates the object
-	//There is no way to completely destroy one object from memory, you have to destroy submitsystem
+	// A submit object isn't completely destroyed, this just invalidates the object
+	// There is no way to completely destroy one object from memory, you have to destroy submitsystem
 	inline void DestroySubmit(SubmitIDType ID);
 	inline void System_Destroy();
+
 private:
 	std::vector<submit_vk*> Submits;
 #ifdef VULKAN_DEBUGGING
@@ -152,16 +158,18 @@ private:
 #endif
 };
 
-
-struct framegraph_vk {
+struct framegraph_vk
+{
 	branch_vk* FrameGraphTree;
 	unsigned char branchcount = 255;
 };
 
-struct framegraphsys_vk {
-	//SECONDARY FUNCTION DECLARATIONs
+struct framegraphsys_vk
+{
+	// SECONDARY FUNCTION DECLARATIONs
 
-	//This function will reconstruct framegraph's static information (and will generate branches for next frame, you only need to duplicate framegraph in next frame)
+	// This function will reconstruct framegraph's static information (and will generate branches for next frame, you
+	// only need to duplicate framegraph in next frame)
 	bool Check_WaitHandles();
 	void Create_FrameGraphs();
 	void Create_VkDataofRGBranches(const framegraph_vk& FrameGraph);

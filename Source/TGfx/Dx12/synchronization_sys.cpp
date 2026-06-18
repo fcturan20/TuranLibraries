@@ -1,24 +1,31 @@
 #include "synchronization_sys.h"
 
-struct fence_dx {
-  ComPtr<ID3D12Fence> g_Fence;
-  uint64_t            g_FrameFenceValues[2] = {};
-  HANDLE              g_FenceEvent;
+struct fence_dx
+{
+	ComPtr<ID3D12Fence> Fence;
+	uint64_t FrameFenceValues[2] = {};
+	HANDLE FenceEvent;
 
-  enum fence_status : unsigned char { invalid = 0, unused = 1, used = 2 };
-  fence_status current_status = fence_status::invalid;
-  // Each wait semaphore in a queue submission is unsignaled and never signaled in the same
-  // submission
-  std::vector<semaphore_idtype_dx> wait_semaphores;
+	enum FenceStatus : unsigned char
+	{
+		FENCE_STATUS_INVALID = 0,
+		FENCE_STATUS_UNUSED = 1,
+		FENCE_STATUS_USED = 2
+	};
+	FenceStatus CurrentStatus = FenceStatus::FENCE_STATUS_INVALID;
+	// Each wait semaphore in a queue submission is unsignaled and never signaled in the same
+	// submission
+	std::vector<semaphore_idtype_dx> WaitSemaphores;
 #ifdef VULKAN_DEBUGGING
-  fence_idtype_dx ID;
+	fence_idtype_dx Id;
 #endif
-  inline fence_idtype_dx getID() {
+	inline fence_idtype_dx GetId()
+	{
 #ifdef VULKAN_DEBUGGING
-    return ID;
+		return Id;
 #else
-    return this;
+		return this;
 #endif
-  }
-  friend struct fencesys_vk;
+	}
+	friend struct fencesys_vk;
 };

@@ -1,19 +1,19 @@
 #include "predefinitions_dx.h"
 
-core_tgfx*             core_tgfx_main = nullptr;
-core_public*           core_dx        = nullptr;
-renderer_public*       renderer       = nullptr;
-gpudatamanager_public* contentmanager = nullptr;
-imgui_dx*              imgui          = nullptr;
-GPU_VKOBJ*             rendergpu      = nullptr;
-threadingsys_tapi*     threadingsys   = nullptr;
-unsigned int           threadcount    = 1;
-semaphoresys_dx*       semaphoresys   = nullptr;
-fencesys_dx*           fencesys       = nullptr;
-allocatorsys_dx*       gpu_allocator  = nullptr;
-queuesys_dx*           queuesys       = nullptr;
+core_tgfx* gCoreTgfxMain = nullptr;
+core_public* gCoreDx = nullptr;
+renderer_public* gRenderer = nullptr;
+gpudatamanager_public* gContentManager = nullptr;
+imgui_dx* gImgui = nullptr;
+GPU_VKOBJ* gRenderGpu = nullptr;
+threadingsys_tapi* gThreadingSystem = nullptr;
+unsigned int gThreadCount = 1;
+semaphoresys_dx* gSemaphoreSystem = nullptr;
+fencesys_dx* gFenceSystem = nullptr;
+allocatorsys_dx* gGpuAllocator = nullptr;
+queuesys_dx* gQueueSystem = nullptr;
 
 tgfx_PrintLogCallback printer = nullptr;
 
-HINSTANCE hInstance           = NULL;
-UINT      g_RTVDescriptorSize = UINT32_MAX;
+HINSTANCE gHInstance = NULL;
+UINT gRtvDescriptorSize = UINT32_MAX;

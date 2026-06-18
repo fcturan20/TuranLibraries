@@ -1,13 +1,14 @@
 #pragma once
 
 #define TCORE_C_LINKAGE extern "C"
-#define TCORE_BEGIN_C_LINKAGE extern "C" {
+#define TCORE_BEGIN_C_LINKAGE                                                                                          \
+	extern "C"                                                                                                         \
+	{
 #define TCORE_END_C_LINKAGE }
 #define TCORE_DEFINE_HANDLE(name) typedef struct name* name##Handle
 
-#define TCORE_MAKE_PLUGIN_VERSION(major, mid, minor)                      \
-  (((major < 255 ? major : 255) << 16) | ((mid < 255 ? mid : 255) << 8) | \
-   ((minor < 255 ? minor : 255)))
+#define TCORE_MAKE_PLUGIN_VERSION(major, mid, minor)                                                                   \
+	(((major < 255 ? major : 255) << 16) | ((mid < 255 ? mid : 255) << 8) | ((minor < 255 ? minor : 255)))
 #define TCORE_GET_PLUGIN_MAJOR(version) (version >> 16)
 
 TCORE_BEGIN_C_LINKAGE
@@ -37,14 +38,13 @@ TCORE_BEGIN_C_LINKAGE
 #elif defined(T_ENV32BIT)
 #error "32 bit platform is not supported! Please use 64 bit platform to build this project."
 #else
-#error \
-  "Project configurations should be corrupted because environment is neither 32 bit or 64 bit! So project failed to compile"
+#error                                                                                                                 \
+	"Project configurations should be corrupted because environment is neither 32 bit or 64 bit! So project failed to compile"
 #endif
 
 // Define TCORE_FUN_EXPORT as a C macro for the compiler
 // Microsoft
 #if defined(_MSC_VER)
-// Add extern "C" for C++ compilers
 #if defined(__cplusplus)
 #define TCORE_FUN_EXPORT TCORE_C_LINKAGE __declspec(dllexport)
 #else
@@ -58,6 +58,12 @@ TCORE_BEGIN_C_LINKAGE
 #else
 #define TCORE_FUN_EXPORT __attribute__((visibility("default")))
 #endif
+#endif
+
+// Define TCORE_CPP_20 as a C++ macro for the compiler on all platforms
+#if defined(__cplusplus) && __cplusplus >= 202002L
+#define TCORE_CPP_20
+// Define TCORE_USE_CPP_WRAPPER if you want to use C++ wrapper for TCore API
 #endif
 
 #if defined(T_SUPPORTEDPLATFORM) & defined(TCORE_INCLUDE_PLATFORM_LIBS)
@@ -74,33 +80,68 @@ TCORE_BEGIN_C_LINKAGE
 #endif
 #endif
 
-typedef enum TCResult {
-  TC_RESULT_SUCCESS           = 0,
-  TC_RESULT_FAILURE           = 1,
-  TC_RESULT_UNKNOWN           = 2,
-  TC_RESULT_INVALID_ARGUMENT  = 3,
-  TC_RESULT_OUT_OF_MEMORY     = 4,
-  TC_RESULT_NOT_FOUND         = 5,
-  TC_RESULT_ALREADY_EXISTS    = 6,
-  TC_RESULT_UNSUPPORTED       = 7,
-  TC_RESULT_TIMEOUT           = 8,
-  TC_RESULT_PERMISSION_DENIED = 9,
-  TC_RESULT_UNIMPLEMENTED     = 10,
-  TC_RESULT_ABSENT_DEPENDENCY = 11
+#define TC_NULL ((void*)0)
+typedef enum TCResult
+{
+	TC_RESULT_SUCCESS = 0,
+	TC_RESULT_FAILURE = 1,
+	TC_RESULT_UNKNOWN = 2,
+	TC_RESULT_INVALID_ARGUMENT = 3,
+	TC_RESULT_OUT_OF_MEMORY = 4,
+	TC_RESULT_NOT_FOUND = 5,
+	TC_RESULT_ALREADY_EXISTS = 6,
+	TC_RESULT_UNSUPPORTED = 7,
+	TC_RESULT_TIMEOUT = 8,
+	TC_RESULT_PERMISSION_DENIED = 9,
+	TC_RESULT_UNIMPLEMENTED = 10,
+	TC_RESULT_ABSENT_DEPENDENCY = 11
 } TCResult;
 
 typedef unsigned char TBool;
 #define TTRUE 1
 #define TFALSE 0
 
-typedef struct TCBuffer {
-  void*         data;
-  unsigned long size;
+typedef struct TCBuffer
+{
+	void* data;
+	unsigned long size;
 } TCBuffer;
 
-typedef struct TCReadBuffer {
-  const void*   data;
-  unsigned long size;
+typedef struct TCReadBuffer
+{
+	const void* data;
+	unsigned long size;
 } TCReadBuffer;
+
+#if defined(NDEBUG)
+#define TCORE_SOFT_CHECK(condition, message)                                                                           \
+	if (!(condition))                                                                                                  \
+	{                                                                                                                  \
+		printf("Soft check failed: %s\n", message);                                                                    \
+		__debugbreak(); // MSVC
+}
+
+#define TCORE_HARD_CHECK(condition, message)                                                                           \
+	if (!(condition))                                                                                                  \
+	{                                                                                                                  \
+		printf("Hard check failed: %s\n", message);                                                                    \
+		exit(1);                                                                                                       \
+	}
+#else
+#include <stdio.h>
+#include <stdlib.h>
+#define TCORE_SOFT_CHECK(condition, message)                                                                           \
+	if (!(condition))                                                                                                  \
+	{                                                                                                                  \
+		perror("Soft check failed: " message);                                                                         \
+		abort();                                                                                                       \
+	}
+#define TCORE_HARD_CHECK(condition, message)                                                                           \
+	if (!(condition))                                                                                                  \
+	{                                                                                                                  \
+		perror("Hard check failed: " message);                                                                         \
+		abort();                                                                                                       \
+	}
+#endif
 
 TCORE_END_C_LINKAGE

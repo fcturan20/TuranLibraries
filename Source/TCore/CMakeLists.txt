@@ -6,8 +6,18 @@ tcmake_create_dynamic_target(TCore "${TCoreFiles}" "TCore")
 set_target_properties(TCore PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/Include")
 target_link_libraries(TCore PRIVATE dynalo)
 
+# Virtual Memory System
+set(TCoreVIRTUALMEM_SOURCES "Source/VirtualMemory.cpp" "Include/VirtualMemory.h")
+tcmake_create_dynamic_target(TCoreVirtualMemory "${TCoreVIRTUALMEM_SOURCES}" "TCore")
+target_link_libraries(TCoreVirtualMemory PRIVATE TCore)
+
+# Allocator System
+set(TCoreALLOCATOR_SOURCES "Source/Allocator.cpp" "Include/Allocator.h")
+tcmake_create_dynamic_target(TCoreAllocator "${TCoreALLOCATOR_SOURCES}" "TCore")
+target_link_libraries(TCoreAllocator PRIVATE TCore)
+
 #ECS System
-set(TCoreECS_SOURCES "Source/ECS.cpp" "Source/Allocator.cpp" "Include/ECS.h" "Include/Allocator.h")
+set(TCoreECS_SOURCES "Source/ECS.cpp" "Include/ECS.h")
 tcmake_create_dynamic_target(TCoreECS "${TCoreECS_SOURCES}" "TCore")
 target_link_libraries(TCoreECS PRIVATE TCore)
 
@@ -16,7 +26,7 @@ set(TCoreUNITTEST_SOURCES "Source/UnitTestSystem.cpp" "Include/UnitTestSystem.h"
 tcmake_create_dynamic_target(TCoreUnitTest "${TCoreUNITTEST_SOURCES}" "TCore")
 target_link_libraries(TCoreUnitTest PRIVATE TCore)
 
-##Array of Strings System
+#String System
 set(TCoreSTRING_SOURCES "Source/TString.cpp" "Include/TString.h")
 tcmake_create_dynamic_target(TCoreString "${TCoreSTRING_SOURCES}" "TCore")
 target_link_libraries(TCoreString PRIVATE TCore)

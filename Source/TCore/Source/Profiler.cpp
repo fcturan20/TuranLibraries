@@ -9,110 +9,112 @@
 #include "ECS.h"
 #include "Threading.h"
 
+TCORE_PLUGIN_INIT(TC)
+TCORE_PLUGIN_INIT(TCProfiler)
+TCORE_PLUGIN_INIT(TCThreading)
+
+TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCProfiler)
+TCORE_PLUGIN_ENTRY_POINT_END()
+
 struct TCProfiledScope
 {
-public:
-	bool isRecording : 1;
-	unsigned char timingType : 2;
+	bool IsRecording : 1;
+	TCDurationType DurationType : 2;
 	unsigned long long startPoint;
 	unsigned long long* duration;
 	std::string name;
 };
-typedef struct TCProfilerData
-{
-	TCProfiler* sys;
-	TCProfiledScope** last_handles;
-	unsigned int threadcount;
-	const tlJob* threadsys;
-} profiler_tapi_d;
 
-TCProfilerData* priv = nullptr;
-
-constexpr long long getTime(unsigned char timingType)
+constexpr long long GetCurrentTime(TCDurationType durationType)
 {
-	switch (timingType)
+	switch (durationType)
 	{
-	case 0:
+	case TC_DURATION_TYPE_NANOSECONDS:
 		return std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now())
 			.time_since_epoch()
 			.count();
 		break;
-	case 1:
+	case TC_DURATION_TYPE_MICROSECONDS:
 		return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now())
 			.time_since_epoch()
 			.count();
 		break;
-	case 2:
+	case TC_DURATION_TYPE_MILLISECONDS:
 		return std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now())
 			.time_since_epoch()
 			.count();
 		break;
-	case 3:
+	case TC_DURATION_TYPE_SECONDS:
 		return std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now())
 			.time_since_epoch()
 			.count();
 		break;
-	default: assert(0 && "Timing type is invalid!");
+	default: assert(0 && "Duration type is invalid!");
 	}
 }
 
-TCProfiledScope* start_profiling(const char* name, unsigned long long* duration, unsigned char timingType)
+static const char* GTimeNames[] = {"nanoseconds", "microseconds", "milliseconds", "seconds"};
+struct TCProfilerContext* GContext = nullptr;
+struct TCProfilerContext
 {
-	unsigned int threadindex = (priv->threadcount == 1) ? (0) : (priv->threadsys->thisThreadIndx());
-	TCProfiledScope* profile = new TCProfiledScope;
-	profile->startPoint = getTime(timingType);
-	profile->isRecording = true;
-	profile->duration = duration;
-	profile->timingType = timingType;
-	profile->name = name;
-	priv->last_handles[threadindex] = profile;
-	return profile;
-}
-
-void finish_profiling(TCProfiledScope* profil)
-{
-	*profil->duration = getTime(profil->timingType) - profil->startPoint;
-	delete profil;
-}
-const char* timeNames[] = {"nanoseconds", "microseconds", "milliseconds", "seconds"};
-void threadlocal_finish_last_profiling(unsigned char shouldPrint)
-{
-	unsigned int threadindex = (priv->threadcount == 1) ? (0) : (priv->threadsys->thisThreadIndx());
-	TCProfiledScope* profile = (TCProfiledScope*)priv->last_handles[threadindex];
-	unsigned long long* duration = profile->duration;
-	std::string name = profile->name;
-	unsigned char timingType = profile->timingType;
-	finish_profiling(priv->last_handles[threadindex]);
-	if (shouldPrint)
+	TCProfiledScope** LastHandles;
+	unsigned int ThreadCount;
+	static TCProfiledScope* Begin(const char* name, unsigned long long* duration, TCDurationType durationType)
 	{
-		printf("%s took %llu %s!\n", name.c_str(), *duration, timeNames[timingType]);
+		unsigned int threadindex = (GContext->ThreadCount == 1) ? (0) : (TCThreading->GetCurrentThreadIndex());
+		TCProfiledScope* profile = new TCProfiledScope;
+		profile->startPoint = GetCurrentTime(durationType);
+		profile->IsRecording = true;
+		profile->duration = duration;
+		profile->DurationType = durationType;
+		profile->name = name;
+		GContext->LastHandles[threadindex] = profile;
+		return profile;
 	}
-}
 
-ECSPLUGIN_ENTRY(ecssys, reloadFlag)
-{
-	unsigned int threadcount = 1;
-	THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE threadsystype =
-		(THREADINGSYS_TAPI_PLUGIN_LOAD_TYPE)ecssys->getSystem(THREADINGSYS_TAPI_PLUGIN_NAME);
-	if (threadsystype)
+	static void Finish(TCProfiledScope* profil)
 	{
-		threadcount = threadsystype->threadCount();
+		*profil->duration = GetCurrentTime(profil->DurationType) - profil->startPoint;
+		delete profil;
 	}
+	static void ThreadLocalFinishLast(unsigned char shouldPrint)
+	{
+		unsigned int threadindex = (GContext->ThreadCount == 1) ? (0) : (TCThreading->GetCurrentThreadIndex());
+		TCProfiledScope* profile = (TCProfiledScope*)GContext->LastHandles[threadindex];
+		unsigned long long* duration = profile->duration;
+		std::string name = profile->name;
+		TCDurationType durationType = profile->DurationType;
+		Finish(GContext->LastHandles[threadindex]);
+		if (shouldPrint)
+		{
+			printf("%s took %llu %s!\n", name.c_str(), *duration, GTimeNames[durationType]);
+		}
+	}
+};
 
-	TCProfiler* type = (TCProfiler*)malloc(sizeof(TCProfiler));
-	priv = (TCProfilerData*)malloc(sizeof(TCProfilerData));
+TCResult TCProfiler_Initialize(const void** outPluginAPI)
+{
+	auto services = new ITCProfiler;
+	services->Begin = TCProfilerContext::Begin;
+	services->End = TCProfilerContext::Finish;
+	services->EndLastLocalProfile = TCProfilerContext::ThreadLocalFinishLast;
 
-	ecssys->addSystem(PROFILER_TAPI_PLUGIN_NAME, PROFILER_TAPI_PLUGIN_VERSION, type);
-
-	type->start = &start_profiling;
-	type->end = &finish_profiling;
-	type->endLastLocalProfile = &threadlocal_finish_last_profiling;
-	type->data = priv;
-
-	priv->threadsys = threadsystype;
-	priv->threadcount = threadcount;
-	priv->last_handles = (TCProfiledScope**)malloc(sizeof(TCProfiledScope*) * threadcount);
-	memset(priv->last_handles, 0, sizeof(TCProfiledScope*) * threadcount);
+	TCProfiler = services;
+	*outPluginAPI = TCProfiler;
+	GContext = new TCProfilerContext;
+	return TC_RESULT_SUCCESS;
 }
 
-ECSPLUGIN_EXIT(ecssys, reloadFlag) {}
+TCResult TCProfiler_OnPreShutdown()
+{
+	return TC_RESULT_SUCCESS;
+}
+
+TCResult TCProfiler_Shutdown()
+{
+	delete TCProfiler;
+	TCProfiler = nullptr;
+	return TC_RESULT_SUCCESS;
+}
+
+void TCProfiler_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded) {}

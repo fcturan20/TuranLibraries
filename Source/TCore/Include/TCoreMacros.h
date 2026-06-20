@@ -80,7 +80,6 @@ TCORE_BEGIN_C_LINKAGE
 #endif
 #endif
 
-#define TC_NULL ((void*)0)
 typedef enum TCResult
 {
 	TC_RESULT_SUCCESS = 0,
@@ -100,13 +99,22 @@ typedef enum TCResult
 typedef unsigned char TBool;
 #define TTRUE 1
 #define TFALSE 0
+static_assert(sizeof(TBool) == 1, "TBool should be 1 byte in size!");
 
+typedef unsigned long long TSize;
+static_assert(sizeof(TSize) == 8, "TSize should be 8 bytes in size!");
+
+typedef unsigned long long TUint;
+static_assert(sizeof(TUint) == 8, "TUint should be 8 bytes in size!");
+
+// Modifiable buffer
 typedef struct TCBuffer
 {
 	void* data;
 	unsigned long size;
 } TCBuffer;
 
+// Constant (non-modifiable) buffer
 typedef struct TCReadBuffer
 {
 	const void* data;

@@ -41,7 +41,7 @@ TCResult LoadPlugin(const char* path, const TCPluginInfo** outInfo)
 	try
 	{
 		auto handle = dynalo::open(path);
-		auto entryPoint = dynalo::get_function<void(const ITC*, TCPluginInfo*, TCPluginFunctions*)>(
+		auto entryPoint = dynalo::get_function<TCResult(const ITC*, TCPluginInfo*, TCPluginFunctions*)>(
 			handle, "TCORE_PLUGIN_ENTRY_FUNC");
 		if (!entryPoint)
 		{
@@ -51,7 +51,13 @@ TCResult LoadPlugin(const char* path, const TCPluginInfo** outInfo)
 
 		TCPluginInfo info;
 		TCPluginFunctions functions;
-		entryPoint(TC, &info, &functions);
+		auto res = entryPoint(TC, &info, &functions);
+		if (res != TC_RESULT_SUCCESS)
+		{
+			printf("Plugin entry point failed to initialize: %s\n", path);
+			dynalo::close(handle);
+			return res;
+		}
 
 		StrCopy((char**)&info.Name, info.Name);
 		StrCopy((char**)&info.RootFolderPath, info.RootFolderPath);
@@ -120,7 +126,7 @@ TCResult TC_Shutdown()
 	return TC_RESULT_SUCCESS;
 }
 
-void TC_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded)
+void TC_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded)
 {
 	// This plugin doesn't react to other plugins being loaded or unloaded, so this function is empty.
 }

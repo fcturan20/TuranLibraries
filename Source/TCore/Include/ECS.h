@@ -24,80 +24,78 @@ TCORE_BEGIN_C_LINKAGE
 
 TCORE_PLUGIN_DEFINE(TCECS, "tcEcs", TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
 
-// To help users to minimize accessing issues, each type name has its pointer
-// With this way, users can't use an entityTypeID mistakenly as entityID etc.
-struct tcEntityType;
-struct tcComponentTypeID; // Identifier for component types
-struct tcComponent;
-struct tcEntity;
+TCORE_DEFINE_HANDLE(TCEntityType);
+TCORE_DEFINE_HANDLE(TCComponentType);
+TCORE_DEFINE_HANDLE(TCComponent);
+TCORE_DEFINE_HANDLE(TCEntity);
 
 // Use this to match base of a component type with a overriden one
-struct tcComponentTypePair
+typedef struct TCComponentTypePair
 {
-	struct tcComponentTypeID* base;
-	void* overriden; // Pointer to overriden type
-};
+	TCComponentTypeHandle Base;
+	void* Overriden; // Pointer to overriden type
+} TCComponentTypePair;
 
 // Each component should handle its allocations in its own manager
 // So there is no general componentManager for all components
 // If a system will use a component; it should include the header that has component's type
-struct tcComponentManagerDescription
+typedef struct TCComponentManagerDescription
 {
-	struct tcComponent* (*createComponent)();
-	unsigned char (*validateComponent)();
-	void (*destroyComponent)(struct tcComponent* hnd);
-};
+	TCComponentHandle (*CreateComponent)();
+	unsigned char (*ValidateComponent)();
+	void (*DestroyComponent)(TCComponentHandle hnd);
+} TCComponentManagerDescription;
 
-typedef struct TCECSServices
+typedef struct ITCECS
 {
 	// SYSTEM
 	////////////////////////////
 
 	// Get the system registered by a plugin
-	const void* (*getSystem)(const char* name);
+	const void* (*GetSystem)(const char* name);
 	// Make a system accessible from other systems
-	void (*addSystem)(const char* pluginName, const char* name, unsigned int version, const void* system_ptr);
-	void (*destroySystem)(const void* systemPTR);
+	TCResult (*RegisterSystem)(const char* plugin_name, const char* name, unsigned int version, const void* system_ptr);
+	void (*DestroySystem)(const void* systemPTR);
 
 	// COMPONENT
 	////////////////////////////
 
 	// @param mainType: If main type can't be inherited, set NULL.
 	// @return NULL if there is any component inheritance conflicts
-	struct tcComponentTypeID* (*addComponentType)(const char* name,
-												  void* mainType,
-												  struct tcComponentManagerDescription manager,
-												  const struct tcComponentTypePair* pairList,
-												  unsigned int pairListSize);
-	struct tcComponentManagerDescription (*getCompManager)(struct tcComponentTypeID* compType);
+	TCComponentTypeHandle (*AddComponentType)(const char* name,
+											  void* mainType,
+											  const TCComponentManagerDescription* manager,
+											  const TCComponentTypePair* pair_list,
+											  unsigned int pair_list_size);
+	const TCComponentManagerDescription* (*GetComponentManager)(TCComponentTypeHandle component_type);
 
 	// ENTITY
 	////////////////////////////
 
-	struct tcEntityType* (*addEntityType)(const struct tcComponentTypeID* const* compTypeList, unsigned int listSize);
+	TCEntityTypeHandle (*AddEntityType)(const TCComponentTypeHandle* component_type_list, TSize list_size);
 	// Create an entity
-	struct tcEntity* (*createEntity)(struct tcEntityType* typeHandle);
+	TCEntityHandle (*CreateEntity)(TCEntityTypeHandle type);
 	// Find entity type handle
-	struct tcEntityType* (*findEntityType_byEntityHnd)(struct tcEntity* entityHnd);
+	TCEntityTypeHandle (*FindEntityType)(TCEntityHandle entity);
 	//@return 1 if entity type contains the component type; otherwise 0
-	unsigned char (*doesContains_entityType)(struct tcEntityType* entityType, struct tcComponentTypeID* compType);
+	TCResult (*SearchComponentType)(TCEntityTypeHandle entity_type, TCComponentTypeHandle component_type);
 	// Get a specific type of component of an entity
-	// @param compTypeID: ID of the component type user wants to access
-	// @param returnedCompType: Pointer to overriden component type, you should cast and use this to
+	// @param component_type: ID of the component type user wants to access
+	// @param outComponentType: Pointer to overriden component type, you should cast and use this to
 	// access data of the component
 	// @return nullptr if there is no such component; otherwise valid pointer to use with new
-	// compTypeID
+	// component_type
 	// @example
-	// compTypeID_ecstapi baseXXXCompTypeID = XXXCompManager->GetComponentTypeID();
+	// component_type_ecstapi baseXXXCompTypeID = XXXCompManager->GetComponentTypeID();
 	// compType_ecstapi overridenCompType;
 	// compHnd_ecstapi compData = get_comp_byEntityHnd(firstEntity, baseXXXComponentType,
 	// &overridenCompType); int ABCvarValue = ((XXX*)overridenCompType)->get_ABCvar(compData); NOTE:
 	// Don't do ->    int ABCvarValue =
 	// ((XXX*)XXXCompManager->GetComponentType())->get_ABCvar(compData);
 	//  because it will break inheritance
-	struct tcComponent* (*get_component_byEntityHnd)(struct tcEntity* entityID,
-													 struct tcComponentTypeID* compTypeID,
-													 void** returnedCompType);
-} TCECSServices;
+	TCComponentHandle (*GetComponent)(TCEntityHandle entity,
+									  TCComponentTypeHandle component_type,
+									  void** outComponentType);
+} ITCECS;
 
 TCORE_END_C_LINKAGE

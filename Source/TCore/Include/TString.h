@@ -12,7 +12,7 @@ typedef struct ITCString
 	void (*Append)(TCStringHandle str, const char* str_to_append);
 	void (*Clear)(TCStringHandle str);
 	void (*Set)(TCStringHandle str, const char* new_str);
-	const char* (*C_str)(TCStringHandle str);
+	const char* (*CStr)(TCStringHandle str);
 	void (*Resize)(TCStringHandle str, size_t new_capacity);
 	TCStringHandle (*Substring)(TCStringHandle str, size_t start_index, size_t end_index);
 } ITCString;
@@ -27,13 +27,13 @@ class String
 {
 public:
 	String(const char* str = nullptr) { Handle = TCString->Create(str); }
-	String(const String& other) { Handle = TCString->Create(other.C_str()); }
+	String(const String& other) { Handle = TCString->Create(other.CStr()); }
 	String& operator=(const String& other)
 	{
 		if (this != &other)
 		{
 			TCString->Destroy(Handle);
-			Handle = TCString->Create(other.C_str());
+			Handle = TCString->Create(other.CStr());
 		}
 		return *this;
 	}
@@ -50,6 +50,21 @@ public:
 			Handle = other.Handle;
 			other.Handle = nullptr;
 		}
+		return *this;
+	}
+	String& operator+=(const char* str_to_append)
+	{
+		TCString->Append(Handle, str_to_append);
+		return *this;
+	}
+	String& operator+=(const String& other)
+	{
+		TCString->Append(Handle, other.CStr());
+		return *this;
+	}
+	String& operator=(const char* new_str)
+	{
+		TCString->Set(Handle, new_str);
 		return *this;
 	}
 	String(TCStringHandle handle) : Handle(handle) {}
@@ -75,13 +90,29 @@ public:
 		TCString->Set(Handle, new_str);
 		return *this;
 	}
-	const char* C_str() const { return TCString->C_str(Handle); }
+	const char* CStr() const { return TCString->CStr(Handle); }
 	void Resize(size_t new_capacity) { TCString->Resize(Handle, new_capacity); }
 	String Substring(size_t start_index, size_t end_index)
 	{
 		return TCString->Substring(Handle, start_index, end_index);
 	}
 
+#if defined(_XSTRING_) || defined(_LIBCPP_STRING) || defined(_GLIBCXX_STRING)
+	operator std::string() const { return std::string(CStr()); }
+	String& operator=(const std::string& str)
+	{
+		TCString->Set(Handle, str.c_str());
+		return *this;
+	}
+	String& operator+=(const std::string& str)
+	{
+		TCString->Append(Handle, str.c_str());
+		return *this;
+	}
+	// Converting constructor from std::string to support:
+	//   TCore::String textData = std::string("abd");
+	String(const std::string& str) { Handle = TCString->Create(str.c_str()); }
+#endif
 private:
 	TCStringHandle Handle;
 };

@@ -5,7 +5,7 @@ TCORE_BEGIN_C_LINKAGE
 TCORE_PLUGIN_DEFINE(TCFileSystem, "tcFileSystem", TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
 
 // All path and texts should be UTF-8 encoded with null terminator
-typedef struct TCFileSystemServices
+typedef struct ITCFileSystem
 {
 	void* (*ReadBinaryFile)(const char* path, unsigned long* size);
 	void (*WriteBinaryFile)(const char* path, void* data, unsigned long size);
@@ -13,6 +13,6 @@ typedef struct TCFileSystemServices
 	void* (*ReadTextFile)(const char* path, unsigned long* size);
 	void (*WriteTextFile)(const char* text, const char* path, TBool writeToEnd);
 	void (*DeleteFile)(const char* path);
-} TCFileSystemServices;
+} ITCFileSystem;
 
 TCORE_END_C_LINKAGE

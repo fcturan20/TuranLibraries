@@ -146,7 +146,13 @@ struct TCBitsetContext
 /////////////////////////////////////////////// Unit Tests
 #include <vector>
 
-uint32_t findFirst(std::vector<bool>& stdBitset, bool isTrue)
+struct TCBitsetUnitTests
+{
+	static unsigned int FindFirstBitset(TCReadBuffer input_data);
+	static unsigned int SetBitset(TCReadBuffer input_data);
+	static void Register();
+};
+uint32_t FindFirst(std::vector<bool>& stdBitset, bool isTrue)
 {
 	for (uint32_t i = 0; i < stdBitset.size(); i++)
 	{
@@ -158,40 +164,87 @@ uint32_t findFirst(std::vector<bool>& stdBitset, bool isTrue)
 	return UINT32_MAX;
 }
 
-TCORE_UNITTEST_START(FindFirstBitset)
-static constexpr uint32_t bitsetByteLength = 10 << 10;
-std::vector<bool> stdBitset(bitsetByteLength * 8, false);
-TCBitsetHandle bitset = TCBitset->CreateBitset(bitsetByteLength);
+unsigned int TCBitsetUnitTests::FindFirstBitset(TCReadBuffer input_data)
+{
+	static constexpr uint32_t bitsetByteLength = 10 << 10;
+	std::vector<bool> stdBitset(bitsetByteLength * 8, false);
+	TCBitsetHandle bitset = TCBitset->CreateBitset(bitsetByteLength);
 
-time_t t;
-srand((unsigned)time(&t));
-for (uint32_t i = 0; i < bitsetByteLength * 8; i++)
-{
-	uint32_t bit = rand() % (bitsetByteLength * 8);
-	bool v = rand() % 2;
-	stdBitset[bit] = v;
-	TCBitset->SetBit(bitset, bit, v);
-}
-if (findFirst(stdBitset, true) != TCBitset->GetFirstBitIndx(bitset, true) ||
-	findFirst(stdBitset, false) != TCBitset->GetFirstBitIndx(bitset, false))
-{
-	*outputStr = L"Firsts're not matching!";
-	return 1;
-}
-for (uint32_t i = 0; i < bitsetByteLength * 8; i++)
-{
-	unsigned char tapiV = TCBitset->GetBitValue(bitset, i);
-	unsigned char stdV = stdBitset[i];
-	if (stdV != tapiV)
+	time_t t;
+	srand((unsigned)time(&t));
+	for (uint32_t i = 0; i < bitsetByteLength * 8; i++)
 	{
-		*outputStr = L"Some elements're not matching!";
+		uint32_t bit = rand() % (bitsetByteLength * 8);
+		bool v = rand() % 2;
+		stdBitset[bit] = v;
+		TCBitset->SetBit(bitset, bit, v);
+	}
+	if (FindFirst(stdBitset, true) != TCBitset->GetFirstBitIndx(bitset, true) ||
+		FindFirst(stdBitset, false) != TCBitset->GetFirstBitIndx(bitset, false))
+	{
+		printf("FindFirstBitset test failed!\n");
 		return 1;
 	}
+	for (uint32_t i = 0; i < bitsetByteLength * 8; i++)
+	{
+		unsigned char tapiV = TCBitset->GetBitValue(bitset, i);
+		unsigned char stdV = stdBitset[i];
+		if (stdV != tapiV)
+		{
+			printf("SetBitset test failed!\n");
+			return 1;
+		}
+	}
+	return 0;
 }
-*outputStr = L"Succeded";
-return 0;
-TCORE_UNITTEST_END()
 
+unsigned int TCBitsetUnitTests::SetBitset(TCReadBuffer input_data)
+{
+	static constexpr uint32_t bitsetByteLength = 10 << 10;
+	std::vector<bool> stdBitset(bitsetByteLength * 8, false);
+	TCBitsetHandle bitset = TCBitset->CreateBitset(bitsetByteLength);
+
+	time_t t;
+	srand((unsigned)time(&t));
+	for (uint32_t i = 0; i < bitsetByteLength * 8; i++)
+	{
+		uint32_t bit = rand() % (bitsetByteLength * 8);
+		bool v = rand() % 2;
+		stdBitset[bit] = v;
+		TCBitset->SetBit(bitset, bit, v);
+	}
+	for (uint32_t i = 0; i < bitsetByteLength * 8; i++)
+	{
+		unsigned char tapiV = TCBitset->GetBitValue(bitset, i);
+		unsigned char stdV = stdBitset[i];
+		if (stdV != tapiV)
+		{
+			printf("SetBitset test failed!\n");
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void TCBitsetUnitTests::Register()
+{
+	if (TCUnitTest = (ITCUnitTest*)TC->GetPlugin("tcUnitTestSystem", 0, nullptr, nullptr); !TCUnitTest)
+		return;
+
+	TCUnitTestDescription desc1;
+	desc1.Name = "FindFirstBitset";
+	desc1.GlobalCategoryName = "Bitset";
+	desc1.Test = FindFirstBitset;
+	desc1.Data = {nullptr, 0};
+	TCUnitTest->RegisterTest(&desc1);
+
+	TCUnitTestDescription desc2;
+	desc2.Name = "SetBitset";
+	desc2.GlobalCategoryName = "Bitset";
+	desc2.Test = SetBitset;
+	desc2.Data = {nullptr, 0};
+	TCUnitTest->RegisterTest(&desc2);
+}
 TCResult TCBitset_Initialize(const void** outBitsetAPI)
 {
 	// Fill plugin API struct with function pointers
@@ -211,22 +264,7 @@ TCResult TCBitset_Initialize(const void** outBitsetAPI)
 	}
 
 	// Register unit tests
-	TCUnitTest = (ITCUnitTest*)TC->GetPlugin("tcUnitTestSystem", 0, nullptr, nullptr);
-	if (TCUnitTest)
-	{
-		TCUnitTest->RegisterTest(&(TCUnitTestDescription){
-			.Name = "FindFirstBitset",
-			.GlobalCategoryName = "Bitset",
-			.Data = {nullptr, 0},
-			.Test = &FindFirstBitset,
-		});
-		TCUnitTest->RegisterTest(&(TCUnitTestDescription){
-			.Name = "SetBitset",
-			.GlobalCategoryName = "Bitset",
-			.Data = {nullptr, 0},
-			.Test = &SetBitset,
-		});
-	}
+	TCBitsetUnitTests::Register();
 
 	return TC_RESULT_SUCCESS;
 }
@@ -242,3 +280,5 @@ TCResult TCBitset_Shutdown()
 {
 	return TC_RESULT_SUCCESS;
 }
+
+void TCBitset_OnPluginLoadStateChange(const TCPluginInfo* info, TBool isLoaded) {}

@@ -34,10 +34,4 @@ typedef struct ITCUnitTest
 	void (*RunTest)(const char* name, TCReadBuffer inputData);
 } ITCUnitTest;
 
-// Define a unit test with prefix UnitTest_
-#define TCORE_UNITTEST_START(name)                                                                                     \
-	unsigned int UnitTest_##name(TCReadBuffer inputData)                                                               \
-	{
-#define TCORE_UNITTEST_END() }
-
 TCORE_END_C_LINKAGE

@@ -1,3 +1,9 @@
+// External
+#include <stdio.h>
+#include <stdlib.h>
+#include <wchar.h>
+
+#define TCORE_USE_CPP_WRAPPER
 #include "UnitTestSystem.h"
 
 TCORE_PLUGIN_INIT(TC)
@@ -7,13 +13,7 @@ TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCUnitTest)
 TCORE_PLUGIN_ENTRY_POINT_END()
 
 // TCore APIs
-#define TCORE_USE_CPP_WRAPPER
 #include "Logger.h"
-
-// External
-#include <stdio.h>
-#include <stdlib.h>
-#include <wchar.h>
 
 struct TCUnitTestContext
 {
@@ -55,7 +55,7 @@ TCResult TCUnitTest_Shutdown()
 	return TC_RESULT_SUCCESS;
 }
 
-void TCUnitTest_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded)
+void TCUnitTest_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded)
 {
 	// This plugin doesn't react to other plugins being loaded or unloaded, so this function is empty.
 }

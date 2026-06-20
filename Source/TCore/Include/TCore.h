@@ -41,7 +41,7 @@ typedef struct TCPluginFunctions
 	// This function is called when another plugin is loaded or unloaded. This allows plugins to react
 	// to changes in the plugin ecosystem. For example, a feature of the plugin can be disabled when a
 	// plugin it depends on is unloaded, and re-enabled when the plugin is loaded again.
-	void (*OnPluginLoadStateChange)(const TCPluginInfo* pluginInfo, bool isLoaded);
+	void (*OnPluginLoadStateChange)(const TCPluginInfo* pluginInfo, TBool isLoaded);
 } TCPluginFunctions;
 
 typedef struct ITC
@@ -74,13 +74,13 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 
 // Define void BindPluginFunctions(TCPluginFunctions*) before calling this
 #define TCORE_PLUGIN_ENTRY_POINT_START(name)                                                                           \
-	TCORE_FUN_EXPORT void TCORE_PLUGIN_ENTRY_FUNC(                                                                     \
+	TCORE_FUN_EXPORT TCResult TCORE_PLUGIN_ENTRY_FUNC(                                                                 \
 		const ITC* core, TCPluginInfo* outPluginInfo, TCPluginFunctions* outPluginFunctions)                           \
 	{                                                                                                                  \
 		TC = core;                                                                                                     \
 		if (!core || !outPluginFunctions || !outPluginInfo)                                                            \
 		{                                                                                                              \
-			return;                                                                                                    \
+			return TC_RESULT_INVALID_ARGUMENT;                                                                         \
 		}                                                                                                              \
 		outPluginInfo->Name = name##_PLUGIN_NAME;                                                                      \
 		outPluginInfo->Version = name##_PLUGIN_VERSION;                                                                \
@@ -97,7 +97,7 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 	{                                                                                                                  \
 		TCPluginInfo info{};                                                                                           \
 		TCPluginFunctions functions{};                                                                                 \
-		TS->GetPlugin(name##_PLUGIN_NAME, version, &info, &name);                                                      \
+		TC->GetPlugin(name##_PLUGIN_NAME, version, &info, (void**)&name);                                              \
 		if (!info.Name)                                                                                                \
 		{                                                                                                              \
 			printf("Failed to load plugin %s because it is not found!\n", name##_PLUGIN_NAME);                         \
@@ -112,7 +112,7 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 	TCResult name##_Initialize(const void** outPluginAPI);                                                             \
 	TCResult name##_OnPreShutdown();                                                                                   \
 	TCResult name##_Shutdown();                                                                                        \
-	void name##_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded);                                \
+	void name##_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded);                               \
 	void BindPluginFunctions(TCPluginFunctions* outPluginFunctions)                                                    \
 	{                                                                                                                  \
 		if (!outPluginFunctions)                                                                                       \
@@ -126,6 +126,8 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 	}                                                                                                                  \
 	TCORE_PLUGIN_ENTRY_POINT_START(name)
 
-#define TCORE_PLUGIN_ENTRY_POINT_END() }
+#define TCORE_PLUGIN_ENTRY_POINT_END()                                                                                 \
+	return TC_RESULT_SUCCESS;                                                                                          \
+	}
 
 TCORE_END_C_LINKAGE

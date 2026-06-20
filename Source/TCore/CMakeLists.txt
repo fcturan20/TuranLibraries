@@ -17,9 +17,9 @@ tcmake_create_dynamic_target(TCoreAllocator "${TCoreALLOCATOR_SOURCES}" "TCore")
 target_link_libraries(TCoreAllocator PRIVATE TCore)
 
 #ECS System
-set(TCoreECS_SOURCES "Source/ECS.cpp" "Include/ECS.h")
-tcmake_create_dynamic_target(TCoreECS "${TCoreECS_SOURCES}" "TCore")
-target_link_libraries(TCoreECS PRIVATE TCore)
+#set(TCoreECS_SOURCES "Source/ECS.cpp" "Include/ECS.h")
+#tcmake_create_dynamic_target(TCoreECS "${TCoreECS_SOURCES}" "TCore")
+#target_link_libraries(TCoreECS PRIVATE TCore)
 
 #Unit Test System
 set(TCoreUNITTEST_SOURCES "Source/UnitTestSystem.cpp" "Include/UnitTestSystem.h")

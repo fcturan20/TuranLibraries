@@ -7,6 +7,8 @@
 
 TCORE_PLUGIN_INIT(TC)
 TCORE_PLUGIN_INIT(TCString)
+TCORE_PLUGIN_INIT(TCAllocator)
+TCORE_PLUGIN_INIT(TCUnitTest)
 TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCString)
 TCORE_PLUGIN_ENTRY_POINT_END()
 
@@ -35,10 +37,9 @@ struct TCStringContext
 		size_t oldCapacity = TCVectorManager->Capacity((TCVectorHandle)str);
 		// If the new length exceeds the current capacity, resize the string
 		if (newLength > oldCapacity)
-		{
 			str = (TCStringHandle)TCVectorManager->Resize((TCVectorHandle)str, newLength);
-		}
-		strcat((char*)str, str_to_append);
+		if (str && str_to_append)
+			strcat((char*)str, str_to_append);
 	}
 
 	static void Clear(TCStringHandle str) { TCVectorManager->Destroy((TCVectorHandle)str); }
@@ -50,7 +51,7 @@ struct TCStringContext
 		strcpy((char*)str, new_str);
 	}
 
-	static const char* C_str(TCStringHandle str) { return (const char*)str; }
+	static const char* CStr(TCStringHandle str) { return (const char*)str; }
 
 	static void Resize(TCStringHandle str, size_t new_capacity)
 	{
@@ -85,7 +86,7 @@ TCResult TCString_Initialize(const void** outPluginAPI)
 							 &TCStringContext::Append,
 							 &TCStringContext::Clear,
 							 &TCStringContext::Set,
-							 &TCStringContext::C_str,
+							 &TCStringContext::CStr,
 							 &TCStringContext::Resize,
 							 &TCStringContext::Substring};
 	TCString = api;
@@ -109,7 +110,7 @@ TCResult TCString_OnPreShutdown()
 	return TC_RESULT_SUCCESS;
 }
 
-void TCString_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded) {}
+void TCString_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded) {}
 
 #pragma region Unit Tests
 
@@ -117,7 +118,7 @@ unsigned int TCStringUnitTests::FirstTest(TCReadBuffer input_data)
 {
 	TCStringHandle str = TCString->Create("Hello");
 	TCString->Append(str, " World");
-	const char* cstr = TCString->C_str(str);
+	const char* cstr = TCString->CStr(str);
 	unsigned int result = 0;
 	if (strcmp(cstr, "Hello World") != 0)
 	{

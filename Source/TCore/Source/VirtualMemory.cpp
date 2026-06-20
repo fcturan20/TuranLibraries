@@ -81,7 +81,7 @@ TCResult TCVirtualMemory_Shutdown()
 	return TC_RESULT_SUCCESS;
 }
 
-void TCVirtualMemory_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded)
+void TCVirtualMemory_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded)
 {
 	// This plugin doesn't react to other plugins being loaded or unloaded, so this function is empty.
 }

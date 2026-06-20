@@ -110,7 +110,7 @@ TCORE_PLUGIN_ENTRY_POINT_END()
 
 TCResult TCFileSystem_Initialize(const void** outPluginAPI)
 {
-	auto services = new TCFileSystemServices;
+	auto services = new ITCFileSystem;
 	services->ReadBinaryFile = ReadBinaryFile;
 	services->OverwriteBinaryFile = OverwriteBinaryFile;
 	services->ReadTextFile = ReadTextFile;
@@ -137,7 +137,7 @@ TCResult TCFileSystem_Shutdown()
 	return TC_RESULT_SUCCESS;
 }
 
-void TCFileSystem_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, bool isLoaded)
+void TCFileSystem_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded)
 {
 	// This plugin doesn't react to other plugins being loaded or unloaded, so this function is empty.
 }

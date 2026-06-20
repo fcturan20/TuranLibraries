@@ -18,7 +18,7 @@ TCORE_DEFINE_HANDLE(TCSuperBlock);
 
 typedef struct ITCBuffer
 {
-	void* (*Malloc)(TCSuperBlockHandle memBlock, unsigned int size, const char* name);
+	void* (*Malloc)(TCSuperBlockHandle memBlock, TSize size, const char* name);
 	// @param returnedAllocPTR: This should be the same pointer as returned by malloc()
 	void (*Free)(void* returnedAllocPTR);
 } ITCBuffer;
@@ -33,29 +33,24 @@ typedef struct ITCVector
 	// @param initialSize: Elements to push at initialization
 	// @param maxSize: Define an upper limit for element count
 	// @return Array pointer, so cast it to your own type
-	TCVectorHandle (*Create)(TCSuperBlockHandle memblock,
-							 unsigned int elementSize,
-							 unsigned int initialSize,
-							 unsigned int maxSize);
-	unsigned int (*Size)(const TCVectorHandle hnd);
-	unsigned int (*Capacity)(const TCVectorHandle hnd);
+	TCVectorHandle (*Create)(TCSuperBlockHandle memory_block, TUint element_size, TSize initial_size, TSize max_size);
+	TSize (*Size)(const TCVectorHandle hnd);
+	TSize (*Capacity)(const TCVectorHandle hnd);
 	// @param src: Source data to copy from
 	// @param copyFunc: Used to copy the element
-	// @return 0 if fails; 1 if succeeds. May fail if mem commit fails or upper limit is reached.
-	unsigned char (*PushBack)(TCVectorHandle hnd, const void* src);
+	TCResult (*PushBack)(TCVectorHandle hnd, const void* src);
 	// @return 0 if there is no such object, 1 if succeeds
-	unsigned char (*Erase)(TCVectorHandle hnd, unsigned int elementIndex);
+	TCResult (*Erase)(TCVectorHandle hnd, TSize element_index);
 	// @param constructor: if new items will be added, this is used to initialize
 	// @param destructor: if old items will be destroyed, this is used to destroy
-	// @return 0 if fails; 1 if succeeds. May fail if mem allocation fais or upper limit is reached.
-	unsigned char (*Resize)(TCVectorHandle hnd, unsigned int newItemCount);
+	TCResult (*Resize)(TCVectorHandle hnd, TSize new_item_count);
 	void (*Destroy)(TCVectorHandle hnd);
 } ITCVector;
 
 typedef struct ITCAllocator
 {
-	TCSuperBlockHandle (*AllocateSuperMemoryBlock)(unsigned long long blockSize, const char* superMemBlockName);
-	void (*FreeSuperMemoryBlock)(TCSuperBlockHandle superMemBlock);
+	TCSuperBlockHandle (*AllocateSuperMemoryBlock)(TSize block_size, const char* super_mem_block_name);
+	void (*FreeSuperMemoryBlock)(TCSuperBlockHandle super_mem_block);
 	const ITCVector* VectorManager;
 	const ITCBuffer* StandardAllocator;
 	// Allocations are rounded up to pagesize and an extra page is allocated
@@ -68,3 +63,46 @@ typedef struct ITCAllocator
 #define TCEopAllocator TCAllocator->EndOfPageAllocator
 
 TCORE_END_C_LINKAGE
+
+// C++ wrapper
+#define TCORE_USE_CPP_WRAPPER
+#if defined(TCORE_CPP_20) & defined(TCORE_USE_CPP_WRAPPER)
+namespace TCore
+{
+
+extern TCSuperBlockHandle GSuperMemoryBlock;
+
+// Write a C++ wrapper for the vector allocator
+template <typename T>
+class Vector
+{
+public:
+	Vector(TCSuperBlockHandle memblock = GSuperMemoryBlock,
+		   unsigned int initial_size = 0,
+		   unsigned int initial_capacity = 0)
+	{
+		Handle = TCVectorManager->Create(memblock, sizeof(T), initial_size, initial_capacity);
+		for (size_t i = 0; i < initial_size; i++)
+			new ((*this)[i]) T();
+	}
+
+	Vector(const Vector& other)
+	{
+		Handle = TCVectorManager->Create(GSuperMemoryBlock, sizeof(T), other.Size(), other.Capacity());
+		for (TSize i = 0; i < other.Size(); i++)
+			new ((*this)[i]) T(other[i]);
+	}
+
+	// STD::vector like functions
+	void PushBack(const T& item) { TCVectorManager->PushBack(Handle, &item); }
+	TSize Size() const { return TCVectorManager->Size(Handle); }
+	TSize Capacity() const { return TCVectorManager->Capacity(Handle); }
+	T* Data() { return reinterpret_cast<T*>(Handle); }
+	T& operator[](TSize index) { return reinterpret_cast<T*>(Handle)[index]; }
+	const T& operator[](TSize index) const { return reinterpret_cast<const T*>(Handle)[index]; }
+	void Resize(TSize new_size) { TCVectorManager->Resize(Handle, new_size); }
+	void Erase(TSize index) { TCVectorManager->Erase(Handle, index); }
+};
+
+} // namespace TCore
+#endif

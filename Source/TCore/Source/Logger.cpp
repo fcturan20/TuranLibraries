@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#define TCORE_INCLUDE_PLATFORM_LIBS
 #define TCORE_USE_CPP_WRAPPER
 #include "Logger.h"
 

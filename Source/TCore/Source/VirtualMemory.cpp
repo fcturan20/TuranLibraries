@@ -1,4 +1,3 @@
-#define TCORE_INCLUDE_PLATFORM_LIBS
 #include "VirtualMemory.h"
 
 #include <stdio.h>
@@ -8,12 +7,53 @@ TCORE_PLUGIN_INIT(TCVirtualMemory)
 TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCVirtualMemory)
 TCORE_PLUGIN_ENTRY_POINT_END()
 
-#ifndef T_ENVWINDOWS
-#error Virtual memory system isn't supported for your platform, virtualmemorysys_tapi.c for more information
-#else
+#if defined(T_ENVMACOS) || defined(T_ENVLINUX)
+#include <sys/mman.h>
+#include <unistd.h>
+#elif defined(T_ENVWINDOWS)
+#include <windows.h>
+#endif
 
-struct TCVirtualMemoryContext
+namespace TCore{
+	namespace VirtualMemory{
+
+struct Context
 {
+
+#if defined(T_ENVMACOS) || defined(T_ENVLINUX)
+	// Reserve address space from virtual memory
+	static void* Reserve(unsigned long long size)
+	{
+		return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	}
+
+	// Initialize the reserved memory with zeros.
+	static void Commit(void* ptr, unsigned long long commitsize)
+	{
+		if (commitsize && mprotect(ptr, commitsize, PROT_READ | PROT_WRITE) == -1)
+		{
+			perror("mprotect failed");
+		}
+	}
+
+	// Return back the committed memory to reserved state
+	// This will help if you want to catch some bugs that points to memory you just freed.
+	static void Decommit(void* ptr, unsigned long long size)
+	{
+		if (mprotect(ptr, size, PROT_NONE) == -1)
+		{
+			perror("mprotect failed");
+		}
+	}
+
+	// Free the pages allocated
+	static void Free(void* ptr, unsigned long long size) { munmap(ptr, size); }
+
+	static unsigned int GetPageSize()
+	{
+		return (unsigned int)sysconf(_SC_PAGESIZE);
+	}
+#elif defined(T_ENVWINDOWS)
 	// Reserve address space from virtual memory
 	static void* Reserve(unsigned long long size) { return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_READWRITE); }
 
@@ -50,16 +90,19 @@ struct TCVirtualMemoryContext
 		GetSystemInfo(&si);
 		return si.dwPageSize;
 	}
+#endif
 };
+}
+}
 
 TCResult TCVirtualMemory_Initialize(const void** outPluginAPI)
 {
 	auto services = new ITCVirtualMemory;
-	services->Reserve = TCVirtualMemoryContext::Reserve;
-	services->Commit = TCVirtualMemoryContext::Commit;
-	services->Decommit = TCVirtualMemoryContext::Decommit;
-	services->Free = TCVirtualMemoryContext::Free;
-	services->GetPageSize = TCVirtualMemoryContext::GetPageSize;
+	services->Reserve = TCore::VirtualMemory::Context::Reserve;
+	services->Commit = TCore::VirtualMemory::Context::Commit;
+	services->Decommit = TCore::VirtualMemory::Context::Decommit;
+	services->Free = TCore::VirtualMemory::Context::Free;
+	services->GetPageSize = TCore::VirtualMemory::Context::GetPageSize;
 
 	TCVirtualMemory = services;
 	*outPluginAPI = TCVirtualMemory;
@@ -85,5 +128,3 @@ void TCVirtualMemory_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBo
 {
 	// This plugin doesn't react to other plugins being loaded or unloaded, so this function is empty.
 }
-
-#endif

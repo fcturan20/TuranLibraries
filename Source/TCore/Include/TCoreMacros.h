@@ -18,18 +18,16 @@ TCORE_BEGIN_C_LINKAGE
 // Check 32-64 bit
 #if defined(_WIN32) || defined(_WIN64)
 #define T_ENVWINDOWS
-#if _WIN64
-#define T_ENV64BIT
-#else
-#define T_ENV32BIT
-#endif
-#elif defined(__APPLE__) || defined(__MACH__) || defined(__GNUC__)
+#elif defined(__APPLE__) || defined(__MACH__)
 #define T_ENVMACOS
-#if __x86_64__ || __ppc64__ || __aarch64__
-#define T_ENV64BIT
-#else
-#define T_ENV32BIT
+#elif defined(__linux__)
+#define T_ENVLINUX
 #endif
+
+#if defined(__x86_64__) || defined(__ppc64__) || defined(__aarch64__) || defined(_WIN64) || defined(__LP64__) || defined(_LP64)
+#define T_ENV64BIT
+#elif defined(__i386__) || defined(__arm__) || defined(_WIN32) || defined(__ILP32__) || defined(_ILP32)
+#define T_ENV32BIT
 #endif
 
 // Fail if the platform is 32 bit
@@ -64,20 +62,6 @@ TCORE_BEGIN_C_LINKAGE
 #if defined(__cplusplus) && __cplusplus >= 202002L
 #define TCORE_CPP_20
 // Define TCORE_USE_CPP_WRAPPER if you want to use C++ wrapper for TCore API
-#endif
-
-#if defined(T_SUPPORTEDPLATFORM) & defined(TCORE_INCLUDE_PLATFORM_LIBS)
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include "windows.h"
-#define TCORE_DLL_EXTENSION ".dll"
-#elif defined(__APPLE__) || defined(__MACH__) || defined(__GNUC__)
-#include <dlfcn.h>
-#define TCORE_DLL_EXTENSION ".dylib"
-#else
-#error Dynamic library build is failed because compiler's function export attribute isn't supported. Please go to API_includes.h for more info.
-#endif
 #endif
 
 typedef enum TCResult

@@ -9,7 +9,9 @@ TCORE_BEGIN_C_LINKAGE
 	typedef struct I##name I##name;                                                                                    \
 	static constexpr unsigned int name##_PLUGIN_VERSION = version;                                                     \
 	static constexpr const char* const name##_PLUGIN_NAME = #display_name;                                             \
-	extern const I##name* name;
+	extern const I##name* name;                                                                                        \
+	extern const char* TCORE_ACTIVE_PLUGIN_NAME; // Used to identify the currently active plugin in the entry point, so
+												 // you can use it for logging and other purposes.
 
 // Use this once for every system variable you access in your code.
 #define TCORE_PLUGIN_INIT(name) const I##name* name = nullptr;
@@ -74,6 +76,7 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 
 // Define void BindPluginFunctions(TCPluginFunctions*) before calling this
 #define TCORE_PLUGIN_ENTRY_POINT_START(name)                                                                           \
+	const char* TCORE_ACTIVE_PLUGIN_NAME = nullptr;                                                                    \
 	TCORE_FUN_EXPORT TCResult TCORE_PLUGIN_ENTRY_FUNC(                                                                 \
 		const ITC* core, TCPluginInfo* outPluginInfo, TCPluginFunctions* outPluginFunctions)                           \
 	{                                                                                                                  \
@@ -85,7 +88,8 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 		outPluginInfo->Name = name##_PLUGIN_NAME;                                                                      \
 		outPluginInfo->Version = name##_PLUGIN_VERSION;                                                                \
 		outPluginInfo->RootFolderPath = nullptr;                                                                       \
-		BindPluginFunctions(outPluginFunctions);
+		BindPluginFunctions(outPluginFunctions);                                                                       \
+		TCORE_ACTIVE_PLUGIN_NAME = name##_PLUGIN_NAME;
 
 // Hard dependencies are plugins that must be loaded for this plugin to work. If any of the hard
 // dependencies are not loaded, this plugin will not be loaded. You don't have to use this macro if

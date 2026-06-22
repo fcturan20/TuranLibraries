@@ -93,6 +93,7 @@ TCResult UnloadPlugin(const char* pluginName)
 		stored.Functions.OnPluginLoadStateChange(&plugin.Info, false);
 	delete[] plugin.Info.Name;
 	delete[] plugin.Info.RootFolderPath;
+	return TC_RESULT_SUCCESS;
 }
 
 TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TC)

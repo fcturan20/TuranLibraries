@@ -6,20 +6,18 @@ TCORE_PLUGIN_DEFINE(TCAllocator, "tcAllocator", TCORE_MAKE_PLUGIN_VERSION(0, 0, 
 //        ALLOCATOR API
 /////////////////////////////////////
 //  This API is used to provide memory allocator functionality as simple as possible
-//  There are 3 types of allocators:
-//    1) Classic buffer allocators (allocator_tapi)
-//    2) Vector allocators (std::vector with custom functionality)
-//    3) List allocators (OrderedList, Hash etc.)
 //  SuperMemoryBlock: A very big address space possibly for a system
 //   Allocators allocates for a system by using a SuperMemoryBlock pointer
-//   AllocatorSystem has its own address space for storing internal structures of SuperMemoryBlocks
 TCORE_DEFINE_HANDLE(TCSuperBlock);
 
 typedef struct ITCBuffer
 {
-	void* (*Malloc)(TCSuperBlockHandle memBlock, TSize size, const char* name);
-	// @param returnedAllocPTR: This should be the same pointer as returned by malloc()
-	void (*Free)(void* returnedAllocPTR);
+	TCSuperBlockHandle (*CreateSuperBlock)(TSize block_size, const char* name);
+	void (*DestroySuperBlock)(TCSuperBlockHandle super_mem_block);
+
+	void* (*Malloc)(TCSuperBlockHandle memory_block, TSize size, const char* name);
+	// @param allocationPtr: This should be the same pointer as returned by malloc()
+	void (*Free)(void* allocationPtr);
 } ITCBuffer;
 
 TCORE_DEFINE_HANDLE(TCVector);
@@ -33,27 +31,28 @@ typedef struct ITCVector
 	// @param maxSize: Define an upper limit for element count
 	// @return Array pointer, so cast it to your own type
 	TCVectorHandle (*Create)(TCSuperBlockHandle memory_block, TUint element_size, TSize initial_size, TSize max_size);
-	TSize (*Size)(const TCVectorHandle hnd);
-	TSize (*Capacity)(const TCVectorHandle hnd);
+	TSize (*Size)(const TCVectorHandle vector);
+	TSize (*Capacity)(const TCVectorHandle vector);
 	// @param src: Source data to copy from
 	// @param copyFunc: Used to copy the element
-	TCResult (*PushBack)(TCVectorHandle hnd, const void* src);
+	TCResult (*PushBack)(TCVectorHandle vector, const void* src);
 	// @return 0 if there is no such object, 1 if succeeds
-	TCResult (*Erase)(TCVectorHandle hnd, TSize element_index);
+	TCResult (*Erase)(TCVectorHandle vector, TSize element_index);
 	// @param constructor: if new items will be added, this is used to initialize
 	// @param destructor: if old items will be destroyed, this is used to destroy
-	TCResult (*Resize)(TCVectorHandle hnd, TSize new_item_count);
-	void (*Destroy)(TCVectorHandle hnd);
+	TCResult (*Resize)(TCVectorHandle vector, TSize new_item_count);
+	void (*Destroy)(TCVectorHandle vector);
 } ITCVector;
 
 typedef struct ITCAllocator
 {
-	TCSuperBlockHandle (*AllocateSuperMemoryBlock)(TSize block_size, const char* super_mem_block_name);
-	void (*FreeSuperMemoryBlock)(TCSuperBlockHandle super_mem_block);
 	const ITCVector* VectorManager;
+	// Allocates each memory block directly after each other
 	const ITCBuffer* StandardAllocator;
-	// Allocations are rounded up to pagesize and an extra page is allocated
+	// Allocates extra empty pages at start and end of the allocated memory block to prevent out of space accesses
 	// Use for debugging (out of space accesses will be crashes etc.)
+	// Allocation layout: Page0 [ Block A Info | Empty Space ], Page1 Empty, Page2 [ Data A ], Page3 Empty,
+	//						Page4 [ Block B Info | Empty Space ], ...
 	const ITCBuffer* EndOfPageAllocator;
 } ITCAllocator;
 
@@ -153,6 +152,11 @@ public:
 		TCVectorManager->Resize(Handle, new_size);
 	}
 	void Erase(TSize index) { TCVectorManager->Erase(Handle, index); }
+	T* Begin() { return Data(); }
+	T* End() { return Data() + Size() - 1; }
+
+private:
+	TCVectorHandle Handle;
 };
 
 } // namespace TCore

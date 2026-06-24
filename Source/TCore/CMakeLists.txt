@@ -56,4 +56,7 @@ set(TCorePROFILER_SOURCES "Source/Profiler.cpp" "Include/Profiler.h")
 tcmake_create_dynamic_target(TCoreProfiler "${TCorePROFILER_SOURCES}" "TCore")
 target_link_libraries(TCoreProfiler PRIVATE TCore)
 
-# C++ Wrapper for C API
+#Windowing System
+set(TCoreWINDOWING_SOURCES "Source/Windowing.cpp" "Include/Windowing.h")
+tcmake_create_dynamic_target(TCoreWindowing "${TCoreWINDOWING_SOURCES}" "TCore")
+target_link_libraries(TCoreWindowing PRIVATE TCore)

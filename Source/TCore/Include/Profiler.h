@@ -17,13 +17,6 @@ typedef struct ITCProfiler
 {
 	TCProfiledScope* (*Begin)(const char* name, unsigned long long* duration, TCDurationType duration_type);
 	void (*End)(TCProfiledScope* scope);
-	// Use this if both:
-	// 1) You're profiling operations that are run on the same thread...
-	// 2) Finish profiling that has started last
-	// So you shouldn't use this to create nested profiling systems like:
-	// Start Profiling A, Call A, A Starts Profiling B, A calls B, B finishes, A finishes Profiling B,
-	// A finishes, End Profiling A Systems like above isn't supported!
-	void (*EndLastLocalProfile)(unsigned char shouldPrint);
 } ITCProfiler;
 
 #define TURAN_PROFILE_SCOPE_NAS(profilertapi, name, duration_ptr)                                                      \

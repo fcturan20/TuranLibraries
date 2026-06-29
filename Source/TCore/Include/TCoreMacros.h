@@ -24,7 +24,8 @@ TCORE_BEGIN_C_LINKAGE
 #define T_ENVLINUX
 #endif
 
-#if defined(__x86_64__) || defined(__ppc64__) || defined(__aarch64__) || defined(_WIN64) || defined(__LP64__) || defined(_LP64)
+#if defined(__x86_64__) || defined(__ppc64__) || defined(__aarch64__) || defined(_WIN64) || defined(__LP64__) ||       \
+	defined(_LP64)
 #define T_ENV64BIT
 #elif defined(__i386__) || defined(__arm__) || defined(_WIN32) || defined(__ILP32__) || defined(_ILP32)
 #define T_ENV32BIT
@@ -94,15 +95,15 @@ static_assert(sizeof(TUint) == 8, "TUint should be 8 bytes in size!");
 // Modifiable buffer
 typedef struct TCBuffer
 {
-	void* data;
-	unsigned long size;
+	void* Data;
+	unsigned long Size;
 } TCBuffer;
 
 // Constant (non-modifiable) buffer
 typedef struct TCReadBuffer
 {
-	const void* data;
-	unsigned long size;
+	const void* Data;
+	unsigned long Size;
 } TCReadBuffer;
 
 #if defined(NDEBUG)

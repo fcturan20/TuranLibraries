@@ -12,6 +12,10 @@
 #define TCORE_USE_CPP_WRAPPER
 #include "Logger.h"
 
+#if defined(T_ENVWINDOWS)
+#include <Windows.h>
+#endif
+
 #include "ECS.h"
 #include "FileSystem.h"
 #include "TString.h"

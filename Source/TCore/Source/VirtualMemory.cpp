@@ -14,8 +14,10 @@ TCORE_PLUGIN_ENTRY_POINT_END()
 #include <windows.h>
 #endif
 
-namespace TCore{
-	namespace VirtualMemory{
+namespace TCore
+{
+namespace VirtualMemory
+{
 
 struct Context
 {
@@ -49,10 +51,7 @@ struct Context
 	// Free the pages allocated
 	static void Free(void* ptr, unsigned long long size) { munmap(ptr, size); }
 
-	static unsigned int GetPageSize()
-	{
-		return (unsigned int)sysconf(_SC_PAGESIZE);
-	}
+	static unsigned int GetPageSize() { return (unsigned int)sysconf(_SC_PAGESIZE); }
 #elif defined(T_ENVWINDOWS)
 	// Reserve address space from virtual memory
 	static void* Reserve(unsigned long long size) { return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_READWRITE); }
@@ -84,7 +83,7 @@ struct Context
 	// Free the pages allocated
 	static void Free(void* ptr, unsigned long long size) { VirtualFree(ptr, size, MEM_RELEASE); }
 
-	static unsigned int GetPageSize()
+	static TUint GetPageSize()
 	{
 		SYSTEM_INFO si;
 		GetSystemInfo(&si);
@@ -92,8 +91,8 @@ struct Context
 	}
 #endif
 };
-}
-}
+} // namespace VirtualMemory
+} // namespace TCore
 
 TCResult TCVirtualMemory_Initialize(const void** outPluginAPI)
 {

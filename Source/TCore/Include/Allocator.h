@@ -63,18 +63,18 @@ typedef struct ITCAllocator
 TCORE_END_C_LINKAGE
 
 // C++ wrapper
-#define TCORE_USE_CPP_WRAPPER
 #if defined(TCORE_CPP_20) & defined(TCORE_USE_CPP_WRAPPER)
 #include <cstring>
+#include <type_traits>
 
 namespace TCore
 {
 
+// Use macros at the end of the header
 extern TCSuperBlockHandle GSuperMemoryBlock;
-#define TCORE_PLUGIN_RESERVE_ADDRESS_SPACE(size) TCAllocator->AllocateSuperMemoryBlock(size, TCORE_ACTIVE_PLUGIN_NAME)
 
 // Write a C++ wrapper for the vector allocator
-template <typename T, bool EnableTrivialCopy>
+template <typename T, bool EnableTrivialCopy = std::is_trivially_copyable<T>::value>
 class Vector
 {
 public:
@@ -160,4 +160,10 @@ private:
 };
 
 } // namespace TCore
+
+#define TCORE_PLUGIN_MEMORY_BLOCK_INIT() TCSuperBlockHandle TCore::GSuperMemoryBlock = nullptr;
+// Call this inside the entry point
+#define TCORE_PLUGIN_RESERVE_ADDRESS_SPACE(size)                                                                       \
+	TCore::GSuperMemoryBlock = TCStdAllocator->CreateSuperBlock(size, TCORE_ACTIVE_PLUGIN_NAME)
+
 #endif

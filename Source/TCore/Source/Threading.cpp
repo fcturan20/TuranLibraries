@@ -10,219 +10,268 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <locale>
+#include <iostream>
+#include <codecvt>
 
-#include "ECS.h"
+#ifdef T_ENVWINDOWS
+#include <windows.h>
+#endif
 
-inline std::atomic_bool& WaitHandleConverter(struct tlSemaphore* handle)
+#define TCORE_USE_CPP_WRAPPER
+#include "Allocator.h"
+
+TCORE_PLUGIN_INIT(TC)
+TCORE_PLUGIN_INIT(TCThreading)
+TCORE_PLUGIN_INIT(TCAllocator)
+TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCThreading)
+TCORE_PLUGIN_HARD_DEPENDENCY(TCAllocator, TCAllocator_PLUGIN_VERSION)
+TCORE_PLUGIN_ENTRY_POINT_END()
+
+namespace TCore
 {
-	return *(std::atomic_bool*)(handle);
-}
-
-struct tlJobPriv* JOBSYS = nullptr;
-struct tlJobPriv
+namespace Threading
 {
-	tlJob* sysPtr = nullptr;
 
-private:
-	// This class has to wait as std::conditional_variable() if there is no job when
-	// pop_front_strong() is called Because it contains jobs and shouldn't look for new jobs while
-	// already waiting for a job
-	class TSJobifiedRingBuffer
-	{
-		std::mutex WaitData;
-		std::condition_variable NewJobWaitCond;
-		std::function<void()> data[256];
-		unsigned int head = 0, tail = 0;
-
-	public:
-		std::atomic_uint64_t IsThreadBusy = 0;
-		bool isEmpty()
-		{
-			WaitData.lock();
-			bool result = head == tail;
-			WaitData.unlock();
-			return result;
-		}
-		bool push_back_weak(const std::function<void()>& item)
-		{
-			WaitData.lock();
-			if ((head + 1) % 256 != tail)
-			{
-				data[head] = [this, item]() {
-					this->IsThreadBusy.fetch_add(1);
-					item();
-					this->IsThreadBusy.fetch_sub(1);
-				};
-				head = (head + 1) % 256;
-				NewJobWaitCond.notify_one();
-				WaitData.unlock();
-				return true;
-			}
-
-			WaitData.unlock();
-			return false;
-		}
-		void push_back_strong(const std::function<void()>& item)
-		{
-			while (!push_back_weak(item))
-			{
-				std::function<void()> Job;
-				pop_front_strong(Job);
-				Job();
-			}
-		}
-		bool pop_front_weak(std::function<void()>& item)
-		{
-			WaitData.lock();
-			if (tail != head)
-			{
-				item = data[tail];
-				tail = (tail + 1) % 256;
-				WaitData.unlock();
-				return true;
-			}
-			WaitData.unlock();
-			return false;
-		}
-		void pop_front_strong(std::function<void()>& item)
-		{
-			while (!pop_front_weak(item))
-			{
-				std::unique_lock<std::mutex> Locker(WaitData);
-				NewJobWaitCond.wait(Locker);
-			}
-		}
-	};
+// This class has to wait as std::conditional_variable() if there is no job when
+// pop_front_strong() is called Because it contains jobs and shouldn't look for new jobs while
+// already waiting for a job
+class TSJobifiedRingBuffer
+{
+	std::mutex WaitData;
+	std::condition_variable NewJobWaitCond;
+	std::function<TCThreadFunc> Data[256];
+	std::atomic_bool Locked = false;
+	unsigned int head = 0, tail = 0;
 
 public:
-	std::map<std::thread::id, unsigned char> ThreadIDs;
-	std::atomic<unsigned char> ShouldClose;
-	TSJobifiedRingBuffer Jobs;
-
-	static void tlExecute(void (*func)(), unsigned int semaphoreCount, struct tlSemaphore** semaphores)
+	std::atomic_uint64_t IsThreadBusy = 0;
+	bool IsEmpty()
 	{
-		// That means job list is full, wake up a thread (if there is anyone sleeping) and yield current
-		// thread!
-		JOBSYS->Jobs.push_back_strong([semaphoreCount, &semaphores, func]() {
-			for (uint32_t i = 0; i < semaphoreCount; i++)
-			{
-				WaitHandleConverter(semaphores[i]).store(1);
-			}
-			func();
-			for (uint32_t i = 0; i < semaphoreCount; i++)
-			{
-				WaitHandleConverter(semaphores[i]).store(2);
-			}
-		});
+		WaitData.lock();
+		bool result = head == tail;
+		WaitData.unlock();
+		return result;
 	}
-
-	static struct tlSemaphore* tlCreateSemaphore() { return (struct tlSemaphore*)new std::atomic_bool; }
-
-	static void tlWaitSemaphoreBusy(struct tlSemaphore* wait)
+	bool push_back_weak(const std::function<TCThreadFunc>& item)
 	{
-		if (WaitHandleConverter(wait).load() != 2)
+		WaitData.lock();
+		if ((head + 1) % 256 != tail)
 		{
-			std::this_thread::yield();
+			Data[head] = [this, item]() {
+				this->IsThreadBusy.fetch_add(1);
+				item();
+				this->IsThreadBusy.fetch_sub(1);
+			};
+			head = (head + 1) % 256;
+			NewJobWaitCond.notify_one();
+			WaitData.unlock();
+			return true;
 		}
-		while (WaitHandleConverter(wait).load() != 2)
+
+		WaitData.unlock();
+		return false;
+	}
+	void push_back_strong(const std::function<TCThreadFunc>& item)
+	{
+		while (!push_back_weak(item))
 		{
-			std::function<void()> Job;
-			JOBSYS->Jobs.pop_front_strong(Job);
+			std::function<TCThreadFunc> Job;
+			pop_front_strong(Job);
 			Job();
 		}
 	}
-	static void tlWaitSemaphoreFree(struct tlSemaphore* wait)
+	TCResult pop_front_weak(std::function<TCThreadFunc>& item)
 	{
-		while (WaitHandleConverter(wait).load() != 2)
+		std::unique_lock lock(WaitData);
+		if (tail != head)
 		{
-			std::this_thread::yield();
+			item = Data[tail];
+			tail = (tail + 1) % 256;
+			return TC_RESULT_SUCCESS;
 		}
+		return TC_RESULT_FAILURE;
 	}
-	static void tlUnsignalSemaphore(struct tlSemaphore* wait) { WaitHandleConverter(wait).store(0); }
-	static void tlWaitAllJobs()
+	void pop_front_strong(std::function<TCThreadFunc>& item)
 	{
-		while (!JOBSYS->Jobs.isEmpty())
+		while (!pop_front_weak(item))
 		{
-			std::function<void()> Job;
-			JOBSYS->Jobs.pop_front_strong(Job);
-			Job();
-		}
-		while (JOBSYS->Jobs.IsThreadBusy.load())
-		{
-			std::function<void()> Job;
-			if (JOBSYS->Jobs.pop_front_weak(Job))
-			{
-				Job();
-			}
-			else
-			{
-				std::this_thread::yield();
-			}
-		}
-	}
-	static unsigned int tlThisThreadIndx() { return JOBSYS->ThreadIDs[std::this_thread::get_id()]; }
-	static unsigned int tlThreadCount() { return std::thread::hardware_concurrency(); }
-	static void tlJoinThread()
-	{
-		// ShouldClose will be true if JobSystem destructor is called
-		// Destructor will wait for all other jobs to finish
-		while (!JOBSYS->ShouldClose.load())
-		{
-			std::function<void()> Job;
-			JOBSYS->Jobs.pop_front_strong(Job);
-			Job();
+			std::unique_lock lock(WaitData);
+			NewJobWaitCond.wait(lock);
 		}
 	}
 };
 
-void tlJobInit()
+struct TCThread
 {
-	JOBSYS->ShouldClose.store(false);
+	std::thread::id Id;
+	std::thread::native_handle_type NativeHandle;
+	TBool IsRunning = TTRUE;
+	TBool IsJoined = TFALSE;
 
-	JOBSYS->ThreadIDs.insert(std::pair<std::thread::id, unsigned char>(std::this_thread::get_id(), 0));
-	unsigned int ThreadCount = std::thread::hardware_concurrency();
-	if (ThreadCount == 1)
+	TCThreadHandle GetHandle() { return (TCThreadHandle)this; }
+	TBool IsJoinable() { return !IsRunning && !IsJoined; }
+	void Join()
 	{
-		printf("Job system didn't create any std::thread objects because your CPU only has 1 core!\n");
+		while (!IsJoinable())
+		{
+		}
+		IsJoined = TTRUE;
 	}
-	else
+};
+
+struct TCThreadingContext* GContext = nullptr;
+struct TCThreadingContext
+{
+	std::map<std::thread::id, TCThreadHandle> ThreadHandles;
+	std::atomic<TBool> ShouldClose;
+
+	TCThread* GetThread(TCThreadHandle hnd) { return (TCThread*)hnd; }
+
+	static void Initialize()
 	{
-		ThreadCount--;
+		GContext = new TCThreadingContext;
+		GContext->ShouldClose.store(false);
 	}
-	for (uint32_t ThreadIndex = 0; ThreadIndex < ThreadCount; ThreadIndex++)
+
+	static TCThreadHandle Create(TCThreadFunc func, TCBuffer thread_data, const char* thread_name)
 	{
-		std::thread newthread([ThreadIndex]() {
-			JOBSYS->ThreadIDs.insert(
-				std::pair<std::thread::id, unsigned char>(std::this_thread::get_id(), ThreadIndex + 1));
-			tlJobPriv::tlJoinThread();
+		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+		std::wstring wideString = converter.from_bytes(thread_name);
+
+		auto thread = new TCThread;
+		std::thread newThread([&thread_data, func, thread_name, thread]() {
+			thread->IsRunning = true;
+			thread->IsJoined = false;
+			func(thread_data);
+			thread->IsRunning = false;
 		});
-		newthread.detach();
+		newThread.detach();
+
+		SetThreadDescription(thread->NativeHandle, wideString.c_str());
+		GContext->ThreadHandles.insert(std::make_pair(thread->Id, thread->GetHandle()));
+		return thread->GetHandle();
 	}
-}
 
-ECSPLUGIN_ENTRY(ecssys, reloadFlag)
+	static TCResult Join(TCThreadHandle thread)
+	{
+		auto t = GContext->GetThread(thread);
+		t->Join();
+		return TC_RESULT_SUCCESS;
+	}
+
+	static void Sleep(TSize milliseconds) { ::Sleep(milliseconds); }
+
+	static TCThreadHandle GetCurrentThread() { return GContext->ThreadHandles[std::this_thread::get_id()]; }
+};
+
+struct TCJobContext* JobContext = nullptr;
+struct TCJobContext
 {
+public:
+	TSJobifiedRingBuffer Jobs;
+	// If you want only a portion of threads to be in job system, use this
+	static void UseCurrentThread() {}
+	// Checks hardware capabilities and creates a thread in job consume loop for each core
+	static void UseAllCores(TBool except_this_thread) {}
+	static void DispatchTask(TCThreadFunc job, TUint dispatch_size) {}
+	// Waits till there is no more jobs to dispatch and all threads in the system are idle
+	static void WaitIdle()
+	{
+		while (!JobContext->Jobs.IsEmpty())
+		{
+		}
+		JobContext->Jobs.Lock();
+	}
+};
 
-	tlJob* type = (tlJob*)malloc(sizeof(tlJob));
-	JOBSYS = new tlJobPriv;
-	type->d = JOBSYS;
-	JOBSYS->sysPtr = type;
-
-	type->unsignalSemaphore = &tlJobPriv::tlUnsignalSemaphore;
-	type->createSemaphore = &tlJobPriv::tlCreateSemaphore;
-	type->joinThread = &tlJobPriv::tlJoinThread;
-	type->execute = &tlJobPriv::tlExecute;
-	type->thisThreadIndx = &tlJobPriv::tlThisThreadIndx;
-	type->threadCount = &tlJobPriv::tlThreadCount;
-	type->waitAllJobs = &tlJobPriv::tlWaitAllJobs;
-	type->waitSemaphoreBusy = &tlJobPriv::tlWaitSemaphoreBusy;
-	type->waitSemaphoreFree = &tlJobPriv::tlWaitSemaphoreFree;
-
-	ecssys->addSystem(THREADINGSYS_TAPI_PLUGIN_NAME, THREADINGSYS_TAPI_PLUGIN_VERSION, type);
-
-	tlJobInit();
-}
-ECSPLUGIN_EXIT(ecssys, reloadFlag)
+struct TCTaskContext* TaskContext = nullptr;
+struct TCTaskContext
 {
-	printf("Job system exit isn't coded");
+public:
+	struct TCTaskedThread
+	{
+		TCThreadHandle Thread;
+		TSJobifiedRingBuffer Jobs;
+		TBool ShouldClose;
+		TBool ForceClose;
+	};
+	Vector<TCTaskedThread> Threads;
+
+	// Add checks here
+	TCTaskedThread* GetThreadFromHandle(TCThreadHandle hnd) { return (TCTaskedThread*)hnd; }
+
+	static TCThreadHandle CreateTaskedThread(const char* thread_name)
+	{
+		auto thread = new TCTaskedThread;
+		auto threadLoop = [](TCBuffer buffer) -> TCResult {
+			TCTaskedThread* thread = (TCTaskedThread*)buffer.Data;
+			thread->Thread = TCThreading->GetCurrentThread();
+			while (!thread->ShouldClose)
+			{
+				while (!thread->Jobs.IsEmpty() && !thread->ForceClose)
+				{
+					std::function<TCThreadFunc> func{};
+					thread->Jobs.pop_front_strong(func);
+					func();
+				}
+			}
+		};
+		auto hnd = TCThreadingContext::Create(threadLoop, {.Data = thread, .Size = sizeof(thread)}, thread_name);
+	}
+
+	static void EnqueueTask(TCThreadHandle thread, TCThreadFunc task, TCBuffer data)
+	{
+		auto t = TaskContext->GetThreadFromHandle(thread);
+		t->Jobs.push_back_strong()
+	}
+
+	static void StopTaskedThread(TCThreadHandle thread, TBool wait_all_tasks_to_end)
+	{
+		auto t = TaskContext->GetThreadFromHandle(thread);
+		if (!wait_all_tasks_to_end)
+			t->ForceClose = true;
+		t->ShouldClose = true;
+		TCThreadingContext::Join(thread);
+	}
+};
+
+} // namespace Threading
+} // namespace TCore
+
+TCResult TCThreading_Initialize(const void** outPluginAPI)
+{
+	TCore::Threading::TCThreadingContext::Initialize();
+
+	auto services = new ITCThreading;
+	services->Create = TCore::Threading::TCThreadingContext::Create;
+	services->Join = TCore::Threading::TCThreadingContext::Join;
+	services->Sleep = TCore::Threading::TCThreadingContext::Sleep;
+	services->GetCurrentThread = TCore::Threading::TCThreadingContext::GetCurrentThread;
+
+	services->JobSystem = new ITCJob;
+	services->JobSystem->Dispatch = TCore::Threading::TCJobContext::DispatchTask;
+	services->JobSystem->UseAllCores = TCore::Threading::TCJobContext::UseAllCores;
+	services->JobSystem->UseCurrentThread = TCore::Threading::TCJobContext::UseCurrentThread;
+	services->JobSystem->WaitIdle = TCore::Threading::TCJobContext::WaitIdle;
+
+	services->TaskSystem = new ITCTask;
+	services->TaskSystem->CreateTaskedThread = TCore::Threading::TCTaskContext::CreateTaskedThread;
+	services->TaskSystem->EnqueueTask = TCore::Threading::TCTaskContext::EnqueueTask;
+	services->TaskSystem->StopTaskedThread = TCore::Threading::TCTaskContext::StopTaskedThread;
+
+	TCThreading = services;
+	*outPluginAPI = TCThreading;
+	return TC_RESULT_SUCCESS;
 }
+
+void TCThreading_OnPluginLoadStateChange(const TCPluginInfo* info, TBool is_loaded) {}
+
+TCResult TCThreading_OnPreShutdown() {}
+
+TCResult TCThreading_Shutdown()
+{
+	return TC_RESULT_SUCCESS;
+}
+
+void EndUsageOfTheApi() {}

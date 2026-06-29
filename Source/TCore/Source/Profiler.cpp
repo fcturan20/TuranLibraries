@@ -7,11 +7,9 @@
 #include <string>
 
 #include "ECS.h"
-#include "Threading.h"
 
 TCORE_PLUGIN_INIT(TC)
 TCORE_PLUGIN_INIT(TCProfiler)
-TCORE_PLUGIN_INIT(TCThreading)
 
 TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCProfiler)
 TCORE_PLUGIN_ENTRY_POINT_END()
@@ -57,18 +55,15 @@ static const char* GTimeNames[] = {"nanoseconds", "microseconds", "milliseconds"
 struct TCProfilerContext* GContext = nullptr;
 struct TCProfilerContext
 {
-	TCProfiledScope** LastHandles;
 	unsigned int ThreadCount;
 	static TCProfiledScope* Begin(const char* name, unsigned long long* duration, TCDurationType durationType)
 	{
-		unsigned int threadindex = (GContext->ThreadCount == 1) ? (0) : (TCThreading->GetCurrentThreadIndex());
 		TCProfiledScope* profile = new TCProfiledScope;
 		profile->startPoint = GetCurrentTime(durationType);
 		profile->IsRecording = true;
 		profile->duration = duration;
 		profile->DurationType = durationType;
 		profile->name = name;
-		GContext->LastHandles[threadindex] = profile;
 		return profile;
 	}
 
@@ -77,19 +72,6 @@ struct TCProfilerContext
 		*profil->duration = GetCurrentTime(profil->DurationType) - profil->startPoint;
 		delete profil;
 	}
-	static void ThreadLocalFinishLast(unsigned char shouldPrint)
-	{
-		unsigned int threadindex = (GContext->ThreadCount == 1) ? (0) : (TCThreading->GetCurrentThreadIndex());
-		TCProfiledScope* profile = (TCProfiledScope*)GContext->LastHandles[threadindex];
-		unsigned long long* duration = profile->duration;
-		std::string name = profile->name;
-		TCDurationType durationType = profile->DurationType;
-		Finish(GContext->LastHandles[threadindex]);
-		if (shouldPrint)
-		{
-			printf("%s took %llu %s!\n", name.c_str(), *duration, GTimeNames[durationType]);
-		}
-	}
 };
 
 TCResult TCProfiler_Initialize(const void** outPluginAPI)
@@ -97,7 +79,6 @@ TCResult TCProfiler_Initialize(const void** outPluginAPI)
 	auto services = new ITCProfiler;
 	services->Begin = TCProfilerContext::Begin;
 	services->End = TCProfilerContext::Finish;
-	services->EndLastLocalProfile = TCProfilerContext::ThreadLocalFinishLast;
 
 	TCProfiler = services;
 	*outPluginAPI = TCProfiler;

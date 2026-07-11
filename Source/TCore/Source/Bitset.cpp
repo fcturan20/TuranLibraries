@@ -24,20 +24,20 @@ struct TCBitset
 
 struct TCBitsetContext
 {
-	static TCBitsetHandle CreateBitset(unsigned int byte_length)
+	static TCBitsetHnd CreateBitset(unsigned int byte_length)
 	{
-		TCBitsetHandle bitset = (TCBitsetHandle)malloc(sizeof(TCBitsetHandle) + (sizeof(bool) * byte_length));
+		TCBitsetHnd bitset = (TCBitsetHnd)malloc(sizeof(TCBitsetHnd) + (sizeof(bool) * byte_length));
 		bitset->Array = (bool*)(bitset + 1);
 		memset(bitset->Array, 0, byte_length);
 		bitset->ByteLength = byte_length;
 		return bitset;
 	}
-	static void DestroyBitset(TCBitsetHandle hnd)
+	static void DestroyBitset(TCBitsetHnd hnd)
 	{
-		TCBitsetHandle bitset = (TCBitsetHandle)hnd;
+		TCBitsetHnd bitset = (TCBitsetHnd)hnd;
 		free(bitset);
 	}
-	static void SetBit(TCBitsetHandle set, unsigned int index, unsigned char set_true)
+	static void SetBit(TCBitsetHnd set, unsigned int index, unsigned char set_true)
 	{
 		if (index / 8 > set->ByteLength - 1)
 		{
@@ -65,7 +65,7 @@ struct TCBitsetContext
 			}
 		}
 	}
-	static unsigned char GetBitValue(const TCBitsetHandle set, unsigned int index)
+	static unsigned char GetBitValue(const TCBitsetHnd set, unsigned int index)
 	{
 		unsigned char byte = ((unsigned char*)set->Array)[index / 8];
 		unsigned char bitindex = (index % 8);
@@ -75,8 +75,8 @@ struct TCBitsetContext
 		}
 		return false;
 	}
-	static unsigned int GetByteLength(const TCBitsetHandle set) { return set->ByteLength; }
-	static unsigned int GetFirstBitIndx(const TCBitsetHandle set, unsigned char find_true)
+	static unsigned int GetByteLength(const TCBitsetHnd set) { return set->ByteLength; }
+	static unsigned int GetFirstBitIndx(const TCBitsetHnd set, unsigned char find_true)
 	{
 		if (find_true)
 		{
@@ -114,12 +114,9 @@ struct TCBitsetContext
 		}
 	}
 
-	static void ClearBitset(TCBitsetHandle set, unsigned char set_true)
-	{
-		memset(set->Array, set_true, set->ByteLength);
-	}
+	static void ClearBitset(TCBitsetHnd set, unsigned char set_true) { memset(set->Array, set_true, set->ByteLength); }
 
-	static void ExpandBitset(TCBitsetHandle set, unsigned int expand_size)
+	static void ExpandBitset(TCBitsetHnd set, unsigned int expand_size)
 	{
 		bool* newBlock = new bool[expand_size + set->ByteLength];
 		if (newBlock)
@@ -148,8 +145,8 @@ struct TCBitsetContext
 
 struct TCBitsetUnitTests
 {
-	static unsigned int FindFirstBitset(TCReadBuffer input_data);
-	static unsigned int SetBitset(TCReadBuffer input_data);
+	static TCResult FindFirstBitset(TCReadBuffer input_data);
+	static TCResult SetBitset(TCReadBuffer input_data);
 	static void Register();
 };
 uint32_t FindFirst(std::vector<bool>& stdBitset, bool isTrue)
@@ -164,11 +161,11 @@ uint32_t FindFirst(std::vector<bool>& stdBitset, bool isTrue)
 	return UINT32_MAX;
 }
 
-unsigned int TCBitsetUnitTests::FindFirstBitset(TCReadBuffer input_data)
+TCResult TCBitsetUnitTests::FindFirstBitset(TCReadBuffer input_data)
 {
 	static constexpr uint32_t bitsetByteLength = 10 << 10;
 	std::vector<bool> stdBitset(bitsetByteLength * 8, false);
-	TCBitsetHandle bitset = TCBitset->CreateBitset(bitsetByteLength);
+	TCBitsetHnd bitset = TCBitset->CreateBitset(bitsetByteLength);
 
 	time_t t;
 	srand((unsigned)time(&t));
@@ -181,28 +178,22 @@ unsigned int TCBitsetUnitTests::FindFirstBitset(TCReadBuffer input_data)
 	}
 	if (FindFirst(stdBitset, true) != TCBitset->GetFirstBitIndx(bitset, true) ||
 		FindFirst(stdBitset, false) != TCBitset->GetFirstBitIndx(bitset, false))
-	{
-		printf("FindFirstBitset test failed!\n");
-		return 1;
-	}
+		return TC_RESULT_FAILURE;
 	for (uint32_t i = 0; i < bitsetByteLength * 8; i++)
 	{
 		unsigned char tapiV = TCBitset->GetBitValue(bitset, i);
 		unsigned char stdV = stdBitset[i];
 		if (stdV != tapiV)
-		{
-			printf("SetBitset test failed!\n");
-			return 1;
-		}
+			return TC_RESULT_FAILURE;
 	}
-	return 0;
+	return TC_RESULT_SUCCESS;
 }
 
-unsigned int TCBitsetUnitTests::SetBitset(TCReadBuffer input_data)
+TCResult TCBitsetUnitTests::SetBitset(TCReadBuffer input_data)
 {
 	static constexpr uint32_t bitsetByteLength = 10 << 10;
 	std::vector<bool> stdBitset(bitsetByteLength * 8, false);
-	TCBitsetHandle bitset = TCBitset->CreateBitset(bitsetByteLength);
+	TCBitsetHnd bitset = TCBitset->CreateBitset(bitsetByteLength);
 
 	time_t t;
 	srand((unsigned)time(&t));
@@ -218,12 +209,9 @@ unsigned int TCBitsetUnitTests::SetBitset(TCReadBuffer input_data)
 		unsigned char tapiV = TCBitset->GetBitValue(bitset, i);
 		unsigned char stdV = stdBitset[i];
 		if (stdV != tapiV)
-		{
-			printf("SetBitset test failed!\n");
-			return 1;
-		}
+			return TC_RESULT_FAILURE;
 	}
-	return 0;
+	return TC_RESULT_SUCCESS;
 }
 
 void TCBitsetUnitTests::Register()

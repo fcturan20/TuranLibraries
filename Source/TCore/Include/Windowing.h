@@ -30,7 +30,7 @@ typedef struct ITCWindowing
 	// the description.
 	// The window is not transparent by default. To make it transparent, set the transparent flag in the
 	// description.
-	void (*CreateWindow)(const TCWindowDescription* desc, void* user, struct twindow** outWindowHandle);
+	void (*CreateWindow)(const TCWindowDescription* desc, void* user, struct twindow** outWindowHnd);
 } ITCWindowing;
 
 TCORE_END_C_LINKAGE

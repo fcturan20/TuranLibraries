@@ -44,10 +44,10 @@ void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount,
 							   VkCommandBuffer* secondaryCmdBuffers);
 /*
 #define getGPUfromQueueHnd(i_queue)                            \
-  GPU_VKOBJ*   gpu   = QUEUE_VKOBJ::getGPUfromHandle(i_queue); \
-  QUEUEFAM_VK* fam   = QUEUE_VKOBJ::getFAMfromHandle(i_queue); \
+  GPU_VKOBJ*   gpu   = QUEUE_VKOBJ::getGPUfromHnd(i_queue); \
+  QUEUEFAM_VK* fam   = QUEUE_VKOBJ::getFAMfromHnd(i_queue); \
   QUEUE_VKOBJ* queue = getOBJ<QUEUE_VKOBJ>(i_queue);*/
 #define getGPUfromQueueHnd(i_queue)                                                                                    \
-	GPU_VKOBJ* gpu = QUEUE_VKOBJ::getGPUfromHandle(i_queue);                                                           \
-	QUEUEFAM_VK* fam = QUEUE_VKOBJ::getFAMfromHandle(i_queue);                                                         \
+	GPU_VKOBJ* gpu = QUEUE_VKOBJ::getGPUfromHnd(i_queue);                                                              \
+	QUEUEFAM_VK* fam = QUEUE_VKOBJ::getFAMfromHnd(i_queue);                                                            \
 	QUEUE_VKOBJ* queue = getOBJ<QUEUE_VKOBJ>(i_queue);

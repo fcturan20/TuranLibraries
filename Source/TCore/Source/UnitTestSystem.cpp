@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <wchar.h>
+#include <string>
 
 #define TCORE_USE_CPP_WRAPPER
 #include "UnitTestSystem.h"
@@ -15,25 +16,68 @@ TCORE_PLUGIN_ENTRY_POINT_END()
 // TCore APIs
 #include "Logger.h"
 
+namespace TCore
+{
+namespace UnitTest
+{
+
+struct UnitTest
+{
+	std::string Name;
+	std::string Category;
+	TCReadBuffer Data;
+	TCResult (*Test)(TCReadBuffer inputData);
+};
+
+struct TCUnitTestContext* GContext = nullptr;
 struct TCUnitTestContext
 {
-	static void RegisterTest(const TCUnitTestDescription* desc) { printf("Registered unit test: %s\n", desc->Name); }
+	UnitTest Tests[1024];
+	TUint TestCount = 0;
+	static void Initialize() { GContext = new TCore::UnitTest::TCUnitTestContext(); }
+	static void RegisterTest(const TCUnitTestDescription* desc)
+	{
+		auto& test = GContext->Tests[GContext->TestCount++];
+		test.Name = desc->Name;
+		if (desc->GlobalCategoryName)
+			test.Category = test.Category;
+		test.Test = desc->Test;
+		test.Data = desc->Data;
+	}
 
 	static void UnregisterTest(const char* name) {}
 
 	static void RunTest(const char* name, TCReadBuffer inputData) {}
-};
-TCUnitTestContext* Context = nullptr;
 
+	static void RunAllTests()
+	{
+		for (TUint indx = 0; indx < GContext->TestCount; indx++)
+		{
+			auto& test = GContext->Tests[indx];
+			if (auto res = test.Test(test.Data); res != TC_RESULT_SUCCESS)
+			{
+				printf("Test failed: %s\n", test.Name.c_str());
+			}
+			else
+			{
+				printf("Test successful: %s\n", test.Name.c_str());
+			}
+		}
+	}
+};
+
+} // namespace UnitTest
+} // namespace TCore
 TCResult TCUnitTest_Initialize(const void** outPluginAPI)
 {
-	Context = new TCUnitTestContext();
+	TCore::UnitTest::TCUnitTestContext::Initialize();
+
 	auto* sys = new ITCUnitTest();
-	sys->RegisterTest = TCUnitTestContext::RegisterTest;
-	sys->UnregisterTest = TCUnitTestContext::UnregisterTest;
-	sys->RunAllTests = nullptr;
+	sys->RegisterTest = TCore::UnitTest::TCUnitTestContext::RegisterTest;
+	sys->UnregisterTest = TCore::UnitTest::TCUnitTestContext::UnregisterTest;
+	sys->RunAllTests = TCore::UnitTest::TCUnitTestContext::RunAllTests;
 	sys->RunTests = nullptr;
-	sys->RunTest = TCUnitTestContext::RunTest;
+	sys->RunTest = TCore::UnitTest::TCUnitTestContext::RunTest;
 
 	TCUnitTest = sys;
 	*outPluginAPI = TCUnitTest;
@@ -47,10 +91,10 @@ TCResult TCUnitTest_OnPreShutdown()
 
 TCResult TCUnitTest_Shutdown()
 {
-	if (Context)
+	if (TCore::UnitTest::GContext)
 	{
-		delete Context;
-		Context = nullptr;
+		delete TCore::UnitTest::GContext;
+		TCore::UnitTest::GContext = nullptr;
 	}
 	return TC_RESULT_SUCCESS;
 }

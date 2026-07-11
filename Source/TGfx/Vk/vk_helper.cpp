@@ -22,13 +22,13 @@ static unsigned char vk_getTextureTypeLimits(texture_dimensions_tgfx dims,
 											 textureOrder_tgfx dataorder,
 											 textureChannels_tgfx chnnltype,
 											 textureUsageMask_tgfxflag usageflag,
-											 struct tgfx_gpu* GPUHandle,
+											 struct tgfx_gpu* GPUHnd,
 											 unsigned int* MAXWIDTH,
 											 unsigned int* MAXHEIGHT,
 											 unsigned int* MAXDEPTH,
 											 unsigned int* MAXMIPLEVEL)
 {
-	GPU_VKOBJ* GPU = getOBJ<GPU_VKOBJ>(GPUHandle);
+	GPU_VKOBJ* GPU = getOBJ<GPU_VKOBJ>(GPUHnd);
 	VkImageFormatProperties props;
 	VkImageUsageFlags flag = vk_findTextureUsageFlagVk(usageflag);
 	if (chnnltype == texture_channels_tgfx_D24S8 || chnnltype == texture_channels_tgfx_D32)

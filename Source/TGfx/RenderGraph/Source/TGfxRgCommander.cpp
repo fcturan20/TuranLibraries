@@ -233,7 +233,7 @@ struct renderer_funcs
 						   subdrawpass_tgfx_handle SubDrawPass_ID)
 	{
 		VKOBJHANDLE sphandle = *(VKOBJHANDLE*)SubDrawPass_ID;
-		RenderGraph::SubDP_VK* SP = getPass_fromHandle<RenderGraph::SubDP_VK>(sphandle);
+		RenderGraph::SubDP_VK* SP = getPass_fromHnd<RenderGraph::SubDP_VK>(sphandle);
 		VKOBJHANDLE ib_handle = *(VKOBJHANDLE*)&IndexBuffer_ID, vb_handle = *(VKOBJHANDLE*)&VertexBuffer_ID;
 		INDEXBUFFER_VKOBJ* IB = contentmanager->GETIB_ARRAY().getOBJfromHANDLE(ib_handle);
 		VERTEXBUFFER_VKOBJ* VB = contentmanager->GETVB_ARRAY().getOBJfromHANDLE(vb_handle);
@@ -304,9 +304,9 @@ struct renderer_funcs
 		}
 	}
 
-	static void SwapBuffers(struct tgfx_window* WindowHandle, windowpass_tgfx_handle WindowPassHandle)
+	static void SwapBuffers(struct tgfx_window* WindowHnd, windowpass_tgfx_handle WindowPassHnd)
 	{
-		WINDOW_VKOBJ* VKWINDOW = (WINDOW_VKOBJ*)WindowHandle;
+		WINDOW_VKOBJ* VKWINDOW = (WINDOW_VKOBJ*)WindowHnd;
 		if (VKWINDOW->isSwapped.load())
 		{
 			return;
@@ -336,8 +336,8 @@ struct renderer_funcs
 		VKWINDOW->PresentationSemaphores[1] = semaphore.get_id();
 		VKWINDOW->PresentationFences[1] = fence.getID();
 
-		VKOBJHANDLE wphandle = *(VKOBJHANDLE*)&WindowPassHandle;
-		RenderGraph::WP_VK* wp = getPass_fromHandle<RenderGraph::WP_VK>(wphandle);
+		VKOBJHANDLE wphandle = *(VKOBJHANDLE*)&WindowPassHnd;
+		RenderGraph::WP_VK* wp = getPass_fromHnd<RenderGraph::WP_VK>(wphandle);
 		RenderGraph::windowcall_vk call;
 		call.WindowID = core_vk->GETWINDOWs().getINDEX_byOBJ(VKWINDOW);
 		wp->WindowCalls.push_back(call);
@@ -372,9 +372,9 @@ struct renderer_funcs
 
 	// Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
 	// Target Buffer should be created with DEVICELOCAL
-	static void CopyBuffer_toBuffer(subtransferpass_tgfx_handle TransferPassHandle,
-									struct tgfx_buffer* SourceBuffer_Handle,
-									struct tgfx_buffer* TargetBuffer_Handle,
+	static void CopyBuffer_toBuffer(subtransferpass_tgfx_handle TransferPassHnd,
+									struct tgfx_buffer* SourceBuffer_Hnd,
+									struct tgfx_buffer* TargetBuffer_Hnd,
 									unsigned int SourceBuffer_Offset,
 									unsigned int TargetBuffer_Offset,
 									unsigned int Size)
@@ -382,15 +382,15 @@ struct renderer_funcs
 		VkBuffer SourceBuffer, DistanceBuffer;
 		VkDeviceSize SourceOffset = static_cast<VkDeviceSize>(SourceBuffer_Offset),
 					 DistanceOffset = static_cast<VkDeviceSize>(TargetBuffer_Offset);
-		FindBufferOBJ_byBufType(SourceBuffer_Handle, SourceBuffer, SourceOffset);
-		FindBufferOBJ_byBufType(TargetBuffer_Handle, DistanceBuffer, DistanceOffset);
+		FindBufferOBJ_byBufType(SourceBuffer_Hnd, SourceBuffer, SourceOffset);
+		FindBufferOBJ_byBufType(TargetBuffer_Hnd, DistanceBuffer, DistanceOffset);
 		VkBufferCopy Copy_i = {};
 		Copy_i.dstOffset = DistanceOffset;
 		Copy_i.srcOffset = SourceOffset;
 		Copy_i.size = static_cast<VkDeviceSize>(Size);
 
-		VKOBJHANDLE subtphandle = *(VKOBJHANDLE*)&TransferPassHandle;
-		RenderGraph::SubTPCOPY_VK* subtp = getPass_fromHandle<RenderGraph::SubTPCOPY_VK>(subtphandle);
+		VKOBJHANDLE subtphandle = *(VKOBJHANDLE*)&TransferPassHnd;
+		RenderGraph::SubTPCOPY_VK* subtp = getPass_fromHnd<RenderGraph::SubTPCOPY_VK>(subtphandle);
 		RenderGraph::VK_BUFtoBUFinfo finalinfo;
 		finalinfo.DistanceBuffer = DistanceBuffer;
 		finalinfo.SourceBuffer = SourceBuffer;
@@ -399,15 +399,15 @@ struct renderer_funcs
 	}
 
 	// Source Buffer should be created with HOSTVISIBLE or FASTHOSTVISIBLE
-	static void CopyBuffer_toImage(subtransferpass_tgfx_handle TransferPassHandle,
-								   struct tgfx_buffer* SourceBuffer_Handle,
-								   struct tgfx_texture* TextureHandle,
+	static void CopyBuffer_toImage(subtransferpass_tgfx_handle TransferPassHnd,
+								   struct tgfx_buffer* SourceBuffer_Hnd,
+								   struct tgfx_texture* TextureHnd,
 								   unsigned int SourceBuffer_offset,
 								   boxRegion_tgfx TargetTextureRegion,
 								   unsigned int TargetMipLevel,
 								   cubeface_tgfx TargetCubeMapFace)
 	{
-		TEXTURE_VKOBJ* TEXTURE = (TEXTURE_VKOBJ*)TextureHandle;
+		TEXTURE_VKOBJ* TEXTURE = (TEXTURE_VKOBJ*)TextureHnd;
 		VkDeviceSize finaloffset = static_cast<VkDeviceSize>(SourceBuffer_offset);
 		RenderGraph::VK_BUFtoIMinfo x;
 		x.BufferImageCopy.bufferImageHeight = 0;
@@ -455,17 +455,17 @@ struct renderer_funcs
 		x.BufferImageCopy.imageSubresource.layerCount = 1;
 		x.BufferImageCopy.imageSubresource.mipLevel = TargetMipLevel;
 		x.TargetImage = TEXTURE->Image;
-		FindBufferOBJ_byBufType(SourceBuffer_Handle, x.SourceBuffer, finaloffset);
+		FindBufferOBJ_byBufType(SourceBuffer_Hnd, x.SourceBuffer, finaloffset);
 		x.BufferImageCopy.bufferOffset = finaloffset;
 
-		VKOBJHANDLE subTPhandle = *(VKOBJHANDLE*)&TransferPassHandle;
-		RenderGraph::SubTPCOPY_VK* subTP = getPass_fromHandle<RenderGraph::SubTPCOPY_VK>(subTPhandle);
+		VKOBJHANDLE subTPhandle = *(VKOBJHANDLE*)&TransferPassHnd;
+		RenderGraph::SubTPCOPY_VK* subTP = getPass_fromHnd<RenderGraph::SubTPCOPY_VK>(subTPhandle);
 		subTP->BUFIMCopies.push_back(x);
 	}
 
-	static void CopyImage_toImage(subtransferpass_tgfx_handle TransferPassHandle,
-								  struct tgfx_texture* SourceTextureHandle,
-								  struct tgfx_texture* TargetTextureHandle,
+	static void CopyImage_toImage(subtransferpass_tgfx_handle TransferPassHnd,
+								  struct tgfx_texture* SourceTextureHnd,
+								  struct tgfx_texture* TargetTextureHnd,
 								  uvec3_tgfx SourceTextureOffset,
 								  uvec3_tgfx CopySize,
 								  uvec3_tgfx TargetTextureOffset,
@@ -474,16 +474,16 @@ struct renderer_funcs
 								  cubeface_tgfx SourceCubeMapFace,
 								  cubeface_tgfx TargetCubeMapFace);
 
-	static void ImageBarrier(subtransferpass_tgfx_handle BarrierTPHandle,
-							 struct tgfx_texture* TextureHandle,
+	static void ImageBarrier(subtransferpass_tgfx_handle BarrierTPHnd,
+							 struct tgfx_texture* TextureHnd,
 							 image_access_tgfx LAST_ACCESS,
 							 image_access_tgfx NEXT_ACCESS,
 							 unsigned int TargetMipLevel,
 							 cubeface_tgfx TargetCubeMapFace)
 	{
-		TEXTURE_VKOBJ* Texture = (TEXTURE_VKOBJ*)TextureHandle;
-		VKOBJHANDLE subTPhandle = *(VKOBJHANDLE*)&BarrierTPHandle;
-		RenderGraph::SubTPBARRIER_VK* tp = getPass_fromHandle<RenderGraph::SubTPBARRIER_VK>(subTPhandle);
+		TEXTURE_VKOBJ* Texture = (TEXTURE_VKOBJ*)TextureHnd;
+		VKOBJHANDLE subTPhandle = *(VKOBJHANDLE*)&BarrierTPHnd;
+		RenderGraph::SubTPBARRIER_VK* tp = getPass_fromHnd<RenderGraph::SubTPBARRIER_VK>(subTPhandle);
 
 		RenderGraph::VK_ImBarrierInfo im_bi;
 		im_bi.image = Texture->Image;
@@ -524,17 +524,16 @@ struct renderer_funcs
 		tp->TextureBarriers.push_back(im_bi);
 	}
 
-	static void Dispatch_Compute(subcomputepass_tgfx_handle ComputePassHandle,
-								 computeShaderInstance_tgfxhnd CSInstanceHandle,
+	static void Dispatch_Compute(subcomputepass_tgfx_handle ComputePassHnd,
+								 computeShaderInstance_tgfxhnd CSInstanceHnd,
 								 uvec3_tgfx DispatchSize)
 	{
-		VKOBJHANDLE CPhandle = *(VKOBJHANDLE*)&ComputePassHandle;
-		RenderGraph::SubCP_VK* subCP = getPass_fromHandle<RenderGraph::SubCP_VK>(CPhandle);
+		VKOBJHANDLE CPhandle = *(VKOBJHANDLE*)&ComputePassHnd;
+		RenderGraph::SubCP_VK* subCP = getPass_fromHnd<RenderGraph::SubCP_VK>(CPhandle);
 
 		RenderGraph::dispatchcall_vk dc;
 		dc.DispatchSize = glm::vec3(DispatchSize.x, DispatchSize.y, DispatchSize.z);
-		COMPUTEINST_VKOBJ* ci =
-			contentmanager->GETCOMPUTEINST_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*)CSInstanceHandle);
+		COMPUTEINST_VKOBJ* ci = contentmanager->GETCOMPUTEINST_ARRAY().getOBJfromHANDLE(*(VKOBJHANDLE*)CSInstanceHnd);
 		COMPUTETYPE_VKOBJ* pso = contentmanager->GETCOMPUTETYPE_ARRAY().getOBJbyINDEX(ci->PROGRAM);
 		uint32_t current_i = 0;
 		for (uint32_t i = 0; i < VKCONST_MAXDESCSET_PERLIST && ci->InstSETs[i] != UINT32_MAX; i++)

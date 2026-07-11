@@ -7,14 +7,14 @@ TCORE_PLUGIN_DEFINE(TCString, "tcString", TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
 TCORE_DEFINE_HANDLE(TCString);
 typedef struct ITCString
 {
-	TCStringHandle (*Create)(const char* str);
-	void (*Destroy)(TCStringHandle str);
-	void (*Append)(TCStringHandle str, const char* str_to_append);
-	void (*Clear)(TCStringHandle str);
-	void (*Set)(TCStringHandle str, const char* new_str);
-	const char* (*CStr)(TCStringHandle str);
-	void (*Resize)(TCStringHandle str, size_t new_capacity);
-	TCStringHandle (*Substring)(TCStringHandle str, size_t start_index, size_t end_index);
+	TCStringHnd (*Create)(const char* str);
+	void (*Destroy)(TCStringHnd str);
+	void (*Append)(TCStringHnd str, const char* str_to_append);
+	void (*Clear)(TCStringHnd str);
+	void (*Set)(TCStringHnd str, const char* new_str);
+	const char* (*CStr)(TCStringHnd str);
+	void (*Resize)(TCStringHnd str, size_t new_capacity);
+	TCStringHnd (*Substring)(TCStringHnd str, size_t start_index, size_t end_index);
 } ITCString;
 
 TCORE_END_C_LINKAGE
@@ -67,7 +67,7 @@ public:
 		TCString->Set(Handle, new_str);
 		return *this;
 	}
-	String(TCStringHandle handle) : Handle(handle) {}
+	String(TCStringHnd handle) : Handle(handle) {}
 	~String()
 	{
 		if (Handle)
@@ -114,7 +114,7 @@ public:
 	String(const std::string& str) { Handle = TCString->Create(str.c_str()); }
 #endif
 private:
-	TCStringHandle Handle;
+	TCStringHnd Handle;
 };
 } // namespace TCore
 #endif

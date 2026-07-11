@@ -109,8 +109,8 @@ struct QUEUE_VKOBJ
 	bool isALIVE = false;
 	vk_handleType HANDLETYPE = VKHANDLETYPEs::GPUQUEUE;
 	static uint16_t GET_EXTRAFLAGS(QUEUE_VKOBJ* obj) { return (obj->m_gpu->gpuIndx() << 8) | (obj->vk_queueFamIndex); }
-	static GPU_VKOBJ* getGPUfromHandle(struct tgfx_gpuQueue* hnd);
-	static QUEUEFAM_VK* getFAMfromHandle(struct tgfx_gpuQueue* hnd);
+	static GPU_VKOBJ* getGPUfromHnd(struct tgfx_gpuQueue* hnd);
+	static QUEUEFAM_VK* getFAMfromHnd(struct tgfx_gpuQueue* hnd);
 
 	uint32_t vk_queueFamIndex = 0, m_queueIndx = 0;
 	VkQueue vk_queue;
@@ -200,7 +200,7 @@ struct CMDBUFFER_VKOBJ
 {
 	vk_handleType HANDLETYPE = VKHANDLETYPEs::CMDBUFFER;
 	static uint16_t GET_EXTRAFLAGS(CMDBUFFER_VKOBJ* obj) { return uint16_t(obj->m_gpuIndx) << 8; }
-	static GPU_VKOBJ* getGPUfromHandle(struct tgfx_commandBuffer* hnd)
+	static GPU_VKOBJ* getGPUfromHnd(struct tgfx_commandBuffer* hnd)
 	{
 		VKOBJHANDLE handle = *(VKOBJHANDLE*)&hnd;
 		uint32_t gpuIndx = handle.EXTRA_FLAGs >> 8;
@@ -385,7 +385,7 @@ struct cmdPool_vk
 	QUEUEFAM_VK* m_queueFam = nullptr;
 	std::mutex m_secondarySync;
 };
-GPU_VKOBJ* QUEUE_VKOBJ::getGPUfromHandle(struct tgfx_gpuQueue* hnd)
+GPU_VKOBJ* QUEUE_VKOBJ::getGPUfromHnd(struct tgfx_gpuQueue* hnd)
 {
 #ifdef VK_USE_STD
 	QUEUE_VKOBJ* o = getOBJ<QUEUE_VKOBJ>(hnd);
@@ -396,13 +396,13 @@ GPU_VKOBJ* QUEUE_VKOBJ::getGPUfromHandle(struct tgfx_gpuQueue* hnd)
 	return core_vk->getGPU(gpuIndx);
 #endif
 }
-QUEUEFAM_VK* QUEUE_VKOBJ::getFAMfromHandle(struct tgfx_gpuQueue* hnd)
+QUEUEFAM_VK* QUEUE_VKOBJ::getFAMfromHnd(struct tgfx_gpuQueue* hnd)
 {
 #ifdef VK_USE_STD
 	QUEUE_VKOBJ* o = getOBJ<QUEUE_VKOBJ>(hnd);
 	return mngrPriv->m_queueFams[o->vk_queueFamIndex];
 #else
-	GPU_VKOBJ* gpu = getGPUfromHandle(hnd);
+	GPU_VKOBJ* gpu = getGPUfromHnd(hnd);
 	VKOBJHANDLE handle = *(VKOBJHANDLE*)&hnd;
 	uint32_t queueFamIndx = (uint32_t(handle.EXTRA_FLAGs) << 24) >> 24;
 	return mngrPriv->m_queueFams[queueFamIndx];

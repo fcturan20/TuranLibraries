@@ -21,7 +21,7 @@ typedef struct tgfx_helper
 										  enum textureOrder_tgfx dataorder,
 										  enum textureChannels_tgfx channeltype,
 										  textureUsageMask_tgfxflag usageflag,
-										  struct tgfx_gpu* GPUHandle,
+										  struct tgfx_gpu* GPUHnd,
 										  unsigned int* MAXWIDTH,
 										  unsigned int* MAXHEIGHT,
 										  unsigned int* MAXDEPTH,
@@ -31,7 +31,7 @@ typedef struct tgfx_helper
 										struct tgfx_windowGPUsupport* info);
 
 	void (*getTextureSupportedMemTypes)(struct tgfx_texture* texture, unsigned int* SupportedMemoryTypesBitset);
-	void (*getMonitorInfo)(struct tgfx_monitor* MonitorHandle,
+	void (*getMonitorInfo)(struct tgfx_monitor* MonitorHnd,
 						   unsigned int* WIDTH,
 						   unsigned int* HEIGHT,
 						   unsigned int* ColorBites,

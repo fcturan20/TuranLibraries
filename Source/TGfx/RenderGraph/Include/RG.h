@@ -123,7 +123,7 @@ struct RenderGraph
 			handle.EXTRA_FLAGs = RG_BINDINDEX;
 			return handle;
 		}
-		static SubDP_VK* getPassFromHandle(VKOBJHANDLE handle)
+		static SubDP_VK* getPassFromHnd(VKOBJHANDLE handle)
 		{
 			if (handle.type != VKHANDLETYPEs::SUBDP)
 			{
@@ -166,7 +166,7 @@ struct RenderGraph
 			handle.EXTRA_FLAGs = base.PASS_ID;
 			return handle;
 		}
-		static DP_VK* getPassFromHandle(VKOBJHANDLE handle)
+		static DP_VK* getPassFromHnd(VKOBJHANDLE handle)
 		{
 			if (handle.type != VKHANDLETYPEs::DRAWPASS)
 			{
@@ -251,7 +251,7 @@ struct RenderGraph
 			handle.EXTRA_FLAGs = base.PASS_ID;
 			return handle;
 		}
-		static TP_VK* getPassFromHandle(VKOBJHANDLE handle)
+		static TP_VK* getPassFromHnd(VKOBJHANDLE handle)
 		{
 			if (handle.type != VKHANDLETYPEs::TRANSFERPASS)
 			{
@@ -277,7 +277,7 @@ struct RenderGraph
 			handle.EXTRA_FLAGs = common.SubTP_ID;
 			return handle;
 		}
-		static SubTPCOPY_VK* getPassFromHandle(VKOBJHANDLE handle)
+		static SubTPCOPY_VK* getPassFromHnd(VKOBJHANDLE handle)
 		{
 			if (handle.type != VKHANDLETYPEs::SUBTP_COPY)
 			{
@@ -303,7 +303,7 @@ struct RenderGraph
 			handle.EXTRA_FLAGs = common.SubTP_ID;
 			return handle;
 		}
-		static SubTPBARRIER_VK* getPassFromHandle(VKOBJHANDLE handle)
+		static SubTPBARRIER_VK* getPassFromHnd(VKOBJHANDLE handle)
 		{
 			if (handle.type != VKHANDLETYPEs::SUBTP_BARRIER)
 			{
@@ -336,7 +336,7 @@ struct RenderGraph
 			handle.EXTRA_FLAGs = base.PASS_ID;
 			return handle;
 		}
-		static WP_VK* getPassFromHandle(VKOBJHANDLE handle)
+		static WP_VK* getPassFromHnd(VKOBJHANDLE handle)
 		{
 			if (handle.type != VKHANDLETYPEs::WINDOWPASS)
 			{
@@ -386,7 +386,7 @@ struct RenderGraph
 			handle.EXTRA_FLAGs = SubCP_ID;
 			return handle;
 		}
-		static SubCP_VK* getPassFromHandle(VKOBJHANDLE handle)
+		static SubCP_VK* getPassFromHnd(VKOBJHANDLE handle)
 		{
 			if (handle.type != VKHANDLETYPEs::SUBCP)
 			{
@@ -418,7 +418,7 @@ struct RenderGraph
 			handle.EXTRA_FLAGs = base.PASS_ID;
 			return handle;
 		}
-		static CP_VK* getPassFromHandle(VKOBJHANDLE handle)
+		static CP_VK* getPassFromHnd(VKOBJHANDLE handle)
 		{
 			if (handle.type != VKHANDLETYPEs::COMPUTEPASS)
 			{
@@ -513,7 +513,7 @@ struct RenderGraph
 			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
 			return handle;
 		};
-		static WaitDesc_SubDP* getDesc_fromHandle(VKDATAHANDLE handle)
+		static WaitDesc_SubDP* getDesc_fromHnd(VKDATAHANDLE handle)
 		{
 			if (handle.type != HANDLETYPE)
 			{
@@ -540,7 +540,7 @@ struct RenderGraph
 			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
 			return handle;
 		};
-		static WaitDesc_SubCP* getDesc_fromHandle(VKDATAHANDLE handle)
+		static WaitDesc_SubCP* getDesc_fromHnd(VKDATAHANDLE handle)
 		{
 			if (handle.type != HANDLETYPE)
 			{
@@ -567,7 +567,7 @@ struct RenderGraph
 			handle.DATA_memoffset = VK_POINTER_TO_MEMOFFSET(this);
 			return handle;
 		};
-		static WaitDesc_SubTP* getDesc_fromHandle(VKDATAHANDLE handle)
+		static WaitDesc_SubTP* getDesc_fromHnd(VKDATAHANDLE handle)
 		{
 			if (handle.type != HANDLETYPE)
 			{
@@ -578,9 +578,9 @@ struct RenderGraph
 		uint32_t convert_to_FinalWaitDesc();
 	};
 	template <typename T>
-	static T* getDesc_fromHandle(VKDATAHANDLE handle)
+	static T* getDesc_fromHnd(VKDATAHANDLE handle)
 	{
-		return (T*)T::getDesc_fromHandle(handle);
+		return (T*)T::getDesc_fromHnd(handle);
 	}
 	static void setRGSTATUS(RGReconstructionStatus stat);
 };
@@ -595,9 +595,9 @@ VKOBJHANDLE getHandle_ofpass(T* pass)
 	return pass->getHANDLE();
 }
 template <class T>
-T* getPass_fromHandle(VKOBJHANDLE handle)
+T* getPass_fromHnd(VKOBJHANDLE handle)
 {
-	return T::getPassFromHandle(handle);
+	return T::getPassFromHnd(handle);
 }
 extern RenderGraph* VKGLOBAL_RG;
 

@@ -135,7 +135,7 @@ unsigned int vk_calculateSizeOfVertexLayout(const datatype_tgfx* ATTRIBUTEs, uns
 
 result_tgfx vk_createTexture(struct tgfx_gpu* i_gpu,
 							 const tgfx_textureDescription* desc,
-							 struct tgfx_texture** TextureHandle)
+							 struct tgfx_texture** TextureHnd)
 {
 	GPU_VKOBJ* gpu = getOBJ<GPU_VKOBJ>(i_gpu);
 	VkImageUsageFlags usageFlag = vk_findTextureUsageFlagVk(desc->usage);
@@ -220,7 +220,7 @@ result_tgfx vk_createTexture(struct tgfx_gpu* i_gpu,
 	texture->vk_imageUsage = im_ci.usage;
 	texture->m_memReqs = memReqs;
 
-	*TextureHandle = getHANDLE<struct tgfx_texture*>(texture);
+	*TextureHnd = getHANDLE<struct tgfx_texture*>(texture);
 	return result_tgfx_SUCCESS;
 }
 void vk_destroyTexture(struct tgfx_texture* texture)
@@ -565,7 +565,7 @@ result_tgfx vk_compileShaderSource(struct tgfx_gpu* gpu,
 								   shaderStage_tgfx shaderstage,
 								   const void* DATA,
 								   unsigned int DATA_SIZE,
-								   struct tgfx_shaderSource** ShaderSourceHandle)
+								   struct tgfx_shaderSource** ShaderSourceHnd)
 {
 	GPU_VKOBJ* GPU = getOBJ<GPU_VKOBJ>(gpu);
 	const void* binary_spirv_data = nullptr;
@@ -607,10 +607,10 @@ result_tgfx vk_compileShaderSource(struct tgfx_gpu* gpu,
 	SHADERSOURCE->stage = shaderstage;
 	SHADERSOURCE->m_gpu = gpu;
 
-	*ShaderSourceHandle = getHANDLE<struct tgfx_shaderSource*>(SHADERSOURCE);
+	*ShaderSourceHnd = getHANDLE<struct tgfx_shaderSource*>(SHADERSOURCE);
 	return result_tgfx_SUCCESS;
 }
-void vk_destroyShaderSource(struct tgfx_shaderSource* ShaderSourceHandle) {}
+void vk_destroyShaderSource(struct tgfx_shaderSource* ShaderSourceHnd) {}
 VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls);
 
 result_tgfx vk_createRasterPipeline(const tgfx_rasterPipelineDescription* desc, struct tgfx_pipeline** hnd)
@@ -968,7 +968,7 @@ result_tgfx vk_createComputePipeline(struct tgfx_shaderSource* Source,
 		cp_ci.stage.pSpecializationInfo = nullptr;
 		cp_ci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 		cp_ci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		cp_ci.basePipelineHandle = VK_NULL_HANDLE;
+		cp_ci.basePipelineHnd = VK_NULL_HANDLE;
 		cp_ci.basePipelineIndex = -1;
 		cp_ci.flags = 0;
 		cp_ci.layout = layout;
@@ -1188,7 +1188,7 @@ result_tgfx vk_createHeap(struct tgfx_gpu* gpu,
 	}
 
 	HEAP_VKOBJ* heap = priv->heaps.create_OBJ();
-	heap->vk_memoryHandle = vkDevMem;
+	heap->vk_memoryHnd = vkDevMem;
 	heap->vk_memoryTypeIndex = memoryRegionID;
 	heap->m_size = heapSize;
 	heap->m_GPU = vkGPU->gpuIndx();
@@ -1277,7 +1277,7 @@ result_tgfx vk_bindToHeap_Buffer(struct tgfx_heap* i_heap,
 	{
 		return vkPrint(46);
 	}
-	if (vkBindBufferMemory(gpu->vk_logical, buffer->vk_buffer, heap->vk_memoryHandle, offset) != VK_SUCCESS)
+	if (vkBindBufferMemory(gpu->vk_logical, buffer->vk_buffer, heap->vk_memoryHnd, offset) != VK_SUCCESS)
 	{
 		return vkPrint(47, L"at vkBindBufferMemory()");
 	}
@@ -1300,7 +1300,7 @@ result_tgfx vk_bindToHeap_Texture(struct tgfx_heap* i_heap,
 	{
 		return vkPrint(46);
 	}
-	if (vkBindImageMemory(gpu->vk_logical, texture->vk_image, heap->vk_memoryHandle, offset) != VK_SUCCESS)
+	if (vkBindImageMemory(gpu->vk_logical, texture->vk_image, heap->vk_memoryHnd, offset) != VK_SUCCESS)
 	{
 		vkPrint(47, L"at vkBindImageMemory()");
 	}
@@ -1366,7 +1366,7 @@ result_tgfx vk_mapHeap(struct tgfx_heap* i_heap,
 {
 	HEAP_VKOBJ* heap = getOBJ<HEAP_VKOBJ>(i_heap);
 	GPU_VKOBJ* gpu = core_vk->getGPU(heap->m_GPU);
-	if (vkMapMemory(gpu->vk_logical, heap->vk_memoryHandle, offset, size, 0, mappedRegion) != VK_SUCCESS)
+	if (vkMapMemory(gpu->vk_logical, heap->vk_memoryHnd, offset, size, 0, mappedRegion) != VK_SUCCESS)
 	{
 		return vkPrint(48);
 	}
@@ -1377,7 +1377,7 @@ result_tgfx vk_unmapHeap(struct tgfx_heap* i_heap)
 {
 	HEAP_VKOBJ* heap = getOBJ<HEAP_VKOBJ>(i_heap);
 	GPU_VKOBJ* gpu = core_vk->getGPU(heap->m_GPU);
-	vkUnmapMemory(gpu->vk_logical, heap->vk_memoryHandle);
+	vkUnmapMemory(gpu->vk_logical, heap->vk_memoryHnd);
 	return result_tgfx_SUCCESS;
 }
 

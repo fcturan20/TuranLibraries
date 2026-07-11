@@ -60,9 +60,9 @@ bool Create_WindowSwapchain(window_dx* new_window,
 
 	ComPtr<IDXGISwapChain1> swapChain1;
 	ThrowIfFailed(dxgiFactory->CreateSwapChainForHwnd(
-		commandQueue.Get(), new_window->Window_Handle, &swapChainDesc, nullptr, nullptr, &swapChain1));
-	ThrowIfFailed(dxgiFactory->MakeWindowAssociation(new_window->Window_Handle, DXGI_MWA_NO_ALT_ENTER));
-	ThrowIfFailed(swapChain1.As(&new_window->Swapchain_Handle));
+		commandQueue.Get(), new_window->Window_Hnd, &swapChainDesc, nullptr, nullptr, &swapChain1));
+	ThrowIfFailed(dxgiFactory->MakeWindowAssociation(new_window->Window_Hnd, DXGI_MWA_NO_ALT_ENTER));
+	ThrowIfFailed(swapChain1.As(&new_window->Swapchain_Hnd));
 
 	return true;
 }
@@ -82,7 +82,7 @@ public:
 							 void* UserPointer,
 							 struct tgfx_texture** SwapchainTextureHandles,
 							 struct tgfx_window** window);
-	static void change_window_resolution(struct tgfx_window* WindowHandle, unsigned int width, unsigned int height);
+	static void change_window_resolution(struct tgfx_window* WindowHnd, unsigned int width, unsigned int height);
 	static void getmonitorlist(monitor_tgfxlsthnd* MonitorList);
 	static void getGPUlist(gpu_tgfxlsthnd* GpuList);
 
@@ -147,7 +147,7 @@ extern "C" TCORE_FUNC_EXPORT result_tgfx backend_load(registrysys_tapi* regsys,
 		printer = vk_printfLog;
 	}
 
-	gHInstance = GetModuleHandle(NULL);
+	gHInstance = GetModuleHnd(NULL);
 
 	set_helper_functions();
 
@@ -209,8 +209,8 @@ void core_functions_dx::createwindow(unsigned int WIDTH,
 		return;
 	}
 
-	new_window->Window_Handle = glfwGetWin32Window(new_window->GLFWHANDLE);
-	if (!new_window->Window_Handle)
+	new_window->Window_Hnd = glfwGetWin32Window(new_window->GLFWHANDLE);
+	if (!new_window->Window_Hnd)
 	{
 		printer(result_tgfx_FAIL, "GLFW failed to get the HWDN handle of the window!");
 		delete new_window;
@@ -228,7 +228,7 @@ void core_functions_dx::createwindow(unsigned int WIDTH,
 	if (!Create_WindowSwapchain(new_window,
 								new_window->LASTWIDTH,
 								new_window->LASTHEIGHT,
-								&new_window->Swapchain_Handle,
+								&new_window->Swapchain_Hnd,
 								SWPCHNTEXTUREHANDLESVK))
 	{
 		printer(result_tgfx_FAIL, "Window's swapchain creation has failed, so window's creation too!");

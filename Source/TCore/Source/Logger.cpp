@@ -49,7 +49,7 @@ struct TCLogContext
 	static void Initialize(const char* logFilePath)
 	{
 #if defined(T_ENVWINDOWS)
-		GContext->hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		GContext->hConsole = GetStdHnd(STD_OUTPUT_HANDLE);
 #endif
 		if (logFilePath)
 			GContext->mainFilePath = logFilePath;

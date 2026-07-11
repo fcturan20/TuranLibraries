@@ -8,7 +8,7 @@ TCORE_BEGIN_C_LINKAGE
 #define TCORE_PLUGIN_DEFINE(name, display_name, version)                                                               \
 	typedef struct I##name I##name;                                                                                    \
 	static constexpr unsigned int name##_PLUGIN_VERSION = version;                                                     \
-	static constexpr const char* const name##_PLUGIN_NAME = #display_name;                                             \
+	static constexpr const char* const name##_PLUGIN_NAME = display_name;                                              \
 	extern const I##name* name;                                                                                        \
 	extern const char* TCORE_ACTIVE_PLUGIN_NAME; // Used to identify the currently active plugin in the entry point, so
 												 // you can use it for logging and other purposes.
@@ -56,8 +56,8 @@ typedef struct ITC
 	TCResult (*UnloadPlugin)(const char* pluginName);
 	TCResult (*GetPlugin)(const char* pluginName,
 						  unsigned int version,
-						  TCPluginInfo* outPluginInfo,
-						  void** outPluginAPI);
+						  const TCPluginInfo** outPluginInfo,
+						  const void** outPluginAPI);
 	TCResult (*GetCallerPluginInfo)(TCPluginInfo* outPluginInfo);
 } ITC;
 
@@ -73,6 +73,10 @@ TCORE_PLUGIN_INIT(TSMyPlugin, TCMyPlugin) will init your plugin. 2-2. Define ent
 plugin and fill plugin functions. It's recommended to use TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START and
 TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry point if you want to.
 */
+
+#define TCORE_PLUGIN_ENTRY_POINT_NAME "TCORE_PLUGIN_ENTRY_FUNC"
+#define TCORE_PLUGIN_ENTRY_POINT_FUNC_SIGNATURE                                                                        \
+	TCResult(const ITC* core, TCPluginInfo* outPluginInfo, TCPluginFunctions* outPluginFuncs)
 
 // Define void BindPluginFunctions(TCPluginFunctions*) before calling this
 #define TCORE_PLUGIN_ENTRY_POINT_START(name)                                                                           \
@@ -99,10 +103,9 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 // user experience.
 #define TCORE_PLUGIN_HARD_DEPENDENCY(name, version)                                                                    \
 	{                                                                                                                  \
-		TCPluginInfo info{};                                                                                           \
-		TCPluginFunctions functions{};                                                                                 \
-		TC->GetPlugin(name##_PLUGIN_NAME, version, &info, (void**)&name);                                              \
-		if (!info.Name)                                                                                                \
+		const TCPluginInfo* info{};                                                                                    \
+		TC->GetPlugin(name##_PLUGIN_NAME, version, &info, (const void**)&name);                                        \
+		if (!info->Name)                                                                                               \
 		{                                                                                                              \
 			printf("Failed to load plugin %s because it is not found!\n", name##_PLUGIN_NAME);                         \
 			return TC_RESULT_FAILURE;                                                                                  \

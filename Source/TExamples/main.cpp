@@ -22,7 +22,7 @@ void Callback(result_tgfx result, const char* Text)
 }
 
 void WindowCallback(
-	tgfx_window WindowHandle, void* UserPTR, unsigned int WIDTH, unsigned int HEIGHT, tgfx_texture* SwapchainTextures)
+	tgfx_window WindowHnd, void* UserPTR, unsigned int WIDTH, unsigned int HEIGHT, tgfx_texture* SwapchainTextures)
 {
 	std::cout << "Window is resizing to x: " << WIDTH << " y: " << HEIGHT << "\n";
 }

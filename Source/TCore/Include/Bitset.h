@@ -8,21 +8,21 @@ TCORE_DEFINE_HANDLE(TCBitset);
 
 typedef struct ITCBitset
 {
-	TCBitsetHandle (*CreateBitset)(unsigned int byte_length);
-	void (*DestroyBitset)(TCBitsetHandle bitset);
+	TCBitsetHnd (*CreateBitset)(unsigned int byte_length);
+	void (*DestroyBitset)(TCBitsetHnd bitset);
 	// If setTrue isn't 0, sets bit as true
 	// Otherwise, sets false
 	// @return 1 = value was opposite. 0 = value was same
 	// TODO: When multi-threading is supported; index = UINT32_MAX'll mean first "!setTrue" bit will
 	//  be "setTrue" and index of the bit will be returned
-	void (*SetBit)(TCBitsetHandle set, unsigned int index, unsigned char set_true);
-	unsigned char (*GetBitValue)(const TCBitsetHandle set, unsigned int index);
-	unsigned int (*GetByteLength)(const TCBitsetHandle set);
+	void (*SetBit)(TCBitsetHnd set, unsigned int index, unsigned char set_true);
+	unsigned char (*GetBitValue)(const TCBitsetHnd set, unsigned int index);
+	unsigned int (*GetByteLength)(const TCBitsetHnd set);
 	// If findTrue isn't 0, looks for first true bit
 	// Otherwise, looks for first false bit.
-	unsigned int (*GetFirstBitIndx)(const TCBitsetHandle set, unsigned char find_true);
-	void (*ClearBitset)(TCBitsetHandle set, unsigned char set_true);
-	void (*Expand)(TCBitsetHandle set, unsigned int new_size);
+	unsigned int (*GetFirstBitIndx)(const TCBitsetHnd set, unsigned char find_true);
+	void (*ClearBitset)(TCBitsetHnd set, unsigned char set_true);
+	void (*Expand)(TCBitsetHnd set, unsigned int new_size);
 } ITCBitset;
 
 TCORE_END_C_LINKAGE

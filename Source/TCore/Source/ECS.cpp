@@ -46,7 +46,7 @@ struct ComponentType
 {
 	uint32_t TypeId = UINT32_MAX;
 	char Name[kMaxCompTypeChar];
-	void* MainTypeHandle;
+	void* MainTypeHnd;
 	TCComponentManagerDescription Manager;
 	unsigned int OverridenTypeCount = 0;
 	TCComponentTypePair* OverridenTypePairs;
@@ -61,7 +61,7 @@ struct Entity
 struct EntityType
 {
 	TUint TypeId = UINT32_MAX;
-	TCore::Vector<TCComponentTypeHandle> ComponentTypes;
+	TCore::Vector<TCComponentTypeHnd> ComponentTypes;
 	TCore::Vector<Entity> Entities;
 };
 
@@ -99,7 +99,7 @@ struct Context
 	// These types are main types
 	// Only childs are stored, overriden parents aren't
 	TCore::Vector<ComponentType>* MainComponentTypes;
-	ComponentType* find_compType_byID(TCComponentTypeHandle id)
+	ComponentType* find_compType_byID(TCComponentTypeHnd id)
 	{
 		ecstapi_idOnlyPointer hndle = *reinterpret_cast<ecstapi_idOnlyPointer*>(&id);
 		ComponentType* r = &MainComponentTypes[hndle.typeID];
@@ -120,7 +120,7 @@ struct Context
 	///////////////////////
 
 	TCore::Vector<EntityType> EntityTypes;
-	EntityType* FindEntityType(TCEntityTypeHandle hnd)
+	EntityType* FindEntityType(TCEntityTypeHnd hnd)
 	{
 		ecstapi_idOnlyPointer hndle = *reinterpret_cast<ecstapi_idOnlyPointer*>(&hnd);
 		EntityType* r = &EntityTypes[hndle.typeID];
@@ -142,7 +142,7 @@ struct Context
 			// If main type matches
 			if (base == eType->compTypeHndlesList[mainCompIndex])
 			{
-				*overriden = GContext->find_compType_byID(base)->mainTypeHandle;
+				*overriden = GContext->find_compType_byID(base)->mainTypeHnd;
 				return mainCompIndex;
 			}
 			ecs_compType* mainCompType = GContext->find_compType_byID(eType->compTypeHndlesList[mainCompIndex]);
@@ -216,16 +216,16 @@ struct Context
 
 #pragma region Component Functions
 
-	static TCComponentTypeHandle AddComponentType(const char* name,
-												  void* main_type,
-												  const TCComponentManagerDescription* manager,
-												  const TCComponentTypePair* pair_list,
-												  unsigned int pair_list_size)
+	static TCComponentTypeHnd AddComponentType(const char* name,
+											   void* main_type,
+											   const TCComponentManagerDescription* manager,
+											   const TCComponentTypePair* pair_list,
+											   unsigned int pair_list_size)
 	{
 		f_vector->pushBack(GContext->v_mainComponentTypes, GContext->v_mainComponentTypes);
 		uint32_t indx = f_vector->size(GContext->v_mainComponentTypes) - 1;
 		ecs_compType* type = &GContext->v_mainComponentTypes[indx];
-		type->mainTypeHandle = mainType;
+		type->mainTypeHnd = mainType;
 		type->manager = manager;
 		type->typeID = indx;
 		type->overridenTypeCount = pairListSize;
@@ -247,12 +247,12 @@ struct Context
 
 #pragma region Entity Functions
 
-	static TCEntityTypeHandle AddEntityType(const TCComponentTypeHandle* comp_type_list, TSize list_size)
+	static TCEntityTypeHnd AddEntityType(const TCComponentTypeHnd* comp_type_list, TSize list_size)
 	{
 		ecs_entityType type;
 		type.compCount = list_size;
 		type.typeID = f_vector->size(GContext->v_entityTypes);
-		type.v_entityList = f_vector->create(mainMemBlock, list_size * sizeof(TCComponentHandle), 0, 1 << 20, 0);
+		type.v_entityList = f_vector->create(mainMemBlock, list_size * sizeof(TCComponentHnd), 0, 1 << 20, 0);
 		type.compTypeHndlesList =
 			(ComponentType**)standard_alloc->malloc(mainMemBlock, sizeof(ComponentType) * list_size);
 		std::memcpy(type.compTypeHndlesList, compTypeList, sizeof(ComponentType) * list_size);
@@ -261,15 +261,15 @@ struct Context
 		ecstapi_idOnlyPointer hnd;
 		hnd.padding_to_8byte = UINT32_MAX;
 		hnd.typeID = type.typeID;
-		return *reinterpret_cast<TCEntityTypeHandle*>(&hnd);
+		return *reinterpret_cast<TCEntityTypeHnd*>(&hnd);
 	}
-	static TCEntityHandle CreateEntity(TCEntityTypeHandle typeHandle)
+	static TCEntityHnd CreateEntity(TCEntityTypeHnd typeHnd)
 	{
-		ecs_entityType* eType = GContext->FindEntityType(typeHandle);
+		ecs_entityType* eType = GContext->FindEntityType(typeHnd);
 		f_vector->pushBack(eType->v_entityList, nullptr);
 		uint32_t index = f_vector->size(eType->v_entityList) - 1;
-		TCComponentHandle* compHndsList = reinterpret_cast<TCComponentHandle*>(
-			reinterpret_cast<uintptr_t>(eType->v_entityList) + (index * eType->compCount * sizeof(TCComponentHandle)));
+		TCComponentHnd* compHndsList = reinterpret_cast<TCComponentHnd*>(
+			reinterpret_cast<uintptr_t>(eType->v_entityList) + (index * eType->compCount * sizeof(TCComponentHnd)));
 		for (uint16_t compIndx = 0; compIndx < eType->compCount; compIndx++)
 		{
 			ecs_compType* compType = GContext->find_compType_byID(eType->compTypeHndlesList[compIndx]);
@@ -278,12 +278,12 @@ struct Context
 		Entity fin_hnd;
 		fin_hnd.entityID = index;
 		fin_hnd.typeID = eType->typeID;
-		return *reinterpret_cast<TCEntityHandle*>(&fin_hnd);
+		return *reinterpret_cast<TCEntityHnd*>(&fin_hnd);
 	}
-	static TCEntityTypeHandle FindEntityType(TCEntityHandle entityHnd)
+	static TCEntityTypeHnd FindEntityType(TCEntityHnd entityHnd)
 	{
 		ecstapi_idOnlyPointer hnd;
-		Entity entity = *reinterpret_cast<TCEntityHandle>(&entityHnd);
+		Entity entity = *reinterpret_cast<TCEntityHnd>(&entityHnd);
 #ifdef TURAN_DEBUGGING
 		// If debugging, first access type
 		// Then return ID of it
@@ -295,9 +295,9 @@ struct Context
 		hnd.typeID = entity.TypeId;
 #endif
 		hnd.padding_to_8byte = UINT32_MAX;
-		return *reinterpret_cast<TCEntityTypeHandle*>(&hnd);
+		return *reinterpret_cast<TCEntityTypeHnd*>(&hnd);
 	}
-	static TCResult SearchComponentType(TCEntityTypeHandle entity_type, TCComponentTypeHandle component_type)
+	static TCResult SearchComponentType(TCEntityTypeHnd entity_type, TCComponentTypeHnd component_type)
 	{
 		EntityType* eType = GContext->FindEntityType(entity_type);
 		void* empty = nullptr;
@@ -308,18 +308,18 @@ struct Context
 		}
 		return 0;
 	}
-	static TCComponentHandle GetComponent(TCEntityHandle entityHnd,
-										  TCComponentTypeHandle component_type,
-										  void** outComponentType)
+	static TCComponentHnd GetComponent(TCEntityHnd entityHnd,
+									   TCComponentTypeHnd component_type,
+									   void** outComponentType)
 	{
-		TCEntityTypeHandle eTypeHnd = FindEntityType(entityHnd);
+		TCEntityTypeHnd eTypeHnd = FindEntityType(entityHnd);
 		EntityType* eType = GContext->FindEntityType(eTypeHnd);
 		// Find overriden component type
 		uint32_t compTypeIndx = FindOverridenComponentType(eType, component_type, outComponentType);
 		uintptr_t eList = reinterpret_cast<uintptr_t>(eType->v_entityList);
-		Entity entity = *reinterpret_cast<TCEntityHandle>(&entityHnd);
-		return *reinterpret_cast<TCComponentHandle*>(
-			eList + (((entity.entityID * eType->compCount) + compTypeIndx) * sizeof(TCComponentHandle)));
+		Entity entity = *reinterpret_cast<TCEntityHnd>(&entityHnd);
+		return *reinterpret_cast<TCComponentHnd*>(
+			eList + (((entity.entityID * eType->compCount) + compTypeIndx) * sizeof(TCComponentHnd)));
 	}
 };
 

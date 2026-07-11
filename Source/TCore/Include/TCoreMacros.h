@@ -5,7 +5,7 @@
 	extern "C"                                                                                                         \
 	{
 #define TCORE_END_C_LINKAGE }
-#define TCORE_DEFINE_HANDLE(name) typedef struct name* name##Handle
+#define TCORE_DEFINE_HANDLE(name) typedef struct name* name##Hnd
 
 #define TCORE_MAKE_PLUGIN_VERSION(major, mid, minor)                                                                   \
 	(((major < 255 ? major : 255) << 16) | ((mid < 255 ? mid : 255) << 8) | ((minor < 255 ? minor : 255)))

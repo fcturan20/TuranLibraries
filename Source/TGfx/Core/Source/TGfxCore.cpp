@@ -1,63 +1,12 @@
+#include <TGfxCore.h>
+
 #include <assert.h>
-
 #include <algorithm>
-
-#define TGFX_BACKEND
-#define T_INCLUDE_PLATFORM_LIBS
-#include <ecs_tapi.h>
-#include <logger_tapi.h>
-#include <predefinitions_tapi.h>
-#include <string_tapi.h>
-
 #include <string>
 
-#include "tgfx_core.h"
-#include "tgfx_forwarddeclarations.h"
-#include "tgfx_gpucontentmanager.h"
-#include "tgfx_helper.h"
-#include "tgfx_imgui.h"
-#include "tgfx_renderer.h"
-#include "tgfx_structs.h"
+TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TGfx)
+TCORE_PLUGIN_ENTRY_POINT_END()
 
-static tgfx_core_type* core_typePtr;
-static const tlECS* core_regSys;
-static const tlLog* core_logSys;
-
-void defaultPrintCallback(unsigned int logCode, const wchar_t* extraInfo)
-{
-	const wchar_t* logMessage = nullptr;
-	result_tgfx result = core_typePtr->api->getLogMessage(logCode, &logMessage);
-	tlLogType logType = tlLogStatus;
-	switch (result)
-	{
-	case result_tgfx_SUCCESS: logType = tlLogStatus; break;
-	case result_tgfx_FAIL:
-	case result_tgfx_INVALIDARGUMENT:
-	case result_tgfx_WRONGTIMING: logType = tlLogError; break;
-	case result_tgfx_NOTCODED: logType = tlLogNotCoded; break;
-	case result_tgfx_WARNING: logType = tlLogWarning; break;
-	}
-	if (extraInfo)
-	{
-		core_logSys->log(logType, false, L"[TGFX] %v; %v", logMessage, extraInfo);
-	}
-	else
-	{
-		core_logSys->log(logType, false, L"[TGFX] %v", logMessage);
-	}
-}
-
-static constexpr char* backendFileNames[] = {"", "TGFXVulkan.dll", "TGFXD3D12.dll"};
-constexpr std::size_t constexpr_slen(const char* s)
-{
-	return std::char_traits<char>::length(s);
-}
-static constexpr uint32_t maxBackendFileName =
-	std::max(constexpr_slen(backendFileNames[0]), constexpr_slen(backendFileNames[1]));
-
-typedef result_tgfx (*load_backend_fnc)(const struct tlECS* ecsSys,
-										struct tgfx_core_type* core,
-										void (*printFnc)(unsigned int logCode, const wchar_t* extraInfo));
 result_tgfx load_backend(tgfx_core* parent,
 						 backends_tgfx backend,
 						 void (*printFnc)(unsigned int logCode, const wchar_t* extraInfo))

@@ -86,9 +86,9 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 				imgui->UploadFontTextures();
 			}
 			// If given subpass is different from the previous one, change subpass
-			else if (((subdrawpass_vk*)imgui->Get_SubDrawPassHandle()) != ((subdrawpass_vk*)IMGUI_Subpass))
+			else if (((subdrawpass_vk*)imgui->Get_SubDrawPassHnd()) != ((subdrawpass_vk*)IMGUI_Subpass))
 			{
-				((subdrawpass_vk*)imgui->Get_SubDrawPassHandle())->render_dearIMGUI = false;
+				((subdrawpass_vk*)imgui->Get_SubDrawPassHnd())->render_dearIMGUI = false;
 				((subdrawpass_vk*)IMGUI_Subpass)->render_dearIMGUI = true;
 				imgui->Change_DrawPass(IMGUI_Subpass);
 			}

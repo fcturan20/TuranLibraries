@@ -11,7 +11,7 @@ public:
 		NEW_FRAME = 2,
 		RENDERED = 3
 	};
-	inline renderSubPass_tgfxhnd Get_SubDrawPassHandle() const { return Subdrawpass; }
+	inline renderSubPass_tgfxhnd Get_SubDrawPassHnd() const { return Subdrawpass; }
 	inline IMGUI_STATUS Get_IMGUIStatus() { return STAT; }
 	void Change_DrawPass(renderSubPass_tgfxhnd Subpass);
 	void NewFrame();

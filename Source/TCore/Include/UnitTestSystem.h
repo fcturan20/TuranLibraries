@@ -18,7 +18,7 @@ typedef struct TCUnitTestDescription
 	const char* GlobalCategoryName;
 	TCReadBuffer Data; // Data that will be passed to the test function
 	// If test returns 0, test is successful
-	unsigned int (*Test)(TCReadBuffer inputData);
+	TCResult (*Test)(TCReadBuffer inputData);
 } TCUnitTestDescription;
 
 typedef struct ITCUnitTest

@@ -3,7 +3,7 @@
 TCORE_BEGIN_C_LINKAGE
 
 TCORE_DEFINE_HANDLE(TGfxGpu);
-TCORE_DEFINE_HANDLE(TGfxWindow);
+TCORE_DEFINE_HANDLE(TGfxSwapchain);
 TCORE_DEFINE_HANDLE(TGfxTexture);
 TCORE_DEFINE_HANDLE(TGfxMonitor);
 TCORE_DEFINE_HANDLE(TGfxBuffer);
@@ -12,7 +12,7 @@ TCORE_DEFINE_HANDLE(TGfxShaderSource);
 TCORE_DEFINE_HANDLE(TGfxBindingTable);
 TCORE_DEFINE_HANDLE(TGfxCommandBuffer);
 TCORE_DEFINE_HANDLE(TGfxCommandBundle);
-TCORE_DEFINE_HANDLE(TGfxGpuQueue);
+TCORE_DEFINE_HANDLE(TGfxQueue);
 TCORE_DEFINE_HANDLE(TGfxFence);
 TCORE_DEFINE_HANDLE(TGfxHeap);
 TCORE_DEFINE_HANDLE(TGfxPipeline);
@@ -59,6 +59,7 @@ typedef enum TGfxBufferUsageMask TGfxBufferUsageMask;
 typedef enum TGfxVertexBindingInputRate TGfxVertexBindingInputRate;
 typedef enum TGfxIndirectOperationType TGfxIndirectOperationType;
 
-typedef void (*tgfx_PrintLogCallback)(unsigned int logCode, const char* extraInfo);
+typedef struct TGfxRenderer TGfxRenderer;
+typedef struct TGfxResourceManager TGfxResourceManager;
 
 TCORE_END_C_LINKAGE

@@ -105,11 +105,11 @@ public:
 struct TCThread
 {
 	std::thread::id Id;
-	std::thread::native_handle_type NativeHandle;
+	std::thread::native_handle_type NativeHnd;
 	TBool IsRunning = TTRUE;
 	TBool IsJoined = TFALSE;
 
-	TCThreadHandle GetHandle() { return (TCThreadHandle)this; }
+	TCThreadHnd GetHnd() { return (TCThreadHnd)this; }
 	TBool IsJoinable() { return !IsRunning && !IsJoined; }
 	void Join()
 	{
@@ -123,10 +123,10 @@ struct TCThread
 struct TCThreadingContext* GContext = nullptr;
 struct TCThreadingContext
 {
-	std::map<std::thread::id, TCThreadHandle> ThreadHandles;
+	std::map<std::thread::id, TCThreadHnd> ThreadHandles;
 	std::atomic<TBool> ShouldClose;
 
-	TCThread* GetThread(TCThreadHandle hnd) { return (TCThread*)hnd; }
+	TCThread* GetThread(TCThreadHnd hnd) { return (TCThread*)hnd; }
 
 	static void Initialize()
 	{
@@ -134,7 +134,7 @@ struct TCThreadingContext
 		GContext->ShouldClose.store(false);
 	}
 
-	static TCThreadHandle Create(TCThreadFunc func, TCBuffer thread_data, const char* thread_name)
+	static TCThreadHnd Create(TCThreadFunc func, TCBuffer thread_data, const char* thread_name)
 	{
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 		std::wstring wideString = converter.from_bytes(thread_name);
@@ -148,12 +148,12 @@ struct TCThreadingContext
 		});
 		newThread.detach();
 
-		SetThreadDescription(thread->NativeHandle, wideString.c_str());
-		GContext->ThreadHandles.insert(std::make_pair(thread->Id, thread->GetHandle()));
-		return thread->GetHandle();
+		SetThreadDescription(thread->NativeHnd, wideString.c_str());
+		GContext->ThreadHandles.insert(std::make_pair(thread->Id, thread->GetHnd()));
+		return thread->GetHnd();
 	}
 
-	static TCResult Join(TCThreadHandle thread)
+	static TCResult Join(TCThreadHnd thread)
 	{
 		auto t = GContext->GetThread(thread);
 		t->Join();
@@ -162,7 +162,7 @@ struct TCThreadingContext
 
 	static void Sleep(TSize milliseconds) { ::Sleep(milliseconds); }
 
-	static TCThreadHandle GetCurrentThread() { return GContext->ThreadHandles[std::this_thread::get_id()]; }
+	static TCThreadHnd GetCurrentThread() { return GContext->ThreadHandles[std::this_thread::get_id()]; }
 };
 
 struct TCJobContext* JobContext = nullptr;
@@ -171,9 +171,9 @@ struct TCJobContext
 public:
 	TSJobifiedRingBuffer Jobs;
 	// If you want only a portion of threads to be in job system, use this
-	static void UseCurrentThread() {}
+	static void ConsumeJobsFromCurrentThread() {}
 	// Checks hardware capabilities and creates a thread in job consume loop for each core
-	static void UseAllCores(TBool except_this_thread) {}
+	static void ConsumeFromAllCores(TBool except_this_thread) {}
 	static void DispatchTask(TCThreadFunc job, TUint dispatch_size) {}
 	// Waits till there is no more jobs to dispatch and all threads in the system are idle
 	static void WaitIdle()
@@ -191,7 +191,7 @@ struct TCTaskContext
 public:
 	struct TCTaskedThread
 	{
-		TCThreadHandle Thread;
+		TCThreadHnd Thread;
 		TSJobifiedRingBuffer Jobs;
 		TBool ShouldClose;
 		TBool ForceClose;
@@ -199,9 +199,9 @@ public:
 	Vector<TCTaskedThread> Threads;
 
 	// Add checks here
-	TCTaskedThread* GetThreadFromHandle(TCThreadHandle hnd) { return (TCTaskedThread*)hnd; }
+	TCTaskedThread* GetThreadFromHnd(TCThreadHnd hnd) { return (TCTaskedThread*)hnd; }
 
-	static TCThreadHandle CreateTaskedThread(const char* thread_name)
+	static TCThreadHnd CreateTaskedThread(const char* thread_name)
 	{
 		auto thread = new TCTaskedThread;
 		auto threadLoop = [](TCBuffer buffer) -> TCResult {
@@ -220,15 +220,15 @@ public:
 		auto hnd = TCThreadingContext::Create(threadLoop, {.Data = thread, .Size = sizeof(thread)}, thread_name);
 	}
 
-	static void EnqueueTask(TCThreadHandle thread, TCThreadFunc task, TCBuffer data)
+	static void EnqueueTask(TCThreadHnd thread, TCThreadFunc task, TCBuffer data)
 	{
-		auto t = TaskContext->GetThreadFromHandle(thread);
+		auto t = TaskContext->GetThreadFromHnd(thread);
 		t->Jobs.push_back_strong()
 	}
 
-	static void StopTaskedThread(TCThreadHandle thread, TBool wait_all_tasks_to_end)
+	static void StopTaskedThread(TCThreadHnd thread, TBool wait_all_tasks_to_end)
 	{
-		auto t = TaskContext->GetThreadFromHandle(thread);
+		auto t = TaskContext->GetThreadFromHnd(thread);
 		if (!wait_all_tasks_to_end)
 			t->ForceClose = true;
 		t->ShouldClose = true;
@@ -251,8 +251,8 @@ TCResult TCThreading_Initialize(const void** outPluginAPI)
 
 	services->JobSystem = new ITCJob;
 	services->JobSystem->Dispatch = TCore::Threading::TCJobContext::DispatchTask;
-	services->JobSystem->UseAllCores = TCore::Threading::TCJobContext::UseAllCores;
-	services->JobSystem->UseCurrentThread = TCore::Threading::TCJobContext::UseCurrentThread;
+	services->JobSystem->ConsumeFromAllCores = TCore::Threading::TCJobContext::ConsumeFromAllCores;
+	services->JobSystem->ConsumeJobsFromCurrentThread = TCore::Threading::TCJobContext::ConsumeJobsFromCurrentThread;
 	services->JobSystem->WaitIdle = TCore::Threading::TCJobContext::WaitIdle;
 
 	services->TaskSystem = new ITCTask;

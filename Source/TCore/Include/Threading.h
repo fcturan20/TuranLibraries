@@ -33,7 +33,7 @@ typedef struct ITCJob
 	// Waits till the semaphore is signaled
 	// @param consume_tasks: Executes PENDING state tasks till signaled. Checks everytime a task is executed.
 	// If false, yields the thread till the semaphore signaled.
-	void (*WaitSemaphore)(TCSemaphoreHandle semaphore, TBool consume_tasks);
+	void (*WaitSemaphore)(TCSemaphoreHnd semaphore, TBool consume_tasks);
 	// Waits till there is no more tasks to dispatch and all threads in the system are idle
 	void (*WaitIdle)();
 	// No job will be picked up by a thread until either ConsumeJobsFromCurrentThread or UseAllCores is called
@@ -42,29 +42,29 @@ typedef struct ITCJob
 
 typedef struct ITCTask
 {
-	TCThreadHandle (*CreateTaskedThread)(const char* thread_name);
-	void (*EnqueueTask)(TCThreadHandle thread, TCThreadFunc task, TCBuffer data);
+	TCThreadHnd (*CreateTaskedThread)(const char* thread_name);
+	void (*EnqueueTask)(TCThreadHnd thread, TCThreadFunc task, TCBuffer data);
 	// Thread will be destroyed after this
-	void (*StopTaskedThread)(TCThreadHandle thread, TBool wait_all_tasks_to_end);
+	void (*StopTaskedThread)(TCThreadHnd thread, TBool wait_all_tasks_to_end);
 } ITCTask;
 
 // Core functionalities to make debugging easier
 
 typedef struct ITCThreading
 {
-	TCThreadHandle (*Create)(TCThreadFunc main, TCBuffer thread_data, const char* thread_name);
+	TCThreadHnd (*Create)(TCThreadFunc main, TCBuffer thread_data, const char* thread_name);
 	// @return TC_RESULT_SUCCESS; Thread handle becomes invalid
-	TCResult (*Join)(TCThreadHandle thread);
+	TCResult (*Join)(TCThreadHnd thread);
 	void (*Sleep)(TSize milliseconds);
-	TCThreadHandle (*GetCurrentThread)();
+	TCThreadHnd (*GetCurrentThread)();
 
 	// Synchronization
 
-	TCSemaphoreHandle (*CreateSemaphore)();
-	TCResult (*SignalSemaphore)(TCSemaphoreHandle semaphore);
-	TBool (*IsSemaphoreSignaled)(TCSemaphoreHandle semaphore);
+	TCSemaphoreHnd (*CreateSemaphore)();
+	TCResult (*SignalSemaphore)(TCSemaphoreHnd semaphore);
+	TBool (*IsSemaphoreSignaled)(TCSemaphoreHnd semaphore);
 	// It's undefined behavior to use the semaphore handle after calling this.
-	void (*DestroySemaphore)(TCSemaphoreHandle semaphore);
+	void (*DestroySemaphore)(TCSemaphoreHnd semaphore);
 
 	// Helper Systems
 	ITCTask* TaskSystem;
@@ -76,6 +76,7 @@ TCORE_END_C_LINKAGE
 // C++ wrapper
 #define TCORE_USE_CPP_WRAPPER
 #if defined(TCORE_CPP_20) & defined(TCORE_USE_CPP_WRAPPER)
+#include <functional>
 namespace TCore
 {
 class Semaphore
@@ -85,8 +86,8 @@ public:
 	TCResult Signal() { return TCThreading->SignalSemaphore(Handle); }
 	TBool IsSignaled() { return TCThreading->IsSemaphoreSignaled(Handle); }
 	~Semaphore() { TCThreading->DestroySemaphore(Handle); }
-	TCSemaphoreHandle Handle;
-	operator TCSemaphoreHandle() const { return Handle; }
+	TCSemaphoreHnd Handle;
+	operator TCSemaphoreHnd() const { return Handle; }
 };
 
 class Task
@@ -113,7 +114,7 @@ protected:
 		TCThreading->TaskSystem->StopTaskedThread(Thread, TTRUE);
 		TCThreading->DestroySemaphore(Semaphore);
 	}
-	TCThreadHandle Thread;
+	TCThreadHnd Thread;
 	Semaphore Semaphore;
 };
 } // namespace TCore

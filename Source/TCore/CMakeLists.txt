@@ -39,7 +39,7 @@ target_link_libraries(TCoreThreading PRIVATE TCore)
 #File System
 set(TCoreFILESYS_SOURCES "Source/FileSystem.cpp" "Include/FileSystem.h")
 tcmake_create_dynamic_target(TCoreFileSystem "${TCoreFILESYS_SOURCES}" "TCore")
-target_link_libraries(TCoreFileSystem PRIVATE TCore)
+target_link_libraries(TCoreFileSystem PRIVATE TCore TCoreUnitTest)
 
 #Logger System
 set(TCoreLOGGER_SOURCES "Source/Logger.cpp" "Include/Logger.h")

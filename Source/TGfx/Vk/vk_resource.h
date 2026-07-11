@@ -268,7 +268,7 @@ struct HEAP_VKOBJ
 	}
 	void operator=(const HEAP_VKOBJ& src)
 	{
-		vk_memoryHandle = src.vk_memoryHandle;
+		vk_memoryHnd = src.vk_memoryHnd;
 		vk_memoryTypeIndex = src.vk_memoryTypeIndex;
 		m_size = src.m_size;
 	}
@@ -276,7 +276,7 @@ struct HEAP_VKOBJ
 	uint8_t m_GPU;
 	unsigned long long m_size;
 
-	VkDeviceMemory vk_memoryHandle;
+	VkDeviceMemory vk_memoryHnd;
 	unsigned int vk_memoryTypeIndex;
 };
 

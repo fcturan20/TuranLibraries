@@ -1,60 +1,11 @@
 #pragma once
 #include <TCoreMacros.h>
+#include <TGfxMath.h>
 TCORE_BEGIN_C_LINKAGE
 
 typedef int textureUsageMask_tgfxflag;
 typedef int bufferUsageMask_tgfxflag;
 typedef int shaderStage_tgfxflag;
-struct tgfx_uvec4
-{
-	unsigned int x, y, z, w;
-};
-
-struct tgfx_uvec3
-{
-	unsigned int x, y, z;
-};
-
-struct tgfx_uvec2
-{
-	unsigned int x, y;
-};
-
-struct tgfx_vec2
-{
-	float x, y;
-};
-
-struct tgfx_vec3
-{
-	float x, y, z;
-};
-
-struct tgfx_vec4
-{
-	float x, y, z, w;
-};
-
-struct tgfx_ivec2
-{
-	int x, y;
-};
-
-struct tgfx_ivec3
-{
-	int x, y, z;
-};
-
-struct tgfx_boxRegion
-{
-	unsigned int XOffset, YOffset, WIDTH, HEIGHT;
-};
-
-struct tgfx_cubeRegion
-{
-	unsigned int XOffset, YOffset, ZOffset, WIDTH, HEIGHT, DEPTH;
-};
-
 struct tgfx_memoryDescription
 {
 	unsigned char memoryTypeId;
@@ -74,7 +25,7 @@ struct tgfx_gpuDescription
 
 typedef void (*tgfx_windowResizeCallback)(struct tgfx_window* windowHnd,
 										  void* userPtr,
-										  tgfx_uvec2 resolution,
+										  TGfxUI2 resolution,
 										  struct tgfx_texture** swapchainTextures);
 // @param scanCode: System-specific scan code
 typedef void (*tgfx_windowKeyCallback)(struct tgfx_window* windowHnd,
@@ -84,17 +35,6 @@ typedef void (*tgfx_windowKeyCallback)(struct tgfx_window* windowHnd,
 									   enum keyAction_tgfx action,
 									   enum keyMod_tgfx mode);
 typedef void (*tgfx_windowCloseCallback)(struct tgfx_window* windowHnd, void* userPtr);
-
-struct tgfx_windowDescription
-{
-	struct tgfx_uvec2 size;
-	struct tgfx_monitor* monitor;
-	enum windowmode_tgfx mode;
-	const wchar_t* name;
-	tgfx_windowResizeCallback resizeCb;
-	tgfx_windowKeyCallback keyCb;
-	tgfx_windowCloseCallback closeCb;
-};
 
 struct tgfx_swapchainDescription
 {
@@ -115,7 +55,7 @@ struct tgfx_swapchainDescription
 struct tgfx_windowGPUsupport
 {
 	unsigned int maxImageCount;
-	struct tgfx_uvec2 minExtent, maxExtent;
+	TGfxUI2 minExtent, maxExtent;
 	textureUsageMask_tgfxflag usageFlag;
 	enum windowpresentation_tgfx presentationModes[TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE];
 	enum colorspace_tgfx colorSpace[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
@@ -128,13 +68,13 @@ struct tgfx_samplerDescription
 	unsigned int minMipLevel, maxMipLevel;
 	enum texture_mipmapfilter_tgfx minFilter, magFilter;
 	enum texture_wrapping_tgfx wrapWidth, wrapHeight, wrapDepth;
-	struct tgfx_uvec4 bordercolor;
+	TGfxUI4 bordercolor;
 };
 
 struct tgfx_textureDescription
 {
 	enum texture_dimensions_tgfx dimension;
-	struct tgfx_uvec2 resolution;
+	TGfxUI2 resolution;
 	enum textureChannels_tgfx channelType;
 	unsigned char mipCount;
 	textureUsageMask_tgfxflag usage;
@@ -234,7 +174,7 @@ struct tgfx_subpassSlotDescription
 
 struct tgfx_viewportInfo
 {
-	struct tgfx_vec2 topLeftCorner, size, depthMinMax;
+	TGfxF2 topLeftCorner, size, depthMinMax;
 };
 
 struct tgfx_rasterInputAssemblerDescription
@@ -287,7 +227,7 @@ struct tgfx_drawNonIndexedIndirectArgument
 
 struct tgfx_dispatchIndirectArgument
 {
-	struct tgfx_uvec3 threadGroupCount;
+	TGfxUI3 threadGroupCount;
 };
 
 typedef enum TGfxDataType
@@ -697,7 +637,7 @@ typedef enum TGfxTextureComponentMask
 	TGFX_TEXTURECOMPONENTMASK_GBA =
 		TGFX_TEXTURECOMPONENTMASK_G | TGFX_TEXTURECOMPONENTMASK_B | TGFX_TEXTURECOMPONENTMASK_A,
 	TGFX_TEXTURECOMPONENTMASK_RGBA = TGFX_TEXTURECOMPONENTMASK_R | TGFX_TEXTURECOMPONENTMASK_G |
-							 TGFX_TEXTURECOMPONENTMASK_B | TGFX_TEXTURECOMPONENTMASK_A,
+									 TGFX_TEXTURECOMPONENTMASK_B | TGFX_TEXTURECOMPONENTMASK_A,
 	TGFX_TEXTURECOMPONENTMASK_ALL, // All possible values if texture's format is known
 	TGFX_TEXTURECOMPONENTMASK_NONE
 } TGfxTextureComponentMask;

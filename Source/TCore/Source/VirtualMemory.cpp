@@ -72,16 +72,53 @@ struct Context
 						  0,
 						  NULL);
 
-			printf("Virtual Alloc failed: %s", (const char*)msgBuf);
+			SYSTEM_INFO si;
+			GetSystemInfo(&si);
+
+			MEMORY_BASIC_INFORMATION mbi;
+			VirtualQuery(ptr, &mbi, sizeof(mbi));
+
+			static constexpr char empty[] = "";
+			static constexpr char notPageAlignedError[] = "Allocation is not page-aligned";
+			printf("Virtual Alloc failed: %s\tOS Error: %d, %s",
+				   (uintptr_t)ptr % si.dwPageSize != 0 ? notPageAlignedError : empty,
+				   dw,
+				   (const char*)msgBuf);
+
+			printf("Base=%p\n", mbi.BaseAddress);
+			printf("State=%lx\n", mbi.State);
+			printf("Protect=%lx\n", mbi.Protect);
+			printf("RegionSize=%zu\n", mbi.RegionSize);
+		}
+	}
+
+	template <int flag>
+	static void Free(void* ptr, unsigned long long size)
+	{
+		if (!VirtualFree(ptr, size, flag))
+		{
+			// Handle error
+			LPVOID msgBuf;
+			DWORD dw = GetLastError();
+
+			FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+						  NULL,
+						  dw,
+						  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+						  (LPTSTR)&msgBuf,
+						  0,
+						  NULL);
+
+			printf("Virtual Free failed: OS Error: %d, %s", dw, (const char*)msgBuf);
 		}
 	}
 
 	// Return back the committed memory to reserved state
 	// This will help if you want to catch some bugs that points to memory you just freed.
-	static void Decommit(void* ptr, unsigned long long size) { VirtualFree(ptr, size, MEM_DECOMMIT); }
+	static void Decommit(void* ptr, unsigned long long size) { Free<MEM_DECOMMIT>(ptr, size); }
 
 	// Free the pages allocated
-	static void Free(void* ptr, unsigned long long size) { VirtualFree(ptr, size, MEM_RELEASE); }
+	static void Free(void* ptr, unsigned long long size) { Free<MEM_RELEASE>(ptr, size); }
 
 	static TUint GetPageSize()
 	{

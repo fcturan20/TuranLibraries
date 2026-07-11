@@ -544,18 +544,18 @@ void ConvertWaits(uint32_t& PassWaitsPTR, uint16_t& PassWaitCount, passwaitdescr
 		{
 		case VKHANDLETYPEs::WAITDESC_SUBCP:
 			passwaitPTR = convert_waitdesc_toSubPassWait()
-							  RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubCP>(waithandle)
+							  RenderGraph::getDesc_fromHnd<RenderGraph::WaitDesc_SubCP>(waithandle)
 								  ->convert_to_FinalWaitDesc();
 			PassWaitCount++;
 			break;
 		case VKHANDLETYPEs::WAITDESC_SUBDP:
 			passwaitPTR =
-				RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubDP>(waithandle)->convert_to_FinalWaitDesc();
+				RenderGraph::getDesc_fromHnd<RenderGraph::WaitDesc_SubDP>(waithandle)->convert_to_FinalWaitDesc();
 			PassWaitCount++;
 			break;
 		case VKHANDLETYPEs::WAITDESC_SUBTP:
 			passwaitPTR =
-				RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubTP>(waithandle)->convert_to_FinalWaitDesc();
+				RenderGraph::getDesc_fromHnd<RenderGraph::WaitDesc_SubTP>(waithandle)->convert_to_FinalWaitDesc();
 			PassWaitCount++;
 			break;
 		default: printer(16); return;
@@ -579,24 +579,21 @@ void ConvertSubpassWaits(passwaitdescription_tgfx_listhandle passwaits,
 		switch (waithandle.type)
 		{
 		case VKHANDLETYPEs::WAITDESC_SUBCP: {
-			RenderGraph::WaitDesc_SubCP* desc =
-				RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubCP>(waithandle);
+			RenderGraph::WaitDesc_SubCP* desc = RenderGraph::getDesc_fromHnd<RenderGraph::WaitDesc_SubCP>(waithandle);
 			VKOBJHANDLE mainpasshandle = *(VKOBJHANDLE*)desc->passhandle;
 			targetmainpassptr = mainpasshandle.OBJ_memoffset;
 			subpassindex = desc->SubPassIndex;
 		}
 		break;
 		case VKHANDLETYPEs::WAITDESC_SUBDP: {
-			RenderGraph::WaitDesc_SubDP* desc =
-				RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubDP>(waithandle);
+			RenderGraph::WaitDesc_SubDP* desc = RenderGraph::getDesc_fromHnd<RenderGraph::WaitDesc_SubDP>(waithandle);
 			VKOBJHANDLE mainpasshandle = *(VKOBJHANDLE*)desc->passhandle;
 			targetmainpassptr = mainpasshandle.OBJ_memoffset;
 			subpassindex = desc->SubPassIndex;
 		}
 		break;
 		case VKHANDLETYPEs::WAITDESC_SUBTP: {
-			RenderGraph::WaitDesc_SubTP* desc =
-				RenderGraph::getDesc_fromHandle<RenderGraph::WaitDesc_SubTP>(waithandle);
+			RenderGraph::WaitDesc_SubTP* desc = RenderGraph::getDesc_fromHnd<RenderGraph::WaitDesc_SubTP>(waithandle);
 			VKOBJHANDLE mainpasshandle = *(VKOBJHANDLE*)desc->passhandle;
 			targetmainpassptr = mainpasshandle.OBJ_memoffset;
 			subpassindex = desc->SubPassIndex;
@@ -713,7 +710,7 @@ void RenderGraph::WP_VK::convert_waits()
 template <typename WaitDescStruct>
 uint32_t convert_waitdesc_toSubPassWait(VKDATAHANDLE deschandle)
 {
-	WaitDescStruct* desc = RenderGraph::getDesc_fromHandle<WaitDescStruct>(deschandle);
+	WaitDescStruct* desc = RenderGraph::getDesc_fromHnd<WaitDescStruct>(deschandle);
 #ifdef VULKAN_DEBUGGING
 	VKOBJHANDLE target_mainpasshandle = (*(VKOBJHANDLE*)desc->passhandle);
 	if (target_mainpasshandle.type != WaitDescStruct::TARGETPASS_HANDLETYPE)

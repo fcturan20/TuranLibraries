@@ -1,17 +1,6 @@
 #include <vector>
 
-#define TGFX_BACKEND
-#include <allocator_tapi.h>
-#include <ecs_tapi.h>
-#include <profiler_tapi.h>
 #include <stdio.h>
-#include <string_tapi.h>
-#include <tgfx_core.h>
-#include <tgfx_gpucontentmanager.h>
-#include <tgfx_helper.h>
-#include <tgfx_imgui.h>
-#include <tgfx_renderer.h>
-#include <threadingsys_tapi.h>
 
 #include "vk_contentmanager.h"
 #include "vk_core.h"

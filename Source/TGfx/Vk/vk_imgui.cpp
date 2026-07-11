@@ -51,7 +51,7 @@ void Selectable(const char* name, unsigned char* is_selected);
 // pointer's value!
 unsigned char Selectable_ListBox(const char* name, int* selected_index, const char* const* item_names);
 // Display a texture that is in the GPU memory, for example a Render Target or a Texture
-// void Display_Texture(tgfx_texture TextureHandle, unsigned int Display_WIDTH, unsigned int
+// void Display_Texture(tgfx_texture TextureHnd, unsigned int Display_WIDTH, unsigned int
 // Display_HEIGHT, unsigned char should_Flip_Vertically);
 unsigned char Begin_TabBar();
 void End_TabBar();

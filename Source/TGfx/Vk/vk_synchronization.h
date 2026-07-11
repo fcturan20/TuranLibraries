@@ -17,7 +17,7 @@ public:
 
 private:
 	friend struct semaphoresys_vk;
-	VkSemaphore SPHandle = VK_NULL_HANDLE;
+	VkSemaphore SPHnd = VK_NULL_HANDLE;
 #ifdef VULKAN_DEBUGGING
 	semaphore_idtype_vk ID;
 #endif
@@ -32,7 +32,7 @@ public:
 		return this;
 #endif
 	}
-	inline VkSemaphore vksemaphore() { return SPHandle; }
+	inline VkSemaphore vksemaphore() { return SPHnd; }
 	inline semaphore_status status() { return current_status; };
 };
 struct semaphoresys_vk
@@ -72,7 +72,7 @@ struct semaphoresys_vk
 
 		semaphore_vk* NewSemaphore = new semaphore_vk;
 		NewSemaphore->current_status = semaphore_vk::used_status;
-		NewSemaphore->SPHandle = vksemp;
+		NewSemaphore->SPHnd = vksemp;
 #ifdef VULKAN_DEBUGGING
 		NewSemaphore->ID = semaphoresys->Semaphores.size();
 #endif
@@ -111,7 +111,7 @@ struct semaphoresys_vk
 #ifdef VULKAN_DEBUGGING
 		invalidone->ID = invalid_semaphoreid;
 #endif
-		invalidone->SPHandle = VK_NULL_HANDLE;
+		invalidone->SPHnd = VK_NULL_HANDLE;
 		Semaphores.push_back(invalidone);
 	}
 	~semaphoresys_vk() {}

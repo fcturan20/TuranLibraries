@@ -59,10 +59,10 @@ struct window_dx
 	fence_idtype_dx PresentationFences[2];
 
 	// WindowDX handle.
-	HWND Window_Handle;
+	HWND Window_Hnd;
 	// Window rectangle (used to toggle fullscreen state).
 	RECT PreviousWindowRect;
 	// Swapchain object
-	ComPtr<IDXGISwapChain4> Swapchain_Handle;
+	ComPtr<IDXGISwapChain4> Swapchain_Hnd;
 	GLFWwindow* GLFWHANDLE;
 };

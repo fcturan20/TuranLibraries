@@ -63,7 +63,7 @@ struct tgfx_dearImgui
 	// @return 1: Any item is selected.
 	//		Selected item's index is the selected_index's pointer's value!
 	unsigned char (*Selectable_ListBox)(const char* name, int* selected_index, const char* const* item_names);
-	void (*Display_Texture)(struct tgfx_texture* hnd,
+	void (*Display_Texture)(TGfxTexture hnd,
 							unsigned int width,
 							unsigned int height,
 							unsigned char should_Flip_Vertically);

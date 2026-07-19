@@ -13,7 +13,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 			VK_Pass::WaitDescription& Wait_desc = DP->base_data.WAITs[WaitIndex];
 			if ((*Wait_desc.WaitedPass) == nullptr)
 			{
-				printer(result_tgfx_FAIL, "You forgot to set wait handle of one of the draw passes!");
+				printer(TC_RESULTSTATE_FAILURE, "You forgot to set wait handle of one of the draw passes!");
 				return false;
 			}
 
@@ -32,7 +32,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the draw passes waits for an draw pass but given pass isn't found!");
 					return false;
 				}
@@ -50,7 +50,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the draw passes waits for an transfer pass but given pass isn't found!");
 					return false;
 				}
@@ -68,7 +68,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the draw passes waits for an window pass but given pass isn't found!");
 					return false;
 				}
@@ -86,18 +86,19 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the draw passes waits for a compute pass but given pass isn't found!");
 					return false;
 				}
 			}
 			break;
 			case VK_Pass::PassType::INVALID: {
-				printer(result_tgfx_FAIL, "Finding a proper TPType has failed, so Check Wait has failed!");
+				printer(TC_RESULTSTATE_FAILURE, "Finding a proper TPType has failed, so Check Wait has failed!");
 				return false;
 			}
 			default:
-				printer(result_tgfx_FAIL, "Finding a Waited TP Type has failed, so Check Wait Handle has failed!");
+				printer(TC_RESULTSTATE_FAILURE,
+						"Finding a Waited TP Type has failed, so Check Wait Handle has failed!");
 				return false;
 			}
 		}
@@ -110,7 +111,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 			VK_Pass::WaitDescription& Wait_desc = WP->base_data.WAITs[WaitIndex];
 			if (!(*Wait_desc.WaitedPass))
 			{
-				printer(result_tgfx_FAIL, "You forgot to set wait handle of one of the window passes!");
+				printer(TC_RESULTSTATE_FAILURE, "You forgot to set wait handle of one of the window passes!");
 				return false;
 			}
 
@@ -128,7 +129,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the window passes waits for an draw pass but given pass isn't found!");
 					return false;
 				}
@@ -147,7 +148,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the window passes waits for an transfer pass but given pass isn't found!");
 					return false;
 				}
@@ -165,21 +166,21 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the window passes waits for a compute pass but given pass isn't found!");
 					return false;
 				}
 			}
 			break;
 			case VK_Pass::PassType::WP:
-				printer(result_tgfx_FAIL,
+				printer(TC_RESULTSTATE_FAILURE,
 						"A window pass can't wait for another window pass, Check Wait Handle failed!");
 				return false;
 			case VK_Pass::PassType::INVALID:
-				printer(result_tgfx_FAIL, "Finding a TPType has failed, so Check Wait Handle too!");
+				printer(TC_RESULTSTATE_FAILURE, "Finding a TPType has failed, so Check Wait Handle too!");
 				return false;
 			default:
-				printer(result_tgfx_FAIL, "TP Type is not supported for now, so Check Wait Handle failed too!");
+				printer(TC_RESULTSTATE_FAILURE, "TP Type is not supported for now, so Check Wait Handle failed too!");
 				return false;
 			}
 		}
@@ -192,7 +193,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 			VK_Pass::WaitDescription& Wait_desc = TP->base_data.WAITs[WaitIndex];
 			if (!(*Wait_desc.WaitedPass))
 			{
-				printer(result_tgfx_FAIL, "You forgot to set wait handle of one of the transfer passes!");
+				printer(TC_RESULTSTATE_FAILURE, "You forgot to set wait handle of one of the transfer passes!");
 				return false;
 			}
 
@@ -211,7 +212,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				if (!is_Found)
 				{
 					std::cout << TP->base_data.NAME << std::endl;
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the transfer passes waits for an draw pass but given pass isn't found!");
 					return false;
 				}
@@ -230,7 +231,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the transfer passes waits for an transfer pass but given pass isn't found!");
 					return false;
 				}
@@ -248,7 +249,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the transfer passes waits for an window pass but given pass isn't found!");
 					return false;
 				}
@@ -266,18 +267,18 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the transfer passes waits for a compute pass but given pass isn't found!");
 					return false;
 				}
 			}
 			break;
 			case VK_Pass::PassType::INVALID: {
-				printer(result_tgfx_FAIL, "Finding a TPType has failed, so Check Wait Handle too!");
+				printer(TC_RESULTSTATE_FAILURE, "Finding a TPType has failed, so Check Wait Handle too!");
 				return false;
 			}
 			default: {
-				printer(result_tgfx_FAIL, "TP Type is not supported for now, so Check Wait Handle failed too!");
+				printer(TC_RESULTSTATE_FAILURE, "TP Type is not supported for now, so Check Wait Handle failed too!");
 				return false;
 			}
 			}
@@ -291,7 +292,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 			VK_Pass::WaitDescription& Wait_desc = CP->base_data.WAITs[WaitIndex];
 			if (!(*Wait_desc.WaitedPass))
 			{
-				printer(result_tgfx_FAIL, "You forgot to set wait handle of one of the compute passes!");
+				printer(TC_RESULTSTATE_FAILURE, "You forgot to set wait handle of one of the compute passes!");
 				return false;
 			}
 
@@ -310,7 +311,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				if (!is_Found)
 				{
 					std::cout << CP->base_data.NAME << std::endl;
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the compute passes waits for an draw pass but given pass isn't found!");
 					return false;
 				}
@@ -329,7 +330,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the compute passes waits for a transfer pass but given pass isn't found!");
 					return false;
 				}
@@ -347,7 +348,7 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the compute passes waits for a window pass but given pass isn't found!");
 					return false;
 				}
@@ -365,18 +366,18 @@ bool framegraphsys_vk::Check_WaitHandles()
 				}
 				if (!is_Found)
 				{
-					printer(result_tgfx_FAIL,
+					printer(TC_RESULTSTATE_FAILURE,
 							"One of the compute passes waits for a compute pass but given pass isn't found!");
 					return false;
 				}
 				break;
 			}
 			case VK_Pass::PassType::INVALID: {
-				printer(result_tgfx_FAIL, "Finding a TPType has failed, so Check Wait Handle too!");
+				printer(TC_RESULTSTATE_FAILURE, "Finding a TPType has failed, so Check Wait Handle too!");
 				return false;
 			}
 			default: {
-				printer(result_tgfx_FAIL, "TP Type is not supported for now, so Check Wait Handle failed too!");
+				printer(TC_RESULTSTATE_FAILURE, "TP Type is not supported for now, so Check Wait Handle failed too!");
 				return false;
 			}
 			}

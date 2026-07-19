@@ -27,7 +27,7 @@ void Start_RenderGraphConstruction()
 	if (renderer->RGSTATUS() == RenderGraphStatus::FinishConstructionCalled ||
 		renderer->RGSTATUS() == RenderGraphStatus::StartedConstruction)
 	{
-		printer(result_tgfx_FAIL,
+		printer(TC_RESULTSTATE_FAILURE,
 				"GFXRENDERER->Start_RenderGraphCreation() has failed because you have wrong function call order!");
 		return;
 	}
@@ -37,7 +37,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 {
 	if (renderer->RG_Status != RenderGraphStatus::StartedConstruction)
 	{
-		printer(result_tgfx_FAIL,
+		printer(TC_RESULTSTATE_FAILURE,
 				"VulkanRenderer->Finish_RenderGraphCreation() has failed because you didn't call "
 				"Start_RenderGraphConstruction() before!");
 		return false;
@@ -46,7 +46,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 	// Checks wait handles of the render nodes, if matching fails return false
 	if (!framegraphsys.Check_WaitHandles())
 	{
-		printer(result_tgfx_FAIL,
+		printer(TC_RESULTSTATE_FAILURE,
 				"VulkanRenderer->Finish_RenderGraphConstruction() has failed because some wait handles have issues!");
 		renderer->RG_Status = RenderGraphStatus::Invalid; // User can change only waits of a pass, so all rendergraph
 														  // falls to invalid in this case
@@ -72,7 +72,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 					->SLOTSET->PERFRAME_SLOTSETs[0]
 					.COLORSLOTs_COUNT != 1)
 			{
-				printer(result_tgfx_FAIL,
+				printer(TC_RESULTSTATE_FAILURE,
 						"The Drawpass that's gonna render dear IMGUI should only have one color slot!");
 				renderer->RG_Status =
 					RenderGraphStatus::Invalid; // User can delete a draw pass, dear Imgui fails in this case.
@@ -101,7 +101,7 @@ unsigned char Finish_RenderGraphConstruction(subdrawpass_tgfx_handle IMGUI_Subpa
 	renderer->RG_Status = RenderGraphStatus::FinishConstructionCalled;
 	return true;
 }
-result_tgfx Execute_RenderGraph()
+TCResult Execute_RenderGraph()
 {
 	unsigned char CurrentFrameIndex = renderer->Get_FrameIndex(false), LastFrameIndex = renderer->Get_FrameIndex(true);
 	framegraph_vk &Current_FrameGraph = framegraphsys.framegraphs[CurrentFrameIndex],
@@ -111,10 +111,10 @@ result_tgfx Execute_RenderGraph()
 	{
 	case RenderGraphStatus::Invalid:
 	case RenderGraphStatus::StartedConstruction:
-		printer(result_tgfx_FAIL,
+		printer(TC_RESULTSTATE_FAILURE,
 				"VulkanRenderer:Execute_RenderGraph() has failed because your rendergraph is either invalid or "
 				"Finish_RenderGraphConstruction() isn't called!");
-		return result_tgfx_FAIL;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	case RenderGraphStatus::FinishConstructionCalled:
 		framegraphsys.Create_FrameGraphs();
 
@@ -143,9 +143,9 @@ result_tgfx Execute_RenderGraph()
 		framegraphsys.CreateSubmits_Fast(Current_FrameGraph, Last_FrameGraph);
 		break;
 	default:
-		printer(result_tgfx_FAIL,
+		printer(TC_RESULTSTATE_FAILURE,
 				"VulkanRenderer:Execute_RenderGraph() has failed because rendergraph's status isn't supported!");
-		return result_tgfx_FAIL;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	framegraphsys.Send_RenderCommands();

@@ -2,59 +2,60 @@
 #include <TCoreMacros.h>
 
 TCORE_BEGIN_C_LINKAGE
-struct TGfxUI4
+
+typedef struct TGfxUVec4
 {
 	unsigned int x, y, z, w;
-};
+} TGfxUVec4;
 
-struct TGfxUI3
+typedef struct TGfxUVec3
 {
 	unsigned int x, y, z;
-};
+} TGfxUVec3;
 
-struct TGfxUI2
+typedef struct TGfxUVec2
 {
 	unsigned int x, y;
-};
+} TGfxUVec2;
 
-struct TGfxF2
+typedef struct TGfxFVec2
 {
 	float x, y;
-};
+} TGfxFVec2;
 
-struct TGfxF3
+typedef struct TGfxFVec3
 {
 	float x, y, z;
-};
+} TGfxFVec3;
 
-struct TGfxF4
+typedef struct TGfxFVec4
 {
 	float x, y, z, w;
-};
+} TGfxFVec4;
 
-struct TGfxI2
+typedef struct TGfxIVec2
 {
 	int x, y;
-};
+} TGfxIVec2;
 
-struct TGfxI3
+typedef struct TGfxIVec3
 {
 	int x, y, z;
-};
+} TGfxIVec3;
 
-struct TGfxI4
+typedef struct TGfxIVec4
 {
 	int x, y, z, w;
-};
+} TGfxIVec4;
 
-struct TGfxBoxRegion
+typedef struct TGfxBoxRegion
 {
 	unsigned int XOffset, YOffset, Width, Height;
-};
+} TGfxBoxRegion;
 
-struct TGfxCubeRegion
+typedef struct TGfxCubeRegion
 {
 	unsigned int XOffset, YOffset, ZOffset, Width, Height, Depth;
-};
+} TGfxCubeRegion;
 
 TCORE_END_C_LINKAGE

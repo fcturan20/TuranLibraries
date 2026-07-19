@@ -11,7 +11,7 @@ struct vkext_depthStencil : public vkext_interface
 	virtual void manage(VkStructureType structType,
 						void* structPtr,
 						unsigned int extCount,
-						struct tgfx_extension* const* exts) override;
+						TGfxExtension* exts) override;
 	VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures features;
 };
 

@@ -5,6 +5,7 @@ TCORE_BEGIN_C_LINKAGE
 TCORE_PLUGIN_DEFINE(TCProfiler, "tcProfiler", TCORE_MAKE_PLUGIN_VERSION(0, 0, 0))
 
 TCORE_DEFINE_HANDLE(TCProfiledScope);
+
 typedef enum TCDurationType
 {
 	TC_DURATION_TYPE_NANOSECONDS,
@@ -15,8 +16,8 @@ typedef enum TCDurationType
 
 typedef struct ITCProfiler
 {
-	TCProfiledScope* (*Begin)(const char* name, unsigned long long* duration, TCDurationType duration_type);
-	void (*End)(TCProfiledScope* scope);
+	TCProfiledScope (*Begin)(const char* name, unsigned long long* duration, TCDurationType duration_type);
+	void (*End)(TCProfiledScope scope);
 } ITCProfiler;
 
 #define TURAN_PROFILE_SCOPE_NAS(profilertapi, name, duration_ptr)                                                      \

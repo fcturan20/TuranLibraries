@@ -7,11 +7,11 @@
 #include "UnitTestSystem.h"
 
 TCORE_PLUGIN_INIT(TC)
-TCORE_PLUGIN_INIT(TCString)
+TCORE_PLUGIN_INIT(TCStringSys)
 TCORE_PLUGIN_INIT(TCAllocator)
 TCORE_PLUGIN_INIT(TCUnitTest)
 TCORE_PLUGIN_MEMORY_BLOCK_INIT()
-TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCString)
+TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCStringSys)
 TCORE_PLUGIN_HARD_DEPENDENCY(TCAllocator, TCAllocator_PLUGIN_VERSION);
 TCORE_PLUGIN_RESERVE_ADDRESS_SPACE(1ull << 30ull);
 TCORE_PLUGIN_ENTRY_POINT_END()
@@ -29,14 +29,14 @@ struct TCStringContext
 		return p;
 	}
 
-	static TCStringHnd Create(const char* str)
+	static TCString Create(const char* str)
 	{
 		size_t len = str ? std::strlen(str) : 0;
 		// Choose a comfortable initial capacity (power of two), at least 64 bytes
 		const size_t minCap = 64;
 		size_t capacity = NextPowerOfTwo(std::max(minCap, len + 1));
 
-		TCVectorHnd vec = TCVectorManager->Create(TCore::GSuperMemoryBlock, 1u, capacity, 0);
+		TCVector vec = TCVectorManager->Create(TCore::GSuperMemoryBlock, 1u, capacity, 0);
 		if (!vec)
 			return nullptr;
 
@@ -49,19 +49,19 @@ struct TCStringContext
 		char nullc = '\0';
 		TCVectorManager->PushBack(vec, &nullc);
 
-		return (TCStringHnd)vec;
+		return (TCString)vec;
 	}
 
-	static void Destroy(TCStringHnd str) { TCVectorManager->Destroy((TCVectorHnd)str); }
+	static void Destroy(TCString str) { TCVectorManager->Destroy((TCVector)str); }
 
-	static void Append(TCStringHnd str, const char* str_to_append)
+	static void Append(TCString str, const char* str_to_append)
 	{
 		if (!str || !str_to_append || !*str_to_append)
 			return;
 
 		size_t oldLen = std::strlen((const char*)str);
 		size_t addLen = std::strlen(str_to_append);
-		size_t capacity = TCVectorManager->Capacity((TCVectorHnd)str);
+		size_t capacity = TCVectorManager->Capacity((TCVector)str);
 
 		// Available space for new chars (excluding null terminator)
 		if (capacity <= oldLen + 1)
@@ -73,14 +73,14 @@ struct TCStringContext
 		// Append up to available characters
 		*((char*)str + oldLen) = str_to_append[0];
 		for (size_t i = 1; i < toCopy; ++i)
-			TCVectorManager->PushBack((TCVectorHnd)str, &str_to_append[i]);
+			TCVectorManager->PushBack((TCVector)str, &str_to_append[i]);
 
 		// Ensure null terminator at the end (if there is still space, PushBack appended the bytes but we need a final
 		// '\0')
 		if (oldLen + toCopy + 1 <= capacity)
 		{
 			char nullc = '\0';
-			TCVectorManager->PushBack((TCVectorHnd)str, &nullc);
+			TCVectorManager->PushBack((TCVector)str, &nullc);
 		}
 		else
 		{
@@ -89,28 +89,28 @@ struct TCStringContext
 		}
 	}
 
-	static void Clear(TCStringHnd str)
+	static void Clear(TCString str)
 	{
 		if (!str)
 			return;
 
 		// If there is at least one element committed, overwrite first char with '\0'.
 		// If no commitment yet, attempt to push a '\0'.
-		size_t cap = TCVectorManager->Capacity((TCVectorHnd)str);
+		size_t cap = TCVectorManager->Capacity((TCVector)str);
 		if (cap == 0)
 			return;
 
 		((char*)str)[0] = '\0';
 
 		// If the vector currently has a size of 0, push null terminator to ensure Count becomes 1.
-		if (TCVectorManager->Size((TCVectorHnd)str) == 0)
+		if (TCVectorManager->Size((TCVector)str) == 0)
 		{
 			char nullc = '\0';
-			TCVectorManager->PushBack((TCVectorHnd)str, &nullc);
+			TCVectorManager->PushBack((TCVector)str, &nullc);
 		}
 	}
 
-	static void Set(TCStringHnd str, const char* new_str)
+	static void Set(TCString str, const char* new_str)
 	{
 		if (!str)
 			return;
@@ -121,7 +121,7 @@ struct TCStringContext
 		}
 
 		size_t newLen = std::strlen(new_str);
-		size_t cap = TCVectorManager->Capacity((TCVectorHnd)str);
+		size_t cap = TCVectorManager->Capacity((TCVector)str);
 
 		// If new string fits into capacity, overwrite in-place.
 		if (newLen + 1 <= cap)
@@ -132,13 +132,13 @@ struct TCStringContext
 			((char*)str)[newLen] = '\0';
 
 			// If vector's Count is smaller than newLen+1, push remaining chars to update Count.
-			size_t curSize = TCVectorManager->Size((TCVectorHnd)str);
+			size_t curSize = TCVectorManager->Size((TCVector)str);
 			if (curSize < newLen + 1)
 			{
 				for (size_t i = curSize; i < newLen + 1; ++i)
 				{
 					char c = ((char*)str)[i];
-					TCVectorManager->PushBack((TCVectorHnd)str, &c);
+					TCVectorManager->PushBack((TCVector)str, &c);
 				}
 			}
 			// If curSize > newLen+1 we cannot shrink Count via public API here; left as-is.
@@ -154,16 +154,16 @@ struct TCStringContext
 		}
 	}
 
-	static const char* CStr(TCStringHnd str) { return (const char*)str; }
+	static const char* CStr(TCString str) { return (const char*)str; }
 
-	static void Resize(TCStringHnd str, size_t new_capacity)
+	static void Resize(TCString str, size_t new_capacity)
 	{
 		// API does not allow safely relocating the buffer (no handle update), so only allow shrinking/truncation
 		if (!str)
 			return;
 
-		size_t oldLen = TCVectorManager->Size((TCVectorHnd)str);
-		size_t curCap = TCVectorManager->Capacity((TCVectorHnd)str);
+		size_t oldLen = TCVectorManager->Size((TCVector)str);
+		size_t curCap = TCVectorManager->Capacity((TCVector)str);
 
 		if (new_capacity == 0 || new_capacity == curCap)
 			return;
@@ -179,22 +179,22 @@ struct TCStringContext
 		// leave as-is to avoid corrupting external handle.
 	}
 
-	static TCStringHnd Substring(TCStringHnd str, size_t start_index, size_t end_index)
+	static TCString Substring(TCString str, size_t start_index, size_t end_index)
 	{
 		if (!str || start_index >= end_index)
 			return Create("");
 
 		size_t length = end_index - start_index;
-		TCStringHnd substr = (TCStringHnd)TCVectorManager->Create(TCore::GSuperMemoryBlock, 1, length + 1, 0);
+		TCString substr = (TCString)TCVectorManager->Create(TCore::GSuperMemoryBlock, 1, length + 1, 0);
 		if (!substr)
 			return nullptr;
 
 		// Fill substr using PushBack so Count is correct
 		const char* src = ((const char*)str) + start_index;
 		for (size_t i = 0; i < length; ++i)
-			TCVectorManager->PushBack((TCVectorHnd)substr, &src[i]);
+			TCVectorManager->PushBack((TCVector)substr, &src[i]);
 		char nullc = '\0';
-		TCVectorManager->PushBack((TCVectorHnd)substr, &nullc);
+		TCVectorManager->PushBack((TCVector)substr, &nullc);
 
 		return substr;
 	}
@@ -208,73 +208,73 @@ struct TCStringUnitTests
 	static void Register();
 };
 
-TCResult TCString_Initialize(const void** outPluginAPI)
+TCResult TCStringSys_Initialize(const void** outPluginAPI)
 {
 	if (!outPluginAPI)
-		return TC_RESULT_INVALID_ARGUMENT;
-	auto api = new ITCString{&TCStringContext::Create,
-							 &TCStringContext::Destroy,
-							 &TCStringContext::Append,
-							 &TCStringContext::Clear,
-							 &TCStringContext::Set,
-							 &TCStringContext::CStr,
-							 &TCStringContext::Resize,
-							 &TCStringContext::Substring};
-	TCString = api;
-	*outPluginAPI = TCString;
+		return {TC_RESULTSTATE_INVALID_ARGUMENT, 0};
+	auto api = new ITCStringSys{&TCStringContext::Create,
+								&TCStringContext::Destroy,
+								&TCStringContext::Append,
+								&TCStringContext::Clear,
+								&TCStringContext::Set,
+								&TCStringContext::CStr,
+								&TCStringContext::Resize,
+								&TCStringContext::Substring};
+	TCStringSys = api;
+	*outPluginAPI = TCStringSys;
 
 	TC->GetPlugin(TCUnitTest_PLUGIN_NAME, TCUnitTest_PLUGIN_VERSION, nullptr, (const void**)&TCUnitTest);
 	if (TCUnitTest)
 		TCStringUnitTests::Register();
 
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
-TCResult TCString_Shutdown()
+TCResult TCStringSys_Shutdown()
 {
-	delete TCString;
-	TCString = nullptr;
-	return TC_RESULT_SUCCESS;
+	delete TCStringSys;
+	TCStringSys = nullptr;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
-TCResult TCString_OnPreShutdown()
+TCResult TCStringSys_OnPreShutdown()
 {
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
-void TCString_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded) {}
+void TCStringSys_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded) {}
 
 #pragma region Unit Tests
 
 TCResult TCStringUnitTests::FirstTest(TCReadBuffer input_data)
 {
-	TCStringHnd str = TCString->Create("Hello");
-	TCString->Append(str, " World");
-	const char* cstr = TCString->CStr(str);
+	TCString str = TCStringSys->Create("Hello");
+	TCStringSys->Append(str, " World");
+	const char* cstr = TCStringSys->CStr(str);
 	unsigned int result = 0;
 	if (strcmp(cstr, "Hello World") != 0)
-		return TC_RESULT_FAILURE;
-	return TC_RESULT_SUCCESS;
+		return {TC_RESULTSTATE_FAILURE, 0};
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCStringUnitTests::SecondTest(TCReadBuffer input_data)
 {
-	TCStringHnd str = TCString->Create("Hello");
-	TCString->Set(str, "New String");
-	const char* cstr = TCString->CStr(str);
+	TCString str = TCStringSys->Create("Hello");
+	TCStringSys->Set(str, "New String");
+	const char* cstr = TCStringSys->CStr(str);
 	if (strcmp(cstr, "New String") != 0)
-		return TC_RESULT_FAILURE;
-	return TC_RESULT_SUCCESS;
+		return {TC_RESULTSTATE_FAILURE, 0};
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCStringUnitTests::ThirdTest(TCReadBuffer input_data)
 {
-	TCStringHnd str = TCString->Create("Hello");
-	TCString->Resize(str, 10);
-	const char* cstr = TCString->CStr(str);
+	TCString str = TCStringSys->Create("Hello");
+	TCStringSys->Resize(str, 10);
+	const char* cstr = TCStringSys->CStr(str);
 	if (strlen(cstr) != 5 || strcmp(cstr, "Hello") != 0)
-		return TC_RESULT_FAILURE;
-	return TC_RESULT_SUCCESS;
+		return {TC_RESULTSTATE_FAILURE, 0};
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void TCStringUnitTests::Register()

@@ -1,5 +1,5 @@
 #pragma once
-#include <tgfx_structs.h>
+#include <TGfxStructs.h>
 
 #include <atomic>
 #include <glm/glm.hpp>
@@ -7,29 +7,32 @@
 #include "vk_includes.h"
 #include "vk_predefinitions.h"
 
-// Memory Management
+namespace TGFX
+{
+namespace Vulkan
+{
 
 // Represents how it's bind to a heap
-struct memoryBlock_vk
+struct VMemoryBlock
 {
-	struct tgfx_heap* m_heap;
+	TGfxHeap m_heap;
 	VkDeviceSize vk_offset;
-	static const memoryBlock_vk& GETINVALID()
+	static const VMemoryBlock& GETINVALID()
 	{
-		memoryBlock_vk invalid;
+		VMemoryBlock invalid;
 		invalid.m_heap = nullptr;
 		invalid.vk_offset = UINT64_MAX;
 		return invalid;
 	}
 };
 //
-struct memoryRequirements_vk
+struct VMemoryRequirements
 {
 	VkMemoryRequirements vk_memReqs;
 	bool prefersDedicatedAlloc : 1, requiresDedicatedAlloc : 1;
-	static const memoryRequirements_vk& GETINVALID()
+	static const VMemoryRequirements& GETINVALID()
 	{
-		memoryRequirements_vk invalid;
+		VMemoryRequirements invalid;
 		invalid.prefersDedicatedAlloc = false;
 		invalid.requiresDedicatedAlloc = false;
 		invalid.vk_memReqs.memoryTypeBits = 0;
@@ -43,8 +46,7 @@ struct memoryRequirements_vk
 
 struct TEXTURE_VKOBJ
 {
-
-	vk_handleType HANDLETYPE = VKHANDLETYPEs::TEXTURE;
+	VkConstHndType HANDLETYPE = VKHANDLETYPEs::TEXTURE;
 	static uint16_t GET_EXTRAFLAGS(TEXTURE_VKOBJ* obj) { return 0; }
 
 	void operator=(const TEXTURE_VKOBJ& src)
@@ -64,20 +66,20 @@ struct TEXTURE_VKOBJ
 
 	unsigned int m_width, m_height;
 	unsigned char m_mips;
-	textureChannels_tgfx m_channels;
-	texture_dimensions_tgfx m_dim;
-	memoryBlock_vk m_memBlock = memoryBlock_vk::GETINVALID();
-	memoryRequirements_vk m_memReqs = memoryRequirements_vk::GETINVALID();
+	TGfxTextureChannels m_channels;
+	TGfxTextureDimensions m_dim;
+	VMemoryBlock m_memBlock = VMemoryBlock::GETINVALID();
+	VMemoryRequirements m_memReqs = VMemoryRequirements::GETINVALID();
 	uint8_t m_GPU;
 
 	VkImage vk_image = {};
 	VkImageView vk_imageView = {};
 	VkImageUsageFlags vk_imageUsage = {};
 };
+
 struct BUFFER_VKOBJ
 {
-
-	vk_handleType HANDLETYPE = VKHANDLETYPEs::BUFFER;
+	VkConstHndType HANDLETYPE = VKHANDLETYPEs::BUFFER;
 	static uint16_t GET_EXTRAFLAGS(BUFFER_VKOBJ* obj) { return 0; }
 
 	void operator=(const BUFFER_VKOBJ& src)
@@ -89,8 +91,8 @@ struct BUFFER_VKOBJ
 		m_memReqs = src.m_memReqs;
 	}
 
-	memoryBlock_vk m_memBlock;
-	memoryRequirements_vk m_memReqs;
+	VMemoryBlock m_memBlock;
+	VMemoryRequirements m_memReqs;
 	uint8_t m_GPU;
 	uint64_t m_intendedSize = UINT64_MAX;
 
@@ -103,18 +105,18 @@ struct BUFFER_VKOBJ
 struct colorslot_vk
 {
 	TEXTURE_VKOBJ* RT;
-	rasterpassLoad_tgfx LOADSTATE;
+	TGfxRasterPassLoad LOADSTATE;
 	bool IS_USED_LATER;
-	operationtype_tgfx RT_OPERATIONTYPE;
+	TGfxOperationType RT_OPERATIONTYPE;
 	glm::vec4 CLEAR_COLOR;
 	std::atomic_bool IsChanged = false;
 };
 struct depthstencilslot_vk
 {
 	TEXTURE_VKOBJ* RT;
-	rasterpassLoad_tgfx DEPTH_LOAD, STENCIL_LOAD;
+	TGfxRasterPassLoad DEPTH_LOAD, STENCIL_LOAD;
 	bool IS_USED_LATER;
-	operationtype_tgfx DEPTH_OPTYPE, STENCIL_OPTYPE;
+	TGfxOperationType DEPTH_OPTYPE, STENCIL_OPTYPE;
 	glm::vec2 CLEAR_COLOR;
 	std::atomic_bool IsChanged = false;
 };
@@ -140,7 +142,7 @@ struct rtslots_vk
 /*
 struct RTSLOTSET_VKOBJ {
 
-  vk_handleType    HANDLETYPE = VKHANDLETYPEs::RTSLOTSET;
+  VkConstHndType    HANDLETYPE = VKHANDLETYPEs::RTSLOTSET;
   static uint16_t  GET_EXTRAFLAGS(RTSLOTSET_VKOBJ* obj) { return 0; }
 
   void operator=(const RTSLOTSET_VKOBJ& copyFrom) {
@@ -156,7 +158,7 @@ struct RTSLOTSET_VKOBJ {
 };
 struct IRTSLOTSET_VKOBJ {
 
-  vk_handleType    HANDLETYPE = VKHANDLETYPEs::IRTSLOTSET;
+  VkConstHndType    HANDLETYPE = VKHANDLETYPEs::IRTSLOTSET;
   static uint16_t  GET_EXTRAFLAGS(IRTSLOTSET_VKOBJ* obj) { return 0; }
 
   void operator=(const IRTSLOTSET_VKOBJ& copyFrom) {
@@ -191,7 +193,7 @@ struct SUBRASTERPASS_VKOBJ
 	static uint16_t GET_EXTRAFLAGS(SUBRASTERPASS_VKOBJ* obj) { return 0; }
 
 	uint32_t m_subpassIndx;
-	struct tgfx_gpu* m_gpu;
+	TGfxGpu m_gpu;
 	VkRenderPass vk_renderPass; // It's same across all subpasses
 	bool isDepthAttachment = false;
 	// Extra information to check raster pipeline compilations without relying on validation layer
@@ -199,7 +201,7 @@ struct SUBRASTERPASS_VKOBJ
 struct SAMPLER_VKOBJ
 {
 
-	vk_handleType HANDLETYPE = VKHANDLETYPEs::SAMPLER;
+	VkConstHndType HANDLETYPE = VKHANDLETYPEs::SAMPLER;
 	static uint16_t GET_EXTRAFLAGS(SAMPLER_VKOBJ* obj) { return obj->m_flags.load(); }
 
 	VkSampler vk_sampler = VK_NULL_HANDLE;
@@ -213,7 +215,7 @@ struct SAMPLER_VKOBJ
 
 struct PIPELINE_VKOBJ
 {
-	vk_handleType HANDLETYPE = VKHANDLETYPEs::PIPELINE;
+	VkConstHndType HANDLETYPE = VKHANDLETYPEs::PIPELINE;
 	static uint16_t GET_EXTRAFLAGS(PIPELINE_VKOBJ* obj) { return obj->vk_type; }
 
 	uint8_t m_gpu;
@@ -224,6 +226,27 @@ struct PIPELINE_VKOBJ
 
 	VkFormat vk_colorAttachmentFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
 	VkFormat vk_depthAttachmentFormat = {};
+};
+
+struct SHADERSOURCE_VKOBJ
+{
+	bool isALIVE = false;
+	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::SHADERSOURCE;
+	static uint16_t GET_EXTRAFLAGS(SHADERSOURCE_VKOBJ* obj) { return obj->Stage; }
+
+	void operator=(const SHADERSOURCE_VKOBJ& copyFrom)
+	{
+		isALIVE = true;
+		Module = copyFrom.Module;
+		Stage = copyFrom.Stage;
+		SourceCode = copyFrom.SourceCode;
+		SourceCodeSize = copyFrom.SourceCodeSize;
+	}
+	VkShaderModule Module;
+	TGfxShaderStage Stage;
+	void* SourceCode = nullptr;
+	unsigned int SourceCodeSize = 0;
+	TGfxGpu Gpu;
 };
 struct depthsettingsdesc_vk
 {
@@ -244,11 +267,11 @@ struct blendinginfo_vk
 	VkPipelineColorBlendAttachmentState BlendState = {};
 };
 
-vk_uint32c VKCONST_MAXVERTEXATTRIBCOUNT = 16, VKCONST_MAXVERTEXBINDINGCOUNT = 4;
+VkConstU4 VKCONST_MAXVERTEXATTRIBCOUNT = 16, VKCONST_MAXVERTEXBINDINGCOUNT = 4;
 struct VERTEXATTRIBLAYOUT_VKOBJ
 {
 
-	vk_handleType HANDLETYPE = VKHANDLETYPEs::VERTEXATTRIB;
+	VkConstHndType HANDLETYPE = VKHANDLETYPEs::VERTEXATTRIB;
 	static uint16_t GET_EXTRAFLAGS(VERTEXATTRIBLAYOUT_VKOBJ* obj) { return 0; }
 
 	VkVertexInputBindingDescription bindingDescs[VKCONST_MAXVERTEXBINDINGCOUNT];
@@ -259,7 +282,7 @@ struct VERTEXATTRIBLAYOUT_VKOBJ
 struct HEAP_VKOBJ
 {
 
-	vk_handleType HANDLETYPE = VKHANDLETYPEs::HEAP;
+	VkConstHndType HANDLETYPE = VKHANDLETYPEs::HEAP;
 
 	static uint16_t GET_EXTRAFLAGS(HEAP_VKOBJ* obj)
 	{
@@ -284,17 +307,17 @@ struct cmdPool_vk;
 struct cmdBundleRef_vk
 {
 	cmdPool_vk* m_cmdPool;
-	struct tgfx_commandBundle* m_cmdBundle;
+	TGfxCommandBundle m_cmdBundle;
 	VkCommandBuffer vk_cmdBuffer;
 };
 
 struct FRAMEBUFFER_VKOBJ
 {
 
-	vk_handleType HANDLETYPE = VKHANDLETYPEs::INTERNAL;
+	VkConstHndType HANDLETYPE = VKHANDLETYPEs::INTERNAL;
 	static uint16_t GET_EXTRAFLAGS(FRAMEBUFFER_VKOBJ* obj) { return 0; }
 
-	struct tgfx_texture* m_textures[VKCONST_MAXRTSLOTCOUNT];
+	TGfxTexture m_textures[kMaxRtSlotCount];
 	// Command bundles records a command buffer for each framebuffer
 	// For now, proper tracking mechanism isn't implemented.
 	static constexpr uint32_t MAXCMDBUNDLECOUNT = 32;
@@ -302,3 +325,6 @@ struct FRAMEBUFFER_VKOBJ
 	cmdBundleRef_vk m_cmdBundleRefs[MAXCMDBUNDLECOUNT] = {};
 	VkFramebuffer vk_framebuffer = {};
 };
+
+} // namespace Vulkan
+} // namespace TGFX

@@ -37,7 +37,7 @@ void vkext_dynamicRendering::inspect()
 void vkext_dynamicRendering::manage(VkStructureType structType,
 									void* structPtr,
 									unsigned int extCount,
-									struct tgfx_extension* const* exts)
+									TGfxExtension* exts)
 {
 }
 
@@ -124,14 +124,14 @@ void vkext_beginDynamicRenderPass(VkCommandBuffer cb,
 	vkCmdBeginRenderingKHR_loaded(cb, &ri);
 }
 
-void vkext_beginStaticRenderPass(VkCommandBuffer cb, unsigned int extCount, struct tgfx_extension* const* exts) {}
+void vkext_beginStaticRenderPass(VkCommandBuffer cb, unsigned int extCount, TGfxExtension* exts) {}
 
 void vkext_dynamicRendering::vk_beginRenderpass(VkCommandBuffer cb,
 												unsigned int colorAttachmentCount,
 												const tgfx_rasterpassBeginSlotInfo* colorAttachments,
 												tgfx_rasterpassBeginSlotInfo depthAttachment,
 												unsigned int extCount,
-												struct tgfx_extension* const* exts)
+												TGfxExtension* exts)
 {
 	if (features.dynamicRendering)
 	{
@@ -149,9 +149,7 @@ void vkext_dynamicRendering::vk_beginRenderpass(VkCommandBuffer cb,
 	}
 }
 
-void vkext_dynamicRendering::vk_endRenderpass(VkCommandBuffer cb,
-											  unsigned int extCount,
-											  struct tgfx_extension* const* exts)
+void vkext_dynamicRendering::vk_endRenderpass(VkCommandBuffer cb, unsigned int extCount, TGfxExtension* exts)
 {
 	if (features.dynamicRendering)
 	{

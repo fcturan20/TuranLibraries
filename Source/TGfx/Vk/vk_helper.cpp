@@ -22,7 +22,7 @@ static unsigned char vk_getTextureTypeLimits(texture_dimensions_tgfx dims,
 											 textureOrder_tgfx dataorder,
 											 textureChannels_tgfx chnnltype,
 											 textureUsageMask_tgfxflag usageflag,
-											 struct tgfx_gpu* GPUHnd,
+											 TGfxGpu GPUHnd,
 											 unsigned int* MAXWIDTH,
 											 unsigned int* MAXHEIGHT,
 											 unsigned int* MAXDEPTH,
@@ -70,7 +70,7 @@ static unsigned char vk_getTextureTypeLimits(texture_dimensions_tgfx dims,
 	return true;
 }
 
-static void vk_getTextureSupportedMemTypes(struct tgfx_texture* texture, unsigned int* SupportedMemoryTypesBitset)
+static void vk_getTextureSupportedMemTypes(TGfxTexture texture, unsigned int* SupportedMemoryTypesBitset)
 {
 	*SupportedMemoryTypesBitset = getOBJ<TEXTURE_VKOBJ>(texture)->m_memReqs.vk_memReqs.memoryTypeBits;
 }

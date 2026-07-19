@@ -21,9 +21,6 @@ void vkext_descIndexing::inspect()
 	m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] = (VK_KHR_MAINTENANCE3_EXTENSION_NAME);
 	m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] = (VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 }
-void vkext_descIndexing::manage(VkStructureType structType,
-								void* structPtr,
-								unsigned int extCount,
-								struct tgfx_extension* const* exts)
+void vkext_descIndexing::manage(VkStructureType structType, void* structPtr, unsigned int extCount, TGfxExtension* exts)
 {
 }

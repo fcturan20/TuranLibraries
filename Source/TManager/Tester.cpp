@@ -1,4 +1,5 @@
 #include <dynalo/dynalo.hpp>
+#define TCORE_USE_CPP_WRAPPER
 #include <TCore.h>
 #include <UnitTestSystem.h>
 
@@ -23,12 +24,12 @@ int LoadCore()
 	TCPluginInfo coreInfo{};
 	TCPluginFunctions coreFuncs{};
 	auto res = entryPoint(TC, &coreInfo, &coreFuncs);
-	if (res != TC_RESULT_SUCCESS)
+	if (res != TC_RESULTSTATE_SUCCESS)
 	{
 		printf("Failed to run entry point of core library");
 		return 1;
 	}
-	if (auto res = coreFuncs.Initialize((const void**)&TC); res != TC_RESULT_SUCCESS)
+	if (auto res = coreFuncs.Initialize((const void**)&TC); res != TC_RESULTSTATE_SUCCESS)
 	{
 		printf("Failed to initialize core library");
 		return 1;
@@ -39,9 +40,9 @@ int LoadCore()
 const char* GPluginsToTest[] = {"TCoreVirtualMemory.dll",
 								"TCoreAllocator.dll",
 								"TCoreFileSystem.dll",
+								"TCoreString.dll",
 								"TCoreLogger.dll",
 								"TCoreProfiler.dll",
-								"TCoreString.dll",
 								"TCoreWindowing.dll"};
 int main()
 {
@@ -49,7 +50,7 @@ int main()
 		return res;
 
 	const TCPluginInfo* unitTestInfo{};
-	if (auto res = TC->LoadPlugin("TCoreUnitTest.dll", nullptr); res != TC_RESULT_SUCCESS)
+	if (auto res = TC->LoadPlugin("TCoreUnitTest.dll", nullptr); res != TC_RESULTSTATE_SUCCESS)
 	{
 		printf("Failed to load unit test system");
 		return 1;
@@ -57,16 +58,16 @@ int main()
 
 	if (auto res =
 			TC->GetPlugin(TCUnitTest_PLUGIN_NAME, TCUnitTest_PLUGIN_VERSION, &unitTestInfo, (const void**)&TCUnitTest);
-		res != TC_RESULT_SUCCESS)
+		res != TC_RESULTSTATE_SUCCESS)
 	{
 		printf("Failed to get unit test system");
 		return 1;
 	}
 
-	for (TUint pluginIndx = 0; pluginIndx < sizeof(GPluginsToTest) / sizeof(sizeof(GPluginsToTest[0])); pluginIndx++)
+	for (TU4 pluginIndx = 0; pluginIndx < sizeof(GPluginsToTest) / sizeof(sizeof(GPluginsToTest[0])); pluginIndx++)
 	{
 		auto plugin = GPluginsToTest[pluginIndx];
-		if (auto res = TC->LoadPlugin(plugin, nullptr); res != TC_RESULT_SUCCESS)
+		if (auto res = TC->LoadPlugin(plugin, nullptr); res != TC_RESULTSTATE_SUCCESS)
 		{
 			printf("Failed to load plugin; %s", plugin);
 			return 2;

@@ -1,144 +1,163 @@
+#define TCORE_USE_CPP_WRAPPER
 #include <TGfxCore.h>
 
 #include <assert.h>
 #include <algorithm>
 #include <string>
 
+#include <TGfxRenderer.h>
+#include <TGfxGpuContentManager.h>
+
+TCORE_PLUGIN_INIT(TC)
+TCORE_PLUGIN_INIT(TGfx)
 TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TGfx)
 TCORE_PLUGIN_ENTRY_POINT_END()
 
-result_tgfx load_backend(tgfx_core* parent,
-						 backends_tgfx backend,
-						 void (*printFnc)(unsigned int logCode, const wchar_t* extraInfo))
+namespace TGFX
 {
-	const char* path = backendFileNames[(int)backend];
 
-	if (!printFnc)
+static class TGfxContext* GContext = nullptr;
+class TGfxContext
+{
+public:
+	const char* BackendPluginName = nullptr;
+	static TCResult RegisterBackend(const char* backendName)
 	{
-		printFnc = defaultPrintCallback;
+		TGfxBackendFunctions* backendFuncs = nullptr;
+		if (auto res = TC->GetPlugin(backendName, 0, nullptr, (const void**)&backendFuncs);
+			res != TC_RESULTSTATE_SUCCESS)
+			return res;
+		if (auto res = backendFuncs->Hook((ITGfx*)TGfx); res != TC_RESULTSTATE_SUCCESS)
+			return res;
+		if (auto res = ValidateInterfaces(); res != TC_RESULTSTATE_SUCCESS)
+			return res;
+		GContext->BackendPluginName = backendName;
+		return {TC_RESULTSTATE_SUCCESS, 0};
 	}
+	static TCResult ValidateInterfaces()
+	{
+		if (!TGfx || !TGfx->Renderer || !TGfx->ResourceManager)
+			return {TC_RESULTSTATE_FAILURE, 0};
+		if (TGfx->RegisterBackend != RegisterBackend)
+			return {TC_RESULTSTATE_FAILURE, 0};
+		if (!TGfx->ChangeSwapchainResolution || !TGfx->CreateSwapchain || !TGfx->GetCurrentSwapchainTextureIndex)
+			return {TC_RESULTSTATE_FAILURE, 0};
+		return {TC_RESULTSTATE_SUCCESS, 0};
+	}
+};
 
-	auto backend_dll = DLIB_LOAD_TAPI(path);
-	if (!backend_dll)
+struct LogEntry
+{
+	TCResultState State;
+	const char* Message;
+	LogEntry(TCResultState r, const char* m) : State(r), Message(m) {}
+};
+
+static LogEntry GTGfxLogs[]{
+	{TC_RESULTSTATE_UNIMPLEMENTED, "NO_OUTPUT_CODE!"},
+	{TC_RESULTSTATE_UNIMPLEMENTED, "Backend needs virmemsys_tapi, init has failed"},
+	{TC_RESULTSTATE_FAILURE, "Backend specific error"},
+	{TC_RESULTSTATE_FAILURE, "Backend page allocation fail!"},
+	{TC_RESULTSTATE_FAILURE, "Backend memory allocator is at max, please report this"},
+	{TC_RESULTSTATE_FAILURE, "Backend tried to free a suballocation wrong, please report this"},
+	{TC_RESULTSTATE_FAILURE, "Backend's suballoc isn't enough for the alloc, please report this"},
+	{TC_RESULTSTATE_FAILURE, "Backend failed to create logical device"},
+	{TC_RESULTSTATE_FAILURE, "Extension isn't supported by the GPU!"},
+	{TC_RESULTSTATE_FAILURE, "Windowing system isn't supported by your system with this backend"},
+	{TC_RESULTSTATE_SUCCESS, "System doesn't support display"},
+	{TC_RESULTSTATE_INVALID_ARGUMENT, "Invalid object handle"},
+	{TC_RESULTSTATE_FAILURE, "There are more binding tables than supported!"},
+	{TC_RESULTSTATE_FAILURE, "No descset is found!"},
+	{TC_RESULTSTATE_FAILURE, "Subpass handle isn't valid!"},
+	{TC_RESULTSTATE_FAILURE, "Object handle's type didn't match!"},
+	{TC_RESULTSTATE_FAILURE, "Backend specific error"},
+	{TC_RESULTSTATE_FAILURE, "System doesn't support the backend"},
+	{TC_RESULTSTATE_FAILURE, "Windowing system failed to create the window"},
+	{TC_RESULTSTATE_FAILURE, "Swapchain creation failed"},
+	{TC_RESULTSTATE_SUCCESS, "System doesn't support raw mouse input mode!"},
+	{TC_RESULTSTATE_SUCCESS, "One of the monitors have invalid physical sizes, be carefu"},
+	{TC_RESULTSTATE_FAILURE, "Failed to signal fence on CPU!"},
+	{TC_RESULTSTATE_FAILURE, "Texture creation has failed at backend object creation"},
+	{TC_RESULTSTATE_FAILURE, "Created object requires a dedicated allocation but you didn't"},
+	{TC_RESULTSTATE_FAILURE, "Texture creation has failed because mip count of the texture is wrong!"},
+	{TC_RESULTSTATE_FAILURE, "Buffer creation has failed because at vkCreateBuffer()"},
+	{TC_RESULTSTATE_FAILURE, "Binding table creation failed at vkCreateDescriptorPool()"},
+	{TC_RESULTSTATE_INVALID_ARGUMENT, "ElementCount shouldn't be zero"},
+	{TC_RESULTSTATE_INVALID_ARGUMENT, "Static sampler should only be used in sampler binding table!"},
+	{TC_RESULTSTATE_FAILURE, "Binding table creation failed at vkAllocateDescriptors()"},
+	{TC_RESULTSTATE_FAILURE, "Fence creation failed"},
+	{TC_RESULTSTATE_FAILURE, "Fence value reading has failed"},
+	{TC_RESULTSTATE_FAILURE, "Invalid shader source"},
+	{TC_RESULTSTATE_FAILURE, "Shader source compilation has failed"},
+	{TC_RESULTSTATE_INVALID_ARGUMENT, "Objects belong to different GPUs"},
+	{TC_RESULTSTATE_FAILURE, "2 shader sources with the same type isn't supported"},
+	{TC_RESULTSTATE_UNIMPLEMENTED, "Backend doesn't support this type of shader source"},
+	{TC_RESULTSTATE_FAILURE, "Exceeded max supported attribute or binding count"},
+	{TC_RESULTSTATE_FAILURE, "Attribute or binding index is wrong"},
+	{TC_RESULTSTATE_FAILURE, "Attribute offset or stride is larger than device supports"},
+	{TC_RESULTSTATE_FAILURE, "Pipeline creation failed"},
+	{TC_RESULTSTATE_FAILURE, "Heap creation failed"},
+	{TC_RESULTSTATE_FAILURE, "TGFX already bound the resource to its own dedicated heap"},
+	{TC_RESULTSTATE_FAILURE, "Bind offset should be multiple of the resource's memory alignment"},
+	{TC_RESULTSTATE_FAILURE, "Binding resource to heap has failed"},
+	{TC_RESULTSTATE_FAILURE, "Heap mapping has failed"},
+	{TC_RESULTSTATE_FAILURE, "Querying queue support for window has failed"},
+	{TC_RESULTSTATE_FAILURE, "GPU doesn't support Compute, Graphics or Transfer; GPU isn't usable"},
+	{TC_RESULTSTATE_FAILURE, "Queue submission failed"},
+	{TC_RESULTSTATE_FAILURE, "Command buffer recording failed"},
+	{TC_RESULTSTATE_FAILURE, "Active queue operation type isn't matching"},
+	{TC_RESULTSTATE_FAILURE, "Querying texture type limits failed"},
+	{TC_RESULTSTATE_SUCCESS, "Seperate depth-stencil layouts aren't supported by the GPU"},
+	{TC_RESULTSTATE_SUCCESS, "Depth bounds testing isn't supported by the GPU"},
+	{TC_RESULTSTATE_FAILURE, "Invalid depth attachment info"},
+	{TC_RESULTSTATE_FAILURE, "Invalid indirect operation type"},
+	{TC_RESULTSTATE_SUCCESS, "Backend specific warning"},
+	{TC_RESULTSTATE_FAILURE, "This command can't be called in this bundle"},
+	{TC_RESULTSTATE_FAILURE, "GPU doesn't support dynamic rendering, use subpass extension"}};
+static constexpr TU8 GTGfxLogCount = sizeof(GTGfxLogs) / sizeof(LogEntry);
+
+TCResultState GetResultStateByReturnCode(TU4 returnCode, const char** message)
+{
+	if (returnCode >= GTGfxLogCount)
 	{
-		printFnc(22, nullptr);
-		return result_tgfx_FAIL;
+		*message = "There is no such log!";
+		return {TC_RESULTSTATE_UNIMPLEMENTED, 0};
 	}
-	load_backend_fnc backendloader = (load_backend_fnc)DLIB_FUNC_LOAD_TAPI(backend_dll, "BACKEND_LOAD");
-	if (!backendloader)
-	{
-		printFnc(23, nullptr);
-		return result_tgfx_FAIL;
-	}
-	return backendloader(core_regSys, core_typePtr, printFnc);
+	auto& log = GTGfxLogs[returnCode];
+	if (message)
+		*message = log.Message;
+	return log.State;
 }
 
-result_tgfx tgfxGetLogMessage(unsigned int logCode, const wchar_t** logMessage);
-ECSPLUGIN_ENTRY(ecsSys, reloadFlag)
+} // namespace TGFX
+
+TCResult TGfx_Initialize(const void** outPluginAPI)
 {
-	tgfx_core_type* core = (tgfx_core_type*)malloc(sizeof(tgfx_core_type) + sizeof(tgfx_core));
-	if (core == NULL)
-	{
-		printf("TGFX core creation failed because malloc failed");
-		exit(-1);
-	}
-	core->api = (tgfx_core*)(core + 1);
-	core_typePtr = core;
-	core_regSys = ecsSys;
-	core->api->contentmanager = new tgfx_gpuDataManager;
-	core->api->helpers = new tgfx_helper;
-	core->api->imgui = new tgfx_dearImgui;
-	core->api->renderer = new tgfx_renderer;
-	core_logSys = ((LOGGER_TAPI_PLUGIN_LOAD_TYPE)core_regSys->getSystem(LOGGER_TAPI_PLUGIN_NAME));
-
-	core->api->load_backend = &load_backend;
-	core->api->getLogMessage = &tgfxGetLogMessage;
-
-	ecsSys->addSystem(TGFX_PLUGIN_NAME, TGFX_PLUGIN_VERSION, core);
+	auto interfacesSize = sizeof(ITGfx) + sizeof(ITGfxRenderer) + sizeof(ITGfxResourceManager);
+	auto interfaces = malloc(interfacesSize);
+	auto ITGFX = (ITGfx*)interfaces;
+	if (!ITGFX)
+		return {TC_RESULTSTATE_OUT_OF_MEMORY, 0};
+	ITGFX->Renderer = (ITGfxRenderer*)((char*)interfaces + sizeof(ITGfx));
+	ITGFX->ResourceManager = (ITGfxResourceManager*)((char*)interfaces + sizeof(ITGfx) + sizeof(ITGfxRenderer));
+	ITGFX->RegisterBackend = TGFX::TGfxContext::RegisterBackend;
+	ITGFX->GetResultStateByReturnCode = TGFX::GetResultStateByReturnCode;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
-ECSPLUGIN_EXIT(ecsSys, reloadFlag) {}
 
-typedef struct tgfxLogStruct
+TCResult TGfx_Shutdown()
 {
-	result_tgfx result;
-	const wchar_t* output;
-	tgfxLogStruct(result_tgfx r, const wchar_t* o) : result(r), output(o) {}
-} logStruct_tgfx;
-static tgfxLogStruct tgfxLogMessages[]{
-	{result_tgfx_NOTCODED, L"NO_OUTPUT_CODE!"},
-	{result_tgfx_NOTCODED, L"Backend needs virmemsys_tapi, init has failed"},
-	{result_tgfx_FAIL, L"Backend specific error"},
-	{result_tgfx_FAIL, L"Backend page allocation fail!"},
-	{result_tgfx_FAIL, L"Backend memory allocator is at max, please report this"},
-	{result_tgfx_FAIL, L"Backend tried to free a suballocation wrong, please report this"},
-	{result_tgfx_FAIL, L"Backend's suballoc isn't enough for the alloc, please report this"},
-	{result_tgfx_FAIL, L"Backend failed to create logical device"},
-	{result_tgfx_FAIL, L"Extension isn't supported by the GPU!"},
-	{result_tgfx_FAIL, L"Windowing system isn't supported by your system with this backend"},
-	{result_tgfx_WARNING, L"System doesn't support display"},
-	{result_tgfx_INVALIDARGUMENT, L"Invalid object handle"},
-	{result_tgfx_FAIL, L"There are more binding tables than supported!"},
-	{result_tgfx_FAIL, L"No descset is found!"},
-	{result_tgfx_FAIL, L"Subpass handle isn't valid!"},
-	{result_tgfx_FAIL, L"Object handle's type didn't match!"},
-	{result_tgfx_FAIL, L"Backend specific error"},
-	{result_tgfx_FAIL, L"System doesn't support the backend"},
-	{result_tgfx_FAIL, L"Windowing system failed to create the window"},
-	{result_tgfx_FAIL, L"Swapchain creation failed"},
-	{result_tgfx_WARNING, L"System doesn't support raw mouse input mode!"},
-	{result_tgfx_WARNING, L"One of the monitors have invalid physical sizes, be careful"},
-	{result_tgfx_FAIL, L"Failed to signal fence on CPU!"},
-	{result_tgfx_FAIL, L"Backend DLL file isn't found!"},
-	{result_tgfx_FAIL, L"Backend's loading scheme isn't supported"},
-	{result_tgfx_FAIL, L"Texture creation has failed at backend object creation"},
-	{result_tgfx_FAIL, L"Created object requires a dedicated allocation but you didn't"},
-	{result_tgfx_FAIL, L"Texture creation has failed because mip count of the texture is wrong!"},
-	{result_tgfx_FAIL, L"Buffer creation has failed because at vkCreateBuffer()"},
-	{result_tgfx_FAIL, L"Binding table creation failed at vkCreateDescriptorPool()"},
-	{result_tgfx_INVALIDARGUMENT, L"ElementCount shouldn't be zero"},
-	{result_tgfx_INVALIDARGUMENT, L"Static sampler should only be used in sampler binding table!"},
-	{result_tgfx_FAIL, L"Binding table creation failed at vkAllocateDescriptors()"},
-	{result_tgfx_FAIL, L"Fence creation failed"},
-	{result_tgfx_FAIL, L"Fence value reading has failed"},
-	{result_tgfx_FAIL, L"Invalid shader source"},
-	{result_tgfx_FAIL, L"Shader source compilation has failed"},
-	{result_tgfx_INVALIDARGUMENT, L"Objects are from different GPUs"},
-	{result_tgfx_FAIL, L"2 shader sources with the same type isn't supported"},
-	{result_tgfx_NOTCODED, L"Backend doesn't support this type of shader source"},
-	{result_tgfx_FAIL, L"Exceeded max supported attribute or binding count"},
-	{result_tgfx_FAIL, L"Attribute or binding index is wrong"},
-	{result_tgfx_FAIL, L"Attribute offset or stride is larger than device supports"},
-	{result_tgfx_FAIL, L"Pipeline creation failed"},
-	{result_tgfx_FAIL, L"Heap creation failed"},
-	{result_tgfx_FAIL, L"TGFX already bound the resource to its own dedicated heap"},
-	{result_tgfx_FAIL, L"Bind offset should be multiple of the resource's memory alignment"},
-	{result_tgfx_FAIL, L"Binding resource to heap has failed"},
-	{result_tgfx_FAIL, L"Heap mapping has failed"},
-	{result_tgfx_INVALIDARGUMENT, L"Fix your function arguments or report this!"},
-	{result_tgfx_FAIL, L"Querying queue support for window has failed"},
-	{result_tgfx_FAIL, L"GPU doesn't support Compute, Graphics or Transfer; GPU isn't usable"},
-	{result_tgfx_FAIL, L"Queue submission failed"},
-	{result_tgfx_FAIL, L"Command buffer recording failed"},
-	{result_tgfx_FAIL, L"Active queue operation type isn't matching"},
-	{result_tgfx_FAIL, L"Querying texture type limits failed"},
-	{result_tgfx_WARNING, L"Seperate depth-stencil layouts aren't supported by the GPU"},
-	{result_tgfx_WARNING, L"Depth bounds testing isn't supported by the GPU"},
-	{result_tgfx_FAIL, L"Invalid depth attachment info"},
-	{result_tgfx_FAIL, L"Invalid indirect operation type"},
-	{result_tgfx_WARNING, L"Backend specific warning"},
-	{result_tgfx_FAIL, L"This command can't be called in this bundle"},
-	{result_tgfx_FAIL, L"GPU doesn't support dynamic rendering, use subpass extension"}};
-static constexpr uint32_t tgfxLogCount = sizeof(tgfxLogMessages) / sizeof(tgfxLogStruct);
-result_tgfx tgfxGetLogMessage(unsigned int logCode, const wchar_t** logMessage)
+	return {TC_RESULTSTATE_SUCCESS, 0};
+}
+
+TCResult TGfx_OnPreShutdown()
 {
-	if (logCode >= tgfxLogCount)
-	{
-		*logMessage = L"There is no such log!";
-		return result_tgfx_FAIL;
-	}
-	if (logMessage)
-	{
-		*logMessage = tgfxLogMessages[logCode].output;
-	}
-	return tgfxLogMessages[logCode].result;
+	return {TC_RESULTSTATE_SUCCESS, 0};
+}
+
+void TGfx_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded)
+{
+	if (!isLoaded && TGFX::GContext->BackendPluginName &&
+		strcmp(pluginInfo->Name, TGFX::GContext->BackendPluginName) == 0)
+		TGFX::GContext->BackendPluginName = nullptr;
 }

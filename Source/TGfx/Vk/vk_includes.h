@@ -1,21 +1,21 @@
 #pragma once
 #include <stdio.h>
-#include <threadingsys_tapi.h>
 #include <vulkan/vulkan.h>
 #include <algorithm>
 #include <glm/glm.hpp>
 #include <iostream>
 #include <mutex>
 
-#include <tgfx_forwarddeclarations.h>
-#include <tgfx_structs.h>
+#include <TGfxDeclarations.h>
+#include <TGfxStructs.h>
+#include <TGfxCore.h>
 
 #include "vk_predefinitions.h"
 
 // Some algorithms and data structures to help in C++ (like threadlocalvector)
 
 template <typename T>
-class vk_atomic
+class atomic
 {
 	std::atomic<T> data;
 
@@ -115,92 +115,97 @@ public:
 	}
 };
 
-inline unsigned char GetByteSizeOf_TextureChannels(textureChannels_tgfx channeltype)
+namespace TGFX
+{
+namespace Vulkan
+{
+
+inline unsigned char GetByteSizeOf_TextureChannels(TGfxTextureChannels channeltype)
 {
 	switch (channeltype)
 	{
-	case texture_channels_tgfx_R8B:
-	case texture_channels_tgfx_R8UB: return 1;
-	case texture_channels_tgfx_RGB8B:
-	case texture_channels_tgfx_RGB8UB: return 3;
-	case texture_channels_tgfx_D24S8:
-	case texture_channels_tgfx_D32:
-	case texture_channels_tgfx_RGBA8B:
-	case texture_channels_tgfx_RGBA8UB:
-	case texture_channels_tgfx_BGRA8UB:
-	case texture_channels_tgfx_BGRA8UNORM:
-	case texture_channels_tgfx_R32F:
-	case texture_channels_tgfx_R32I:
-	case texture_channels_tgfx_R32UI: return 4;
-	case texture_channels_tgfx_RA32F:
-	case texture_channels_tgfx_RA32I:
-	case texture_channels_tgfx_RA32UI: return 8;
-	case texture_channels_tgfx_RGB32F:
-	case texture_channels_tgfx_RGB32I:
-	case texture_channels_tgfx_RGB32UI: return 12;
-	case texture_channels_tgfx_RGBA32F:
-	case texture_channels_tgfx_RGBA32I:
-	case texture_channels_tgfx_RGBA32UI: return 16;
+	case TGFX_TEXTURE_CHANNELS_R8B:
+	case TGFX_TEXTURE_CHANNELS_R8UB: return 1;
+	case TGFX_TEXTURE_CHANNELS_RGB8B:
+	case TGFX_TEXTURE_CHANNELS_RGB8UB: return 3;
+	case TGFX_TEXTURE_CHANNELS_D24S8:
+	case TGFX_TEXTURE_CHANNELS_D32:
+	case TGFX_TEXTURE_CHANNELS_RGBA8B:
+	case TGFX_TEXTURE_CHANNELS_RGBA8UB:
+	case TGFX_TEXTURE_CHANNELS_BGRA8UB:
+	case TGFX_TEXTURE_CHANNELS_BGRA8UNORM:
+	case TGFX_TEXTURE_CHANNELS_R32F:
+	case TGFX_TEXTURE_CHANNELS_R32I:
+	case TGFX_TEXTURE_CHANNELS_R32UI: return 4;
+	case TGFX_TEXTURE_CHANNELS_RA32F:
+	case TGFX_TEXTURE_CHANNELS_RA32I:
+	case TGFX_TEXTURE_CHANNELS_RA32UI: return 8;
+	case TGFX_TEXTURE_CHANNELS_RGB32F:
+	case TGFX_TEXTURE_CHANNELS_RGB32I:
+	case TGFX_TEXTURE_CHANNELS_RGB32UI: return 12;
+	case TGFX_TEXTURE_CHANNELS_RGBA32F:
+	case TGFX_TEXTURE_CHANNELS_RGBA32I:
+	case TGFX_TEXTURE_CHANNELS_RGBA32UI: return 16;
 	default: vkPrint(49); return 0;
 	}
 }
-inline VkFormat vk_findDataType(datatype_tgfx datatype)
+inline VkFormat findDataType(TGfxDataType datatype)
 {
 	switch (datatype)
 	{
-	case datatype_tgfx_VAR_VEC2: return VK_FORMAT_R32G32_SFLOAT;
-	case datatype_tgfx_VAR_VEC3: return VK_FORMAT_R32G32B32_SFLOAT;
-	case datatype_tgfx_VAR_VEC4: return VK_FORMAT_R32G32B32A32_SFLOAT;
+	case TGFX_DATATYPE_FVEC2: return VK_FORMAT_R32G32_SFLOAT;
+	case TGFX_DATATYPE_FVEC3: return VK_FORMAT_R32G32B32_SFLOAT;
+	case TGFX_DATATYPE_FVEC4: return VK_FORMAT_R32G32B32A32_SFLOAT;
 	default: vkPrint(49); return VK_FORMAT_UNDEFINED;
 	}
 }
-inline VkFormat vk_findFormatVk(textureChannels_tgfx channels)
+inline VkFormat findFormatVk(TGfxTextureChannels channels)
 {
 	switch (channels)
 	{
-	case texture_channels_tgfx_BGRA8UNORM: return VK_FORMAT_B8G8R8A8_UNORM;
-	case texture_channels_tgfx_BGRA8UB: return VK_FORMAT_B8G8R8A8_UINT;
-	case texture_channels_tgfx_R8B: return VK_FORMAT_R8_SINT;
-	case texture_channels_tgfx_RGBA8UB: return VK_FORMAT_R8G8B8A8_UINT;
-	case texture_channels_tgfx_RGBA8B: return VK_FORMAT_R8G8B8A8_SINT;
-	case texture_channels_tgfx_RGBA32F: return VK_FORMAT_R32G32B32A32_SFLOAT;
-	case texture_channels_tgfx_RGBA32I: return VK_FORMAT_R32G32B32A32_SINT;
-	case texture_channels_tgfx_RGBA32UI: return VK_FORMAT_R32G32B32A32_UINT;
-	case texture_channels_tgfx_RGB8UB: return VK_FORMAT_R8G8B8_UINT;
-	case texture_channels_tgfx_D32: return VK_FORMAT_D32_SFLOAT;
-	case texture_channels_tgfx_D24S8: return VK_FORMAT_D24_UNORM_S8_UINT;
-	case texture_channels_tgfx_BGRA8SRGB: return VK_FORMAT_B8G8R8A8_SRGB;
-	case texture_channels_tgfx_RGBA16F: return VK_FORMAT_R16G16B16A16_SFLOAT;
-	case texture_channels_tgfx_A2B10G10R10_UNORM: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-	case texture_channels_tgfx_RGBA8SRGB: return VK_FORMAT_R8G8B8A8_SRGB;
-	case texture_channels_tgfx_UNDEF: return VK_FORMAT_UNDEFINED;
-	case texture_channels_tgfx_UNDEF2:
+	case TGFX_TEXTURE_CHANNELS_BGRA8UNORM: return VK_FORMAT_B8G8R8A8_UNORM;
+	case TGFX_TEXTURE_CHANNELS_BGRA8UB: return VK_FORMAT_B8G8R8A8_UINT;
+	case TGFX_TEXTURE_CHANNELS_R8B: return VK_FORMAT_R8_SINT;
+	case TGFX_TEXTURE_CHANNELS_RGBA8UB: return VK_FORMAT_R8G8B8A8_UINT;
+	case TGFX_TEXTURE_CHANNELS_RGBA8B: return VK_FORMAT_R8G8B8A8_SINT;
+	case TGFX_TEXTURE_CHANNELS_RGBA32F: return VK_FORMAT_R32G32B32A32_SFLOAT;
+	case TGFX_TEXTURE_CHANNELS_RGBA32I: return VK_FORMAT_R32G32B32A32_SINT;
+	case TGFX_TEXTURE_CHANNELS_RGBA32UI: return VK_FORMAT_R32G32B32A32_UINT;
+	case TGFX_TEXTURE_CHANNELS_RGB8UB: return VK_FORMAT_R8G8B8_UINT;
+	case TGFX_TEXTURE_CHANNELS_D32: return VK_FORMAT_D32_SFLOAT;
+	case TGFX_TEXTURE_CHANNELS_D24S8: return VK_FORMAT_D24_UNORM_S8_UINT;
+	case TGFX_TEXTURE_CHANNELS_BGRA8SRGB: return VK_FORMAT_B8G8R8A8_SRGB;
+	case TGFX_TEXTURE_CHANNELS_RGBA16F: return VK_FORMAT_R16G16B16A16_SFLOAT;
+	case TGFX_TEXTURE_CHANNELS_A2B10G10R10_UNORM: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+	case TGFX_TEXTURE_CHANNELS_RGBA8SRGB: return VK_FORMAT_R8G8B8A8_SRGB;
+	case TGFX_TEXTURE_CHANNELS_UNDEF: return VK_FORMAT_UNDEFINED;
+	case TGFX_TEXTURE_CHANNELS_UNDEF2:
 	default: vkPrint(49); return VK_FORMAT_UNDEFINED;
 	}
 }
-inline textureChannels_tgfx vk_findTextureChannelsTgfx(VkFormat format)
+inline TGfxTextureChannels findTextureChannelsTgfx(VkFormat format)
 {
 	switch (format)
 	{
-	case VK_FORMAT_B8G8R8A8_UNORM: return texture_channels_tgfx_BGRA8UNORM;
-	case VK_FORMAT_B8G8R8A8_UINT: return texture_channels_tgfx_BGRA8UB;
-	case VK_FORMAT_R8G8B8A8_UINT: return texture_channels_tgfx_RGBA8UB;
-	case VK_FORMAT_R8G8B8A8_SINT: return texture_channels_tgfx_RGBA8B;
-	case VK_FORMAT_R32G32B32A32_SFLOAT: return texture_channels_tgfx_RGBA32F;
-	case VK_FORMAT_R32G32B32A32_SINT: return texture_channels_tgfx_RGBA32I;
-	case VK_FORMAT_R32G32B32A32_UINT: return texture_channels_tgfx_RGBA32UI;
-	case VK_FORMAT_R8G8B8_UINT: return texture_channels_tgfx_RGB8UB;
-	case VK_FORMAT_D32_SFLOAT: return texture_channels_tgfx_D32;
-	case VK_FORMAT_D24_UNORM_S8_UINT: return texture_channels_tgfx_D24S8;
-	case VK_FORMAT_B8G8R8A8_SRGB: return texture_channels_tgfx_BGRA8SRGB;
-	case VK_FORMAT_R16G16B16A16_SFLOAT: return texture_channels_tgfx_RGBA16F;
-	case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return texture_channels_tgfx_A2B10G10R10_UNORM;
-	case VK_FORMAT_R8G8B8A8_UNORM: return texture_channels_tgfx_RGBA8UNORM;
-	case VK_FORMAT_R8G8B8A8_SRGB: return texture_channels_tgfx_RGBA8SRGB;
-	default: vkPrint(49); return texture_channels_tgfx_R8B;
+	case VK_FORMAT_B8G8R8A8_UNORM: return TGFX_TEXTURE_CHANNELS_BGRA8UNORM;
+	case VK_FORMAT_B8G8R8A8_UINT: return TGFX_TEXTURE_CHANNELS_BGRA8UB;
+	case VK_FORMAT_R8G8B8A8_UINT: return TGFX_TEXTURE_CHANNELS_RGBA8UB;
+	case VK_FORMAT_R8G8B8A8_SINT: return TGFX_TEXTURE_CHANNELS_RGBA8B;
+	case VK_FORMAT_R32G32B32A32_SFLOAT: return TGFX_TEXTURE_CHANNELS_RGBA32F;
+	case VK_FORMAT_R32G32B32A32_SINT: return TGFX_TEXTURE_CHANNELS_RGBA32I;
+	case VK_FORMAT_R32G32B32A32_UINT: return TGFX_TEXTURE_CHANNELS_RGBA32UI;
+	case VK_FORMAT_R8G8B8_UINT: return TGFX_TEXTURE_CHANNELS_RGB8UB;
+	case VK_FORMAT_D32_SFLOAT: return TGFX_TEXTURE_CHANNELS_D32;
+	case VK_FORMAT_D24_UNORM_S8_UINT: return TGFX_TEXTURE_CHANNELS_D24S8;
+	case VK_FORMAT_B8G8R8A8_SRGB: return TGFX_TEXTURE_CHANNELS_BGRA8SRGB;
+	case VK_FORMAT_R16G16B16A16_SFLOAT: return TGFX_TEXTURE_CHANNELS_RGBA16F;
+	case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return TGFX_TEXTURE_CHANNELS_A2B10G10R10_UNORM;
+	case VK_FORMAT_R8G8B8A8_UNORM: return TGFX_TEXTURE_CHANNELS_RGBA8UNORM;
+	case VK_FORMAT_R8G8B8A8_SRGB: return TGFX_TEXTURE_CHANNELS_RGBA8SRGB;
+	default: vkPrint(49); return TGFX_TEXTURE_CHANNELS_R8B;
 	}
 }
-inline datatype_tgfx vk_findTextureDataType(VkFormat format)
+inline TGfxDataType findTextureDataType(VkFormat format)
 {
 	switch (format)
 	{
@@ -209,258 +214,262 @@ inline datatype_tgfx vk_findTextureDataType(VkFormat format)
 	case VK_FORMAT_B8G8R8A8_SRGB:
 	case VK_FORMAT_R16G16B16A16_SFLOAT:
 	case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
-	case VK_FORMAT_B8G8R8A8_UNORM: return datatype_tgfx_VAR_FLOAT32;
+	case VK_FORMAT_B8G8R8A8_UNORM: return TGFX_DATATYPE_F32;
 
 	case VK_FORMAT_B8G8R8A8_UINT:
 	case VK_FORMAT_R8G8B8A8_UINT:
 	case VK_FORMAT_R8G8B8_UINT:
 	case VK_FORMAT_R32G32B32A32_UINT:
-	case VK_FORMAT_D24_UNORM_S8_UINT: return datatype_tgfx_VAR_UINT32;
+	case VK_FORMAT_D24_UNORM_S8_UINT: return TGFX_DATATYPE_U32;
 
 	case VK_FORMAT_R8G8B8A8_SINT:
 	case VK_FORMAT_R8_SINT:
-	case VK_FORMAT_R32G32B32A32_SINT: return datatype_tgfx_VAR_INT32;
-	default: vkPrint(49); return datatype_tgfx_UNDEFINED;
+	case VK_FORMAT_R32G32B32A32_SINT: return TGFX_DATATYPE_I32;
+	default: vkPrint(49); return TGFX_DATATYPE_UNDEFINED;
 	}
 }
-inline VkDescriptorType vk_findDescTypeVk(shaderdescriptortype_tgfx desc)
+inline VkDescriptorType findDescTypeVk(TGfxShaderDescriptorType desc)
 {
 	switch (desc)
 	{
-	case shaderdescriptortype_tgfx_BUFFER: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	case shaderdescriptortype_tgfx_SAMPLEDTEXTURE: return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-	case shaderdescriptortype_tgfx_SAMPLER: return VK_DESCRIPTOR_TYPE_SAMPLER;
-	case shaderdescriptortype_tgfx_STORAGEIMAGE: return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	case shaderdescriptortype_tgfx_EXT_UNIFORMBUFFER: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	case TGFX_SHADERDESCRIPTORTYPE_BUFFER: return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	case TGFX_SHADERDESCRIPTORTYPE_SAMPLEDTEXTURE: return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	case TGFX_SHADERDESCRIPTORTYPE_SAMPLER: return VK_DESCRIPTOR_TYPE_SAMPLER;
+	case TGFX_SHADERDESCRIPTORTYPE_STORAGEIMAGE: return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	case TGFX_SHADERDESCRIPTORTYPE_EXT_UNIFORMBUFFER: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	default: vkPrint(49); return VK_DESCRIPTOR_TYPE_MAX_ENUM;
 	}
 }
-inline shaderdescriptortype_tgfx vk_findDescTypeTgfx(VkDescriptorType desc)
+inline TGfxShaderDescriptorType findDescTypeTgfx(VkDescriptorType desc)
 {
 	switch (desc)
 	{
-	case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: return shaderdescriptortype_tgfx_BUFFER;
-	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: return shaderdescriptortype_tgfx_SAMPLEDTEXTURE;
-	case VK_DESCRIPTOR_TYPE_SAMPLER: return shaderdescriptortype_tgfx_SAMPLER;
-	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: return shaderdescriptortype_tgfx_STORAGEIMAGE;
-	case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: return shaderdescriptortype_tgfx_EXT_UNIFORMBUFFER;
-	default: vkPrint(49); return (shaderdescriptortype_tgfx)UINT64_MAX;
+	case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: return TGFX_SHADERDESCRIPTORTYPE_BUFFER;
+	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: return TGFX_SHADERDESCRIPTORTYPE_SAMPLEDTEXTURE;
+	case VK_DESCRIPTOR_TYPE_SAMPLER: return TGFX_SHADERDESCRIPTORTYPE_SAMPLER;
+	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: return TGFX_SHADERDESCRIPTORTYPE_STORAGEIMAGE;
+	case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: return TGFX_SHADERDESCRIPTORTYPE_EXT_UNIFORMBUFFER;
+	default: vkPrint(49); return (TGfxShaderDescriptorType)UINT64_MAX;
 	}
 }
-inline VkSamplerAddressMode vk_findAddressModeVk(texture_wrapping_tgfx Wrapping)
+inline VkSamplerAddressMode findAddressModeVk(TGfxTextureWrapping Wrapping)
 {
 	switch (Wrapping)
 	{
-	case texture_wrapping_tgfx_REPEAT: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	case texture_wrapping_tgfx_MIRRORED_REPEAT: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-	case texture_wrapping_tgfx_CLAMP_TO_EDGE: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	case TGFX_TEXTURE_WRAPPING_REPEAT: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	case TGFX_TEXTURE_WRAPPING_MIRRORED_REPEAT: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+	case TGFX_TEXTURE_WRAPPING_CLAMP_TO_EDGE: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	default: vkPrint(49); return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
 	}
 }
-inline VkFilter vk_findFilterVk(texture_mipmapfilter_tgfx filter)
+inline VkFilter findFilterVk(TGfxTextureMipmapFilter filter)
 {
 	switch (filter)
 	{
-	case texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP:
-	case texture_mipmapfilter_tgfx_LINEAR_FROM_2MIP: return VK_FILTER_LINEAR;
-	case texture_mipmapfilter_tgfx_NEAREST_FROM_1MIP:
-	case texture_mipmapfilter_tgfx_NEAREST_FROM_2MIP: return VK_FILTER_NEAREST;
+	case TGFX_TEXTURE_MIPMAPFILTER_LINEAR_FROM_1MIP:
+	case TGFX_TEXTURE_MIPMAPFILTER_LINEAR_FROM_2MIP: return VK_FILTER_LINEAR;
+	case TGFX_TEXTURE_MIPMAPFILTER_NEAREST_FROM_1MIP:
+	case TGFX_TEXTURE_MIPMAPFILTER_NEAREST_FROM_2MIP: return VK_FILTER_NEAREST;
 	default: vkPrint(49); return VK_FILTER_MAX_ENUM;
 	}
 }
-inline VkSamplerMipmapMode vk_findMipmapModeVk(texture_mipmapfilter_tgfx filter)
+inline VkSamplerMipmapMode findMipmapModeVk(TGfxTextureMipmapFilter filter)
 {
 	switch (filter)
 	{
-	case texture_mipmapfilter_tgfx_LINEAR_FROM_2MIP:
-	case texture_mipmapfilter_tgfx_NEAREST_FROM_2MIP: return VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	case texture_mipmapfilter_tgfx_LINEAR_FROM_1MIP:
-	case texture_mipmapfilter_tgfx_NEAREST_FROM_1MIP: return VK_SAMPLER_MIPMAP_MODE_NEAREST;
-	default: vkPrint(49);
+	case TGFX_TEXTURE_MIPMAPFILTER_LINEAR_FROM_2MIP:
+	case TGFX_TEXTURE_MIPMAPFILTER_NEAREST_FROM_2MIP: return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	case TGFX_TEXTURE_MIPMAPFILTER_LINEAR_FROM_1MIP:
+	case TGFX_TEXTURE_MIPMAPFILTER_NEAREST_FROM_1MIP: return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	default: vkPrint(49); return VK_SAMPLER_MIPMAP_MODE_MAX_ENUM;
 	}
 }
-inline VkCullModeFlags vk_findCullModeVk(cullmode_tgfx mode)
+inline VkCullModeFlags findCullModeVk(TGfxCullMode mode)
 {
 	switch (mode)
 	{
-	case cullmode_tgfx_OFF: return VK_CULL_MODE_NONE;
-	case cullmode_tgfx_BACK: return VK_CULL_MODE_BACK_BIT;
-	case cullmode_tgfx_FRONT: return VK_CULL_MODE_FRONT_BIT;
+	case TGFX_CULLMODE_OFF: return VK_CULL_MODE_NONE;
+	case TGFX_CULLMODE_BACK: return VK_CULL_MODE_BACK_BIT;
+	case TGFX_CULLMODE_FRONT: return VK_CULL_MODE_FRONT_BIT;
 	default: vkPrint(49); return VK_CULL_MODE_NONE;
 	}
 }
-inline VkPolygonMode vk_findPolygonModeVk(polygonmode_tgfx mode)
+inline VkPolygonMode findPolygonModeVk(TGfxPolygonMode mode)
 {
 	switch (mode)
 	{
-	case polygonmode_tgfx_FILL: return VK_POLYGON_MODE_FILL;
-	case polygonmode_tgfx_LINE: return VK_POLYGON_MODE_LINE;
-	case polygonmode_tgfx_POINT: return VK_POLYGON_MODE_POINT;
+	case TGFX_POLYGONMODE_FILL: return VK_POLYGON_MODE_FILL;
+	case TGFX_POLYGONMODE_LINE: return VK_POLYGON_MODE_LINE;
+	case TGFX_POLYGONMODE_POINT: return VK_POLYGON_MODE_POINT;
 	default: vkPrint(49); return VK_POLYGON_MODE_MAX_ENUM;
 	}
 }
-inline VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(vertexlisttypes_tgfx vertextype)
+inline VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(TGfxVertexListType vertextype)
 {
 	switch (vertextype)
 	{
-	case vertexlisttypes_tgfx_TRIANGLELIST: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	case TGFX_VERTEXLISTTYPE_TRIANGLELIST: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	default: vkPrint(49); return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
 	}
 }
-inline VkLogicOp vk_findLogicOpVk() {}
-inline VkIndexType Find_IndexType_byGFXDATATYPE(datatype_tgfx datatype)
+inline VkLogicOp findLogicOpVk()
+{
+	vkPrint(49);
+	return VK_LOGIC_OP_MAX_ENUM;
+}
+inline VkIndexType Find_IndexType_byGFXDATATYPE(TGfxDataType datatype)
 {
 	switch (datatype)
 	{
-	case datatype_tgfx_VAR_UINT32: return VK_INDEX_TYPE_UINT32;
-	case datatype_tgfx_VAR_UINT16: return VK_INDEX_TYPE_UINT16;
+	case TGFX_DATATYPE_U32: return VK_INDEX_TYPE_UINT32;
+	case TGFX_DATATYPE_U16: return VK_INDEX_TYPE_UINT16;
 	default: vkPrint(49); return VK_INDEX_TYPE_MAX_ENUM;
 	}
 }
-inline VkCompareOp vk_findCompareOpVk(compare_tgfx test)
+inline VkCompareOp findCompareOpVk(TGfxCompare test)
 {
 	switch (test)
 	{
-	case compare_tgfx_NEVER: return VK_COMPARE_OP_NEVER;
-	case compare_tgfx_ALWAYS: return VK_COMPARE_OP_ALWAYS;
-	case compare_tgfx_GEQUAL: return VK_COMPARE_OP_GREATER_OR_EQUAL;
-	case compare_tgfx_GREATER: return VK_COMPARE_OP_GREATER;
-	case compare_tgfx_LEQUAL: return VK_COMPARE_OP_LESS_OR_EQUAL;
-	case compare_tgfx_LESS: return VK_COMPARE_OP_LESS;
+	case TGFX_COMPARE_NEVER: return VK_COMPARE_OP_NEVER;
+	case TGFX_COMPARE_ALWAYS: return VK_COMPARE_OP_ALWAYS;
+	case TGFX_COMPARE_GEQUAL: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+	case TGFX_COMPARE_GREATER: return VK_COMPARE_OP_GREATER;
+	case TGFX_COMPARE_LEQUAL: return VK_COMPARE_OP_LESS_OR_EQUAL;
+	case TGFX_COMPARE_LESS: return VK_COMPARE_OP_LESS;
 	default: vkPrint(49); return VK_COMPARE_OP_MAX_ENUM;
 	}
 }
-inline void Find_DepthMode_byGFXDepthMode(depthmode_tgfx mode, VkBool32& ShouldTest, VkBool32& ShouldWrite)
+inline void Find_DepthMode_byGFXDepthMode(TGfxDepthMode mode, VkBool32& ShouldTest, VkBool32& ShouldWrite)
 {
 	switch (mode)
 	{
-	case depthmode_tgfx_READ_WRITE:
+	case TGFX_DEPTHMODE_READ_WRITE:
 		ShouldTest = VK_TRUE;
 		ShouldWrite = VK_TRUE;
 		break;
-	case depthmode_tgfx_READ_ONLY:
+	case TGFX_DEPTHMODE_READ_ONLY:
 		ShouldTest = VK_TRUE;
 		ShouldWrite = VK_FALSE;
 		break;
-	case depthmode_tgfx_OFF:
+	case TGFX_DEPTHMODE_OFF:
 		ShouldTest = VK_FALSE;
 		ShouldWrite = VK_FALSE;
 		break;
 	default: vkPrint(49); break;
 	}
 }
-inline VkAttachmentLoadOp vk_findLoadTypeVk(rasterpassLoad_tgfx load)
+inline VkAttachmentLoadOp findLoadTypeVk(TGfxRasterPassLoad load)
 {
 	switch (load)
 	{
-	case rasterpassLoad_tgfx_CLEAR: return VK_ATTACHMENT_LOAD_OP_CLEAR;
-	case rasterpassLoad_tgfx_DISCARD: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	case rasterpassLoad_tgfx_LOAD: return VK_ATTACHMENT_LOAD_OP_LOAD;
-	case rasterpassLoad_tgfx_NONE: return VK_ATTACHMENT_LOAD_OP_NONE_EXT;
+	case TGFX_RASTERPASSLOAD_CLEAR: return VK_ATTACHMENT_LOAD_OP_CLEAR;
+	case TGFX_RASTERPASSLOAD_DISCARD: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	case TGFX_RASTERPASSLOAD_LOAD: return VK_ATTACHMENT_LOAD_OP_LOAD;
+	case TGFX_RASTERPASSLOAD_NONE: return VK_ATTACHMENT_LOAD_OP_NONE_EXT;
 	default: vkPrint(49); return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
 	}
 }
-inline VkAttachmentStoreOp vk_findStoreTypeVk(rasterpassStore_tgfx store)
+inline VkAttachmentStoreOp findStoreTypeVk(TGfxRasterPassStore store)
 {
 	switch (store)
 	{
-	case rasterpassStore_tgfx_STORE: return VK_ATTACHMENT_STORE_OP_STORE;
-	case rasterpassStore_tgfx_DISCARD: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	case rasterpassLoad_tgfx_NONE: return VK_ATTACHMENT_STORE_OP_NONE;
+	case TGFX_RASTERPASSSTORE_STORE: return VK_ATTACHMENT_STORE_OP_STORE;
+	case TGFX_RASTERPASSSTORE_DISCARD: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	case TGFX_RASTERPASSSTORE_NONE: return VK_ATTACHMENT_STORE_OP_NONE;
 	default: vkPrint(49); return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
 	}
 }
-inline VkStencilOp vk_findStencilOpVk(stencilop_tgfx op)
+inline VkStencilOp findStencilOpVk(TGfxStencilOp op)
 {
 	switch (op)
 	{
-	case stencilop_tgfx_DONT_CHANGE: return VK_STENCIL_OP_KEEP;
-	case stencilop_tgfx_SET_ZERO: return VK_STENCIL_OP_ZERO;
-	case stencilop_tgfx_CHANGE: return VK_STENCIL_OP_REPLACE;
-	case stencilop_tgfx_CLAMPED_INCREMENT: return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
-	case stencilop_tgfx_WRAPPED_INCREMENT: return VK_STENCIL_OP_INCREMENT_AND_WRAP;
-	case stencilop_tgfx_CLAMPED_DECREMENT: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
-	case stencilop_tgfx_WRAPPED_DECREMENT: return VK_STENCIL_OP_DECREMENT_AND_WRAP;
-	case stencilop_tgfx_BITWISE_INVERT: return VK_STENCIL_OP_INVERT;
+	case TGFX_STENCILOP_DONT_CHANGE: return VK_STENCIL_OP_KEEP;
+	case TGFX_STENCILOP_SET_ZERO: return VK_STENCIL_OP_ZERO;
+	case TGFX_STENCILOP_CHANGE: return VK_STENCIL_OP_REPLACE;
+	case TGFX_STENCILOP_CLAMPED_INCREMENT: return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+	case TGFX_STENCILOP_WRAPPED_INCREMENT: return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+	case TGFX_STENCILOP_CLAMPED_DECREMENT: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+	case TGFX_STENCILOP_WRAPPED_DECREMENT: return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+	case TGFX_STENCILOP_BITWISE_INVERT: return VK_STENCIL_OP_INVERT;
 	default: vkPrint(49); return VK_STENCIL_OP_KEEP;
 	}
 }
-inline VkBlendOp vk_findBlendOpVk(blendmode_tgfx mode)
+inline VkBlendOp findBlendOpVk(TGfxBlendMode mode)
 {
 	switch (mode)
 	{
-	case blendmode_tgfx_ADDITIVE: return VK_BLEND_OP_ADD;
-	case blendmode_tgfx_SUBTRACTIVE: return VK_BLEND_OP_SUBTRACT;
-	case blendmode_tgfx_SUBTRACTIVE_SWAPPED: return VK_BLEND_OP_REVERSE_SUBTRACT;
-	case blendmode_tgfx_MIN: return VK_BLEND_OP_MIN;
-	case blendmode_tgfx_MAX: return VK_BLEND_OP_MAX;
+	case TGFX_BLENDMODE_ADDITIVE: return VK_BLEND_OP_ADD;
+	case TGFX_BLENDMODE_SUBTRACTIVE: return VK_BLEND_OP_SUBTRACT;
+	case TGFX_BLENDMODE_SUBTRACTIVE_SWAPPED: return VK_BLEND_OP_REVERSE_SUBTRACT;
+	case TGFX_BLENDMODE_MIN: return VK_BLEND_OP_MIN;
+	case TGFX_BLENDMODE_MAX: return VK_BLEND_OP_MAX;
 	default: vkPrint(49); return VK_BLEND_OP_MAX_ENUM;
 	}
 }
-inline VkBlendFactor vk_findBlendFactorVk(blendfactor_tgfx factor)
+inline VkBlendFactor findBlendFactorVk(TGfxBlendFactor factor)
 {
 	switch (factor)
 	{
-	case blendfactor_tgfx_ONE: return VK_BLEND_FACTOR_ONE;
-	case blendfactor_tgfx_ZERO: return VK_BLEND_FACTOR_ZERO;
-	case blendfactor_tgfx_SRC_COLOR: return VK_BLEND_FACTOR_SRC_COLOR;
-	case blendfactor_tgfx_SRC_1MINUSCOLOR: return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-	case blendfactor_tgfx_SRC_ALPHA: return VK_BLEND_FACTOR_SRC_ALPHA;
-	case blendfactor_tgfx_SRC_1MINUSALPHA: return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	case blendfactor_tgfx_DST_COLOR: return VK_BLEND_FACTOR_DST_COLOR;
-	case blendfactor_tgfx_DST_1MINUSCOLOR: return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-	case blendfactor_tgfx_DST_ALPHA: return VK_BLEND_FACTOR_DST_ALPHA;
-	case blendfactor_tgfx_DST_1MINUSALPHA: return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-	case blendfactor_tgfx_CONST_COLOR: return VK_BLEND_FACTOR_CONSTANT_COLOR;
-	case blendfactor_tgfx_CONST_1MINUSCOLOR: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
-	case blendfactor_tgfx_CONST_ALPHA: return VK_BLEND_FACTOR_CONSTANT_ALPHA;
-	case blendfactor_tgfx_CONST_1MINUSALPHA: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
+	case TGFX_BLENDFACTOR_ONE: return VK_BLEND_FACTOR_ONE;
+	case TGFX_BLENDFACTOR_ZERO: return VK_BLEND_FACTOR_ZERO;
+	case TGFX_BLENDFACTOR_SRC_COLOR: return VK_BLEND_FACTOR_SRC_COLOR;
+	case TGFX_BLENDFACTOR_SRC_1MINUSCOLOR: return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+	case TGFX_BLENDFACTOR_SRC_ALPHA: return VK_BLEND_FACTOR_SRC_ALPHA;
+	case TGFX_BLENDFACTOR_SRC_1MINUSALPHA: return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	case TGFX_BLENDFACTOR_DST_COLOR: return VK_BLEND_FACTOR_DST_COLOR;
+	case TGFX_BLENDFACTOR_DST_1MINUSCOLOR: return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+	case TGFX_BLENDFACTOR_DST_ALPHA: return VK_BLEND_FACTOR_DST_ALPHA;
+	case TGFX_BLENDFACTOR_DST_1MINUSALPHA: return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+	case TGFX_BLENDFACTOR_CONST_COLOR: return VK_BLEND_FACTOR_CONSTANT_COLOR;
+	case TGFX_BLENDFACTOR_CONST_1MINUSCOLOR: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+	case TGFX_BLENDFACTOR_CONST_ALPHA: return VK_BLEND_FACTOR_CONSTANT_ALPHA;
+	case TGFX_BLENDFACTOR_CONST_1MINUSALPHA: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
 	default: vkPrint(49); return VK_BLEND_FACTOR_MAX_ENUM;
 	}
 }
-inline void Fill_ComponentMapping_byCHANNELs(textureChannels_tgfx channels, VkComponentMapping& mapping)
+inline void Fill_ComponentMapping_byCHANNELs(TGfxTextureChannels channels, VkComponentMapping& mapping)
 {
 	switch (channels)
 	{
-	case texture_channels_tgfx_D32:
-	case texture_channels_tgfx_D24S8:
-	case texture_channels_tgfx_BGRA8UB:
-	case texture_channels_tgfx_BGRA8UNORM:
-	case texture_channels_tgfx_RGBA32F:
-	case texture_channels_tgfx_RGBA32UI:
-	case texture_channels_tgfx_RGBA32I:
-	case texture_channels_tgfx_RGBA8UB:
-	case texture_channels_tgfx_RGBA8B:
+	case TGFX_TEXTURE_CHANNELS_D32:
+	case TGFX_TEXTURE_CHANNELS_D24S8:
+	case TGFX_TEXTURE_CHANNELS_BGRA8UB:
+	case TGFX_TEXTURE_CHANNELS_BGRA8UNORM:
+	case TGFX_TEXTURE_CHANNELS_RGBA32F:
+	case TGFX_TEXTURE_CHANNELS_RGBA32UI:
+	case TGFX_TEXTURE_CHANNELS_RGBA32I:
+	case TGFX_TEXTURE_CHANNELS_RGBA8UB:
+	case TGFX_TEXTURE_CHANNELS_RGBA8B:
 		mapping.r = VK_COMPONENT_SWIZZLE_R;
 		mapping.g = VK_COMPONENT_SWIZZLE_G;
 		mapping.b = VK_COMPONENT_SWIZZLE_B;
 		mapping.a = VK_COMPONENT_SWIZZLE_A;
 		return;
-	case texture_channels_tgfx_RGB32F:
-	case texture_channels_tgfx_RGB32UI:
-	case texture_channels_tgfx_RGB32I:
-	case texture_channels_tgfx_RGB8UB:
-	case texture_channels_tgfx_RGB8B:
+	case TGFX_TEXTURE_CHANNELS_RGB32F:
+	case TGFX_TEXTURE_CHANNELS_RGB32UI:
+	case TGFX_TEXTURE_CHANNELS_RGB32I:
+	case TGFX_TEXTURE_CHANNELS_RGB8UB:
+	case TGFX_TEXTURE_CHANNELS_RGB8B:
 		mapping.r = VK_COMPONENT_SWIZZLE_R;
 		mapping.g = VK_COMPONENT_SWIZZLE_G;
 		mapping.b = VK_COMPONENT_SWIZZLE_B;
 		mapping.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 		return;
-	case texture_channels_tgfx_RA32F:
-	case texture_channels_tgfx_RA32UI:
-	case texture_channels_tgfx_RA32I:
-	case texture_channels_tgfx_RA8UB:
-	case texture_channels_tgfx_RA8B:
+	case TGFX_TEXTURE_CHANNELS_RA32F:
+	case TGFX_TEXTURE_CHANNELS_RA32UI:
+	case TGFX_TEXTURE_CHANNELS_RA32I:
+	case TGFX_TEXTURE_CHANNELS_RA8UB:
+	case TGFX_TEXTURE_CHANNELS_RA8B:
 		mapping.r = VK_COMPONENT_SWIZZLE_R;
 		mapping.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 		mapping.b = VK_COMPONENT_SWIZZLE_IDENTITY;
 		mapping.a = VK_COMPONENT_SWIZZLE_A;
 		return;
-	case texture_channels_tgfx_R32F:
-	case texture_channels_tgfx_R32UI:
-	case texture_channels_tgfx_R32I:
-	case texture_channels_tgfx_R8UB:
-	case texture_channels_tgfx_R8B:
+	case TGFX_TEXTURE_CHANNELS_R32F:
+	case TGFX_TEXTURE_CHANNELS_R32UI:
+	case TGFX_TEXTURE_CHANNELS_R32I:
+	case TGFX_TEXTURE_CHANNELS_R8UB:
+	case TGFX_TEXTURE_CHANNELS_R8B:
 		mapping.r = VK_COMPONENT_SWIZZLE_R;
 		mapping.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 		mapping.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -469,14 +478,14 @@ inline void Fill_ComponentMapping_byCHANNELs(textureChannels_tgfx channels, VkCo
 	default: break;
 	}
 }
-inline void vk_findSubpassAccessPattern(subdrawpassaccess_tgfx access,
-										bool isSource,
-										VkPipelineStageFlags& stageflag,
-										VkAccessFlags& accessflag)
+inline void findSubpassAccessPattern(TGfxSubDrawPassAccess access,
+									 bool isSource,
+									 VkPipelineStageFlags& stageflag,
+									 VkAccessFlags& accessflag)
 {
 	switch (access)
 	{
-	case subdrawpassaccess_tgfx_ALLCOMMANDS:
+	case TGFX_SUBDRAWPASSACCESS_ALLCOMMANDS:
 		if (isSource)
 		{
 			stageflag |= VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -486,108 +495,108 @@ inline void vk_findSubpassAccessPattern(subdrawpassaccess_tgfx access,
 			stageflag |= VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 		}
 		break;
-	case subdrawpassaccess_tgfx_INDEX_READ:
+	case TGFX_SUBDRAWPASSACCESS_INDEX_READ:
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
 		accessflag |= VK_ACCESS_INDEX_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_VERTEXATTRIB_READ:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXATTRIB_READ:
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
 		accessflag |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_VERTEXUBUFFER_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXUBUFFER_READONLY:
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
 		accessflag |= VK_ACCESS_UNIFORM_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_VERTEXSBUFFER_READONLY:
-	case subdrawpassaccess_tgfx_VERTEXSAMPLED_READONLY:
-	case subdrawpassaccess_tgfx_VERTEXIMAGE_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXSBUFFER_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXSAMPLED_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXIMAGE_READONLY:
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_VERTEXSBUFFER_READWRITE:
-	case subdrawpassaccess_tgfx_VERTEXIMAGE_READWRITE:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXSBUFFER_READWRITE:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXIMAGE_READWRITE:
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_VERTEXIMAGE_WRITEONLY:
-	case subdrawpassaccess_tgfx_VERTEXSBUFFER_WRITEONLY:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXIMAGE_WRITEONLY:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXSBUFFER_WRITEONLY:
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_VERTEXINPUTS_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXINPUTS_READONLY:
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_VERTEXINPUTS_READWRITE:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXINPUTS_READWRITE:
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_VERTEXINPUTS_WRITEONLY:
+	case TGFX_SUBDRAWPASSACCESS_VERTEXINPUTS_WRITEONLY:
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_WRITE_BIT;
 		break;
 
-	case subdrawpassaccess_tgfx_EARLY_Z_READ:
+	case TGFX_SUBDRAWPASSACCESS_EARLY_Z_READ:
 		stageflag |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_EARLY_Z_READWRITE:
+	case TGFX_SUBDRAWPASSACCESS_EARLY_Z_READWRITE:
 		stageflag |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_EARLY_Z_WRITEONLY:
+	case TGFX_SUBDRAWPASSACCESS_EARLY_Z_WRITEONLY:
 		stageflag |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_FRAGMENTUBUFFER_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTUBUFFER_READONLY:
 		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		accessflag |= VK_ACCESS_UNIFORM_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_FRAGMENTSBUFFER_READONLY:
-	case subdrawpassaccess_tgfx_FRAGMENTSAMPLED_READONLY:
-	case subdrawpassaccess_tgfx_FRAGMENTIMAGE_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTSBUFFER_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTSAMPLED_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTIMAGE_READONLY:
 		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_FRAGMENTSBUFFER_READWRITE:
-	case subdrawpassaccess_tgfx_FRAGMENTIMAGE_READWRITE:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTSBUFFER_READWRITE:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTIMAGE_READWRITE:
 		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_FRAGMENTIMAGE_WRITEONLY:
-	case subdrawpassaccess_tgfx_FRAGMENTSBUFFER_WRITEONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTIMAGE_WRITEONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTSBUFFER_WRITEONLY:
 		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_FRAGMENTINPUTS_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTINPUTS_READONLY:
 		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_FRAGMENTINPUTS_READWRITE:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTINPUTS_READWRITE:
 		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_FRAGMENTINPUTS_WRITEONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTINPUTS_WRITEONLY:
 		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		accessflag |= VK_ACCESS_SHADER_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_FRAGMENTRT_READONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTRT_READONLY:
 		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		accessflag |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_LATE_Z_READ:
+	case TGFX_SUBDRAWPASSACCESS_LATE_Z_READ:
 		stageflag |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		break;
-	case subdrawpassaccess_tgfx_LATE_Z_READWRITE:
+	case TGFX_SUBDRAWPASSACCESS_LATE_Z_READWRITE:
 		stageflag |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_LATE_Z_WRITEONLY:
+	case TGFX_SUBDRAWPASSACCESS_LATE_Z_WRITEONLY:
 		stageflag |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		break;
-	case subdrawpassaccess_tgfx_FRAGMENTRT_WRITEONLY:
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTRT_WRITEONLY:
 		stageflag |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		accessflag |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 		break;
@@ -599,314 +608,318 @@ inline void vk_findSubpassAccessPattern(subdrawpassaccess_tgfx access,
 	}
 }
 
-inline void vk_findImageAccessPattern(const image_access_tgfx& Access,
-									  VkAccessFlags& TargetAccessFlag,
-									  VkImageLayout& TargetImageLayout)
+inline void findImageAccessPattern(const TGfxImageAccess& Access,
+								   VkAccessFlags& TargetAccessFlag,
+								   VkImageLayout& TargetImageLayout)
 {
 	switch (Access)
 	{
-	case image_access_tgfx_DEPTHSTENCIL_READONLY:
+	case TGFX_IMAGE_ACCESS_DEPTHSTENCIL_READONLY:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTHSTENCIL_READWRITE:
+	case TGFX_IMAGE_ACCESS_DEPTHSTENCIL_READWRITE:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTHSTENCIL_WRITEONLY:
+	case TGFX_IMAGE_ACCESS_DEPTHSTENCIL_WRITEONLY:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTHREADWRITE_STENCILREAD:
+	case TGFX_IMAGE_ACCESS_DEPTHREADWRITE_STENCILREAD:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTHREADWRITE_STENCILWRITE:
+	case TGFX_IMAGE_ACCESS_DEPTHREADWRITE_STENCILWRITE:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTHREAD_STENCILREADWRITE:
+	case TGFX_IMAGE_ACCESS_DEPTHREAD_STENCILREADWRITE:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTHREAD_STENCILWRITE:
+	case TGFX_IMAGE_ACCESS_DEPTHREAD_STENCILWRITE:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTHWRITE_STENCILREAD:
+	case TGFX_IMAGE_ACCESS_DEPTHWRITE_STENCILREAD:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTHWRITE_STENCILREADWRITE:
+	case TGFX_IMAGE_ACCESS_DEPTHWRITE_STENCILREADWRITE:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTH_READONLY:
+	case TGFX_IMAGE_ACCESS_DEPTH_READONLY:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
 		return;
-	case image_access_tgfx_DEPTH_READWRITE:
-	case image_access_tgfx_DEPTH_WRITEONLY:
+	case TGFX_IMAGE_ACCESS_DEPTH_READWRITE:
+	case TGFX_IMAGE_ACCESS_DEPTH_WRITEONLY:
 		TargetAccessFlag = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_NO_ACCESS:
+	case TGFX_IMAGE_ACCESS_NO_ACCESS:
 		TargetAccessFlag = 0;
 		TargetImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		return;
-	case image_access_tgfx_RTCOLOR_READONLY:
+	case TGFX_IMAGE_ACCESS_RTCOLOR_READONLY:
 		TargetAccessFlag = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_RTCOLOR_READWRITE:
+	case TGFX_IMAGE_ACCESS_RTCOLOR_READWRITE:
 		TargetAccessFlag = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_RTCOLOR_WRITEONLY:
+	case TGFX_IMAGE_ACCESS_RTCOLOR_WRITEONLY:
 		TargetAccessFlag = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		return;
-	case image_access_tgfx_SHADER_SAMPLEONLY:
+	case TGFX_IMAGE_ACCESS_SHADER_SAMPLEONLY:
 		TargetAccessFlag = VK_ACCESS_SHADER_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		return;
-	case image_access_tgfx_SHADER_SAMPLEWRITE:
+	case TGFX_IMAGE_ACCESS_SHADER_SAMPLEWRITE:
 		TargetAccessFlag = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_GENERAL;
 		return;
-	case image_access_tgfx_SHADER_WRITEONLY:
+	case TGFX_IMAGE_ACCESS_SHADER_WRITEONLY:
 		TargetAccessFlag = VK_ACCESS_SHADER_WRITE_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_GENERAL;
 		return;
-	case image_access_tgfx_SWAPCHAIN_DISPLAY:
+	case TGFX_IMAGE_ACCESS_SWAPCHAIN_DISPLAY:
 		TargetAccessFlag = 0;
 		TargetImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 		return;
-	case image_access_tgfx_TRANSFER_DIST:
+	case TGFX_IMAGE_ACCESS_TRANSFER_DIST:
 		TargetAccessFlag = VK_ACCESS_TRANSFER_WRITE_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 		return;
-	case image_access_tgfx_TRANSFER_SRC:
+	case TGFX_IMAGE_ACCESS_TRANSFER_SRC:
 		TargetAccessFlag = VK_ACCESS_TRANSFER_READ_BIT;
 		TargetImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 		return;
 	default: vkPrint(49); return;
 	}
 }
-inline VkImageType vk_findImageTypeVk(texture_dimensions_tgfx dimensions)
+inline VkImageType findImageTypeVk(TGfxTextureDimensions dimensions)
 {
 	switch (dimensions)
 	{
-	case texture_dimensions_tgfx_2D:
-	case texture_dimensions_tgfx_2DCUBE: return VK_IMAGE_TYPE_2D;
-	case texture_dimensions_tgfx_3D: return VK_IMAGE_TYPE_3D;
+	case TGFX_TEXTURE_DIMENSIONS_2D:
+	case TGFX_TEXTURE_DIMENSIONS_2DCUBE: return VK_IMAGE_TYPE_2D;
+	case TGFX_TEXTURE_DIMENSIONS_3D: return VK_IMAGE_TYPE_3D;
 	default: vkPrint(49); return VkImageType::VK_IMAGE_TYPE_MAX_ENUM;
 	}
 }
-inline VkImageTiling Find_VkTiling(textureOrder_tgfx order)
+inline VkImageTiling Find_VkTiling(TGfxTextureOrder order)
 {
 	switch (order)
 	{
-	case textureOrder_tgfx_SWIZZLE: return VK_IMAGE_TILING_OPTIMAL;
-	case textureOrder_tgfx_LINEAR: return VK_IMAGE_TILING_LINEAR;
+	case TGFX_TEXTURE_ORDER_SWIZZLE: return VK_IMAGE_TILING_OPTIMAL;
+	case TGFX_TEXTURE_ORDER_LINEAR: return VK_IMAGE_TILING_LINEAR;
 	default: vkPrint(49); return VkImageTiling::VK_IMAGE_TILING_MAX_ENUM;
 	}
 }
-inline unsigned int Find_TextureLayer_fromtgfx_cubeface(cubeface_tgfx cubeface)
+inline unsigned int Find_TextureLayer_fromtgfx_cubeface(TGfxCubeFace cubeface)
 {
 	switch (cubeface)
 	{
-	case cubeface_tgfx_FRONT: return 0;
-	case cubeface_tgfx_BACK: return 1;
-	case cubeface_tgfx_LEFT: return 2;
-	case cubeface_tgfx_RIGHT: return 3;
-	case cubeface_tgfx_TOP: return 4;
-	case cubeface_tgfx_BOTTOM: return 5;
-	default: vkPrint(49);
-	}
-}
-inline unsigned int vk_getDataTypeByteSizes(datatype_tgfx data)
-{
-	switch (data)
-	{
-	case datatype_tgfx_VAR_BYTE8:
-	case datatype_tgfx_VAR_UBYTE8: return 1;
-	case datatype_tgfx_VAR_INT16:
-	case datatype_tgfx_VAR_UINT16: return 2;
-	case datatype_tgfx_VAR_FLOAT32:
-	case datatype_tgfx_VAR_INT32:
-	case datatype_tgfx_VAR_UINT32: return 4;
-	case datatype_tgfx_VAR_VEC2: return 8;
-	case datatype_tgfx_VAR_VEC3: return 12;
-	case datatype_tgfx_VAR_VEC4: return 16;
-	case datatype_tgfx_VAR_MAT4x4: return 64;
-	case datatype_tgfx_UNDEFINED:
+	case TGFX_CUBEFACE_FRONT: return 0;
+	case TGFX_CUBEFACE_BACK: return 1;
+	case TGFX_CUBEFACE_LEFT: return 2;
+	case TGFX_CUBEFACE_RIGHT: return 3;
+	case TGFX_CUBEFACE_TOP: return 4;
+	case TGFX_CUBEFACE_BOTTOM: return 5;
 	default: vkPrint(49); return 0;
 	}
 }
-inline VkPresentModeKHR vk_findPresentModeVk(windowpresentation_tgfx p)
+inline TU4 GetDataTypeSizeInBytes(TGfxDataType data)
+{
+	switch (data)
+	{
+	case TGFX_DATATYPE_I8:
+	case TGFX_DATATYPE_U8: return 1;
+	case TGFX_DATATYPE_I16:
+	case TGFX_DATATYPE_U16: return 2;
+	case TGFX_DATATYPE_F32:
+	case TGFX_DATATYPE_I32:
+	case TGFX_DATATYPE_U32: return 4;
+	case TGFX_DATATYPE_FVEC2: return 8;
+	case TGFX_DATATYPE_FVEC3: return 12;
+	case TGFX_DATATYPE_FVEC4: return 16;
+	case TGFX_DATATYPE_FMAT4x4: return 64;
+	case TGFX_DATATYPE_UNDEFINED:
+	default: vkPrint(49); return 0;
+	}
+}
+inline VkPresentModeKHR findPresentModeVk(TGfxWindowPresentation p)
 {
 	switch (p)
 	{
-	case windowpresentation_tgfx_FIFO: return VK_PRESENT_MODE_FIFO_KHR;
-	case windowpresentation_tgfx_FIFO_RELAXED: return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
-	case windowpresentation_tgfx_IMMEDIATE: return VK_PRESENT_MODE_IMMEDIATE_KHR;
-	case windowpresentation_tgfx_MAILBOX: return VK_PRESENT_MODE_MAILBOX_KHR;
+	case TGFX_WINDOWPRESENTATION_FIFO: return VK_PRESENT_MODE_FIFO_KHR;
+	case TGFX_WINDOWPRESENTATION_FIFO_RELAXED: return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+	case TGFX_WINDOWPRESENTATION_IMMEDIATE: return VK_PRESENT_MODE_IMMEDIATE_KHR;
+	case TGFX_WINDOWPRESENTATION_MAILBOX: return VK_PRESENT_MODE_MAILBOX_KHR;
 	default: vkPrint(49); return VK_PRESENT_MODE_MAX_ENUM_KHR;
 	}
 }
-inline windowpresentation_tgfx vk_findPresentModeTgfx(VkPresentModeKHR p)
+inline TGfxWindowPresentation findPresentModeTgfx(VkPresentModeKHR p)
 {
 	switch (p)
 	{
-	case VK_PRESENT_MODE_FIFO_KHR: return windowpresentation_tgfx_FIFO;
-	case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return windowpresentation_tgfx_FIFO_RELAXED;
-	case VK_PRESENT_MODE_IMMEDIATE_KHR: return windowpresentation_tgfx_IMMEDIATE;
-	case VK_PRESENT_MODE_MAILBOX_KHR: return windowpresentation_tgfx_MAILBOX;
-	default: vkPrint(49); return windowpresentation_tgfx_FIFO;
+	case VK_PRESENT_MODE_FIFO_KHR: return TGFX_WINDOWPRESENTATION_FIFO;
+	case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return TGFX_WINDOWPRESENTATION_FIFO_RELAXED;
+	case VK_PRESENT_MODE_IMMEDIATE_KHR: return TGFX_WINDOWPRESENTATION_IMMEDIATE;
+	case VK_PRESENT_MODE_MAILBOX_KHR: return TGFX_WINDOWPRESENTATION_MAILBOX;
+	default: vkPrint(49); return TGFX_WINDOWPRESENTATION_FIFO;
 	}
 }
-inline VkColorSpaceKHR vk_findColorSpaceVk(colorspace_tgfx cs)
+inline VkColorSpaceKHR findColorSpaceVk(TGfxColorSpace cs)
 {
 	switch (cs)
 	{
-	case colorspace_tgfx_sRGB_NONLINEAR: return VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-	case colorspace_tgfx_HDR10_ST2084: return VK_COLOR_SPACE_HDR10_ST2084_EXT;
-	case colorspace_tgfx_EXTENDED_sRGB_LINEAR: return VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
-	default: vkPrint(49);
+	case TGFX_COLORSPACE_sRGB_NONLINEAR: return VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+	case TGFX_COLORSPACE_HDR10_ST2084: return VK_COLOR_SPACE_HDR10_ST2084_EXT;
+	case TGFX_COLORSPACE_EXTENDED_sRGB_LINEAR: return VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
+	default: vkPrint(49); return VK_COLOR_SPACE_MAX_ENUM_KHR;
 	}
-	return VK_COLOR_SPACE_MAX_ENUM_KHR;
 }
-inline VkColorComponentFlags vk_findColorWriteMask(textureChannels_tgfx chnnls)
+inline VkColorComponentFlags findColorWriteMask(TGfxTextureChannels chnnls)
 {
 	switch (chnnls)
 	{
-	case texture_channels_tgfx_BGRA8UB:
-	case texture_channels_tgfx_BGRA8UNORM:
-	case texture_channels_tgfx_RGBA32F:
-	case texture_channels_tgfx_RGBA32UI:
-	case texture_channels_tgfx_RGBA32I:
-	case texture_channels_tgfx_RGBA8UB:
-	case texture_channels_tgfx_RGBA8B:
+	case TGFX_TEXTURE_CHANNELS_BGRA8UB:
+	case TGFX_TEXTURE_CHANNELS_BGRA8UNORM:
+	case TGFX_TEXTURE_CHANNELS_RGBA32F:
+	case TGFX_TEXTURE_CHANNELS_RGBA32UI:
+	case TGFX_TEXTURE_CHANNELS_RGBA32I:
+	case TGFX_TEXTURE_CHANNELS_RGBA8UB:
+	case TGFX_TEXTURE_CHANNELS_RGBA8B:
 		return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
 			   VK_COLOR_COMPONENT_A_BIT;
-	case texture_channels_tgfx_RGB32F:
-	case texture_channels_tgfx_RGB32UI:
-	case texture_channels_tgfx_RGB32I:
-	case texture_channels_tgfx_RGB8UB:
-	case texture_channels_tgfx_RGB8B:
+	case TGFX_TEXTURE_CHANNELS_RGB32F:
+	case TGFX_TEXTURE_CHANNELS_RGB32UI:
+	case TGFX_TEXTURE_CHANNELS_RGB32I:
+	case TGFX_TEXTURE_CHANNELS_RGB8UB:
+	case TGFX_TEXTURE_CHANNELS_RGB8B:
 		return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
-	case texture_channels_tgfx_RA32F:
-	case texture_channels_tgfx_RA32UI:
-	case texture_channels_tgfx_RA32I:
-	case texture_channels_tgfx_RA8UB:
-	case texture_channels_tgfx_RA8B: return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT;
-	case texture_channels_tgfx_R32F:
-	case texture_channels_tgfx_R32UI:
-	case texture_channels_tgfx_R32I: return VK_COLOR_COMPONENT_R_BIT;
-	case texture_channels_tgfx_R8UB:
-	case texture_channels_tgfx_R8B: return VK_COLOR_COMPONENT_R_BIT;
-	case texture_channels_tgfx_D32:
-	case texture_channels_tgfx_D24S8:
+	case TGFX_TEXTURE_CHANNELS_RA32F:
+	case TGFX_TEXTURE_CHANNELS_RA32UI:
+	case TGFX_TEXTURE_CHANNELS_RA32I:
+	case TGFX_TEXTURE_CHANNELS_RA8UB:
+	case TGFX_TEXTURE_CHANNELS_RA8B: return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT;
+	case TGFX_TEXTURE_CHANNELS_R32F:
+	case TGFX_TEXTURE_CHANNELS_R32UI:
+	case TGFX_TEXTURE_CHANNELS_R32I: return VK_COLOR_COMPONENT_R_BIT;
+	case TGFX_TEXTURE_CHANNELS_R8UB:
+	case TGFX_TEXTURE_CHANNELS_R8B: return VK_COLOR_COMPONENT_R_BIT;
+	case TGFX_TEXTURE_CHANNELS_D32:
+	case TGFX_TEXTURE_CHANNELS_D24S8:
 	default: vkPrint(49); return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
 	}
 }
-inline VkColorComponentFlags vk_findColorComponentsVk(textureComponentMask_tgfx mask, textureChannels_tgfx format)
+inline VkColorComponentFlags findColorComponentsVk(TGfxTextureComponentMask mask, TGfxTextureChannels format)
 {
-	if (mask == textureComponentMask_tgfx_ALL && format != texture_channels_tgfx_UNDEF)
+	if (mask == TGFX_TEXTURECOMPONENTMASK_RGBA && format != TGFX_TEXTURE_CHANNELS_UNDEF)
 	{
-		return vk_findColorWriteMask(format);
+		return findColorWriteMask(format);
 	}
-	if (mask == textureComponentMask_tgfx_NONE)
+	if (mask == (TGfxTextureComponentMask)0)
 	{
 		return 0;
 	}
 	VkColorComponentFlags flag = {};
-	flag |= (mask & textureComponentMask_tgfx_R) ? VK_COLOR_COMPONENT_R_BIT : 0;
-	flag |= (mask & textureComponentMask_tgfx_G) ? VK_COLOR_COMPONENT_G_BIT : 0;
-	flag |= (mask & textureComponentMask_tgfx_B) ? VK_COLOR_COMPONENT_B_BIT : 0;
-	flag |= (mask & textureComponentMask_tgfx_A) ? VK_COLOR_COMPONENT_A_BIT : 0;
+	flag |= (mask & TGFX_TEXTURECOMPONENTMASK_R) ? VK_COLOR_COMPONENT_R_BIT : 0;
+	flag |= (mask & TGFX_TEXTURECOMPONENTMASK_G) ? VK_COLOR_COMPONENT_G_BIT : 0;
+	flag |= (mask & TGFX_TEXTURECOMPONENTMASK_B) ? VK_COLOR_COMPONENT_B_BIT : 0;
+	flag |= (mask & TGFX_TEXTURECOMPONENTMASK_A) ? VK_COLOR_COMPONENT_A_BIT : 0;
 	return flag;
 }
-inline colorspace_tgfx vk_findColorSpaceTgfx(VkColorSpaceKHR cs)
+inline TGfxColorSpace findColorSpaceTgfx(VkColorSpaceKHR cs)
 {
 	switch (cs)
 	{
-	case VK_COLORSPACE_SRGB_NONLINEAR_KHR: return colorspace_tgfx_sRGB_NONLINEAR;
-	case VK_COLOR_SPACE_HDR10_ST2084_EXT: return colorspace_tgfx_HDR10_ST2084;
-	case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT: return colorspace_tgfx_EXTENDED_sRGB_LINEAR;
-	default: vkPrint(49); return (colorspace_tgfx)UINT32_MAX;
+	case VK_COLORSPACE_SRGB_NONLINEAR_KHR: return TGFX_COLORSPACE_sRGB_NONLINEAR;
+	case VK_COLOR_SPACE_HDR10_ST2084_EXT: return TGFX_COLORSPACE_HDR10_ST2084;
+	case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT: return TGFX_COLORSPACE_EXTENDED_sRGB_LINEAR;
+	default: vkPrint(49); return (TGfxColorSpace)UINT32_MAX;
 	}
 }
-inline VkShaderStageFlags vk_findShaderStageVk(shaderStage_tgfxflag mask)
+inline TGfxShaderStage findShaderStageFromMask(unsigned int mask)
 {
-	VkShaderStageFlags flag = {};
-	flag |= (mask & shaderStage_tgfx_VERTEXSHADER) ? VK_SHADER_STAGE_VERTEX_BIT : 0;
-	flag |= (mask & shaderStage_tgfx_FRAGMENTSHADER) ? VK_SHADER_STAGE_FRAGMENT_BIT : 0;
-	flag |= (mask & shaderStage_tgfx_COMPUTESHADER) ? VK_SHADER_STAGE_COMPUTE_BIT : 0;
+	TGfxShaderStage flag = (TGfxShaderStage)0;
+	flag = (TGfxShaderStage)((mask & TGFX_SHADERSTAGE_VERTEXSHADER) ? TGFX_SHADERSTAGE_VERTEXSHADER : 0);
+	flag =
+		(TGfxShaderStage)((mask & TGFX_SHADERSTAGE_FRAGMENTSHADER) ? (flag | TGFX_SHADERSTAGE_FRAGMENTSHADER) : flag);
+	flag = (TGfxShaderStage)((mask & TGFX_SHADERSTAGE_COMPUTESHADER) ? (flag | TGFX_SHADERSTAGE_COMPUTESHADER) : flag);
 	return flag;
 }
-inline gpu_type_tgfx vk_findGPUTypeTgfx(VkPhysicalDeviceType t)
+inline TGfxGpuType findGPUTypeTgfx(VkPhysicalDeviceType t)
 {
 	switch (t)
 	{
-	case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return gpu_type_tgfx_DISCRETE_GPU;
-	case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return gpu_type_tgfx_INTEGRATED_GPU;
-	default: return (gpu_type_tgfx)UINT32_MAX;
+	case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+		return (TGfxGpuType)0; // replace with actual TGfxGpuType enum if available
+	case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return (TGfxGpuType)1; // replace with actual enum values
+	default: return (TGfxGpuType)UINT32_MAX;
 	}
 }
-inline VkPipelineBindPoint vk_findPipelineBindPoint(pipelineType_tgfx type)
+inline VkPipelineBindPoint findPipelineBindPoint(TGfxPipelineType type)
 {
 	switch (type)
 	{
-	case pipelineType_tgfx_COMPUTE: return VK_PIPELINE_BIND_POINT_COMPUTE;
-	case pipelineType_tgfx_RASTER: return VK_PIPELINE_BIND_POINT_GRAPHICS;
-	case pipelineType_tgfx_RAYTRACING: return VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR;
+	case TGFX_PIPELINETYPE_COMPUTE: return VK_PIPELINE_BIND_POINT_COMPUTE;
+	case TGFX_PIPELINETYPE_RASTER: return VK_PIPELINE_BIND_POINT_GRAPHICS;
+	case TGFX_PIPELINETYPE_RAYTRACING: return VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR;
 	default: vkPrint(49); return VK_PIPELINE_BIND_POINT_MAX_ENUM;
 	}
 }
-inline VkBufferUsageFlags vk_findBufferUsageFlagVk(bufferUsageMask_tgfxflag mask)
+inline VkBufferUsageFlags findBufferUsageFlagVk(unsigned int mask)
 {
 	VkBufferUsageFlags flag = {};
-	flag |= (mask & bufferUsageMask_tgfx_COPYFROM) ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0;
-	flag |= (mask & bufferUsageMask_tgfx_COPYTO) ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0;
-	flag |= (mask & bufferUsageMask_tgfx_INDEXBUFFER) ? VK_BUFFER_USAGE_INDEX_BUFFER_BIT : 0;
-	flag |= (mask & bufferUsageMask_tgfx_INDIRECTBUFFER) ? VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT : 0;
-	flag |= (mask & bufferUsageMask_tgfx_STORAGEBUFFER) ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : 0;
-	flag |= (mask & bufferUsageMask_tgfx_UNIFORMBUFFER) ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT : 0;
-	flag |= (mask & bufferUsageMask_tgfx_VERTEXBUFFER) ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : 0;
+	// The TGfx buffer usage mask constants should be mapped here; placeholder mapping:
+	// flag |= (mask & TGFX_BUFFERUSAGE_COPYFROM) ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0;
+	// flag |= (mask & TGFX_BUFFERUSAGE_COPYTO) ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0;
+	// flag |= (mask & TGFX_BUFFERUSAGE_INDEXBUFFER) ? VK_BUFFER_USAGE_INDEX_BUFFER_BIT : 0;
+	// flag |= (mask & TGFX_BUFFERUSAGE_INDIRECTBUFFER) ? VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT : 0;
+	// flag |= (mask & TGFX_BUFFERUSAGE_STORAGEBUFFER) ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : 0;
+	// flag |= (mask & TGFX_BUFFERUSAGE_UNIFORMBUFFER) ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT : 0;
+	// flag |= (mask & TGFX_BUFFERUSAGE_VERTEXBUFFER) ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : 0;
 	return flag;
 }
-inline VkImageUsageFlags vk_findTextureUsageFlagVk(textureUsageMask_tgfxflag mask)
+inline VkImageUsageFlags findTextureUsageFlagVk(unsigned int mask)
 {
 	VkImageUsageFlags flag = {};
-	flag |= (mask & textureUsageMask_tgfx_COPYFROM) ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0;
-	flag |= (mask & textureUsageMask_tgfx_COPYTO) ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0;
-	flag |= (mask & textureUsageMask_tgfx_RANDOMACCESS) ? VK_IMAGE_USAGE_STORAGE_BIT : 0;
-	flag |= (mask & textureUsageMask_tgfx_RASTERSAMPLE) ? VK_IMAGE_USAGE_SAMPLED_BIT : 0;
-	flag |= (mask & textureUsageMask_tgfx_RENDERATTACHMENT)
-				? (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
-				: 0;
+	// Placeholder mapping; replace TGFX_TEXTUREUSAGE_* masks with actual constants when available
+	// flag |= (mask & TGFX_TEXTUREUSAGE_COPYFROM) ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0;
+	// flag |= (mask & TGFX_TEXTUREUSAGE_COPYTO) ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0;
+	// flag |= (mask & TGFX_TEXTUREUSAGE_RANDOMACCESS) ? VK_IMAGE_USAGE_STORAGE_BIT : 0;
+	// flag |= (mask & TGFX_TEXTUREUSAGE_RASTERSAMPLE) ? VK_IMAGE_USAGE_SAMPLED_BIT : 0;
+	// flag |= (mask & TGFX_TEXTUREUSAGE_RENDERATTACHMENT) ? (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+	// VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) : 0;
 	return flag;
 }
-inline textureUsageMask_tgfxflag vk_findTextureUsageFlagTgfx(VkImageUsageFlags mask)
+inline unsigned int findTextureUsageFlagTgfx(VkImageUsageFlags mask)
 {
-	textureUsageMask_tgfxflag flag = {};
-	flag |= (mask & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) ? textureUsageMask_tgfx_COPYFROM : 0;
-	flag |= (mask & VK_IMAGE_USAGE_TRANSFER_DST_BIT) ? textureUsageMask_tgfx_COPYTO : 0;
-	flag |= (mask & VK_IMAGE_USAGE_STORAGE_BIT) ? textureUsageMask_tgfx_RANDOMACCESS : 0;
-	flag |= (mask & VK_IMAGE_USAGE_SAMPLED_BIT) ? textureUsageMask_tgfx_RASTERSAMPLE : 0;
-	flag |= (mask & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))
-				? textureUsageMask_tgfx_RENDERATTACHMENT
-				: 0;
+	unsigned int flag = 0;
+	// Placeholder mapping back to TGfx texture usage mask
+	// flag |= (mask & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) ? TGFX_TEXTUREUSAGE_COPYFROM : 0;
+	// flag |= (mask & VK_IMAGE_USAGE_TRANSFER_DST_BIT) ? TGFX_TEXTUREUSAGE_COPYTO : 0;
+	// flag |= (mask & VK_IMAGE_USAGE_STORAGE_BIT) ? TGFX_TEXTUREUSAGE_RANDOMACCESS : 0;
+	// flag |= (mask & VK_IMAGE_USAGE_SAMPLED_BIT) ? TGFX_TEXTUREUSAGE_RASTERSAMPLE : 0;
+	// flag |= (mask & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)) ?
+	// TGFX_TEXTUREUSAGE_RENDERATTACHMENT : 0;
 	return flag;
 }
-inline VkVertexInputRate vk_findVertexInputRateVk(vertexBindingInputRate_tgfx rate)
+inline VkVertexInputRate findVertexInputRateVk(TGfxVertexBindingInputRate rate)
 {
 	switch (rate)
 	{
-	case vertexBindingInputRate_tgfx_VERTEX: return VK_VERTEX_INPUT_RATE_VERTEX;
-	case vertexBindingInputRate_tgfx_INSTANCE: return VK_VERTEX_INPUT_RATE_INSTANCE;
+	case TGFX_VERTEXBINDINGINPUTRATE_VERTEX: return VK_VERTEX_INPUT_RATE_VERTEX;
+	case TGFX_VERTEXBINDINGINPUTRATE_INSTANCE: return VK_VERTEX_INPUT_RATE_INSTANCE;
 	default: vkPrint(49); return VK_VERTEX_INPUT_RATE_MAX_ENUM;
 	}
 }
+} // namespace Vulkan
+} // namespace TGFX

@@ -1,3 +1,6 @@
 [submodule "External/dynalo"]
 	path = External/dynalo
 	url = https://github.com/maddouri/dynalo.git
+[submodule "External/volk"]
+	path = External/volk
+	url = https://github.com/zeux/volk

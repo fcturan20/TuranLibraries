@@ -12,10 +12,10 @@ TCORE_DEFINE_HANDLE(TCSuperBlock);
 
 typedef struct ITCBuffer
 {
-	TCSuperBlockHnd (*CreateSuperBlock)(TSize block_size, const char* name);
-	void (*DestroySuperBlock)(TCSuperBlockHnd super_mem_block);
+	TCSuperBlock (*CreateSuperBlock)(TU8 block_size, const char* name);
+	void (*DestroySuperBlock)(TCSuperBlock super_mem_block);
 
-	void* (*Malloc)(TCSuperBlockHnd memory_block, TSize size, const char* name);
+	void* (*Malloc)(TCSuperBlock memory_block, TU8 size, const char* name);
 	// @param allocationPtr: This should be the same pointer as returned by malloc()
 	void (*Free)(void* allocationPtr);
 } ITCBuffer;
@@ -30,15 +30,15 @@ typedef struct ITCVector
 	// @param initialSize: Elements to push at initialization
 	// @param maxSize: Define an upper limit for element count
 	// @return Array pointer, so cast it to your own type
-	TCVectorHnd (*Create)(TCSuperBlockHnd memory_block, TUint element_size, TSize initial_size, TSize max_size);
-	TSize (*Size)(const TCVectorHnd vector);
-	TSize (*Capacity)(const TCVectorHnd vector);
+	TCVector (*Create)(TCSuperBlock memory_block, TU4 element_size, TU8 initial_size, TU8 max_size);
+	TU8 (*Size)(const TCVector vector);
+	TU8 (*Capacity)(const TCVector vector);
 	// @param src: Source data to copy from
 	// @param copyFunc: Used to copy the element
-	TCResult (*PushBack)(TCVectorHnd vector, const void* src);
+	TCResult (*PushBack)(TCVector vector, const void* src);
 	// @return 0 if there is no such object, 1 if succeeds
-	TCResult (*Erase)(TCVectorHnd vector, TSize element_index);
-	void (*Destroy)(TCVectorHnd vector);
+	TCResult (*Erase)(TCVector vector, TU8 element_index);
+	void (*Destroy)(TCVector vector);
 } ITCVector;
 
 typedef struct ITCAllocator
@@ -68,16 +68,14 @@ namespace TCore
 {
 
 // Use macros at the end of the header
-extern TCSuperBlockHnd GSuperMemoryBlock;
+extern TCSuperBlock GSuperMemoryBlock;
 
 // Write a C++ wrapper for the vector allocator
 template <typename T, bool EnableTrivialCopy = std::is_trivially_copyable<T>::value>
 class Vector
 {
 public:
-	Vector(TCSuperBlockHnd mem_block = GSuperMemoryBlock,
-		   unsigned int initial_size = 0,
-		   unsigned int initial_capacity = 0)
+	Vector(TCSuperBlock mem_block = GSuperMemoryBlock, unsigned int initial_size = 0, unsigned int initial_capacity = 0)
 	{
 		Handle = TCVectorManager->Create(mem_block, sizeof(T), initial_size, initial_capacity);
 		if constexpr (!EnableTrivialCopy)
@@ -89,7 +87,7 @@ public:
 	{
 		Handle = TCVectorManager->Create(GSuperMemoryBlock, sizeof(T), other.Size(), other.Capacity());
 		if constexpr (!EnableTrivialCopy)
-			for (TSize i = 0; i < other.Size(); i++)
+			for (TU8 i = 0; i < other.Size(); i++)
 				new ((*this)[i]) T(other[i]);
 	}
 
@@ -97,7 +95,7 @@ public:
 	void PushBack(const T& item)
 	{
 		Resize(Size() + 1);
-		if (TCVectorManager->PushBack(Handle, &item) != TC_RESULT_SUCCESS)
+		if (TCVectorManager->PushBack(Handle, &item) != TC_RESULTSTATE_SUCCESS)
 		{
 			printf("Vector push back failed!\n");
 			return;
@@ -106,12 +104,12 @@ public:
 		if constexpr (!EnableTrivialCopy)
 			new ((*this)[Size() - 1]) T(item);
 	}
-	TSize Size() const { return TCVectorManager->Size(Handle); }
-	TSize Capacity() const { return TCVectorManager->Capacity(Handle); }
+	TU8 Size() const { return TCVectorManager->Size(Handle); }
+	TU8 Capacity() const { return TCVectorManager->Capacity(Handle); }
 	T* Data() { return reinterpret_cast<T*>(Handle); }
-	T& operator[](TSize index) { return reinterpret_cast<T*>(Handle)[index]; }
-	const T& operator[](TSize index) const { return reinterpret_cast<const T*>(Handle)[index]; }
-	void Resize(TSize new_size)
+	T& operator[](TU8 index) { return reinterpret_cast<T*>(Handle)[index]; }
+	const T& operator[](TU8 index) const { return reinterpret_cast<const T*>(Handle)[index]; }
+	void Resize(TU8 new_size)
 	{
 		auto capacity = TCVectorManager->Capacity(Handle);
 		auto size = TCVectorManager->Size(Handle);
@@ -121,7 +119,7 @@ public:
 			auto newHnd = TCVectorManager->Create(GSuperMemoryBlock, sizeof(T), new_size, new_size);
 
 			if constexpr (!EnableTrivialCopy)
-				for (TSize i = 0; i < size; i++)
+				for (TU8 i = 0; i < size; i++)
 					new ((*newHnd)[i]) T((*this)[i]);
 			else
 				std::memcpy(newHnd, Handle, sizeof(T) * size);
@@ -132,29 +130,29 @@ public:
 		else if (capacity > new_size && new_size > size)
 		{
 			auto diff = new_size - size;
-			for (TSize i = 0; i < diff; i++)
+			for (TU8 i = 0; i < diff; i++)
 				PushBack(T());
 		}
 		else
 		{
 			if constexpr (!EnableTrivialCopy)
-				for (TSize i = new_size; i < size; i++)
+				for (TU8 i = new_size; i < size; i++)
 					(*this)[i].~T();
 			else
 				std::memset((this) + new_size, 0, sizeof(T) * (new_size - size));
 		}
 	}
-	void Erase(TSize index) { TCVectorManager->Erase(Handle, index); }
+	void Erase(TU8 index) { TCVectorManager->Erase(Handle, index); }
 	T* Begin() { return Data(); }
 	T* End() { return Data() + Size() - 1; }
 
 private:
-	TCVectorHnd Handle;
+	TCVector Handle;
 };
 
 } // namespace TCore
 
-#define TCORE_PLUGIN_MEMORY_BLOCK_INIT() TCSuperBlockHnd TCore::GSuperMemoryBlock = nullptr;
+#define TCORE_PLUGIN_MEMORY_BLOCK_INIT() TCSuperBlock TCore::GSuperMemoryBlock = nullptr;
 // Call this inside the entry point
 #define TCORE_PLUGIN_RESERVE_ADDRESS_SPACE(size)                                                                       \
 	TCore::GSuperMemoryBlock = TCStdAllocator->CreateSuperBlock(size, TCORE_ACTIVE_PLUGIN_NAME)

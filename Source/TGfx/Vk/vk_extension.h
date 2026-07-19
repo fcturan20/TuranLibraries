@@ -1,22 +1,16 @@
 #pragma once
-#include <float.h>
-
-#include <vector>
-
 #include "vk_predefinitions.h"
 
-struct vkext_interface;
-extern vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_EXTS;
-struct extManager_vkDevice
+namespace TGFX
+{
+namespace Vulkan
+{
+struct ExtensionManager
 {
 	GPU_VKOBJ* m_GPU;
-	vkext_interface** m_exts;
+	IVkExt** m_exts;
 	const char** m_activeDevExtNames;
 	uint32_t m_devExtCount = 0;
-
-private:
-	// Swapchain
-	bool SwapchainDisplay = false;
 
 public:
 	static void createExtManager(GPU_VKOBJ* gpu);
@@ -31,29 +25,28 @@ public:
 // Create a header for the extension you want to support
 // Struct that stores device data (props, features etc) should be derived from this interface
 // Then add an enum to vkext_types, then add it to m_exts list in extManager_vkDevice
-struct vkext_interface
+struct IVkExt
 {
 	// Extension structures should contain this as their first variable to identify which extension
 	// the struct belongs to.
 	// Then as a second variable, struct can store struct's type.
 	// vkext_interface's store this to idenfity their extensions
-	enum vkext_types : uint16_t
+	enum Types : uint16_t
 	{
-		depthStencil_vkExtEnum,
-		descIndexing_vkExtEnum,
-		timelineSemaphores_vkExtEnum,
-		dynamicRendering_vkExtEnum,
-		dynamicStates_vkExtEnum,
-		vkext_count
+		DepthStencilExtension,
+		DescriptorIndexingExtension,
+		TimelineSemaphoresExtension,
+		DynamicRenderingExtension,
+		DynamicStatesExtension,
+		InvalidExtension
 	};
 
-	vkext_interface(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct);
-	virtual void inspect() = 0;
+	IVkExt(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct);
+	virtual void Inspect() = 0;
 	// If functionality is TGFX Extension, then handle it in this function
-	virtual void manage(VkStructureType structType,
-						void* structPtr,
-						unsigned int extCount,
-						struct tgfx_extension* const* exts) = 0;
-	vkext_types m_type = vkext_count; // Derived classes should change this
-	GPU_VKOBJ* m_gpu = nullptr;
+	virtual void Manage(VkStructureType structType, void* structPtr, unsigned int extCount, TGfxExtension* exts) = 0;
+	Types Type = InvalidExtension; // Derived classes should change this
+	GPU_VKOBJ* GPU = nullptr;
 };
+} // namespace Vulkan
+} // namespace TGFX

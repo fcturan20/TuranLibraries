@@ -88,9 +88,9 @@ public:
 		{
 			item = Data[tail];
 			tail = (tail + 1) % 256;
-			return TC_RESULT_SUCCESS;
+			return {TC_RESULTSTATE_SUCCESS, 0};
 		}
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 	void pop_front_strong(std::function<TCThreadFunc>& item)
 	{
@@ -109,7 +109,7 @@ struct TCThread
 	TBool IsRunning = TTRUE;
 	TBool IsJoined = TFALSE;
 
-	TCThreadHnd GetHnd() { return (TCThreadHnd)this; }
+	TCThread GetHnd() { return (TCThread)this; }
 	TBool IsJoinable() { return !IsRunning && !IsJoined; }
 	void Join()
 	{
@@ -123,10 +123,10 @@ struct TCThread
 struct TCThreadingContext* GContext = nullptr;
 struct TCThreadingContext
 {
-	std::map<std::thread::id, TCThreadHnd> ThreadHandles;
+	std::map<std::thread::id, TCThread> ThreadHandles;
 	std::atomic<TBool> ShouldClose;
 
-	TCThread* GetThread(TCThreadHnd hnd) { return (TCThread*)hnd; }
+	TCThread* GetThread(TCThread hnd) { return (TCThread*)hnd; }
 
 	static void Initialize()
 	{
@@ -134,7 +134,7 @@ struct TCThreadingContext
 		GContext->ShouldClose.store(false);
 	}
 
-	static TCThreadHnd Create(TCThreadFunc func, TCBuffer thread_data, const char* thread_name)
+	static TCThread Create(TCThreadFunc func, TCBuffer thread_data, const char* thread_name)
 	{
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 		std::wstring wideString = converter.from_bytes(thread_name);
@@ -153,16 +153,16 @@ struct TCThreadingContext
 		return thread->GetHnd();
 	}
 
-	static TCResult Join(TCThreadHnd thread)
+	static TCResult Join(TCThread thread)
 	{
 		auto t = GContext->GetThread(thread);
 		t->Join();
-		return TC_RESULT_SUCCESS;
+		return {TC_RESULTSTATE_SUCCESS, 0};
 	}
 
-	static void Sleep(TSize milliseconds) { ::Sleep(milliseconds); }
+	static void Sleep(TU8 milliseconds) { ::Sleep(milliseconds); }
 
-	static TCThreadHnd GetCurrentThread() { return GContext->ThreadHandles[std::this_thread::get_id()]; }
+	static TCThread GetCurrentThread() { return GContext->ThreadHandles[std::this_thread::get_id()]; }
 };
 
 struct TCJobContext* JobContext = nullptr;
@@ -174,7 +174,7 @@ public:
 	static void ConsumeJobsFromCurrentThread() {}
 	// Checks hardware capabilities and creates a thread in job consume loop for each core
 	static void ConsumeFromAllCores(TBool except_this_thread) {}
-	static void DispatchTask(TCThreadFunc job, TUint dispatch_size) {}
+	static void DispatchTask(TCThreadFunc job, TU4 dispatch_size) {}
 	// Waits till there is no more jobs to dispatch and all threads in the system are idle
 	static void WaitIdle()
 	{
@@ -191,7 +191,7 @@ struct TCTaskContext
 public:
 	struct TCTaskedThread
 	{
-		TCThreadHnd Thread;
+		TCThread Thread;
 		TSJobifiedRingBuffer Jobs;
 		TBool ShouldClose;
 		TBool ForceClose;
@@ -199,9 +199,9 @@ public:
 	Vector<TCTaskedThread> Threads;
 
 	// Add checks here
-	TCTaskedThread* GetThreadFromHnd(TCThreadHnd hnd) { return (TCTaskedThread*)hnd; }
+	TCTaskedThread* GetThreadFromHnd(TCThread hnd) { return (TCTaskedThread*)hnd; }
 
-	static TCThreadHnd CreateTaskedThread(const char* thread_name)
+	static TCThread CreateTaskedThread(const char* thread_name)
 	{
 		auto thread = new TCTaskedThread;
 		auto threadLoop = [](TCBuffer buffer) -> TCResult {
@@ -220,13 +220,13 @@ public:
 		auto hnd = TCThreadingContext::Create(threadLoop, {.Data = thread, .Size = sizeof(thread)}, thread_name);
 	}
 
-	static void EnqueueTask(TCThreadHnd thread, TCThreadFunc task, TCBuffer data)
+	static void EnqueueTask(TCThread thread, TCThreadFunc task, TCBuffer data)
 	{
 		auto t = TaskContext->GetThreadFromHnd(thread);
 		t->Jobs.push_back_strong()
 	}
 
-	static void StopTaskedThread(TCThreadHnd thread, TBool wait_all_tasks_to_end)
+	static void StopTaskedThread(TCThread thread, TBool wait_all_tasks_to_end)
 	{
 		auto t = TaskContext->GetThreadFromHnd(thread);
 		if (!wait_all_tasks_to_end)
@@ -262,7 +262,7 @@ TCResult TCThreading_Initialize(const void** outPluginAPI)
 
 	TCThreading = services;
 	*outPluginAPI = TCThreading;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void TCThreading_OnPluginLoadStateChange(const TCPluginInfo* info, TBool is_loaded) {}
@@ -271,7 +271,7 @@ TCResult TCThreading_OnPreShutdown() {}
 
 TCResult TCThreading_Shutdown()
 {
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void EndUsageOfTheApi() {}

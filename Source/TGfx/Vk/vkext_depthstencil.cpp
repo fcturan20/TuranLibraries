@@ -8,80 +8,80 @@
 Fill_DepthAttachmentDescriptionFnc fillDepthAttachDesc = nullptr;
 Fill_DepthAttachmentReferenceFnc fillDepthAttachRef = nullptr;
 
-// Seperated Depth Stencil Layouts
+// Separated Depth Stencil Layouts
 void Fill_DepthAttachmentReference_SeperatedDSLayouts(VkAttachmentReference& Ref,
 													  unsigned int index,
-													  textureChannels_tgfx channels,
-													  operationtype_tgfx DEPTHOPTYPE,
-													  operationtype_tgfx STENCILOPTYPE)
+													  TGfxTextureChannels channels,
+													  TGfxOperationType DEPTHOPTYPE,
+													  TGfxOperationType STENCILOPTYPE)
 {
 	Ref.attachment = index;
-	if (channels == texture_channels_tgfx_D32)
+	if (channels == TGFX_TEXTURE_CHANNELS_D32)
 	{
 		switch (DEPTHOPTYPE)
 		{
-		case operationtype_tgfx_READ_ONLY: Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-		case operationtype_tgfx_READ_AND_WRITE:
-		case operationtype_tgfx_WRITE_ONLY: Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL; break;
-		case operationtype_tgfx_UNUSED:
+		case TGFX_OPERATIONTYPE_READ_ONLY: Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL; break;
+		case TGFX_OPERATIONTYPE_READ_AND_WRITE:
+		case TGFX_OPERATIONTYPE_WRITE_ONLY: Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL; break;
+		case TGFX_OPERATIONTYPE_UNUSED:
 			Ref.attachment = VK_ATTACHMENT_UNUSED;
 			Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
 			break;
-		default: vkPrint(58);
+		default: vkPrint(58); break;
 		}
 	}
-	else if (channels == texture_channels_tgfx_D24S8)
+	else if (channels == TGFX_TEXTURE_CHANNELS_D24S8)
 	{
 		switch (STENCILOPTYPE)
 		{
-		case operationtype_tgfx_READ_ONLY:
-			if (DEPTHOPTYPE == operationtype_tgfx_UNUSED || DEPTHOPTYPE == operationtype_tgfx_READ_ONLY)
+		case TGFX_OPERATIONTYPE_READ_ONLY:
+			if (DEPTHOPTYPE == TGFX_OPERATIONTYPE_UNUSED || DEPTHOPTYPE == TGFX_OPERATIONTYPE_READ_ONLY)
 			{
 				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 			}
-			else if (DEPTHOPTYPE == operationtype_tgfx_READ_AND_WRITE || DEPTHOPTYPE == operationtype_tgfx_WRITE_ONLY)
+			else if (DEPTHOPTYPE == TGFX_OPERATIONTYPE_READ_AND_WRITE || DEPTHOPTYPE == TGFX_OPERATIONTYPE_WRITE_ONLY)
 			{
 				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
 			}
 			break;
-		case operationtype_tgfx_READ_AND_WRITE:
-		case operationtype_tgfx_WRITE_ONLY:
-			if (DEPTHOPTYPE == operationtype_tgfx_UNUSED || DEPTHOPTYPE == operationtype_tgfx_READ_ONLY)
+		case TGFX_OPERATIONTYPE_READ_AND_WRITE:
+		case TGFX_OPERATIONTYPE_WRITE_ONLY:
+			if (DEPTHOPTYPE == TGFX_OPERATIONTYPE_UNUSED || DEPTHOPTYPE == TGFX_OPERATIONTYPE_READ_ONLY)
 			{
 				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
 			}
-			else if (DEPTHOPTYPE == operationtype_tgfx_READ_AND_WRITE || DEPTHOPTYPE == operationtype_tgfx_WRITE_ONLY)
+			else if (DEPTHOPTYPE == TGFX_OPERATIONTYPE_READ_AND_WRITE || DEPTHOPTYPE == TGFX_OPERATIONTYPE_WRITE_ONLY)
 			{
 				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			}
 			break;
-		case operationtype_tgfx_UNUSED:
-			if (DEPTHOPTYPE == operationtype_tgfx_UNUSED)
+		case TGFX_OPERATIONTYPE_UNUSED:
+			if (DEPTHOPTYPE == TGFX_OPERATIONTYPE_UNUSED)
 			{
 				Ref.attachment = VK_ATTACHMENT_UNUSED;
 				Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
 			}
-			else if (DEPTHOPTYPE == operationtype_tgfx_READ_AND_WRITE || DEPTHOPTYPE == operationtype_tgfx_WRITE_ONLY)
+			else if (DEPTHOPTYPE == TGFX_OPERATIONTYPE_READ_AND_WRITE || DEPTHOPTYPE == TGFX_OPERATIONTYPE_WRITE_ONLY)
 			{
 				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
 			}
-			else if (DEPTHOPTYPE == operationtype_tgfx_READ_ONLY)
+			else if (DEPTHOPTYPE == TGFX_OPERATIONTYPE_READ_ONLY)
 			{
 				Ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 			}
 			break;
-		default: vkPrint(58);
+		default: vkPrint(58); break;
 		}
 	}
 }
 void Fill_DepthAttachmentReference_NOSeperated(VkAttachmentReference& Ref,
 											   unsigned int index,
-											   textureChannels_tgfx channels,
-											   operationtype_tgfx DEPTHOPTYPE,
-											   operationtype_tgfx STENCILOPTYPE)
+											   TGfxTextureChannels channels,
+											   TGfxOperationType DEPTHOPTYPE,
+											   TGfxOperationType STENCILOPTYPE)
 {
 	Ref.attachment = index;
-	if (DEPTHOPTYPE == operationtype_tgfx_UNUSED)
+	if (DEPTHOPTYPE == TGFX_OPERATIONTYPE_UNUSED)
 	{
 		Ref.attachment = VK_ATTACHMENT_UNUSED;
 		Ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -109,9 +109,9 @@ void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription&
 		Desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		Desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	}
-	if (DepthSlot->RT->m_channels == texture_channels_tgfx_D32)
+	if (DepthSlot->RT->m_channels == TGFX_TEXTURE_CHANNELS_D32)
 	{
-		if (DepthSlot->DEPTH_OPTYPE == operationtype_tgfx_READ_ONLY)
+		if (DepthSlot->DEPTH_OPTYPE == TGFX_OPERATIONTYPE_READ_ONLY)
 		{
 			Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
 			Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
@@ -122,34 +122,34 @@ void Fill_DepthAttachmentDescription_SeperatedDSLayouts(VkAttachmentDescription&
 			Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 		}
 	}
-	else if (DepthSlot->RT->m_channels == texture_channels_tgfx_D24S8)
+	else if (DepthSlot->RT->m_channels == TGFX_TEXTURE_CHANNELS_D24S8)
 	{
-		if (DepthSlot->DEPTH_OPTYPE == operationtype_tgfx_READ_ONLY)
+		if (DepthSlot->DEPTH_OPTYPE == TGFX_OPERATIONTYPE_READ_ONLY)
 		{
-			if (DepthSlot->STENCIL_OPTYPE != operationtype_tgfx_READ_ONLY &&
-				DepthSlot->STENCIL_OPTYPE != operationtype_tgfx_UNUSED)
+			if (DepthSlot->STENCIL_OPTYPE != TGFX_OPERATIONTYPE_READ_ONLY &&
+				DepthSlot->STENCIL_OPTYPE != TGFX_OPERATIONTYPE_UNUSED)
 			{
 				Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
 				Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
 			}
 			else
 			{
-				Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-				Desc.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+				Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+				Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 			}
 		}
 		else
 		{
-			if (DepthSlot->STENCIL_OPTYPE != operationtype_tgfx_READ_ONLY &&
-				DepthSlot->STENCIL_OPTYPE != operationtype_tgfx_UNUSED)
+			if (DepthSlot->STENCIL_OPTYPE != TGFX_OPERATIONTYPE_READ_ONLY &&
+				DepthSlot->STENCIL_OPTYPE != TGFX_OPERATIONTYPE_UNUSED)
 			{
-				Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-				Desc.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+				Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+				Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			}
 			else
 			{
-				Desc.finalLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-				Desc.initialLayout = VkImageLayout::VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
+				Desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
+				Desc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
 			}
 		}
 	}
@@ -193,16 +193,13 @@ void vkext_depthStencil::inspect()
 		fillDepthAttachDesc = Fill_DepthAttachmentDescription_NOSeperated;
 		fillDepthAttachRef = Fill_DepthAttachmentReference_NOSeperated;
 
-		vkPrint(56, m_gpu->desc.name);
+		vkPrint(56, m_gpu->desc.Name);
 	}
 	if (!m_gpu->vk_featuresDev.features.depthBounds)
 	{
-		vkPrint(57, m_gpu->desc.name);
+		vkPrint(57, m_gpu->desc.Name);
 	}
 }
-void vkext_depthStencil::manage(VkStructureType structType,
-								void* structPtr,
-								unsigned int extCount,
-								struct tgfx_extension* const* exts)
+void vkext_depthStencil::manage(VkStructureType structType, void* structPtr, unsigned int extCount, TGfxExtension* exts)
 {
 }

@@ -18,7 +18,8 @@ typedef enum TCLogLevel
 	TC_LOG_LEVEL_WARNING,
 	TC_LOG_LEVEL_ERROR,
 	TC_LOG_LEVEL_NOT_CODED,
-	TC_LOG_LEVEL_CRASHING
+	TC_LOG_LEVEL_CRASHING,
+	TC_LOG_LEVEL_ALL
 } TCLogLevel;
 
 typedef struct ITCLog
@@ -45,7 +46,7 @@ namespace TCore
 class tl
 {
 public:
-	tl(TCLogLevel level, const char* owner) : Level(level)
+	tl(TCLogLevel level, const char* owner = TCORE_ACTIVE_PLUGIN_NAME) : Level(level)
 	{
 		TCORE_SOFT_CHECK(TCLog,
 						 "Log system is not initialized. Please call "
@@ -74,5 +75,10 @@ public:
 	TCore::String Details;
 	bool IsStartedDetailing = false;
 };
+
+class td
+{
+};
+
 } // namespace TCore
 #endif

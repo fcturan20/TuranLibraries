@@ -1,7 +1,5 @@
 #include <atomic>
 #include <glm/glm.hpp>
-#include <string_tapi.h>
-#include <tgfx_forwarddeclarations.h>
 
 #include "vk_core.h"
 #include "vk_includes.h"
@@ -14,30 +12,28 @@
 #include "vkext_dynamicStates.h"
 #include "vkext_dynamic_rendering.h"
 #include "vkext_timelineSemaphore.h"
-vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_EXTS = nullptr;
 
-vkext_interface::vkext_interface(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct)
+namespace TGFX
+{
+namespace Vulkan
+{
+
+IVkExt::IVkExt(GPU_VKOBJ* gpu, void* propsStruct, void* featuresStruct)
 {
 	m_gpu = gpu;
 	if (propsStruct)
 	{
-		pNext_addToLast(&gpu->vk_propsDev, propsStruct);
+		Append_pNext(&gpu->vk_propsDev, propsStruct);
 	}
 	if (featuresStruct)
 	{
-		pNext_addToLast(&gpu->vk_featuresDev, featuresStruct);
+		Append_pNext(&gpu->vk_featuresDev, featuresStruct);
 	}
 }
 
-void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu)
+void ExtensionManager::createExtManager(GPU_VKOBJ* gpu)
 {
-	if (!VKGLOBAL_VIRMEM_EXTS)
-	{
-		// 4MB is fine i guess?
-		VKGLOBAL_VIRMEM_EXTS = vk_virmem::allocate_dynamicmem(1 << 20);
-	}
-
-	extManager_vkDevice* mngr = new (VKGLOBAL_VIRMEM_EXTS) extManager_vkDevice;
+	ExtensionManager* mngr = new (VKGLOBAL_VIRMEM_EXTS) ExtensionManager;
 	mngr->m_exts = new (VKGLOBAL_VIRMEM_EXTS) vkext_interface*[vkext_interface::vkext_count];
 	mngr->m_GPU = gpu;
 
@@ -46,17 +42,16 @@ void extManager_vkDevice::createExtManager(GPU_VKOBJ* gpu)
 	gpu->vk_propsDev.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
 	gpu->vk_propsDev.pNext = nullptr;
 
-	mngr->m_exts[vkext_interface::depthStencil_vkExtEnum] = new (VKGLOBAL_VIRMEM_EXTS) vkext_depthStencil(gpu);
-	mngr->m_exts[vkext_interface::descIndexing_vkExtEnum] = new (VKGLOBAL_VIRMEM_EXTS) vkext_descIndexing(gpu);
-	mngr->m_exts[vkext_interface::timelineSemaphores_vkExtEnum] =
-		new (VKGLOBAL_VIRMEM_EXTS) vkext_timelineSemaphore(gpu);
-	mngr->m_exts[vkext_interface::dynamicRendering_vkExtEnum] = new (VKGLOBAL_VIRMEM_EXTS) vkext_dynamicRendering(gpu);
-	mngr->m_exts[vkext_interface::dynamicStates_vkExtEnum] = new (VKGLOBAL_VIRMEM_EXTS) vkext_dynamicStates(gpu);
+	mngr->m_exts[IVkExt::DepthStencilExtension] = new (VKGLOBAL_VIRMEM_EXTS) vkext_depthStencil(gpu);
+	mngr->m_exts[IVkExt::DescriptorIndexingExtension] = new (VKGLOBAL_VIRMEM_EXTS) vkext_descIndexing(gpu);
+	mngr->m_exts[IVkExt::TimelineSemaphoresExtension] = new (VKGLOBAL_VIRMEM_EXTS) vkext_timelineSemaphore(gpu);
+	mngr->m_exts[IVkExt::DynamicRenderingExtension] = new (VKGLOBAL_VIRMEM_EXTS) vkext_dynamicRendering(gpu);
+	mngr->m_exts[IVkExt::DynamicStatesExtension] = new (VKGLOBAL_VIRMEM_EXTS) VkExtDynamicStates(gpu);
 
 	gpu->ext() = mngr;
 }
 
-void extManager_vkDevice::inspect()
+void ExtensionManager::inspect()
 {
 	uint32_t extCount = 0;
 	vkEnumerateDeviceExtensionProperties(m_GPU->vk_physical, nullptr, &extCount, nullptr);
@@ -67,7 +62,7 @@ void extManager_vkDevice::inspect()
 	VkPhysicalDeviceSubgroupProperties subgroupProps;
 	subgroupProps.pNext = nullptr;
 	subgroupProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
-	pNext_addToLast(&m_GPU->vk_propsDev, &subgroupProps);
+	Append_pNext(&m_GPU->vk_propsDev, &subgroupProps);
 
 	vkGetPhysicalDeviceFeatures2(m_GPU->vk_physical, &m_GPU->vk_featuresDev);
 	vkGetPhysicalDeviceProperties2(m_GPU->vk_physical, &m_GPU->vk_propsDev);
@@ -94,7 +89,7 @@ void extManager_vkDevice::inspect()
 	m_activeDevExtNames[m_devExtCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 	m_activeDevExtNames[m_devExtCount++] = VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME;
 }
-const char** extManager_vkDevice::getEnabledExtensionNames(uint32_t* count)
+const char** ExtensionManager::getEnabledExtensionNames(uint32_t* count)
 {
 	*count = m_devExtCount;
 	for (uint32_t i = 0; i < *count; i++)
@@ -103,3 +98,6 @@ const char** extManager_vkDevice::getEnabledExtensionNames(uint32_t* count)
 	}
 	return m_activeDevExtNames;
 }
+
+} // namespace Vulkan
+} // namespace TGFX

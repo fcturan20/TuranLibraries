@@ -7,16 +7,16 @@ typedef struct ITCVirtualMemory
 {
 	// Reserve address space from virtual memory
 	// size is in bytes
-	void* (*Reserve)(TSize size);
+	void* (*Reserve)(TU8 size);
 	// Initialize the reserved memory with zeros.
-	void (*Commit)(void* reservedmem, TSize commitsize);
+	void (*Commit)(void* reservedmem, TU8 commitsize);
 	// Return back the committed memory to reserved state
 	// This will help if you want to catch some bugs that points to memory you just freed.
-	void (*Decommit)(void* committedmem, TSize size);
+	void (*Decommit)(void* committedmem, TU8 size);
 	// Return allocated address space back to OS
-	void (*Free)(void* ptr, TSize size);
+	void (*Free)(void* ptr, TU8 size);
 	// Get page size of the system
-	TUint (*GetPageSize)();
+	TU4 (*GetPageSize)();
 } ITCVirtualMemory;
 
 TCORE_END_C_LINKAGE

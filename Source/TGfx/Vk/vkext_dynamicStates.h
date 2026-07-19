@@ -4,14 +4,19 @@
 #include "vk_extension.h"
 #include "vk_predefinitions.h"
 
-struct vkext_dynamicStates : public vkext_interface
+namespace TGFX
 {
-	vkext_dynamicStates(GPU_VKOBJ* gpu);
-	virtual void inspect() override;
-	virtual void manage(VkStructureType structType,
+namespace Vulkan
+{
+
+struct VkExtDynamicStates : public IVkExt
+{
+	VkExtDynamicStates(GPU_VKOBJ* gpu);
+	virtual void Inspect() override;
+	virtual void Manage(VkStructureType structType,
 						void* structPtr,
 						unsigned int extCount,
-						struct tgfx_extension* const* exts) override;
+						TGfxExtension* exts) override;
 	VkPhysicalDeviceExtendedDynamicStateFeaturesEXT features1;
 	VkPhysicalDeviceExtendedDynamicState2FeaturesEXT features2;
 	VkPhysicalDeviceExtendedDynamicState3FeaturesEXT features3;
@@ -20,28 +25,11 @@ struct vkext_dynamicStates : public vkext_interface
 };
 
 // These are TGFX CORE functionalities, so func pointers are here
-typedef struct tgfx_rasterPipelineDescription tgfx_rasterPipelineDescription;
-typedef void (*vk_fillRasterPipelineStateInfoFnc)(GPU_VKOBJ* gpu,
-												  VkGraphicsPipelineCreateInfo* ci,
-												  const tgfx_rasterPipelineDescription* desc,
-												  unsigned int extCount,
-												  struct tgfx_extension* const* exts);
-extern vk_fillRasterPipelineStateInfoFnc vk_fillRasterPipelineStateInfo;
+typedef void (*FillRasterPipelineStateInfoPFN)(GPU_VKOBJ* gpu,
+											   VkGraphicsPipelineCreateInfo* ci,
+											   const TGfxRasterPipelineDescription* desc,
+											   TGfxExtension* exts);
+extern FillRasterPipelineStateInfoPFN FillRasterPipelineStateInfo;
 
-// vk_EXT_extended_dynamic_state
-declareVkExtFunc(vkCmdSetCullModeEXT);
-declareVkExtFunc(vkCmdSetDepthCompareOpEXT);
-declareVkExtFunc(vkCmdSetDepthBoundsTestEnableEXT);
-declareVkExtFunc(vkCmdSetDepthTestEnableEXT);
-declareVkExtFunc(vkCmdSetDepthWriteEnableEXT);
-
-// vk_EXT_extended_dynamic_state_2
-declareVkExtFunc(vkCmdSetDepthBiasEnableEXT);
-
-// vk_EXT_extended_dynamic_state_3
-declareVkExtFunc(vkCmdSetDepthClampEnableEXT);
-declareVkExtFunc(vkCmdSetDepthClipEnableEXT);
-declareVkExtFunc(vkCmdSetColorWriteEnableEXT);
-declareVkExtFunc(vkCmdSetPrimitiveTopologyEXT);
-declareVkExtFunc(vkCmdSetStencilOpEXT);
-declareVkExtFunc(vkCmdSetStencilTestEnableEXT);
+} // namespace Vulkan
+} // namespace TGFX

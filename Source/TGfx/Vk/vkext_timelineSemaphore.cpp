@@ -19,7 +19,7 @@ vkext_timelineSemaphore::vkext_timelineSemaphore(GPU_VKOBJ* gpu) : vkext_interfa
 	features.pNext = nullptr;
 }
 
-struct tgfx_fence* vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue)
+TGfxFence vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue)
 {
 	vkext_timelineSemaphore* ext =
 		(vkext_timelineSemaphore*)gpu->ext()->m_exts[vkext_interface::timelineSemaphores_vkExtEnum];
@@ -43,14 +43,14 @@ struct tgfx_fence* vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue)
 	fence->vk_timelineSemaphore = sem;
 	fence->m_curValue = initValue;
 	fence->m_gpuIndx = gpu->gpuIndx();
-	return getHANDLE<struct tgfx_fence*>(fence);
+	return getHANDLE<TGfxFence>(fence);
 }
 
 #define findGPUfromFence(i_fence)                                                                                      \
 	FENCE_VKOBJ* fence = getOBJ<FENCE_VKOBJ>(i_fence);                                                                 \
 	GPU_VKOBJ* gpu = core_vk->getGPU(fence->m_gpuIndx)
 
-result_tgfx vk_getFenceValue(struct tgfx_fence* i_fence, unsigned long long* value)
+TCResult GetFenceValue(TGfxFence i_fence, unsigned long long* value)
 {
 	findGPUfromFence(i_fence);
 
@@ -60,9 +60,9 @@ result_tgfx vk_getFenceValue(struct tgfx_fence* i_fence, unsigned long long* val
 	{
 		return vkPrint(34, L"at vkGetSemaphoreCounterValueKHR()");
 	}
-	return result_tgfx_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
-result_tgfx vk_setFenceValue(struct tgfx_fence* i_fence, unsigned long long value)
+TCResult SetFence(TGfxFence i_fence, unsigned long long value)
 {
 	findGPUfromFence(i_fence);
 	getTimelineSemaphoreEXT(gpu, ext);
@@ -76,7 +76,7 @@ result_tgfx vk_setFenceValue(struct tgfx_fence* i_fence, unsigned long long valu
 	{
 		return vkPrint(22);
 	}
-	return result_tgfx_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void vkext_timelineSemaphore::inspect()
@@ -96,7 +96,7 @@ void vkext_timelineSemaphore::inspect()
 void vkext_timelineSemaphore::manage(VkStructureType structType,
 									 void* structPtr,
 									 unsigned int extCount,
-									 struct tgfx_extension* const* exts)
+									 TGfxExtension* exts)
 {
 	switch (structType)
 	{

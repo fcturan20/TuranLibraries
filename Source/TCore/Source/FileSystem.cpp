@@ -1,3 +1,4 @@
+#define TCORE_USE_CPP_WRAPPER
 #include "FileSystem.h"
 
 #include <filesystem>
@@ -24,7 +25,7 @@ struct TCFileSystemContext* GContext = nullptr;
 struct TCFileSystemContext
 {
 	static void Initialize() { GContext = new TCFileSystemContext; }
-	static void* ReadBinaryFile(const char* path, unsigned long* size)
+	static void* ReadBinaryFile(const char* path, TU8* size)
 	{
 		std::ifstream binaryFile;
 		binaryFile.open(path, std::ios::binary | std::ios::in | std::ios::ate);
@@ -44,7 +45,7 @@ struct TCFileSystemContext
 		return read_data;
 	}
 
-	static void OverwriteBinaryFile(const char* path, void* data, unsigned long datasize)
+	static void OverwriteBinaryFile(const char* path, void* data, TU8 datasize)
 	{
 		// ios::trunc is used to clear the file before outputting the data!
 		std::ofstream outputFile;
@@ -64,7 +65,7 @@ struct TCFileSystemContext
 		printf("File output is successful\n");
 	}
 
-	static void* ReadTextFile(const char* path, unsigned long* size)
+	static void* ReadTextFile(const char* path, TU8* size)
 	{
 		std::ifstream cTextFile;
 		cTextFile.open(path);
@@ -87,7 +88,8 @@ struct TCFileSystemContext
 			i++;
 		}
 		finaltext[i] = '\0';
-		*size = i;
+		if (size)
+			*size = i;
 		return finaltext;
 	}
 
@@ -120,16 +122,16 @@ void RegisterUnitTests()
 		desc.Name = "ReadBinaryFile";
 		desc.GlobalCategoryName = "FileSystem";
 		desc.Test = [](TCReadBuffer) -> TCResult {
-			unsigned long size = 0;
+			TU8 size = 0;
 			auto currentPath = std::filesystem::current_path();
 			void* data = TCFileSystemContext::ReadBinaryFile("test.bin", &size);
 			if (!data)
 			{
-				return TC_RESULT_FAILURE;
+				return {TC_RESULTSTATE_FAILURE, 0};
 			}
 			printf("ReadBinaryFile test passed, size: %lu\n", size);
 			delete[] static_cast<char*>(data);
-			return TC_RESULT_SUCCESS;
+			return {TC_RESULTSTATE_SUCCESS, 0};
 		};
 		TCUnitTest->RegisterTest(&desc);
 	}
@@ -149,17 +151,17 @@ TCResult TCFileSystem_Initialize(const void** outPluginAPI)
 
 	const TCPluginInfo* unitTestInfo{};
 	if (TC->GetPlugin(TCUnitTest_PLUGIN_NAME, TCUnitTest_PLUGIN_VERSION, &unitTestInfo, (const void**)&TCUnitTest) ==
-		TC_RESULT_SUCCESS)
+		TC_RESULTSTATE_SUCCESS)
 		TCore::FileSystem::RegisterUnitTests();
 
 	TCFileSystem = services;
 	*outPluginAPI = TCFileSystem;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCFileSystem_OnPreShutdown()
 {
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCFileSystem_Shutdown()
@@ -169,7 +171,7 @@ TCResult TCFileSystem_Shutdown()
 		delete TCFileSystem;
 		TCFileSystem = nullptr;
 	}
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void TCFileSystem_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded)

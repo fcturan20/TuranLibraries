@@ -28,11 +28,11 @@ namespace TCore
 namespace Allocator
 {
 
-static constexpr TSize kMaxBlockName = 230; // You should use null terminator
+static constexpr TU8 kMaxBlockName = 230; // You should use null terminator
 
 // These can be gathered after reload too
-static TSize GPageSizeBitCount = 0;
-static TSize GHandleConstantSuffix = 0;
+static TU8 GPageSizeBitCount = 0;
+static TU8 GHandleConstantSuffix = 0;
 
 void BindVectorAndAllocatorServices(ITCAllocator* allocator);
 struct TCAllocatorContext* GContext = nullptr;
@@ -44,7 +44,7 @@ struct TCAllocatorContext
 	static void Initialize();
 };
 
-static inline TSize PagesToBytes(TSize pageCount)
+static inline TU8 PagesToBytes(TU8 pageCount)
 {
 	return pageCount << GPageSizeBitCount;
 }
@@ -59,13 +59,13 @@ struct SuperBlock
 
 	char Name[kMaxBlockName + 1];
 	bool IsFreed = true;
-	TSize PageCount;
+	TU8 PageCount;
 	const ITCBuffer* Allocator = nullptr;
 
 	// Validate if this super block is valid
-	static bool IsValid(TCSuperBlockHnd hnd)
+	static bool IsValid(TCSuperBlock hnd)
 	{
-		TSize handleSuffix = uintptr_t(hnd) << (64 - GPageSizeBitCount);
+		TU8 handleSuffix = uintptr_t(hnd) << (64 - GPageSizeBitCount);
 		if (handleSuffix != GHandleConstantSuffix)
 			return false;
 		auto block = reinterpret_cast<SuperBlock*>(uintptr_t(hnd) - handleSuffix);
@@ -82,15 +82,15 @@ struct SuperBlock
 		return true;
 	}
 
-	TCSuperBlockHnd GetHnd()
+	TCSuperBlock GetHnd()
 	{
 		TCORE_SOFT_CHECK(IsValid(), "Invalid super block");
-		TSize address = uintptr_t(this);
+		TU8 address = uintptr_t(this);
 		address += GHandleConstantSuffix;
-		return (TCSuperBlockHnd)address;
+		return (TCSuperBlock)address;
 	}
 
-	static SuperBlock* GetFromHnd(TCSuperBlockHnd hnd)
+	static SuperBlock* GetFromHnd(TCSuperBlock hnd)
 	{
 		TCORE_SOFT_CHECK(IsValid(hnd), "Invalid super block handle");
 		auto block = reinterpret_cast<SuperBlock*>(uintptr_t(hnd) - GHandleConstantSuffix);
@@ -98,7 +98,7 @@ struct SuperBlock
 	}
 
 	template <bool UseContext>
-	static TCSuperBlockHnd Create(TSize block_size, const char* name, const ITCBuffer* allocator)
+	static TCSuperBlock Create(TU8 block_size, const char* name, const ITCBuffer* allocator)
 	{
 		// Search for a freed super memory block
 		uint32_t namelen = std::min(strlen(name), kMaxBlockName);
@@ -120,13 +120,13 @@ struct SuperBlock
 				super->IsFreed = false;
 				memcpy(super->Name, name, namelen * sizeof(char));
 				super->Allocator = allocator;
-				return (TCSuperBlockHnd)super;
+				return (TCSuperBlock)super;
 			}
 		}
 
 		// There is no available super memory block, so allocate new one
-		TSize roundedSize = block_size + (PagesToBytes(1) - (block_size % PagesToBytes(1)));
-		TSize blockSize = roundedSize + PagesToBytes(1); // One extra page for super memory block struct
+		TU8 roundedSize = block_size + (PagesToBytes(1) - (block_size % PagesToBytes(1)));
+		TU8 blockSize = roundedSize + PagesToBytes(1); // One extra page for super memory block struct
 		SuperBlock* block = (SuperBlock*)TCVirtualMemory->Reserve(blockSize);
 		if (!block)
 		{
@@ -159,13 +159,13 @@ void TCAllocatorContext::Initialize()
 	BindVectorAndAllocatorServices(services);
 	TCAllocator = services;
 
-	TSize pageSizeBytes = TCVirtualMemory->GetPageSize();
+	TU8 pageSizeBytes = TCVirtualMemory->GetPageSize();
 	GPageSizeBitCount = 0;
-	while ((TSize(1) << GPageSizeBitCount) < pageSizeBytes)
+	while ((TU8(1) << GPageSizeBitCount) < pageSizeBytes)
 		++GPageSizeBitCount;
-	TCORE_SOFT_CHECK((TSize(1) << GPageSizeBitCount) == pageSizeBytes, "Page size is not a power of two");
+	TCORE_SOFT_CHECK((TU8(1) << GPageSizeBitCount) == pageSizeBytes, "Page size is not a power of two");
 
-	static constexpr TSize kInitialAllocatorSize = 1ull << 20ull;
+	static constexpr TU8 kInitialAllocatorSize = 1ull << 20ull;
 	auto reservedMemory = TCVirtualMemory->Reserve(kInitialAllocatorSize);
 	TCVirtualMemory->Commit(reservedMemory, PagesToBytes(1));
 	TCore::GSuperMemoryBlock =
@@ -176,7 +176,7 @@ void TCAllocatorContext::Initialize()
 
 struct MemoryBlock
 {
-	TSize Size;
+	TU8 Size;
 	bool IsFree;
 	SuperBlock* ParentSuperBlock;
 	char Name[kMaxBlockName];
@@ -197,21 +197,21 @@ struct MemoryBlock
 // Mostly for debug purposes
 struct EndOfPageAllocatorServices
 {
-	static TCSuperBlockHnd CreateSuperBlock(TSize blockSize, const char* superMemBlockName)
+	static TCSuperBlock CreateSuperBlock(TU8 blockSize, const char* superMemBlockName)
 	{
 		return SuperBlock::Create<true>(blockSize, superMemBlockName, TCEopAllocator);
 	}
-	static void DestroySuperBlock(TCSuperBlockHnd super_memory_block)
+	static void DestroySuperBlock(TCSuperBlock super_memory_block)
 	{
 		auto super = SuperBlock::GetFromHnd(super_memory_block);
 		TCORE_SOFT_CHECK(super, "Super block handle invalid");
 		return super->Destroy();
 	}
 
-	inline static TSize CalculateFinalAllocSize(TSize requestedAllocSize)
+	inline static TU8 CalculateFinalAllocSize(TU8 requestedAllocSize)
 	{
-		TSize roundedUpSize = requestedAllocSize + (PagesToBytes(1) - (requestedAllocSize % PagesToBytes(1)));
-		TSize totalAlloc = PagesToBytes(3) + roundedUpSize;
+		TU8 roundedUpSize = requestedAllocSize + (PagesToBytes(1) - (requestedAllocSize % PagesToBytes(1)));
+		TU8 totalAlloc = PagesToBytes(3) + roundedUpSize;
 		return totalAlloc;
 	}
 	inline static MemoryBlock* FindNextBlock(MemoryBlock* block)
@@ -227,7 +227,7 @@ struct EndOfPageAllocatorServices
 		TCORE_SOFT_CHECK(block->ParentSuperBlock->Allocator == TCEopAllocator, "Allocator mismatch");
 		return block;
 	}
-	static void* Malloc(TCSuperBlockHnd super_block, TSize size, const char* name)
+	static void* Malloc(TCSuperBlock super_block, TU8 size, const char* name)
 	{
 		auto totalAlloc = CalculateFinalAllocSize(size);
 
@@ -256,7 +256,7 @@ struct EndOfPageAllocatorServices
 			foundMemBlock->Size = size;
 		}
 		foundMemBlock->IsFree = false;
-		TUint nameLen = std::min(std::strlen(name), kMaxBlockName);
+		TU4 nameLen = std::min(std::strlen(name), kMaxBlockName);
 		std::memcpy(foundMemBlock->Name, name, nameLen);
 
 		TCVirtualMemory->Commit(foundMemBlock->Ptr, size);
@@ -279,11 +279,11 @@ struct EndOfPageAllocatorServices
 // Pretty standard allocator, just allocates the sizeof(MemoryBlock) + requested size
 struct StandardAllocatorServices
 {
-	static TCSuperBlockHnd CreateSuperBlock(TSize blockSize, const char* superMemBlockName)
+	static TCSuperBlock CreateSuperBlock(TU8 blockSize, const char* superMemBlockName)
 	{
 		return SuperBlock::Create<true>(blockSize, superMemBlockName, TCStdAllocator);
 	}
-	static void DestroySuperBlock(TCSuperBlockHnd super_memory_block)
+	static void DestroySuperBlock(TCSuperBlock super_memory_block)
 	{
 		auto super = SuperBlock::GetFromHnd(super_memory_block);
 		TCORE_SOFT_CHECK(super, "Super block handle invalid");
@@ -301,9 +301,9 @@ struct StandardAllocatorServices
 		TCORE_SOFT_CHECK(memBlock->ParentSuperBlock->Allocator == TCStdAllocator, "Allocator mismatch");
 		return memBlock;
 	}
-	static void* Malloc(TCSuperBlockHnd super_block, TSize size, const char* name)
+	static void* Malloc(TCSuperBlock super_block, TU8 size, const char* name)
 	{
-		const TSize requiredAllocSize = size + sizeof(MemoryBlock);
+		const TU8 requiredAllocSize = size + sizeof(MemoryBlock);
 		auto superBlock = SuperBlock::GetFromHnd(super_block);
 
 		MemoryBlock* foundMemBlock = nullptr;
@@ -329,7 +329,7 @@ struct StandardAllocatorServices
 			foundMemBlock->Size = size;
 		}
 		foundMemBlock->IsFree = false;
-		TUint nameLen = std::min(std::strlen(name), kMaxBlockName);
+		TU4 nameLen = std::min(std::strlen(name), kMaxBlockName);
 		std::memcpy(foundMemBlock->Name, name, nameLen);
 
 		TCVirtualMemory->Commit(foundMemBlock->Ptr, size);
@@ -349,26 +349,26 @@ struct StandardAllocatorServices
 
 struct Vector
 {
-	TUint ElementSize = 0;
-	TSize Count = 0;
-	TSize Capacity = 0;
-	TSize AllocationSize = 0;
+	TU4 ElementSize = 0;
+	TU8 Count = 0;
+	TU8 Capacity = 0;
+	TU8 AllocationSize = 0;
 	SuperBlock* ParentSuperBlock = nullptr;
 	void* Data() { return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(this) + sizeof(Vector)); }
 };
 struct VectorServices
 {
 #define GetVector(data) reinterpret_cast<Vector*>(reinterpret_cast<uintptr_t>(data) - sizeof(Vector))
-	static void DestroyElements(void* data, TSize destroyCount)
+	static void DestroyElements(void* data, TU8 destroyCount)
 	{
 		Vector* hnd = GetVector(data);
 		if (!hnd || destroyCount == 0)
 			return;
 
-		const TSize byteCount = hnd->ElementSize * destroyCount;
+		const TU8 byteCount = hnd->ElementSize * destroyCount;
 		memset(reinterpret_cast<unsigned char*>(data) + (hnd->ElementSize * (hnd->Count - destroyCount)), 0, byteCount);
 	}
-	static void AddElements(void* data, TSize elementCount)
+	static void AddElements(void* data, TU8 elementCount)
 	{
 		Vector* hnd = GetVector(data);
 		if (!hnd || elementCount == 0)
@@ -379,14 +379,14 @@ struct VectorServices
 								elementCount * hnd->ElementSize);
 		hnd->Count += elementCount;
 	}
-	static TCVectorHnd Create(TCSuperBlockHnd super_block, TUint element_size, TSize initial_size, TSize max_size)
+	static TCVector Create(TCSuperBlock super_block, TU4 element_size, TU8 initial_size, TU8 max_size)
 	{
 		auto superBlock = SuperBlock::GetFromHnd(super_block);
 		if (!superBlock)
 			return nullptr;
 
-		const TSize capacity = std::max<TSize>(initial_size, max_size ? max_size : 1);
-		const TSize reserveSize = std::max<TSize>(sizeof(Vector) + (element_size * capacity), PagesToBytes(1));
+		const TU8 capacity = std::max<TU8>(initial_size, max_size ? max_size : 1);
+		const TU8 reserveSize = std::max<TU8>(sizeof(Vector) + (element_size * capacity), PagesToBytes(1));
 		Vector* vector =
 			reinterpret_cast<Vector*>(superBlock->Allocator->Malloc(superBlock->GetHnd(), reserveSize, "Vector"));
 		if (!vector)
@@ -398,47 +398,47 @@ struct VectorServices
 		vector->Capacity = capacity;
 		vector->AllocationSize = reserveSize;
 		vector->ParentSuperBlock = superBlock;
-		return reinterpret_cast<TCVectorHnd>(vector->Data());
+		return reinterpret_cast<TCVector>(vector->Data());
 	}
-	static TSize Size(const TCVectorHnd data)
+	static TU8 Size(const TCVector data)
 	{
 		Vector* hnd = GetVector(data);
 		return hnd ? hnd->Count : 0;
 	}
-	static TSize Capacity(const TCVectorHnd data)
+	static TU8 Capacity(const TCVector data)
 	{
 		Vector* hnd = GetVector(data);
 		return hnd ? hnd->Capacity : 0;
 	}
-	static TCResult PushBack(TCVectorHnd data, const void* src)
+	static TCResult PushBack(TCVector data, const void* src)
 	{
 		Vector* hnd = GetVector(data);
 		if (!hnd)
-			return TC_RESULT_INVALID_ARGUMENT;
+			return {TC_RESULTSTATE_INVALID_ARGUMENT, 0};
 		if (hnd->Count >= hnd->Capacity)
-			return TC_RESULT_OUT_OF_MEMORY;
+			return {TC_RESULTSTATE_OUT_OF_MEMORY, 0};
 
 		void* dstElement = reinterpret_cast<unsigned char*>(hnd->Data()) + (hnd->ElementSize * hnd->Count);
 		TCVirtualMemory->Commit(dstElement, hnd->ElementSize);
 		if (src)
 			memcpy(dstElement, src, hnd->ElementSize);
 		hnd->Count++;
-		return TC_RESULT_SUCCESS;
+		return {TC_RESULTSTATE_SUCCESS, 0};
 	}
-	static TCResult Erase(TCVectorHnd data, TSize elementIndex)
+	static TCResult Erase(TCVector data, TU8 elementIndex)
 	{
 		Vector* hnd = GetVector(data);
 		if (!hnd || elementIndex >= hnd->Count)
-			return TC_RESULT_INVALID_ARGUMENT;
+			return {TC_RESULTSTATE_INVALID_ARGUMENT, 0};
 
 		memmove(reinterpret_cast<unsigned char*>(hnd->Data()) + (hnd->ElementSize * elementIndex),
 				reinterpret_cast<unsigned char*>(hnd->Data()) + (hnd->ElementSize * (elementIndex + 1)),
 				hnd->ElementSize * (hnd->Count - elementIndex - 1));
 
 		hnd->Count--;
-		return TC_RESULT_SUCCESS;
+		return {TC_RESULTSTATE_SUCCESS, 0};
 	}
-	static void Destroy(TCVectorHnd v)
+	static void Destroy(TCVector v)
 	{
 		Vector* hnd = GetVector(v);
 		if (!hnd)
@@ -504,22 +504,22 @@ TCResult TCAllocatorUnitTests::StandardAllocatorTest(TCReadBuffer inputData)
 	if (!TCAllocator || !TCAllocator->StandardAllocator || !TCAllocator->StandardAllocator->CreateSuperBlock ||
 		!TCAllocator->StandardAllocator->Malloc || !TCAllocator->StandardAllocator->Free ||
 		!TCAllocator->StandardAllocator->DestroySuperBlock)
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 
-	TCSuperBlockHnd superBlock = TCAllocator->StandardAllocator->CreateSuperBlock(4096, "TCAllocatorStdTest");
+	TCSuperBlock superBlock = TCAllocator->StandardAllocator->CreateSuperBlock(4096, "TCAllocatorStdTest");
 	if (!superBlock)
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	void* allocation = TCAllocator->StandardAllocator->Malloc(superBlock, 128, "TCAllocatorStdTest");
 	if (!allocation)
 	{
 		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	std::memset(allocation, 0x5A, 128);
 	TCAllocator->StandardAllocator->Free(allocation);
 	TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCAllocatorUnitTests::EndOfPageAllocatorTest(TCReadBuffer inputData)
@@ -528,22 +528,22 @@ TCResult TCAllocatorUnitTests::EndOfPageAllocatorTest(TCReadBuffer inputData)
 	if (!TCAllocator || !TCAllocator->EndOfPageAllocator || !TCAllocator->EndOfPageAllocator->CreateSuperBlock ||
 		!TCAllocator->EndOfPageAllocator->Malloc || !TCAllocator->EndOfPageAllocator->Free ||
 		!TCAllocator->EndOfPageAllocator->DestroySuperBlock)
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 
-	TCSuperBlockHnd superBlock = TCAllocator->EndOfPageAllocator->CreateSuperBlock(1ull << 20ull, "TCAllocatorEopTest");
+	TCSuperBlock superBlock = TCAllocator->EndOfPageAllocator->CreateSuperBlock(1ull << 20ull, "TCAllocatorEopTest");
 	if (!superBlock)
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	void* allocation = TCAllocator->EndOfPageAllocator->Malloc(superBlock, 64, "TCAllocatorEopTest");
 	if (!allocation)
 	{
 		TCAllocator->EndOfPageAllocator->DestroySuperBlock(superBlock);
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	std::memset(allocation, 0x7C, 64);
 	TCAllocator->EndOfPageAllocator->Free(allocation);
 	TCAllocator->EndOfPageAllocator->DestroySuperBlock(superBlock);
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCAllocatorUnitTests::VectorManagerTest(TCReadBuffer inputData)
@@ -552,26 +552,26 @@ TCResult TCAllocatorUnitTests::VectorManagerTest(TCReadBuffer inputData)
 	if (!TCAllocator || !TCAllocator->VectorManager || !TCAllocator->VectorManager->Create ||
 		!TCAllocator->VectorManager->PushBack || !TCAllocator->VectorManager->Size ||
 		!TCAllocator->VectorManager->Erase || !TCAllocator->VectorManager->Destroy)
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 
-	TCSuperBlockHnd superBlock = TCAllocator->StandardAllocator->CreateSuperBlock(8192, "TCAllocatorVectorTest");
+	TCSuperBlock superBlock = TCAllocator->StandardAllocator->CreateSuperBlock(8192, "TCAllocatorVectorTest");
 	if (!superBlock)
-		return TC_RESULT_FAILURE;
-	TCVectorHnd vector = TCAllocator->VectorManager->Create(superBlock, sizeof(int), 0, 4);
+		return {TC_RESULTSTATE_FAILURE, 0};
+	TCVector vector = TCAllocator->VectorManager->Create(superBlock, sizeof(int), 0, 4);
 	if (!vector)
 	{
 		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	int values[3] = {10, 20, 30};
 	for (int i = 0; i < 3; ++i)
 	{
-		if (TCAllocator->VectorManager->PushBack(vector, &values[i]) != TC_RESULT_SUCCESS)
+		if (TCAllocator->VectorManager->PushBack(vector, &values[i]) != TC_RESULTSTATE_SUCCESS)
 		{
 			TCAllocator->VectorManager->Destroy(vector);
 			TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
-			return TC_RESULT_FAILURE;
+			return {TC_RESULTSTATE_FAILURE, 0};
 		}
 	}
 
@@ -579,21 +579,21 @@ TCResult TCAllocatorUnitTests::VectorManagerTest(TCReadBuffer inputData)
 	{
 		TCAllocator->VectorManager->Destroy(vector);
 		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
-	if (TCAllocator->VectorManager->Erase(vector, 1) != TC_RESULT_SUCCESS)
+	if (TCAllocator->VectorManager->Erase(vector, 1) != TC_RESULTSTATE_SUCCESS)
 	{
 		TCAllocator->VectorManager->Destroy(vector);
 		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	if (TCAllocator->VectorManager->Size(vector) != 2)
 	{
 		TCAllocator->VectorManager->Destroy(vector);
 		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	int* data = reinterpret_cast<int*>(vector);
@@ -601,12 +601,12 @@ TCResult TCAllocatorUnitTests::VectorManagerTest(TCReadBuffer inputData)
 	{
 		TCAllocator->VectorManager->Destroy(vector);
 		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	TCAllocator->VectorManager->Destroy(vector);
 	TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void TCAllocatorUnitTests::Register()
@@ -637,20 +637,20 @@ TCResult TCAllocator_Initialize(const void** outPluginAPI)
 {
 	TCore::Allocator::TCAllocatorContext::Initialize();
 	if (TC->GetPlugin(TCUnitTest_PLUGIN_NAME, TCUnitTest_PLUGIN_VERSION, nullptr, (const void**)&TCUnitTest) ==
-		TC_RESULT_SUCCESS)
+		TC_RESULTSTATE_SUCCESS)
 		TCore::Allocator::TCAllocatorUnitTests::Register();
 	*outPluginAPI = TCAllocator;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCAllocator_OnPreShutdown()
 {
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCAllocator_Shutdown()
 {
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void TCAllocator_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded) {}

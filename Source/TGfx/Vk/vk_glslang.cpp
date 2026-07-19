@@ -1,43 +1,32 @@
-// glslang was using overriden "new" operator when started in TGFXVulkan.dll
-// So I moved glslang to its own dynamic dll
+#include <glslang/Public/ShaderLang.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
 
-#include <string_tapi.h>
-#include <predefinitions_tapi.h>
-#include <tgfx_forwarddeclarations.h>
+#include <TGfxStructs.h>
+#include <vkGlslang.h>
 
-#include "vk_predefinitions.h"
-#include "vk_includes.h"
-
+namespace TGFX
+{
+namespace Vulkan
+{
 TBuiltInResource glslToSpirvLimitTable;
 
-static EShLanguage Find_EShShaderStage_byTGFXShaderStage(shaderStage_tgfx stage)
+static EShLanguage Find_EShShaderStage_byTGFXShaderStage(TGfxShaderStage stage)
 {
 	switch (stage)
 	{
-	case shaderStage_tgfx_VERTEXSHADER: return EShLangVertex;
-	case shaderStage_tgfx_FRAGMENTSHADER: return EShLangFragment;
-	case shaderStage_tgfx_COMPUTESHADER: return EShLangCompute;
+	case TGFX_SHADERSTAGE_VERTEXSHADER: return EShLangVertex;
+	case TGFX_SHADERSTAGE_FRAGMENTSHADER: return EShLangFragment;
+	case TGFX_SHADERSTAGE_COMPUTESHADER: return EShLangCompute;
 	default:
-		assert(0 && "Find_EShShaderStage_byTGFXShaderStage() doesn't support this type of stage!");
+		vkPrint(2, "Find_EShShaderStage_byTGFXShaderStage() doesn't support this type of stage");
 		return EShLangVertex;
 	}
 }
 
-static wchar_t* glslangGetErrorMessage(glslang::TShader& shader)
-{
-	wchar_t* wLog = nullptr;
-	stringSys->createString(tlStringUTF16,
-							(void**)&wLog,
-							L"Shader compilation failed! %s %s",
-							shader.getInfoLog(),
-							shader.getInfoDebugLog());
-	return wLog;
-}
-const void* vk_compileWithGlslang(shaderStage_tgfx tgfxstage,
-								  const void* i_DATA,
-								  unsigned int i_DATA_SIZE,
-								  unsigned int* compiledbinary_datasize)
+void* GLSLang::Compile(TGfxShaderStage tgfxstage,
+					   const void* i_DATA,
+					   unsigned int i_DATA_SIZE,
+					   unsigned int* compiledbinary_datasize)
 {
 	EShLanguage stage = Find_EShShaderStage_byTGFXShaderStage(tgfxstage);
 	glslang::TShader shader(stage);
@@ -49,11 +38,15 @@ const void* vk_compileWithGlslang(shaderStage_tgfx tgfxstage,
 	const char* strings[1] = {(const char*)i_DATA};
 	shader.setStrings(strings, 1);
 
-	if (!shader.parse(&glslToSpirvLimitTable, 100, false, messages))
-	{
+	auto failCase = [&]() -> void* {
 		*compiledbinary_datasize = 0;
-		return glslangGetErrorMessage(shader);
-	}
+		glslangGetErrorMessage(shader);
+		vkPrint();
+		return nullptr;
+	};
+
+	if (!shader.parse(&glslToSpirvLimitTable, 100, false, messages))
+		return failCase();
 
 	program.addShader(&shader);
 
@@ -62,10 +55,8 @@ const void* vk_compileWithGlslang(shaderStage_tgfx tgfxstage,
 	//
 
 	if (!program.link(messages))
-	{
-		*compiledbinary_datasize = 0;
-		return glslangGetErrorMessage(shader);
-	}
+		return failCase();
+
 	std::vector<unsigned int> binarydata;
 	glslang::GlslangToSpv(*program.getIntermediate(stage), binarydata);
 	if (binarydata.size())
@@ -76,14 +67,10 @@ const void* vk_compileWithGlslang(shaderStage_tgfx tgfxstage,
 		return outbinary;
 	}
 
-	// Fail
-	{
-		*compiledbinary_datasize = 0;
-		return L"glslang couldn't compile the shader!";
-	}
+	return failCase();
 }
 
-void vk_initGlslang()
+void GLSLang::Initialize()
 {
 	// Start glslang
 	glslang::InitializeProcess();
@@ -192,3 +179,6 @@ void vk_initGlslang()
 	glslToSpirvLimitTable.limits.generalVariableIndexing = 1;
 	glslToSpirvLimitTable.limits.generalConstantMatrixVectorIndexing = 1;
 }
+
+} // namespace Vulkan
+} // namespace TGFX

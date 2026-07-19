@@ -5,7 +5,7 @@
 	extern "C"                                                                                                         \
 	{
 #define TCORE_END_C_LINKAGE }
-#define TCORE_DEFINE_HANDLE(name) typedef struct name* name##Hnd
+#define TCORE_DEFINE_HANDLE(name) typedef struct name##Obj* name
 
 #define TCORE_MAKE_PLUGIN_VERSION(major, mid, minor)                                                                   \
 	(((major < 255 ? major : 255) << 16) | ((mid < 255 ? mid : 255) << 8) | ((minor < 255 ? minor : 255)))
@@ -65,32 +65,50 @@ TCORE_BEGIN_C_LINKAGE
 // Define TCORE_USE_CPP_WRAPPER if you want to use C++ wrapper for TCore API
 #endif
 
-typedef enum TCResult
-{
-	TC_RESULT_SUCCESS = 0,
-	TC_RESULT_FAILURE = 1,
-	TC_RESULT_UNKNOWN = 2,
-	TC_RESULT_INVALID_ARGUMENT = 3,
-	TC_RESULT_OUT_OF_MEMORY = 4,
-	TC_RESULT_NOT_FOUND = 5,
-	TC_RESULT_ALREADY_EXISTS = 6,
-	TC_RESULT_UNSUPPORTED = 7,
-	TC_RESULT_TIMEOUT = 8,
-	TC_RESULT_PERMISSION_DENIED = 9,
-	TC_RESULT_UNIMPLEMENTED = 10,
-	TC_RESULT_ABSENT_DEPENDENCY = 11
-} TCResult;
-
 typedef unsigned char TBool;
 #define TTRUE 1
 #define TFALSE 0
 static_assert(sizeof(TBool) == 1, "TBool should be 1 byte in size!");
 
-typedef unsigned long long TSize;
-static_assert(sizeof(TSize) == 8, "TSize should be 8 bytes in size!");
+typedef unsigned long long TU8;
+static_assert(sizeof(TU8) == 8, "TUI8 should be 8 bytes in size!");
 
-typedef unsigned long long TUint;
-static_assert(sizeof(TUint) == 8, "TUint should be 8 bytes in size!");
+typedef TU8 TSize;
+static_assert(sizeof(TU8) == sizeof(TSize), "TSize should be same as TU8 in size!");
+
+typedef unsigned int TU4;
+static_assert(sizeof(TU4) == 4, "TUI4 should be 4 bytes in size!");
+
+typedef unsigned char TU1;
+static_assert(sizeof(TU1) == 1, "TU1 should be 1 byte in size!");
+
+typedef int TI4;
+static_assert(sizeof(TI4) == 4, "TI4 should be 4 bytes in size!");
+
+typedef char TI1;
+static_assert(sizeof(TI1) == 1, "TI1 should be 1 bytes in size!");
+
+typedef enum TCResultState
+{
+	TC_RESULTSTATE_SUCCESS = 0,
+	TC_RESULTSTATE_FAILURE = 1,
+	TC_RESULTSTATE_UNKNOWN = 2,
+	TC_RESULTSTATE_INVALID_ARGUMENT = 3,
+	TC_RESULTSTATE_OUT_OF_MEMORY = 4,
+	TC_RESULTSTATE_NOT_FOUND = 5,
+	TC_RESULTSTATE_ALREADY_EXISTS = 6,
+	TC_RESULTSTATE_UNSUPPORTED = 7,
+	TC_RESULTSTATE_TIMEOUT = 8,
+	TC_RESULTSTATE_PERMISSION_DENIED = 9,
+	TC_RESULTSTATE_UNIMPLEMENTED = 10,
+	TC_RESULTSTATE_ABSENT_DEPENDENCY = 11
+} TCResultState;
+
+typedef struct TCResult
+{
+	TCResultState State : 4;
+	TU4 ResultCode : 28;
+} TCResult;
 
 // Modifiable buffer
 typedef struct TCBuffer
@@ -138,3 +156,17 @@ typedef struct TCReadBuffer
 #endif
 
 TCORE_END_C_LINKAGE
+
+#ifdef TCORE_USE_CPP_WRAPPER
+
+inline bool operator==(const TCResult& lhs, const TCResultState& state)
+{
+	return lhs.State == state;
+}
+
+inline bool operator!=(const TCResult& lhs, const TCResultState& state)
+{
+	return !(lhs == state);
+}
+
+#endif

@@ -120,7 +120,7 @@ struct Context
 	// Free the pages allocated
 	static void Free(void* ptr, unsigned long long size) { Free<MEM_RELEASE>(ptr, size); }
 
-	static TUint GetPageSize()
+	static TU4 GetPageSize()
 	{
 		SYSTEM_INFO si;
 		GetSystemInfo(&si);
@@ -142,12 +142,12 @@ TCResult TCVirtualMemory_Initialize(const void** outPluginAPI)
 
 	TCVirtualMemory = services;
 	*outPluginAPI = TCVirtualMemory;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCVirtualMemory_OnPreShutdown()
 {
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCVirtualMemory_Shutdown()
@@ -157,7 +157,7 @@ TCResult TCVirtualMemory_Shutdown()
 		delete TCVirtualMemory;
 		TCVirtualMemory = nullptr;
 	}
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void TCVirtualMemory_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded)

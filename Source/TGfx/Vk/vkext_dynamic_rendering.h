@@ -12,14 +12,14 @@ struct vkext_dynamicRendering : public vkext_interface
 	virtual void manage(VkStructureType structType,
 						void* structPtr,
 						unsigned int extCount,
-						struct tgfx_extension* const* exts) override;
+						TGfxExtension* exts) override;
 	void vk_beginRenderpass(VkCommandBuffer cb,
 							unsigned int colorAttachmentCount,
 							const tgfx_rasterpassBeginSlotInfo* colorAttachments,
 							tgfx_rasterpassBeginSlotInfo depthAttachment,
 							unsigned int extCount,
-							struct tgfx_extension* const* exts);
-	void vk_endRenderpass(VkCommandBuffer cb, unsigned int extCount, struct tgfx_extension* const* exts);
+							TGfxExtension* exts);
+	void vk_endRenderpass(VkCommandBuffer cb, unsigned int extCount, TGfxExtension* exts);
 
 	VkPhysicalDeviceDynamicRenderingFeatures features;
 };

@@ -32,7 +32,7 @@ TCORE_DEFINE_HANDLE(TCEntity);
 // Use this to match base of a component type with a overriden one
 typedef struct TCComponentTypePair
 {
-	TCComponentTypeHnd Base;
+	TCComponentType Base;
 	void* Overriden; // Pointer to overriden type
 } TCComponentTypePair;
 
@@ -41,9 +41,9 @@ typedef struct TCComponentTypePair
 // If a system will use a component; it should include the header that has component's type
 typedef struct TCComponentManagerDescription
 {
-	TCComponentHnd (*CreateComponent)();
+	TCComponent (*CreateComponent)();
 	unsigned char (*ValidateComponent)();
-	void (*DestroyComponent)(TCComponentHnd hnd);
+	void (*DestroyComponent)(TCComponent hnd);
 } TCComponentManagerDescription;
 
 typedef struct ITCECS
@@ -62,23 +62,23 @@ typedef struct ITCECS
 
 	// @param mainType: If main type can't be inherited, set NULL.
 	// @return NULL if there is any component inheritance conflicts
-	TCComponentTypeHnd (*AddComponentType)(const char* name,
-										   void* mainType,
-										   const TCComponentManagerDescription* manager,
-										   const TCComponentTypePair* pair_list,
-										   unsigned int pair_list_size);
-	const TCComponentManagerDescription* (*GetComponentManager)(TCComponentTypeHnd component_type);
+	TCComponentType (*AddComponentType)(const char* name,
+										void* mainType,
+										const TCComponentManagerDescription* manager,
+										const TCComponentTypePair* pair_list,
+										unsigned int pair_list_size);
+	const TCComponentManagerDescription* (*GetComponentManager)(TCComponentType component_type);
 
 	// ENTITY
 	////////////////////////////
 
-	TCEntityTypeHnd (*AddEntityType)(const TCComponentTypeHnd* component_type_list, TSize list_size);
+	TCEntityType (*AddEntityType)(const TCComponentType* component_type_list, TU8 list_size);
 	// Create an entity
-	TCEntityHnd (*CreateEntity)(TCEntityTypeHnd type);
+	TCEntity (*CreateEntity)(TCEntityType type);
 	// Find entity type handle
-	TCEntityTypeHnd (*FindEntityType)(TCEntityHnd entity);
+	TCEntityType (*FindEntityType)(TCEntity entity);
 	//@return 1 if entity type contains the component type; otherwise 0
-	TCResult (*SearchComponentType)(TCEntityTypeHnd entity_type, TCComponentTypeHnd component_type);
+	TCResult (*SearchComponentType)(TCEntityType entity_type, TCComponentType component_type);
 	// Get a specific type of component of an entity
 	// @param component_type: ID of the component type user wants to access
 	// @param outComponentType: Pointer to overriden component type, you should cast and use this to
@@ -93,7 +93,7 @@ typedef struct ITCECS
 	// Don't do ->    int ABCvarValue =
 	// ((XXX*)XXXCompManager->GetComponentType())->get_ABCvar(compData);
 	//  because it will break inheritance
-	TCComponentHnd (*GetComponent)(TCEntityHnd entity, TCComponentTypeHnd component_type, void** outComponentType);
+	TCComponent (*GetComponent)(TCEntity entity, TCComponentType component_type, void** outComponentType);
 } ITCECS;
 
 TCORE_END_C_LINKAGE

@@ -5,6 +5,10 @@
 #include "vk_predefinitions.h"
 #include "vk_resource.h"
 
+namespace TGFX
+{
+namespace Vulkan
+{
 extern vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER;
 // Initializes as everything is false (same as CreateInvalidNullFlag)
 struct queueflag_vk
@@ -32,7 +36,7 @@ struct queueflag_vk
 	}
 	// Returned flag's every bit is false. You should set at least one of them as true.
 	inline static queueflag_vk CreateInvalidNullFlag() { return queueflag_vk(); }
-	static constexpr wchar_t* VKCONST_FLAG_INVALID_ERROR_TEXT = L"Some inner flag is invalid";
+	static constexpr const char* VKCONST_FLAG_INVALID_ERROR_TEXT = "Some inner flag is invalid";
 	inline bool isFlagValid() const
 	{
 		if (doesntNeedAnything && (is_GRAPHICSsupported || is_COMPUTEsupported || is_TRANSFERsupported))
@@ -53,7 +57,7 @@ struct queueflag_vk
 struct CMDBUFFER_VKOBJ;
 struct cmdPool_vk;
 
-typedef void (*vk_submissionCallback)(GPU_VKOBJ* gpu, VkFence fence, void* userData);
+typedef void (*submissionCallback)(GPU_VKOBJ* gpu, VkFence fence, void* userData);
 // Handle both has GPU's ID & QueueFamily's ID
 struct QUEUEFAM_VK;
 struct QUEUE_VKOBJ;
@@ -77,7 +81,7 @@ struct manager_vk
 public:
 	struct queueCreateInfoList
 	{
-		VkDeviceQueueCreateInfo list[VKCONST_MAXQUEUEFAMCOUNT_PERGPU];
+		VkDeviceQueueCreateInfo list[kMaxQueueFamilyCountPerGpu];
 	};
 	// While creating VK Logical Device, we need which queues to create. Get that info from here.
 	queueCreateInfoList get_queue_cis(GPU_VKOBJ* gpu) const;
@@ -96,20 +100,9 @@ public:
 	bool does_queuefamily_support(QUEUE_VKOBJ* family, const queueflag_vk& flag);
 };
 
-void vk_allocateCmdBuffer(
+void allocateCmdBuffer(
 	QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, cmdPool_vk*& cmdPool, VkCommandBuffer* cbs, uint32_t count);
-void vk_freeCmdBuffer(cmdPool_vk* cmdPool, VkCommandBuffer cb);
-VkQueue getQueueVkObj(QUEUE_VKOBJ* queue);
-QUEUE_VKOBJ* getQueue(struct tgfx_gpuQueue* hnd);
-QUEUEFAM_VK* getQueueFam(GPU_VKOBJ* gpu, unsigned int queueFamIndx);
-QUEUE_VKOBJ* getQueue(QUEUEFAM_VK* queueFam, uint32_t queueIndx);
-// Extension: QueueOwnershipTransfer
-// Use o_ params with uint32_t queueFamList[VKCONST_MAXQUEUEFAMCOUNT] etc.
-void VK_getQueueAndSharingInfos(unsigned int queueList,
-								struct tgfx_gpuQueue* const* i_queueList,
-								unsigned int extCount,
-								struct tgfx_extension* const* i_exts,
-								uint32_t* o_famList,
-								uint32_t* o_famListSize,
-								VkSharingMode* o_sharingMode);
-void vk_getWindowSupportedQueues(GPU_VKOBJ* GPU, WINDOW_VKOBJ* window, tgfx_windowGPUsupport* info);
+void freeCmdBuffer(cmdPool_vk* cmdPool, VkCommandBuffer cb);
+
+} // namespace Vulkan
+} // namespace TGFX

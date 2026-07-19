@@ -14,7 +14,7 @@ TCORE_PLUGIN_INIT(TCProfiler)
 TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCProfiler)
 TCORE_PLUGIN_ENTRY_POINT_END()
 
-struct TCProfiledScope
+struct TCProfiledScopeObj
 {
 	bool IsRecording : 1;
 	TCDurationType DurationType : 2;
@@ -56,9 +56,9 @@ struct TCProfilerContext* GContext = nullptr;
 struct TCProfilerContext
 {
 	unsigned int ThreadCount;
-	static TCProfiledScope* Begin(const char* name, unsigned long long* duration, TCDurationType durationType)
+	static TCProfiledScope Begin(const char* name, unsigned long long* duration, TCDurationType durationType)
 	{
-		TCProfiledScope* profile = new TCProfiledScope;
+		TCProfiledScope profile = new TCProfiledScopeObj;
 		profile->startPoint = GetCurrentTime(durationType);
 		profile->IsRecording = true;
 		profile->duration = duration;
@@ -67,7 +67,7 @@ struct TCProfilerContext
 		return profile;
 	}
 
-	static void Finish(TCProfiledScope* profil)
+	static void Finish(TCProfiledScope profil)
 	{
 		*profil->duration = GetCurrentTime(profil->DurationType) - profil->startPoint;
 		delete profil;
@@ -83,19 +83,19 @@ TCResult TCProfiler_Initialize(const void** outPluginAPI)
 	TCProfiler = services;
 	*outPluginAPI = TCProfiler;
 	GContext = new TCProfilerContext;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCProfiler_OnPreShutdown()
 {
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCProfiler_Shutdown()
 {
 	delete TCProfiler;
 	TCProfiler = nullptr;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void TCProfiler_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded) {}

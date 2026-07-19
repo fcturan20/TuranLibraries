@@ -2,36 +2,22 @@
 
 #include <string>
 
-#include "tgfx_structs.h"
+#include "TGfxStructs.h"
 #include "vk_core.h"
 #include "vk_includes.h"
 #include "vk_predefinitions.h"
 #include "vk_resource.h"
 
-// vk_EXT_extended_dynamic_state
-defineVkExtFunc(vkCmdSetCullModeEXT);
-defineVkExtFunc(vkCmdSetDepthCompareOpEXT);
-defineVkExtFunc(vkCmdSetDepthBoundsTestEnableEXT);
-defineVkExtFunc(vkCmdSetDepthTestEnableEXT);
-defineVkExtFunc(vkCmdSetDepthWriteEnableEXT);
+namespace TGFX
+{
+namespace Vulkan
+{
 
-// vk_EXT_extended_dynamic_state_2
-defineVkExtFunc(vkCmdSetDepthBiasEnableEXT);
-
-// vk_EXT_extended_dynamic_state_3
-defineVkExtFunc(vkCmdSetDepthClampEnableEXT);
-defineVkExtFunc(vkCmdSetDepthClipEnableEXT);
-defineVkExtFunc(vkCmdSetColorWriteEnableEXT);
-defineVkExtFunc(vkCmdSetPrimitiveTopologyEXT);
-defineVkExtFunc(vkCmdSetStencilOpEXT);
-defineVkExtFunc(vkCmdSetStencilTestEnableEXT);
-
-vk_fillRasterPipelineStateInfoFnc vk_fillRasterPipelineStateInfo = {};
-void vk_fillRasterPipelineStateInfo_dynamicState(GPU_VKOBJ* gpu,
-												 VkGraphicsPipelineCreateInfo* ci,
-												 const tgfx_rasterPipelineDescription* desc,
-												 unsigned int extCount,
-												 struct tgfx_extension* const* exts)
+FillRasterPipelineStateInfoPFN FillRasterPipelineStateInfo = {};
+void FillRasterPipelineStateInfo_DynamicState(GPU_VKOBJ* gpu,
+											  VkGraphicsPipelineCreateInfo* ci,
+											  const TGfxRasterPipelineDescription* desc,
+											  TGfxExtension* exts)
 {
 	/*
 	auto* ext = ( vkext_dynamicStates* )gpu->ext()->m_exts[vkext_interface::dynamicStates_vkExtEnum];
@@ -57,7 +43,7 @@ void vk_fillRasterPipelineStateInfo_dynamicState(GPU_VKOBJ* gpu,
 	*/
 }
 
-vkext_dynamicStates::vkext_dynamicStates(GPU_VKOBJ* gpu) : vkext_interface(gpu, &props3, &features1)
+VkExtDynamicStates::VkExtDynamicStates(GPU_VKOBJ* gpu) : IVkExt(gpu, &props3, &features1)
 {
 	features1.pNext = &features2;
 	features2.pNext = &featuresMaintenance4;
@@ -70,24 +56,19 @@ vkext_dynamicStates::vkext_dynamicStates(GPU_VKOBJ* gpu) : vkext_interface(gpu, 
 	props3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_PROPERTIES_EXT;
 	props3.pNext = nullptr;
 }
-void vkext_dynamicStates::inspect()
+void VkExtDynamicStates::inspect()
 {
 	if (!features1.extendedDynamicState)
 	{
 		return;
 	}
 
-	vk_fillRasterPipelineStateInfo = vk_fillRasterPipelineStateInfo_dynamicState;
-	loadVkExtFunc(vkCmdSetCullModeEXT);
-	loadVkExtFunc(vkCmdSetDepthCompareOpEXT);
-	loadVkExtFunc(vkCmdSetDepthBoundsTestEnableEXT);
-	loadVkExtFunc(vkCmdSetDepthTestEnableEXT);
-	loadVkExtFunc(vkCmdSetDepthWriteEnableEXT);
+	FillRasterPipelineStateInfo = FillRasterPipelineStateInfo_DynamicState;
+
 	m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] = (VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
 
 	if (features2.extendedDynamicState2)
 	{
-		loadVkExtFunc(vkCmdSetDepthBiasEnableEXT);
 		m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] =
 			(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME);
 	}
@@ -109,9 +90,8 @@ void vkext_dynamicStates::inspect()
 		m_gpu->ext()->m_activeDevExtNames[m_gpu->ext()->m_devExtCount++] = VK_KHR_MAINTENANCE_4_EXTENSION_NAME;
 	}
 }
-void vkext_dynamicStates::manage(VkStructureType structType,
-								 void* structPtr,
-								 unsigned int extCount,
-								 struct tgfx_extension* const* exts)
+void VkExtDynamicStates::manage(VkStructureType structType, void* structPtr, unsigned int extCount, TGfxExtension* exts)
 {
 }
+} // namespace Vulkan
+} // namespace TGFX

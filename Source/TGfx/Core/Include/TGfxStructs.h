@@ -1,315 +1,70 @@
 #pragma once
 #include <TCoreMacros.h>
 #include <TGfxMath.h>
+#include <TGfxDeclarations.h>
 TCORE_BEGIN_C_LINKAGE
 
-typedef int textureUsageMask_tgfxflag;
-typedef int bufferUsageMask_tgfxflag;
-typedef int shaderStage_tgfxflag;
-struct tgfx_memoryDescription
+typedef enum TGfxTextureMipmapFilter
 {
-	unsigned char memoryTypeId;
-	enum memoryallocationtype_tgfx allocationType;
-	unsigned long maxAllocationSize;
-};
+	TGFX_TEXTURE_MIPMAPFILTER_NEAREST_FROM_1MIP,
+	TGFX_TEXTURE_MIPMAPFILTER_LINEAR_FROM_1MIP,
+	TGFX_TEXTURE_MIPMAPFILTER_NEAREST_FROM_2MIP,
+	TGFX_TEXTURE_MIPMAPFILTER_LINEAR_FROM_2MIP
+} TGfxTextureMipmapFilter;
 
-struct tgfx_gpuDescription
+typedef enum TGfxTextureWrapping
 {
-	const wchar_t* name;
-	unsigned int gfxApiVersion, driverVersion;
-	enum gpu_type_tgfx type;
-	unsigned char operationSupport_raster, operationSupport_compute, operationSupport_transfer, queueFamilyCount;
-	const struct tgfx_memoryDescription* memRegions;
-	unsigned char memRegionsCount;
-};
+	TGFX_TEXTURE_WRAPPING_REPEAT,
+	TGFX_TEXTURE_WRAPPING_MIRRORED_REPEAT,
+	TGFX_TEXTURE_WRAPPING_CLAMP_TO_EDGE
+} TGfxTextureWrapping;
 
-typedef void (*tgfx_windowResizeCallback)(struct tgfx_window* windowHnd,
-										  void* userPtr,
-										  TGfxUI2 resolution,
-										  struct tgfx_texture** swapchainTextures);
-// @param scanCode: System-specific scan code
-typedef void (*tgfx_windowKeyCallback)(struct tgfx_window* windowHnd,
-									   void* userPointer,
-									   enum key_tgfx key,
-									   int scanCode,
-									   enum keyAction_tgfx action,
-									   enum keyMod_tgfx mode);
-typedef void (*tgfx_windowCloseCallback)(struct tgfx_window* windowHnd, void* userPtr);
-
-struct tgfx_swapchainDescription
+typedef struct TGfxSamplerDescription
 {
-	struct tgfx_window* window;
-	enum windowpresentation_tgfx presentationMode;
-	enum windowcomposition_tgfx composition;
-	enum colorspace_tgfx colorSpace;
-	enum textureChannels_tgfx channels;
-	textureUsageMask_tgfxflag swapchainUsage;
-	unsigned int permittedQueueCount;
-	struct tgfx_gpuQueue* const* permittedQueues;
-	unsigned int imageCount;
-};
+	TU4 MinMipLevel, MaxMipLevel;
+	TGfxTextureMipmapFilter MinFilter, MagFilter;
+	TGfxTextureWrapping WrapWidth, WrapHeight, WrapDepth;
+	TGfxUVec4 BorderColor;
+} TGfxSamplerDescription;
 
-#define TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT 24
-#define TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT 64
-#define TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE 6
-struct tgfx_windowGPUsupport
+typedef enum TGfxTextureOrder
 {
-	unsigned int maxImageCount;
-	TGfxUI2 minExtent, maxExtent;
-	textureUsageMask_tgfxflag usageFlag;
-	enum windowpresentation_tgfx presentationModes[TGFX_WINDOWGPUSUPPORT_MAXPRESENTATIONMODE];
-	enum colorspace_tgfx colorSpace[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
-	enum textureChannels_tgfx channels[TGFX_WINDOWGPUSUPPORT_MAXFORMATCOUNT];
-	struct tgfx_gpuQueue* queues[TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT];
-};
+	TGFX_TEXTURE_ORDER_SWIZZLE = 0,
+	TGFX_TEXTURE_ORDER_LINEAR = 1
+} TGfxTextureOrder;
 
-struct tgfx_samplerDescription
+typedef struct TGfxTextureDescription
 {
-	unsigned int minMipLevel, maxMipLevel;
-	enum texture_mipmapfilter_tgfx minFilter, magFilter;
-	enum texture_wrapping_tgfx wrapWidth, wrapHeight, wrapDepth;
-	TGfxUI4 bordercolor;
-};
+	TGfxTextureDimensions Dimension;
+	TGfxUVec2 Resolution;
+	TGfxTextureChannels ChannelType;
+	TU4 MipCount;
+	TGfxTextureOrder DataOrder;
+} TGfxTextureDescription;
 
-struct tgfx_textureDescription
+typedef struct TGfxBufferDescription
 {
-	enum texture_dimensions_tgfx dimension;
-	TGfxUI2 resolution;
-	enum textureChannels_tgfx channelType;
-	unsigned char mipCount;
-	textureUsageMask_tgfxflag usage;
-	enum textureOrder_tgfx dataOrder;
-	unsigned int permittedQueueCount;
-	struct tgfx_gpuQueue* const* permittedQueues;
-};
+	TU8 Size;
+	struct tgfx_extension* Extensions;
+} TGfxBufferDescription;
 
-struct tgfx_bufferDescription
+typedef enum TGfxShaderDescriptorType
 {
-	unsigned int dataSize;
-	bufferUsageMask_tgfxflag usageFlag;
-	unsigned int permittedQueueCount;
-	struct tgfx_gpuQueue* const* permittedQueues;
-	unsigned int extCount;
-	struct tgfx_extension* const* exts;
-};
+	TGFX_SHADERDESCRIPTORTYPE_SAMPLER = 0,
+	TGFX_SHADERDESCRIPTORTYPE_SAMPLEDTEXTURE,
+	TGFX_SHADERDESCRIPTORTYPE_STORAGEIMAGE,
+	TGFX_SHADERDESCRIPTORTYPE_BUFFER,
+	// TODO: Extensions will be supported in the future
+	TGFX_SHADERDESCRIPTORTYPE_EXT_UNIFORMBUFFER,
+	TGFX_SHADERDESCRIPTORTYPE_VKEXT_UNIFORMBLOCK
+} TGfxShaderDescriptorType;
 
-struct tgfx_bindingTableDescription
+typedef struct TGfxBindingTableDescription
 {
-	enum shaderdescriptortype_tgfx descriptorType;
-	unsigned int elementCount;
-	shaderStage_tgfxflag visibleStagesMask;
-	unsigned int staticSamplerCount;
-	struct tgfx_sampler* const* staticSamplers;
-	unsigned char isDynamic;
-};
-
-#define TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT 8
-struct tgfx_stencilState
-{
-	enum stencilop_tgfx stencilFail, pass, depthFail;
-	enum compare_tgfx compareOp;
-	unsigned int compareMask, writeMask, reference;
-};
-
-struct tgfx_depthStencilState
-{
-	unsigned char depthTestEnabled, depthWriteEnabled, stencilTestEnabled;
-	enum compare_tgfx depthCompare;
-	struct tgfx_stencilState front, back;
-};
-
-struct tgfx_blendState
-{
-	unsigned char blendEnabled;
-	enum blendfactor_tgfx srcColorFactor, dstColorFactor, srcAlphaFactor, dstAlphaFactor;
-	enum blendmode_tgfx colorMode, alphaMode;
-	enum textureComponentMask_tgfx blendComponents;
-};
-
-struct tgfx_rasterStateDescription
-{
-	enum cullmode_tgfx culling;
-	enum polygonmode_tgfx polygonmode;
-	struct tgfx_depthStencilState depthStencilState;
-	struct tgfx_blendState blendStates[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
-	enum vertexlisttypes_tgfx topology;
-};
-
-struct tgfx_heapRequirementsInfo
-{
-	// Single GPU can have max 32 regions
-	// GPU should be same with the one used in CreateTexture()
-	unsigned char memoryRegionIDs[32];
-	unsigned int offsetAlignment;
-	unsigned long long size;
-};
-
-// 32 byte data to store extreme colors (RGBA64)
-struct tgfx_typelessColor
-{
-	char data[32];
-};
-
-struct tgfx_vertexAttributeDescription
-{
-	unsigned int attributeIndx, bindingIndx, offset;
-	enum datatype_tgfx dataType;
-};
-
-struct tgfx_vertexBindingDescription
-{
-	unsigned int bindingIndx, stride;
-	enum vertexBindingInputRate_tgfx inputRate;
-};
-
-// TGFX_SUBPASS_EXTENSION
-struct tgfx_subpassSlotDescription
-{
-	enum rasterpassStore_tgfx storeType;
-	enum rasterpassLoad_tgfx loadType;
-	struct tgfx_typelessColor clearValue;
-	enum textureChannels_tgfx format;
-	enum image_access_tgfx layout;
-};
-
-struct tgfx_viewportInfo
-{
-	TGfxF2 topLeftCorner, size, depthMinMax;
-};
-
-struct tgfx_rasterInputAssemblerDescription
-{
-	unsigned int attribCount, bindingCount;
-	const struct tgfx_vertexAttributeDescription* i_attributes;
-	const struct tgfx_vertexBindingDescription* i_bindings;
-};
-
-struct tgfx_rasterPipelineDescription
-{
-	unsigned int shaderCount;
-	struct tgfx_shaderSource* const* shaders;
-	struct tgfx_rasterInputAssemblerDescription attribLayout;
-	const tgfx_rasterStateDescription* mainStates;
-	enum textureChannels_tgfx colorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
-	const struct tgfx_bindingTableDescription* tables;
-	unsigned int tableCount;
-	enum textureChannels_tgfx depthStencilTextureFormat;
-	unsigned int extCount;
-	struct tgfx_extension* const* exts;
-	unsigned char pushConstantOffset, pushConstantSize;
-};
-
-struct tgfx_rasterpassBeginSlotInfo
-{
-	struct tgfx_texture* texture;
-	enum image_access_tgfx imageAccess;
-	enum rasterpassLoad_tgfx loadOp, loadStencilOp;
-	enum rasterpassStore_tgfx storeOp, storeStencilOp;
-	struct tgfx_typelessColor clearValue;
-};
-
-struct tgfx_drawIndexedIndirectArgument
-{
-	unsigned int indexCountPerInstance;
-	unsigned int instanceCount;
-	unsigned int firstIndex;
-	int vertexOffset;
-	unsigned int firstInstance;
-};
-
-struct tgfx_drawNonIndexedIndirectArgument
-{
-	unsigned int vertexCountPerInstance;
-	unsigned int instanceCount;
-	unsigned int firstVertex;
-	unsigned int firstInstance;
-};
-
-struct tgfx_dispatchIndirectArgument
-{
-	TGfxUI3 threadGroupCount;
-};
-
-typedef enum TGfxDataType
-{
-	TGFX_DATATYPE_UNDEFINED = 0,
-	TGFX_DATATYPE_VAR_UBYTE8 = 1,
-	TGFX_DATATYPE_VAR_BYTE8 = 2,
-	TGFX_DATATYPE_VAR_UINT16 = 3,
-	TGFX_DATATYPE_VAR_INT16 = 4,
-	TGFX_DATATYPE_VAR_UINT32 = 5,
-	TGFX_DATATYPE_VAR_INT32 = 6,
-	TGFX_DATATYPE_VAR_FLOAT32,
-	TGFX_DATATYPE_VAR_VEC2,
-	TGFX_DATATYPE_VAR_VEC3,
-	TGFX_DATATYPE_VAR_VEC4,
-	TGFX_DATATYPE_VAR_MAT4x4
-} TGfxDataType;
-
-typedef enum TGfxCubeFace
-{
-	TGFX_CUBEFACE_FRONT = 0,
-	TGFX_CUBEFACE_BACK = 1,
-	TGFX_CUBEFACE_LEFT,
-	TGFX_CUBEFACE_RIGHT,
-	TGFX_CUBEFACE_TOP,
-	TGFX_CUBEFACE_BOTTOM,
-	TGFX_CUBEFACE_ALL
-} TGfxCubeFace;
-
-typedef enum TGfxOperationType
-{
-	TGFX_OPERATIONTYPE_READ_ONLY,
-	TGFX_OPERATIONTYPE_WRITE_ONLY,
-	TGFX_OPERATIONTYPE_READ_AND_WRITE,
-	TGFX_OPERATIONTYPE_UNUSED
-} TGfxOperationType;
-
-typedef enum TGfxRasterPassLoad
-{
-	// All values will be cleared to a certain value
-	TGFX_RASTERPASSLOAD_CLEAR,
-	// Loaded data is random (undef or current value) & driver probably clear
-	TGFX_RASTERPASSLOAD_DISCARD,
-	// You need previous data, so previous data will affect current draw calls
-	TGFX_RASTERPASSLOAD_LOAD,
-	// There won't be any access to previous data, use this for transient resources
-	TGFX_RASTERPASSLOAD_NONE
-} TGfxRasterPassLoad;
-
-typedef enum TGfxRasterPassStore
-{
-	// Driver do whatever it wants with the data (either write or ignores it)
-	TGFX_RASTERPASSSTORE_DISCARD,
-	// Driver should write the data to memory
-	TGFX_RASTERPASSSTORE_STORE,
-	// Driver should ignore writing the data to memory, use this for transient resources
-	TGFX_RASTERPASSSTORE_NONE
-} TGfxRasterPassStore;
-
-typedef enum TGfxCompare
-{
-	TGFX_COMPARE_ALWAYS,
-	TGFX_COMPARE_NEVER,
-	TGFX_COMPARE_LESS,
-	TGFX_COMPARE_LEQUAL,
-	TGFX_COMPARE_GREATER,
-	TGFX_COMPARE_GEQUAL
-} TGfxCompare;
-
-typedef enum TGfxDepthMode
-{
-	TGFX_DEPTHMODE_READ_WRITE,
-	TGFX_DEPTHMODE_READ_ONLY,
-	TGFX_DEPTHMODE_OFF
-} TGfxDepthMode;
-
-typedef enum TGfxCullMode
-{
-	TGFX_CULLMODE_OFF,
-	TGFX_CULLMODE_BACK,
-	TGFX_CULLMODE_FRONT
-} TGfxCullMode;
+	TGfxShaderDescriptorType DescriptorType;
+	TU4 ElementCount;
+	TBool IsDynamic;
+} TGfxBindingTableDescription;
 
 typedef enum TGfxStencilOp
 {
@@ -322,6 +77,30 @@ typedef enum TGfxStencilOp
 	TGFX_STENCILOP_WRAPPED_DECREMENT,
 	TGFX_STENCILOP_BITWISE_INVERT
 } TGfxStencilOp;
+
+typedef enum TGfxCompare
+{
+	TGFX_COMPARE_ALWAYS,
+	TGFX_COMPARE_NEVER,
+	TGFX_COMPARE_LESS,
+	TGFX_COMPARE_LEQUAL,
+	TGFX_COMPARE_GREATER,
+	TGFX_COMPARE_GEQUAL
+} TGfxCompare;
+
+typedef struct TGfxStencilState
+{
+	TGfxStencilOp StencilFail, StencilPass, StencilDepthFail;
+	TGfxCompare CompareOp;
+	TU4 CompareMask, WriteMask, Reference;
+} TGfxStencilState;
+
+typedef struct TGfxDepthStencilState
+{
+	TBool IsDepthTestEnabled, IsDepthWriteEnabled, IsStencilTestEnabled;
+	TGfxCompare DepthCompare;
+	TGfxStencilState Front, Back;
+} TGfxDepthStencilState;
 
 typedef enum TGfxBlendFactor
 {
@@ -350,6 +129,21 @@ typedef enum TGfxBlendMode
 	TGFX_BLENDMODE_MAX
 } TGfxBlendMode;
 
+typedef struct TGfxBlendState
+{
+	TBool IsBlendEnabled;
+	TGfxBlendFactor SrcColorFactor, DstColorFactor, SrcAlphaFactor, DstAlphaFactor;
+	TGfxBlendMode ColorMode, AlphaMode;
+	TGfxTextureComponentMask BlendComponents;
+} TGfxBlendState;
+
+typedef enum TGfxCullMode
+{
+	TGFX_CULLMODE_OFF,
+	TGFX_CULLMODE_BACK,
+	TGFX_CULLMODE_FRONT
+} TGfxCullMode;
+
 typedef enum TGfxPolygonMode
 {
 	TGFX_POLYGONMODE_FILL,
@@ -357,94 +151,179 @@ typedef enum TGfxPolygonMode
 	TGFX_POLYGONMODE_POINT
 } TGfxPolygonMode;
 
-typedef enum TGfxVertexListTypes
+typedef enum TGfxVertexListType
 {
-	TGFX_VERTEXLISTTYPES_TRIANGLELIST,
-	TGFX_VERTEXLISTTYPES_TRIANGLESTRIP,
-	TGFX_VERTEXLISTTYPES_LINELIST,
-	TGFX_VERTEXLISTTYPES_LINESTRIP,
-	TGFX_VERTEXLISTTYPES_POINTLIST
-} TGfxVertexListTypes;
+	TGFX_VERTEXLISTTYPE_TRIANGLELIST,
+	TGFX_VERTEXLISTTYPE_TRIANGLESTRIP,
+	TGFX_VERTEXLISTTYPE_LINELIST,
+	TGFX_VERTEXLISTTYPE_LINESTRIP,
+	TGFX_VERTEXLISTTYPE_POINTLIST
+} TGfxVertexListType;
 
-typedef enum TGfxTextureDimensions
+#define TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT 8
+typedef struct TGfxRasterStateDescription
 {
-	TGFX_TEXTURE_DIMENSIONS_2D = 0,
-	TGFX_TEXTURE_DIMENSIONS_3D = 1,
-	TGFX_TEXTURE_DIMENSIONS_2DCUBE = 2
-} TGfxTextureDimensions;
+	TGfxCullMode Culling;
+	TGfxPolygonMode PolygonMode;
+	TGfxDepthStencilState DepthStencilState;
+	TGfxBlendState BlendStates[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
+	TGfxVertexListType Topology;
+} TGfxRasterStateDescription;
 
-typedef enum TGfxTextureMipmapFilter
+typedef struct TGfxHeapRequirementsInfo
 {
-	TGFX_TEXTURE_MIPMAPFILTER_NEAREST_FROM_1MIP,
-	TGFX_TEXTURE_MIPMAPFILTER_LINEAR_FROM_1MIP,
-	TGFX_TEXTURE_MIPMAPFILTER_NEAREST_FROM_2MIP,
-	TGFX_TEXTURE_MIPMAPFILTER_LINEAR_FROM_2MIP
-} TGfxTextureMipmapFilter;
+	// Single GPU can have max 32 regions
+	// GPU should be same with the one used in CreateTexture()
+	TU1 MemoryRegionIds[32];
+	TU4 OffsetAlignment;
+	TU8 Size;
+} TGfxHeapRequirementsInfo;
 
-typedef enum TGfxTextureOrder
+// 32 byte data to store extreme colors (RGBA64)
+typedef struct TGfxTypelessColor
 {
-	TGFX_TEXTURE_ORDER_SWIZZLE = 0,
-	TGFX_TEXTURE_ORDER_LINEAR = 1
-} TGfxTextureOrder;
+	TU1 data[32];
+} TGfxTypelessColor;
 
-typedef enum TGfxTextureWrapping
+typedef struct TGfxVertexAttributeDescription
 {
-	TGFX_TEXTURE_WRAPPING_REPEAT,
-	TGFX_TEXTURE_WRAPPING_MIRRORED_REPEAT,
-	TGFX_TEXTURE_WRAPPING_CLAMP_TO_EDGE
-} TGfxTextureWrapping;
+	TU4 AttributeIndx, BindingIndx, Offset;
+	TGfxDataType DataType;
+} TGfxVertexAttributeDescription;
 
-typedef enum TGfxTextureChannels
+typedef enum TGfxVertexBindingInputRate
 {
-	TGFX_TEXTURE_CHANNELS_UNDEF,
-	TGFX_TEXTURE_CHANNELS_BGRA8UB,	  // Unsigned but non-normalized char
-	TGFX_TEXTURE_CHANNELS_BGRA8UNORM, // Unsigned and normalized char
-	TGFX_TEXTURE_CHANNELS_BGRA8SRGB,
+	TGFX_VERTEXBINDINGINPUTRATE_UNDEF,
+	TGFX_VERTEXBINDINGINPUTRATE_VERTEX,
+	TGFX_VERTEXBINDINGINPUTRATE_INSTANCE
+} TGfxVertexBindingInputRate;
 
-	TGFX_TEXTURE_CHANNELS_RGBA32F,
-	TGFX_TEXTURE_CHANNELS_RGBA32UI,
-	TGFX_TEXTURE_CHANNELS_RGBA32I,
-	TGFX_TEXTURE_CHANNELS_RGBA8UB,
-	TGFX_TEXTURE_CHANNELS_RGBA8UNORM,
-	TGFX_TEXTURE_CHANNELS_RGBA8SRGB,
-	TGFX_TEXTURE_CHANNELS_RGBA8B,
-	TGFX_TEXTURE_CHANNELS_RGBA16F,
+typedef struct TGfxVertexBindingDescription
+{
+	TU4 BindingIndx, Stride;
+	TGfxVertexBindingInputRate InputRate;
+} TGfxVertexBindingDescription;
 
-	TGFX_TEXTURE_CHANNELS_RGB32F,
-	TGFX_TEXTURE_CHANNELS_RGB32UI,
-	TGFX_TEXTURE_CHANNELS_RGB32I,
-	TGFX_TEXTURE_CHANNELS_RGB8UB,
-	TGFX_TEXTURE_CHANNELS_RGB8B,
+typedef enum TGfxRasterPassLoad
+{
+	// All values will be cleared to a certain value
+	TGFX_RASTERPASSLOAD_CLEAR,
+	// Loaded data is random (undef or current value) & driver probably clear
+	TGFX_RASTERPASSLOAD_DISCARD,
+	// You need previous data, so previous data will affect current draw calls
+	TGFX_RASTERPASSLOAD_LOAD,
+	// There won't be any access to previous data, use this for transient resources
+	TGFX_RASTERPASSLOAD_NONE
+} TGfxRasterPassLoad;
 
-	TGFX_TEXTURE_CHANNELS_RA32F,
-	TGFX_TEXTURE_CHANNELS_RA32UI,
-	TGFX_TEXTURE_CHANNELS_RA32I,
-	TGFX_TEXTURE_CHANNELS_RA8UB,
-	TGFX_TEXTURE_CHANNELS_RA8B,
+typedef enum TGfxRasterPassStore
+{
+	// Driver do whatever it wants with the data (either write or ignores it)
+	TGFX_RASTERPASSSTORE_DISCARD,
+	// Driver should write the data to memory
+	TGFX_RASTERPASSSTORE_STORE,
+	// Driver should ignore writing the data to memory, use this for transient resources
+	TGFX_RASTERPASSSTORE_NONE
+} TGfxRasterPassStore;
 
-	TGFX_TEXTURE_CHANNELS_R32F,
-	TGFX_TEXTURE_CHANNELS_R32UI,
-	TGFX_TEXTURE_CHANNELS_R32I,
-	TGFX_TEXTURE_CHANNELS_R8UB,
-	TGFX_TEXTURE_CHANNELS_R8B,
+// TGFX_SUBPASS_EXTENSION
+typedef struct TGfxSubpassSlotDescription
+{
+	TGfxRasterPassStore StoreType;
+	TGfxRasterPassLoad LoadType;
+	TGfxTypelessColor ClearValue;
+	TGfxTextureChannels Format;
+	TGfxImageAccess Layout;
+} TGfxSubpassSlotDescription;
 
-	TGFX_TEXTURE_CHANNELS_D32,
-	TGFX_TEXTURE_CHANNELS_D24S8,
-	TGFX_TEXTURE_CHANNELS_A2B10G10R10_UNORM,
-	TGFX_TEXTURE_CHANNELS_UNDEF2
-} TGfxTextureChannels;
+typedef struct TGfxViewportInfo
+{
+	TGfxFVec2 TopLeftCorner, Size, DepthMinMax;
+} TGfxViewportInfo;
+
+typedef struct TGfxRasterInputAssemblerDescription
+{
+	TU4 AttribCount, BindingCount;
+	const TGfxVertexAttributeDescription* Attributes;
+	const TGfxVertexBindingDescription* Bindings;
+} TGfxRasterInputAssemblerDescription;
+
+typedef struct TGfxRasterPipelineDescription
+{
+	TU4 ShaderCount;
+	TGfxShaderSource const* Shaders;
+	TGfxRasterInputAssemblerDescription AttributeLayout;
+	const TGfxRasterStateDescription* MainStates;
+	TGfxTextureChannels ColorTextureFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT];
+	const TGfxBindingTableDescription* Tables;
+	TU4 TableCount;
+	TGfxTextureChannels DepthStencilTextureFormat;
+	struct tgfx_extension* const* Exts;
+	TU1 PushConstantOffset, PushConstantSize;
+} TGfxRasterPipelineDescription;
+
+typedef struct TGfxRasterPassBeginSlotInfo
+{
+	TGfxTexture Texture;
+	TGfxImageAccess ImageAccess;
+	TGfxRasterPassLoad LoadOp, LoadStencilOp;
+	TGfxRasterPassStore StoreOp, StoreStencilOp;
+	TGfxTypelessColor ClearValue;
+} TGfxRasterPassBeginSlotInfo;
+
+typedef struct TGfxDrawIndexedIndirectArgument
+{
+	TU4 IndexCountPerInstance;
+	TU4 InstanceCount;
+	TU4 FirstIndex;
+	TI4 VertexOffset;
+	TU4 FirstInstance;
+} TGfxDrawIndexedIndirectArgument;
+
+typedef struct TGfxDrawNonIndexedIndirectArgument
+{
+	TU4 VertexCountPerInstance;
+	TU4 InstanceCount;
+	TU4 FirstVertex;
+	TU4 FirstInstance;
+} TGfxDrawNonIndexedIndirectArgument;
+
+typedef struct TGfxDispatchIndirectArgument
+{
+	TGfxUVec3 ThreadGroupCount;
+} TGfxDispatchIndirectArgument;
+
+typedef enum TGfxCubeFace
+{
+	TGFX_CUBEFACE_FRONT = 0,
+	TGFX_CUBEFACE_BACK = 1,
+	TGFX_CUBEFACE_LEFT,
+	TGFX_CUBEFACE_RIGHT,
+	TGFX_CUBEFACE_TOP,
+	TGFX_CUBEFACE_BOTTOM,
+	TGFX_CUBEFACE_ALL
+} TGfxCubeFace;
+
+typedef enum TGfxOperationType
+{
+	TGFX_OPERATIONTYPE_READ_ONLY,
+	TGFX_OPERATIONTYPE_WRITE_ONLY,
+	TGFX_OPERATIONTYPE_READ_AND_WRITE,
+	TGFX_OPERATIONTYPE_UNUSED
+} TGfxOperationType;
+
+typedef enum TGfxDepthMode
+{
+	TGFX_DEPTHMODE_READ_WRITE,
+	TGFX_DEPTHMODE_READ_ONLY,
+	TGFX_DEPTHMODE_OFF
+} TGfxDepthMode;
 
 typedef enum TGfxTextureAccess
 {
 	TGFX_TEXTURE_ACCESS_SAMPLER_OPERATION,
 	TGFX_TEXTURE_ACCESS_IMAGE_OPERATION,
 } TGfxTextureAccess;
-
-typedef enum TGfxGpuType
-{
-	TGFX_GPU_TYPE_DISCRETE_GPU,
-	TGFX_GPU_TYPE_INTEGRATED_GPU
-} TGfxGpuType;
 
 typedef enum TGfxVsync
 {
@@ -453,24 +332,12 @@ typedef enum TGfxVsync
 	TGFX_VSYNC_TRIPLEBUFFER
 } TGfxVsync;
 
-typedef enum TGfxWindowMode
+typedef enum TGfxShaderLanguage
 {
-	TGFX_WINDOWMODE_FULLSCREEN,
-	TGFX_WINDOWMODE_WINDOWED
-} TGfxWindowMode;
-
-typedef enum TGfxBackends
-{
-	TGFX_BACKENDS_VULKAN = 1,
-	TGFX_BACKENDS_D3D12 = 2
-} TGfxBackends;
-
-typedef enum TGfxShaderLanguages
-{
-	TGFX_SHADERLANGUAGES_GLSL = 0,
-	TGFX_SHADERLANGUAGES_HLSL = 1,
-	TGFX_SHADERLANGUAGES_SPIRV = 2
-} TGfxShaderLanguages;
+	TGFX_SHADERLANGUAGE_GLSL = 0,
+	TGFX_SHADERLANGUAGE_HLSL = 1,
+	TGFX_SHADERLANGUAGE_SPIRV = 2
+} TGfxShaderLanguage;
 
 typedef enum TGfxShaderStage
 {
@@ -478,13 +345,6 @@ typedef enum TGfxShaderStage
 	TGFX_SHADERSTAGE_FRAGMENTSHADER = 1 << 1,
 	TGFX_SHADERSTAGE_COMPUTESHADER = 1 << 2
 } TGfxShaderStage;
-
-typedef enum TGfxPipelineType
-{
-	TGFX_PIPELINETYPE_RASTER = 0,
-	TGFX_PIPELINETYPE_COMPUTE = 1,
-	TGFX_PIPELINETYPE_RAYTRACING = 2
-} TGfxPipelineType;
 
 typedef enum TGfxBarrierPlace
 {
@@ -504,34 +364,6 @@ typedef enum TGfxTransferPassType
 	TGFX_TRANSFERPASSTYPE_BARRIER = 0,
 	TGFX_TRANSFERPASSTYPE_COPY = 1
 } TGfxTransferPassType;
-
-// Don't forget that TGFX stores how you access them in shaders
-// So backend'll probably cull some unnecessary transitions
-typedef enum TGfxImageAccess
-{
-	TGFX_IMAGE_ACCESS_NO_ACCESS,
-	TGFX_IMAGE_ACCESS_RTCOLOR_READONLY,
-	TGFX_IMAGE_ACCESS_RTCOLOR_WRITEONLY,
-	TGFX_IMAGE_ACCESS_RTCOLOR_READWRITE,
-	TGFX_IMAGE_ACCESS_SWAPCHAIN_DISPLAY,
-	TGFX_IMAGE_ACCESS_TRANSFER_DIST,
-	TGFX_IMAGE_ACCESS_TRANSFER_SRC,
-	TGFX_IMAGE_ACCESS_SHADER_SAMPLEONLY,
-	TGFX_IMAGE_ACCESS_SHADER_WRITEONLY,
-	TGFX_IMAGE_ACCESS_SHADER_SAMPLEWRITE,
-	TGFX_IMAGE_ACCESS_DEPTHSTENCIL_READONLY,
-	TGFX_IMAGE_ACCESS_DEPTHSTENCIL_WRITEONLY,
-	TGFX_IMAGE_ACCESS_DEPTHSTENCIL_READWRITE,
-	TGFX_IMAGE_ACCESS_DEPTH_READONLY,
-	TGFX_IMAGE_ACCESS_DEPTH_WRITEONLY,
-	TGFX_IMAGE_ACCESS_DEPTH_READWRITE,
-	TGFX_IMAGE_ACCESS_DEPTHREAD_STENCILREADWRITE,
-	TGFX_IMAGE_ACCESS_DEPTHREAD_STENCILWRITE,
-	TGFX_IMAGE_ACCESS_DEPTHWRITE_STENCILREAD,
-	TGFX_IMAGE_ACCESS_DEPTHWRITE_STENCILREADWRITE,
-	TGFX_IMAGE_ACCESS_DEPTHREADWRITE_STENCILREAD,
-	TGFX_IMAGE_ACCESS_DEPTHREADWRITE_STENCILWRITE
-} TGfxImageAccess;
 
 typedef enum TGfxSubDrawPassAccess
 {
@@ -570,105 +402,12 @@ typedef enum TGfxSubDrawPassAccess
 	TGFX_SUBDRAWPASSACCESS_FRAGMENTRT_WRITEONLY
 } TGfxSubDrawPassAccess;
 
-typedef enum TGfxShaderDescriptorType
-{
-	TGFX_SHADERDESCRIPTORTYPE_SAMPLER = 0,
-	TGFX_SHADERDESCRIPTORTYPE_SAMPLEDTEXTURE,
-	TGFX_SHADERDESCRIPTORTYPE_STORAGEIMAGE,
-	TGFX_SHADERDESCRIPTORTYPE_BUFFER,
-	// TODO: Extensions will be supported in the future
-	TGFX_SHADERDESCRIPTORTYPE_EXT_UNIFORMBUFFER,
-	TGFX_SHADERDESCRIPTORTYPE_VKEXT_UNIFORMBLOCK
-} TGfxShaderDescriptorType;
-
-typedef enum TGfxMemoryAllocationType
-{
-	TGFX_MEMORYALLOCATIONTYPE_DEVICELOCAL = 0,
-	TGFX_MEMORYALLOCATIONTYPE_HOSTVISIBLE = 1,
-	TGFX_MEMORYALLOCATIONTYPE_FASTHOSTVISIBLE = 2,
-	TGFX_MEMORYALLOCATIONTYPE_READBACK = 3
-} TGfxMemoryAllocationType;
-
 typedef enum TGfxConstantSamplerColor
 {
 	TGFX_CONSTANTSAMPLERCOLOR_BLACK_ALPHA0 = 0,
 	TGFX_CONSTANTSAMPLERCOLOR_BLACK_ALPHA1 = 1,
 	TGFX_CONSTANTSAMPLERCOLOR_WHITE_ALPHA1 = 2
 } TGfxConstantSamplerColor;
-
-typedef enum TGfxColorSpace
-{
-	TGFX_COLORSPACE_sRGB_NONLINEAR,
-	TGFX_COLORSPACE_EXTENDED_sRGB_LINEAR,
-	TGFX_COLORSPACE_HDR10_ST2084
-} TGfxColorSpace;
-
-typedef enum TGfxWindowComposition
-{
-	TGFX_WINDOWCOMPOSITION_OPAQUE
-} TGfxWindowComposition;
-
-typedef enum TGfxWindowPresentation
-{
-	TGFX_WINDOWPRESENTATION_FIFO,
-	TGFX_WINDOWPRESENTATION_FIFO_RELAXED,
-	TGFX_WINDOWPRESENTATION_IMMEDIATE,
-	TGFX_WINDOWPRESENTATION_MAILBOX
-} TGfxWindowPresentation;
-
-typedef enum TGfxTextureComponentMask
-{
-	TGFX_TEXTURECOMPONENTMASK_R = 1,
-	TGFX_TEXTURECOMPONENTMASK_G = 1 << 1,
-	TGFX_TEXTURECOMPONENTMASK_B = 1 << 2,
-	TGFX_TEXTURECOMPONENTMASK_A = 1 << 3,
-	TGFX_TEXTURECOMPONENTMASK_RG = TGFX_TEXTURECOMPONENTMASK_R | TGFX_TEXTURECOMPONENTMASK_G,
-	TGFX_TEXTURECOMPONENTMASK_RB = TGFX_TEXTURECOMPONENTMASK_R | TGFX_TEXTURECOMPONENTMASK_B,
-	TGFX_TEXTURECOMPONENTMASK_RA = TGFX_TEXTURECOMPONENTMASK_R | TGFX_TEXTURECOMPONENTMASK_A,
-	TGFX_TEXTURECOMPONENTMASK_GB = TGFX_TEXTURECOMPONENTMASK_G | TGFX_TEXTURECOMPONENTMASK_B,
-	TGFX_TEXTURECOMPONENTMASK_GA = TGFX_TEXTURECOMPONENTMASK_G | TGFX_TEXTURECOMPONENTMASK_A,
-	TGFX_TEXTURECOMPONENTMASK_BA = TGFX_TEXTURECOMPONENTMASK_B | TGFX_TEXTURECOMPONENTMASK_A,
-	TGFX_TEXTURECOMPONENTMASK_RGB =
-		TGFX_TEXTURECOMPONENTMASK_R | TGFX_TEXTURECOMPONENTMASK_G | TGFX_TEXTURECOMPONENTMASK_B,
-	TGFX_TEXTURECOMPONENTMASK_RGA =
-		TGFX_TEXTURECOMPONENTMASK_R | TGFX_TEXTURECOMPONENTMASK_G | TGFX_TEXTURECOMPONENTMASK_A,
-	TGFX_TEXTURECOMPONENTMASK_RBA =
-		TGFX_TEXTURECOMPONENTMASK_R | TGFX_TEXTURECOMPONENTMASK_B | TGFX_TEXTURECOMPONENTMASK_A,
-	TGFX_TEXTURECOMPONENTMASK_GBA =
-		TGFX_TEXTURECOMPONENTMASK_G | TGFX_TEXTURECOMPONENTMASK_B | TGFX_TEXTURECOMPONENTMASK_A,
-	TGFX_TEXTURECOMPONENTMASK_RGBA = TGFX_TEXTURECOMPONENTMASK_R | TGFX_TEXTURECOMPONENTMASK_G |
-									 TGFX_TEXTURECOMPONENTMASK_B | TGFX_TEXTURECOMPONENTMASK_A,
-	TGFX_TEXTURECOMPONENTMASK_ALL, // All possible values if texture's format is known
-	TGFX_TEXTURECOMPONENTMASK_NONE
-} TGfxTextureComponentMask;
-
-typedef enum TGfxTextureUsageMask
-{
-	TGFX_TEXTUREUSAGEMASK_COPYFROM = 1,
-	TGFX_TEXTUREUSAGEMASK_COPYTO = 1 << 1,
-	TGFX_TEXTUREUSAGEMASK_RENDERATTACHMENT = 1 << 2,
-	TGFX_TEXTUREUSAGEMASK_RASTERSAMPLE = 1 << 3,
-	TGFX_TEXTUREUSAGEMASK_RANDOMACCESS = 1 << 4
-} TGfxTextureUsageMask;
-
-typedef enum TGfxBufferUsageMask
-{
-	TGFX_BUFFERUSAGEMASK_COPYFROM = 1,
-	TGFX_BUFFERUSAGEMASK_COPYTO = 1 << 1,
-	TGFX_BUFFERUSAGEMASK_UNIFORMBUFFER = 1 << 2,
-	TGFX_BUFFERUSAGEMASK_STORAGEBUFFER = 1 << 3,
-	TGFX_BUFFERUSAGEMASK_VERTEXBUFFER = 1 << 4,
-	TGFX_BUFFERUSAGEMASK_INDEXBUFFER = 1 << 5,
-	TGFX_BUFFERUSAGEMASK_INDIRECTBUFFER = 1 << 6,
-	TGFX_BUFFERUSAGEMASK_accessByPointerInShader = 1 << 7
-} TGfxBufferUsageMask;
-
-typedef enum TGfxVertexBindingInputRate
-{
-	TGFX_VERTEXBINDINGINPUTRATE_UNDEF,
-	TGFX_VERTEXBINDINGINPUTRATE_VERTEX,
-	TGFX_VERTEXBINDINGINPUTRATE_INSTANCE
-} TGfxVertexBindingInputRate;
 
 typedef enum TGfxIndirectOperationType
 {
@@ -680,6 +419,6 @@ typedef enum TGfxIndirectOperationType
 	TGFX_INDIRECTOPERATIONTYPE_UNDEF2
 } TGfxIndirectOperationType;
 
-typedef void (*tgfx_PrintLogCallback)(unsigned int logCode, const char* extraInfo);
+typedef void (*tgfx_PrintLogCallback)(TU4 logCode, const char* extraInfo);
 
 TCORE_END_C_LINKAGE

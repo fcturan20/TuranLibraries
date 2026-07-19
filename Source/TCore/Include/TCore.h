@@ -87,7 +87,7 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 		TC = core;                                                                                                     \
 		if (!core || !outPluginFunctions || !outPluginInfo)                                                            \
 		{                                                                                                              \
-			return TC_RESULT_INVALID_ARGUMENT;                                                                         \
+			return {TC_RESULTSTATE_INVALID_ARGUMENT, 0};                                                               \
 		}                                                                                                              \
 		outPluginInfo->Name = name##_PLUGIN_NAME;                                                                      \
 		outPluginInfo->Version = name##_PLUGIN_VERSION;                                                                \
@@ -105,10 +105,10 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 	{                                                                                                                  \
 		const TCPluginInfo* info{};                                                                                    \
 		TC->GetPlugin(name##_PLUGIN_NAME, version, &info, (const void**)&name);                                        \
-		if (!info->Name)                                                                                               \
+		if (!info || !info->Name)                                                                                      \
 		{                                                                                                              \
 			printf("Failed to load plugin %s because it is not found!\n", name##_PLUGIN_NAME);                         \
-			return TC_RESULT_FAILURE;                                                                                  \
+			return {TC_RESULTSTATE_FAILURE, 0};                                                                        \
 		}                                                                                                              \
 	}
 
@@ -134,7 +134,7 @@ TCORE_PLUGIN_ENTRY_POINT_END for this, but you can also define your own entry po
 	TCORE_PLUGIN_ENTRY_POINT_START(name)
 
 #define TCORE_PLUGIN_ENTRY_POINT_END()                                                                                 \
-	return TC_RESULT_SUCCESS;                                                                                          \
+	return {TC_RESULTSTATE_SUCCESS, 0};                                                                                \
 	}
 
 TCORE_END_C_LINKAGE

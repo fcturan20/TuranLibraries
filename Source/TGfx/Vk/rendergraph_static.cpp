@@ -7,7 +7,7 @@
 // Each framegraph is constructed as same, so there is no difference about passing different framegraphs here
 void framegraphsys_vk::Create_VkDataofRGBranches(const framegraph_vk& FrameGraph)
 {
-	printer(result_tgfx_NOTCODED, "Couldn't find anything to do in Create_VkDataofRGBranches()");
+	printer(TC_RESULTSTATE_UNIMPLEMENTED, "Couldn't find anything to do in Create_VkDataofRGBranches()");
 }
 // This structure is to create RGBranches easily
 struct VK_RenderingPath
@@ -42,7 +42,7 @@ queueflag_vk FindRequiredQueue_ofGP(const VK_Pass* GP)
 		break;
 	case VK_Pass::PassType::CP: flag.is_COMPUTEsupported = true; break;
 	case VK_Pass::PassType::WP: flag.is_PRESENTATIONsupported = true; break;
-	default: printer(result_tgfx_FAIL, "FindRequiredQueue_ofGP() doesn't support given TPType!");
+	default: printer(TC_RESULTSTATE_FAILURE, "FindRequiredQueue_ofGP() doesn't support given TPType!");
 	}
 	return flag;
 }
@@ -68,7 +68,7 @@ VK_RenderingPath* Create_NewRP(VK_Pass* Pass, std::vector<VK_RenderingPath*>& RP
 			VK_Pass* GP_Check = RP_Check->ExecutionOrder[RPPassIndex];
 			if (GP_Check == Pass)
 			{
-				printer(result_tgfx_FAIL, ("Pass is already in a RP!" + Pass->NAME).c_str());
+				printer(TC_RESULTSTATE_FAILURE, ("Pass is already in a RP!" + Pass->NAME).c_str());
 				return nullptr;
 			}
 		}

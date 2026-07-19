@@ -37,7 +37,7 @@ public:
 };
 struct semaphoresys_vk
 {
-	inline static void ClearList() { printer(result_tgfx_NOTCODED, "SemaphoreSys->ClearList() isn't coded!"); }
+	inline static void ClearList() { printer(TC_RESULTSTATE_UNIMPLEMENTED, "SemaphoreSys->ClearList() isn't coded!"); }
 	// Searches for the previously created but later destroyed semaphores, if there isn't
 	// Then creates a new VkSemaphore object
 	inline static semaphore_vk& Create_Semaphore()
@@ -58,14 +58,14 @@ struct semaphoresys_vk
 		VkSemaphore vksemp = VK_NULL_HANDLE;
 		if (vkCreateSemaphore(rendergpu->devLogical, &Semaphore_ci, nullptr, &vksemp) != VK_SUCCESS)
 		{
-			printer(result_tgfx_FAIL,
+			printer(TC_RESULTSTATE_FAILURE,
 					"Window creation has failed while creating semaphores for each swapchain texture!");
 			return *semaphoresys->Semaphores[0];
 		}
 #ifdef VULKAN_DEBUGGING
 		if (vksemp == VK_NULL_HANDLE)
 		{
-			printer(result_tgfx_FAIL, "vkCreateSemaphore() has failed!");
+			printer(TC_RESULTSTATE_FAILURE, "vkCreateSemaphore() has failed!");
 			return *semaphoresys->Semaphores[0];
 		}
 #endif
@@ -121,7 +121,7 @@ private:
 	std::vector<semaphore_vk*> Semaphores;
 #ifdef VULKAN_DEBUGGING
 	bool isSorted = true;
-	inline static void Sort() { printer(result_tgfx_NOTCODED, "semaphoresys->Sort() isn't written!"); }
+	inline static void Sort() { printer(TC_RESULTSTATE_UNIMPLEMENTED, "semaphoresys->Sort() isn't written!"); }
 #endif
 };
 
@@ -146,14 +146,14 @@ public:
 		VkFence vk_fence = VK_NULL_HANDLE;
 		if (vkCreateFence(rendergpu->devLogical, &fence_ci, nullptr, &vk_fence) != VK_SUCCESS)
 		{
-			printer(result_tgfx_FAIL,
+			printer(TC_RESULTSTATE_FAILURE,
 					"Window creation has failed while creating semaphores for each swapchain texture!");
 			return *fencesys->Fences[0];
 		}
 #ifdef VULKAN_DEBUGGING
 		if (vk_fence == VK_NULL_HANDLE)
 		{
-			printer(result_tgfx_FAIL, "vkCreateSemaphore() has failed!");
+			printer(TC_RESULTSTATE_FAILURE, "vkCreateSemaphore() has failed!");
 			return *fencesys->Fences[0];
 		}
 #endif
@@ -184,12 +184,12 @@ public:
 							(uint32_t)VK_TRUE,
 							UINT64_MAX) != VK_SUCCESS)
 		{
-			printer(result_tgfx_FAIL, "vkWaitForFences() has failed!");
+			printer(TC_RESULTSTATE_FAILURE, "vkWaitForFences() has failed!");
 			return;
 		}
 		if (vkResetFences(rendergpu->devLogical, Fence_objects.size(), Fence_objects.data()) != VK_SUCCESS)
 		{
-			printer(result_tgfx_FAIL, "VulkanRenderer: Fence reset has failed!");
+			printer(TC_RESULTSTATE_FAILURE, "VulkanRenderer: Fence reset has failed!");
 		}
 		for (unsigned int fence_i = 0; fence_i < fences.size(); fence_i++)
 		{

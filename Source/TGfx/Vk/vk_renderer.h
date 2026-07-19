@@ -17,37 +17,27 @@ other systems
 */
 
 #pragma once
-#include <tgfx_forwarddeclarations.h>
-#include <tgfx_structs.h>
+#include <TGfxDeclarations.h>
+#include <TGfxStructs.h>
 
 #include <atomic>
 #include <vector>
 
 #include "vk_includes.h"
 
-vk_uint32c VKCONST_MAXCMDBUNDLE_PERCALL = 256;
-
-// Renderer data that other parts of the backend can access
-struct renderer_funcs;
-struct renderer_public
+namespace TGFX
 {
-public:
+namespace Vulkan
+{
+VkConstU4 VKCONST_MAXCMDBUNDLE_PERCALL = 256;
+
+class Renderer
+{
+	static void BindFunctions(ITGfxRenderer* renderer);
 };
-
-struct FRAMEBUFFER_VKOBJ;
-struct SUBRASTERPASS_VKOBJ;
-struct QUEUEFAM_VK;
-
 void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount,
-							   struct tgfx_commandBundle* const* cmdBundles,
+							   TGfxCommandBundle const* cmdBundles,
 							   uint32_t queueFamIndx,
 							   VkCommandBuffer* secondaryCmdBuffers);
-/*
-#define getGPUfromQueueHnd(i_queue)                            \
-  GPU_VKOBJ*   gpu   = QUEUE_VKOBJ::getGPUfromHnd(i_queue); \
-  QUEUEFAM_VK* fam   = QUEUE_VKOBJ::getFAMfromHnd(i_queue); \
-  QUEUE_VKOBJ* queue = getOBJ<QUEUE_VKOBJ>(i_queue);*/
-#define getGPUfromQueueHnd(i_queue)                                                                                    \
-	GPU_VKOBJ* gpu = QUEUE_VKOBJ::getGPUfromHnd(i_queue);                                                              \
-	QUEUEFAM_VK* fam = QUEUE_VKOBJ::getFAMfromHnd(i_queue);                                                            \
-	QUEUE_VKOBJ* queue = getOBJ<QUEUE_VKOBJ>(i_queue);
+} // namespace Vulkan
+} // namespace TGFX

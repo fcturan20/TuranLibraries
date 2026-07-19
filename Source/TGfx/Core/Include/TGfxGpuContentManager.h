@@ -3,131 +3,94 @@
 #include <TGfxDeclarations.h>
 TCORE_BEGIN_C_LINKAGE
 
-struct tgfx_gpuDataManager
+typedef struct ITGfxResourceManager
 {
 	void (*DestroyAllResources)();
 
 	// If sampler is used as constant;
 	//	DX12 limits bordercolor to be vec4(0), vec4(0,0,0,1) and vec4(1)
-	TCResult (*CreateSampler)(TGfxGpuHnd gpu, const struct tgfx_samplerDescription* desc, struct tgfx_sampler** hnd);
-	void (*DestroySampler)(struct tgfx_sampler* sampler);
+	TCResult (*CreateSampler)(TGfxGpu gpu, const TGfxSamplerDescription* desc, TGfxSampler* hnd);
+	void (*DestroySampler)(TGfxSampler sampler);
 
 	// Extension can be UNIFORMBUFFER
-	TCResult (*CreateBuffer)(TGfxGpuHnd gpu, const struct tgfx_bufferDescription* desc, struct tgfx_buffer** handle);
-	void (*DestroyBuffer)(struct tgfx_buffer* bufferHnd);
+	TCResult (*CreateBuffer)(TGfxGpu gpu, const TGfxBufferDescription* desc, TGfxBuffer* handle);
+	void (*DestroyBuffer)(TGfxBuffer buffer);
 
 	//	If your GPU supports buffer_GPUaddress_pointers, you can use this.
 	//		Otherwise this function pointer is NULL
 	//	You can pass pointers to buffers (call buffer data or classic GPU buffers)
 	//		and use complex data structures and access strategies in shaders
-	TCResult (*GetBufferPointer_GPU)(struct tgfx_buffer* h, unsigned long long* ptr);
+	TCResult (*GetBufferPointer_GPU)(TGfxBuffer h, TSize* ptr);
 
-	TCResult (*CreateTexture)(TGfxGpuHnd gpu,
-							  const struct tgfx_textureDescription* desc,
-							  struct tgfx_texture** textureHnd);
-	void (*DestroyTexture)(struct tgfx_texture* textureHnd);
+	TCResult (*CreateTexture)(TGfxGpu gpu, const TGfxTextureDescription* desc, TGfxTexture* textureHnd);
+	void (*DestroyTexture)(TGfxTexture textureHnd);
 
 	// BINDING TABLES
 	////////////////////////////////////
 
 	// If descType is sampler, SttcSmplrs can be used at binding index 0
-	TCResult (*CreateBindingTable)(TGfxGpuHnd gpu,
-								   const struct tgfx_bindingTableDescription* desc,
-								   struct tgfx_bindingTable** table);
-	void (*DestroyBindingTable)(struct tgfx_bindingTable* bindingTable);
-	TCResult (*SetBindingTable_Texture)(struct tgfx_bindingTable* table,
-										unsigned int bindingCount,
-										const unsigned int* bindingIndices,
-										struct tgfx_texture* const* textures);
+	TCResult (*CreateBindingTable)(TGfxGpu gpu, const TGfxBindingTableDescription* desc, TGfxBindingTable* table);
+	void (*DestroyBindingTable)(TGfxBindingTable bindingTable);
+	TCResult (*SetBindingTable_Texture)(TGfxBindingTable table,
+										TU4 bindingCount,
+										const TU4* bindingIndices,
+										TGfxTexture const* textures);
 	// If offsets is nullptr, then all offsets are 0
 	// If sizes is nullptr, then all sizes are whole buffer
-	TCResult (*SetBindingTable_Buffer)(struct tgfx_bindingTable* table,
-									   unsigned int bindingCount,
-									   const unsigned int* bindingIndices,
-									   struct tgfx_buffer* const* buffers,
-									   const unsigned int* offsets,
-									   const unsigned int* sizes,
-									   unsigned int extCount,
-									   struct tgfx_extension* const* exts);
-	TCResult (*SetBindingTable_Sampler)(struct tgfx_bindingTable* table,
-										unsigned int bindingCount,
-										const unsigned int* bindingIndices,
-										struct tgfx_sampler* const* samplers);
+	TCResult (*SetBindingTable_Buffer)(TGfxBindingTable table,
+									   TU4 bindingCount,
+									   const TU4* bindingIndices,
+									   TGfxBuffer const* buffers,
+									   const TU8* offsets,
+									   const TU8* sizes,
+									   TGfxExtension* exts);
+	TCResult (*SetBindingTable_Sampler)(TGfxBindingTable table,
+										TU4 bindingCount,
+										const TU4* bindingIndices,
+										TGfxSampler const* samplers);
 
 	// SHADER & PIPELINE COMPILATION
 	/////////////////////////////////////
 
-	TCResult (*CompileShaderSource)(TGfxGpuHnd gpu,
-									enum shaderlanguages_tgfx language,
-									enum shaderStage_tgfx shaderstage,
-									const void* DATA,
-									unsigned int DATA_SIZE,
-									struct tgfx_shaderSource** ShaderSourceHnd);
-	void (*DestroyShaderSource)(struct tgfx_shaderSource* ShaderSourceHnd);
+	TCResult (*CompileShaderSource)(TGfxGpu gpu,
+									TGfxShaderLanguage language,
+									TGfxShaderStage shaderstage,
+									const void* data,
+									TU4 size,
+									TGfxShaderSource* oShaderSource);
+	void (*DestroyShaderSource)(TGfxShaderSource shader);
 	// Extensions: CallBufferInfo, Subpass, StaticRasterState
-	TCResult (*CreateRasterPipeline)(const struct tgfx_rasterPipelineDescription* desc, struct tgfx_pipeline** hnd);
+	TCResult (*CreateRasterPipeline)(const TGfxRasterPipelineDescription* desc, TGfxPipeline* oPipeline);
 	// Extensions: Dynamic States, CallBufferInfo, Specialization Constants
-	TCResult (*CopyRasterPipeline)(struct tgfx_pipeline* basePipeline,
-								   struct tgfx_extension* const* exts,
-								   struct tgfx_pipeline** derivedPipeline);
+	TCResult (*CopyRasterPipeline)(TGfxPipeline basePipeline, TGfxExtension* exts, TGfxPipeline* derivedPipeline);
 
-	TCResult (*CreateComputePipeline)(struct tgfx_shaderSource* Source,
-									  unsigned int bindingTableCount,
-									  const tgfx_bindingTableDescription* bindingTableDescs,
-									  unsigned char pushConstantOffset,
-									  unsigned char pushConstantSize,
-									  struct tgfx_pipeline** hnd);
+	TCResult (*CreateComputePipeline)(TGfxShaderSource Source,
+									  TU4 bindingTableCount,
+									  const TGfxBindingTableDescription* bindingTableDescs,
+									  TU1 pushConstantOffset,
+									  TU1 pushConstantSize,
+									  TGfxPipeline* hnd);
 	// Extensions: CallBufferInfo, Specialization Constants
-	TCResult (*CopyComputePipeline)(struct tgfx_pipeline* src,
-									struct tgfx_extension* const* exts,
-									struct tgfx_pipeline** dst);
-	void (*DestroyPipeline)(struct tgfx_pipeline* pipeline);
+	TCResult (*CopyComputePipeline)(TGfxPipeline src, TGfxPipeline dst, TGfxExtension* exts);
+	void (*DestroyPipeline)(TGfxPipeline pipeline);
 
 	//////////////////////////////
 	// MEMORY
 	//////////////////////////////
 
 	// Extensions: Dedicated Memory Allocation
-	TCResult (*CreateHeap)(TGfxGpuHnd gpu,
-						   unsigned char memoryRegionID,
-						   unsigned long long heapSize,
-						   unsigned int extCount,
-						   struct tgfx_extension* const* exts,
-						   struct tgfx_heap** heap);
-	TCResult (*GetHeapRequirement_Texture)(struct tgfx_texture* texture,
-										   unsigned int extCount,
-										   struct tgfx_extension* const* exts,
-										   struct tgfx_heapRequirementsInfo* reqs);
-	TCResult (*GetHeapRequirement_Buffer)(TGfxBufferHnd buffer,
-										  unsigned int extCount,
-										  struct tgfx_extension* const* exts,
-										  struct tgfx_heapRequirementsInfo* reqs);
+	TCResult (*CreateHeap)(TGfxGpu gpu, TU1 memoryRegionID, TSize heapSize, TGfxExtension* exts, TGfxHeap* heap);
+	TCResult (*GetHeapRequirement_Texture)(TGfxTexture texture, TGfxExtension* exts, TGfxHeapRequirementsInfo* reqs);
+	TCResult (*GetHeapRequirement_Buffer)(TGfxBuffer buffer, TGfxExtension* exts, TGfxHeapRequirementsInfo* reqs);
 	// @return FAIL if this feature isn't supported
-	TCResult (*GetRemainingMemory)(TGfxGpuHnd gpu,
-								   unsigned char memoryRegionID,
-								   unsigned int extCount,
-								   struct tgfx_extension* const* exts,
-								   unsigned long long* size);
-	TCResult (*BindToHeap_Buffer)(struct tgfx_heap* heap,
-								  unsigned long long offset,
-								  struct tgfx_buffer* buffer,
-								  unsigned int extCount,
-								  struct tgfx_extension* const* exts);
-	TCResult (*BindToHeap_Texture)(struct tgfx_heap* heap,
-								   unsigned long long offset,
-								   struct tgfx_texture* texture,
-								   unsigned int extCount,
-								   struct tgfx_extension* const* exts);
+	TCResult (*GetRemainingMemory)(TGfxGpu gpu, TU1 memoryRegionID, TGfxExtension* exts, TSize* size);
+	TCResult (*BindToHeap_Buffer)(TGfxHeap heap, TSize offset, TGfxBuffer buffer, TGfxExtension* exts);
+	TCResult (*BindToHeap_Texture)(TGfxHeap heap, TSize offset, TGfxTexture texture, TGfxExtension* exts);
 	// You can only map one part of a heap at a time
 	// Unmap the heap if you want to map another part of it
 	// @param size: UINT64_MAX if you want to map the whole heap
-	TCResult (*MapHeap)(struct tgfx_heap* heap,
-						unsigned long long offset,
-						unsigned long long size,
-						unsigned int extCount,
-						struct tgfx_extension* const* exts,
-						void** mappedRegion);
-	TCResult (*UnmapHeap)(struct tgfx_heap* heap);
-};
+	TCResult (*MapHeap)(TGfxHeap heap, TSize offset, TSize size, TGfxExtension* exts, void** mappedRegion);
+	TCResult (*UnmapHeap)(TGfxHeap heap);
+} ITGfxResourceManager;
 
 TCORE_END_C_LINKAGE

@@ -45,11 +45,6 @@ target_link_libraries(TCoreFileSystem PRIVATE TCore TCoreUnitTest)
 set(TCoreLOGGER_SOURCES "Source/Logger.cpp" "Include/Logger.h")
 tcmake_create_dynamic_target(TCoreLogger "${TCoreLOGGER_SOURCES}" "TCore")
 target_link_libraries(TCoreLogger PRIVATE TCore)
- 
-#Bitset System
-set(TCoreBITSET_SOURCES "Source/Bitset.cpp" "Include/Bitset.h")
-tcmake_create_dynamic_target(TCoreBitset "${TCoreBITSET_SOURCES}" "TCore")
-target_link_libraries(TCoreBitset PRIVATE TCore)
 
 #Profiler System
 set(TCorePROFILER_SOURCES "Source/Profiler.cpp" "Include/Profiler.h")

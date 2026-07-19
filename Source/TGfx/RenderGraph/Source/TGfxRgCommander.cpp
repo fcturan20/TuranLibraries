@@ -330,7 +330,7 @@ struct renderer_funcs
 						<< "\nGFX's stored SwapchainImage_Index: " << unsigned int(VKWINDOW->CurrentFrameSWPCHNIndex)
 						<< "\nGFX's SwapchainIndex and Vulkan's SwapchainIndex don't match, there is "
 						   "something missing!";
-			printer(result_tgfx_FAIL, ErrorStream.str().c_str());
+			printer(TC_RESULT_FAILURE, ErrorStream.str().c_str());
 		}
 
 		VKWINDOW->PresentationSemaphores[1] = semaphore.get_id();
@@ -366,7 +366,7 @@ struct renderer_funcs
 			TargetOffset += IB->Block.Offset;
 		}
 		break;
-		default: printer(result_tgfx_FAIL, "FindBufferOBJ_byBufType() doesn't support this type of buffer!");
+		default: printer(TC_RESULT_FAILURE, "FindBufferOBJ_byBufType() doesn't support this type of buffer!");
 		}
 	}
 

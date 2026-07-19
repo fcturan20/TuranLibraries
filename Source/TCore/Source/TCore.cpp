@@ -1,3 +1,4 @@
+#define TCORE_USE_CPP_WRAPPER
 #include "TCore.h"
 
 // External
@@ -11,6 +12,7 @@
 #include <vector>
 
 TCORE_PLUGIN_INIT(TC)
+const char* TCORE_ACTIVE_PLUGIN_NAME = TC_PLUGIN_NAME;
 
 static const char* TCORE_ERROR_TEXT_DLL_NOT_FOUND = "DLL file isn't found: %s\n";
 static const char* TCORE_ERROR_TEXT_ENTRY_NOT_FOUND = "DLL file is found but plugin entry isn't\n";
@@ -47,12 +49,12 @@ TCResult LoadPlugin(const char* path, const TCPluginInfo** outInfo)
 		if (!entryPoint)
 		{
 			printf(TCORE_ERROR_TEXT_ENTRY_NOT_FOUND);
-			return TC_RESULT_FAILURE;
+			return {TC_RESULTSTATE_FAILURE, 0};
 		}
 
 		TCPluginInfo info{};
 		TCPluginFunctions functions{};
-		if (auto res = entryPoint(TC, &info, &functions); res != TC_RESULT_SUCCESS)
+		if (auto res = entryPoint(TC, &info, &functions); res != TC_RESULTSTATE_SUCCESS)
 		{
 			printf("Plugin entry point failed to initialize: %s\n", path);
 			dynalo::close(handle);
@@ -60,7 +62,7 @@ TCResult LoadPlugin(const char* path, const TCPluginInfo** outInfo)
 		}
 
 		const void* api{};
-		if (auto res = functions.Initialize(&api); res != TC_RESULT_SUCCESS)
+		if (auto res = functions.Initialize(&api); res != TC_RESULTSTATE_SUCCESS)
 		{
 			printf("Plugin failed to initialize: %s\n", path);
 			return res;
@@ -73,12 +75,12 @@ TCResult LoadPlugin(const char* path, const TCPluginInfo** outInfo)
 		Context->Plugins[path] = {handle, info, functions, api};
 		if (outInfo)
 			*outInfo = &Context->Plugins[path].Info;
-		return TC_RESULT_SUCCESS;
+		return {TC_RESULTSTATE_SUCCESS, 0};
 	}
 	catch (std::exception& e)
 	{
 		printf(TCORE_ERROR_TEXT_DLL_NOT_FOUND, path);
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 }
 
@@ -95,10 +97,10 @@ TCResult GetPlugin(const char* pluginName,
 				*outPluginInfo = &plugin.Info;
 			if (outPluginAPI)
 				*outPluginAPI = plugin.Api;
-			return TC_RESULT_SUCCESS;
+			return {TC_RESULTSTATE_SUCCESS, 0};
 		}
 	}
-	return TC_RESULT_NOT_FOUND;
+	return {TC_RESULTSTATE_NOT_FOUND, 0};
 }
 
 TCResult UnloadPlugin(const char* pluginName)
@@ -107,7 +109,7 @@ TCResult UnloadPlugin(const char* pluginName)
 	if (it == Context->Plugins.end())
 	{
 		printf("Plugin isn't found: %s\n", pluginName);
-		return TC_RESULT_FAILURE;
+		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 	auto plugin = it->second;
 	plugin.Functions.OnPreShutdown();
@@ -120,7 +122,7 @@ TCResult UnloadPlugin(const char* pluginName)
 		stored.Functions.OnPluginLoadStateChange(&plugin.Info, false);
 	delete[] plugin.Info.Name;
 	delete[] plugin.Info.RootFolderPath;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TC_Initialize(const void** outPluginAPI);
@@ -138,21 +140,21 @@ void BindPluginFunctions(TCPluginFunctions* outPluginFunctions)
 	outPluginFunctions->Shutdown = TC_Shutdown;
 	outPluginFunctions->OnPluginLoadStateChange = TC_OnPluginLoadStateChange;
 }
-const char* TCORE_ACTIVE_PLUGIN_NAME = nullptr;
+
 extern "C" __declspec(dllexport) TCResult TCORE_PLUGIN_ENTRY_FUNC(const ITC* core,
 																  TCPluginInfo* outPluginInfo,
 																  TCPluginFunctions* outPluginFunctions)
 {
 	if (!outPluginFunctions || !outPluginInfo)
 	{
-		return TC_RESULT_INVALID_ARGUMENT;
+		return {TC_RESULTSTATE_INVALID_ARGUMENT, 0};
 	}
 	outPluginInfo->Name = TC_PLUGIN_NAME;
 	outPluginInfo->Version = TC_PLUGIN_VERSION;
 	outPluginInfo->RootFolderPath = nullptr;
 	BindPluginFunctions(outPluginFunctions);
 	TCORE_ACTIVE_PLUGIN_NAME = TC_PLUGIN_NAME;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TC_Initialize(const void** outPluginAPI)
@@ -167,21 +169,21 @@ TCResult TC_Initialize(const void** outPluginAPI)
 	newTC->GetPlugin = GetPlugin;
 	TC = newTC;
 	*outPluginAPI = TC;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TC_OnPreShutdown()
 {
 	for (auto& [name, stored] : Context->Plugins)
 		TC->UnloadPlugin(name.c_str());
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TC_Shutdown()
 {
 	delete Context;
 	delete TC;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void TC_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded)

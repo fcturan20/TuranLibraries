@@ -114,7 +114,7 @@ void vk_printfLog(result_tgfx result, const char* text)
 }
 void vk_errorCallback(int error_code, const char* description)
 {
-	printer(result_tgfx_FAIL, (std::string("GLFW error: ") + description).c_str());
+	printer(TC_RESULT_FAILURE, (std::string("GLFW error: ") + description).c_str());
 }
 extern void set_helper_functions();
 extern "C" TCORE_FUNC_EXPORT result_tgfx backend_load(registrysys_tapi* regsys,
@@ -122,7 +122,7 @@ extern "C" TCORE_FUNC_EXPORT result_tgfx backend_load(registrysys_tapi* regsys,
 													  tgfx_PrintLogCallback printcallback)
 {
 	if (!regsys->get(TGFX_PLUGIN_NAME, TGFX_PLUGIN_VERSION, 0))
-		return result_tgfx_FAIL;
+		return TC_RESULT_FAILURE;
 
 	core->api->INVALIDHANDLE = regsys->get(VIRTUALMEMORY_TAPI_PLUGIN_NAME, VIRTUALMEMORY_TAPI_PLUGIN_VERSION, 0);
 	// Check if threading system is loaded
@@ -204,7 +204,7 @@ void core_functions_dx::createwindow(unsigned int WIDTH,
 	// Check and Report if GLFW fails
 	if (glfw_window == NULL)
 	{
-		printer(result_tgfx_FAIL, "VulkanCore: We failed to create the window because of GLFW!");
+		printer(TC_RESULT_FAILURE, "VulkanCore: We failed to create the window because of GLFW!");
 		delete new_window;
 		return;
 	}
@@ -212,7 +212,7 @@ void core_functions_dx::createwindow(unsigned int WIDTH,
 	new_window->Window_Hnd = glfwGetWin32Window(new_window->GLFWHANDLE);
 	if (!new_window->Window_Hnd)
 	{
-		printer(result_tgfx_FAIL, "GLFW failed to get the HWDN handle of the window!");
+		printer(TC_RESULT_FAILURE, "GLFW failed to get the HWDN handle of the window!");
 		delete new_window;
 		return;
 	}
@@ -231,7 +231,7 @@ void core_functions_dx::createwindow(unsigned int WIDTH,
 								&new_window->Swapchain_Hnd,
 								SWPCHNTEXTUREHANDLESVK))
 	{
-		printer(result_tgfx_FAIL, "Window's swapchain creation has failed, so window's creation too!");
+		printer(TC_RESULT_FAILURE, "Window's swapchain creation has failed, so window's creation too!");
 		glfwDestroyWindow(new_window->GLFWHANDLE);
 		delete new_window;
 	}
@@ -253,7 +253,7 @@ void core_functions_dx::Check_Computer_Specs()
 #endif
 	ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(&dxgiFactory)));
 
-	printer(result_tgfx_WARNING, "D3D12 backend only uses the GPU with highest Dedicated Video Memory size right now!");
+	printer(TC_RESULT_SUCCESS, "D3D12 backend only uses the GPU with highest Dedicated Video Memory size right now!");
 
 	ComPtr<IDXGIAdapter4> finalAdapter;
 
@@ -272,7 +272,7 @@ void core_functions_dx::Check_Computer_Specs()
 		if (!SUCCEEDED(
 				D3D12CreateDevice(currentAdapter.Get(), D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), nullptr)))
 		{
-			printer(result_tgfx_FAIL, "Current GPU doesn't support D3D_FEATURE_LEVEL_12_0 so skipped it.");
+			printer(TC_RESULT_FAILURE, "Current GPU doesn't support D3D_FEATURE_LEVEL_12_0 so skipped it.");
 			continue;
 		}
 		// Check to see if the adapter can create a D3D12 device without actually

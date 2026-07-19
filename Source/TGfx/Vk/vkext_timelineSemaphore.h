@@ -6,7 +6,7 @@
 
 struct FENCE_VKOBJ
 {
-	vk_handleType HANDLETYPE = VKHANDLETYPEs::FENCE;
+	VkConstHndType HANDLETYPE = VKHANDLETYPEs::FENCE;
 	static uint16_t GET_EXTRAFLAGS(FENCE_VKOBJ* obj) { return obj->m_gpuIndx; }
 	FENCE_VKOBJ& FENCE_VKOBJ::operator=(const FENCE_VKOBJ& src)
 	{
@@ -31,18 +31,18 @@ struct vkext_timelineSemaphore : public vkext_interface
 	virtual void manage(VkStructureType structType,
 						void* structPtr,
 						unsigned int extCount,
-						struct tgfx_extension* const* exts) override;
+						TGfxExtension* exts) override;
 
 	VkPhysicalDeviceTimelineSemaphoreFeatures features;
 	VkPhysicalDeviceTimelineSemaphoreProperties props;
 
-	VK_LINEAR_OBJARRAY<FENCE_VKOBJ, struct tgfx_fence*, 1 << 10> fences;
+	VK_LINEAR_OBJARRAY<FENCE_VKOBJ, TGfxFence, 1 << 10> fences;
 };
 
-struct tgfx_fence* vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue);
+TGfxFence vk_createTGFXFence(GPU_VKOBJ* gpu, uint64_t initValue);
 
-result_tgfx vk_setFenceValue(struct tgfx_fence* fence, unsigned long long value);
-result_tgfx vk_getFenceValue(struct tgfx_fence* fence, unsigned long long* value);
+TCResult SetFence(TGfxFence fence, unsigned long long value);
+TCResult GetFenceValue(TGfxFence fence, unsigned long long* value);
 
 #define getTimelineSemaphoreEXT(gpu, extVarName)                                                                       \
 	vkext_timelineSemaphore* extVarName =                                                                              \

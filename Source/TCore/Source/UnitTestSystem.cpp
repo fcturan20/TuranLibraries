@@ -33,7 +33,7 @@ struct TCUnitTestContext* GContext = nullptr;
 struct TCUnitTestContext
 {
 	UnitTest Tests[1024];
-	TUint TestCount = 0;
+	TU4 TestCount = 0;
 	static void Initialize() { GContext = new TCore::UnitTest::TCUnitTestContext(); }
 	static void RegisterTest(const TCUnitTestDescription* desc)
 	{
@@ -51,10 +51,10 @@ struct TCUnitTestContext
 
 	static void RunAllTests()
 	{
-		for (TUint indx = 0; indx < GContext->TestCount; indx++)
+		for (TU4 indx = 0; indx < GContext->TestCount; indx++)
 		{
 			auto& test = GContext->Tests[indx];
-			if (auto res = test.Test(test.Data); res != TC_RESULT_SUCCESS)
+			if (auto res = test.Test(test.Data); res != TC_RESULTSTATE_SUCCESS)
 			{
 				printf("Test failed: %s\n", test.Name.c_str());
 			}
@@ -68,6 +68,7 @@ struct TCUnitTestContext
 
 } // namespace UnitTest
 } // namespace TCore
+
 TCResult TCUnitTest_Initialize(const void** outPluginAPI)
 {
 	TCore::UnitTest::TCUnitTestContext::Initialize();
@@ -81,12 +82,12 @@ TCResult TCUnitTest_Initialize(const void** outPluginAPI)
 
 	TCUnitTest = sys;
 	*outPluginAPI = TCUnitTest;
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCUnitTest_OnPreShutdown()
 {
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCUnitTest_Shutdown()
@@ -96,7 +97,7 @@ TCResult TCUnitTest_Shutdown()
 		delete TCore::UnitTest::GContext;
 		TCore::UnitTest::GContext = nullptr;
 	}
-	return TC_RESULT_SUCCESS;
+	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 void TCUnitTest_OnPluginLoadStateChange(const TCPluginInfo* pluginInfo, TBool isLoaded)

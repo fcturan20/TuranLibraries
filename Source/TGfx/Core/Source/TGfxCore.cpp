@@ -121,7 +121,7 @@ TCResultState GetResultStateByReturnCode(TU4 returnCode, const char** message)
 	if (returnCode >= GTGfxLogCount)
 	{
 		*message = "There is no such log!";
-		return {TC_RESULTSTATE_UNIMPLEMENTED, 0};
+		return TC_RESULTSTATE_UNIMPLEMENTED;
 	}
 	auto& log = GTGfxLogs[returnCode];
 	if (message)

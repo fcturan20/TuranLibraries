@@ -34,9 +34,8 @@ typedef struct ITGfxRenderer
 
 	// @param fenceCount: Fence count that will be created
 	// @param initValue: Set initial value of all fences
-	// @param fenceList: User should create the array of fence_tgfx_handles.
-	//    So array isn't created by backend
-	void (*CreateFences)(TGfxGpu gpu, TU4 count, TU8 initValue, TGfxFence* fenceList);
+	// @param isShared: Set to use across processes
+	void (*CreateFences)(TGfxGpu gpu, TU4 count, TU8 initValue, TBool isShared, TGfxFence* fenceList);
 	void (*DestroyFence)(TGfxFence fence);
 	// CPU side fence value change
 	TCResult (*SetFence)(TGfxFence fence, TU8 value);

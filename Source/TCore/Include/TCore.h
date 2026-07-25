@@ -64,7 +64,7 @@ typedef struct ITC
 #pragma region Plugin Macros
 
 #define TCORE_SOFT_DEPENDENCY(name)                                                                                    \
-	TC->GetPlugin(name##_PLUGIN_NAME, name##_PLUGIN_VERSION, nullptr, (const void**)&##name)
+	TC->GetPlugin(name##_PLUGIN_NAME, name##_PLUGIN_VERSION, nullptr, (const void**)&name)
 
 /* Instructions for creating a plugin:
 1. In header; define plugin's API struct and its functions. Then, use TCORE_PLUGIN_DEFINE to define

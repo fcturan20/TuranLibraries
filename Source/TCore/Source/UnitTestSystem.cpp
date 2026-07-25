@@ -3,8 +3,10 @@
 #include <stdlib.h>
 #include <wchar.h>
 #include <string>
-#include <Windows.h>
 #include <vector>
+#if defined(T_ENVWINDOWS)
+#include <Windows.h>
+#endif
 
 #define TCORE_USE_CPP_WRAPPER
 #include "UnitTestSystem.h"
@@ -68,7 +70,7 @@ struct TCUnitTestContext
 		if (warningBell)
 			Beep(1000, 200);
 #else
-		printf('\a');
+		printf("\a");
 		fflush(stdout);
 #endif
 

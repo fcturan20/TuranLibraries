@@ -54,7 +54,7 @@ TCORE_DEFINE_OPAQUE_HANDLE_SYSTEM(TCW, WindowingHandleTypes)
 
 struct UVec2
 {
-	unsigned int X, Y;
+	TU4 X, Y;
 };
 
 struct Monitor : TCWObjectBase<Monitor, TCMonitor, WindowingHandleTypes::Monitor>
@@ -258,7 +258,7 @@ struct WindowingContext
 	static void GlfwWindowResizeCallback(GLFWwindow* glfwwindow, int width, int height)
 	{
 		auto w = (Window*)glfwGetWindowUserPointer(glfwwindow);
-		UVec2 res = {width, height};
+		UVec2 res = {TU4(width), TU4(height)};
 		w->m_newWidth = width;
 		w->m_newHeight = height;
 		w->ResizeCallback(GetOpaqueHandle(w), w->UserPtr, res.X, res.Y);
@@ -285,7 +285,7 @@ struct WindowingContext
 	{
 		static constexpr unsigned int maxLength = 1ull << 12;
 		char maxLog[maxLength] = {"GLFW: "};
-		strcpy_s(&maxLog[6], maxLength - 7, description);
+		strcpy(&maxLog[6], description);
 		// vkPrint(16, maxLog);
 	}
 

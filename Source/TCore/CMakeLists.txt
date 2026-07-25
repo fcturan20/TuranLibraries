@@ -32,9 +32,9 @@ tcmake_create_dynamic_target(TCoreString "${TCoreSTRING_SOURCES}" "TCore")
 target_link_libraries(TCoreString PRIVATE TCore)
 
 #Threaded Job System
-set(TCoreTHREADEDJOBSYS_SOURCES "Source/Threading.cpp" "Include/Threading.h")
-tcmake_create_dynamic_target(TCoreThreading "${TCoreTHREADEDJOBSYS_SOURCES}" "TCore")
-target_link_libraries(TCoreThreading PRIVATE TCore)
+#set(TCoreTHREADEDJOBSYS_SOURCES "Source/Threading.cpp" "Include/Threading.h")
+#tcmake_create_dynamic_target(TCoreThreading "${TCoreTHREADEDJOBSYS_SOURCES}" "TCore")
+#target_link_libraries(TCoreThreading PRIVATE TCore)
 
 #File System
 set(TCoreFILESYS_SOURCES "Source/FileSystem.cpp" "Include/FileSystem.h")

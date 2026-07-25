@@ -141,7 +141,7 @@ void BindPluginFunctions(TCPluginFunctions* outPluginFunctions)
 	outPluginFunctions->OnPluginLoadStateChange = TC_OnPluginLoadStateChange;
 }
 
-extern "C" __declspec(dllexport) TCResult TCORE_PLUGIN_ENTRY_FUNC(const ITC* core,
+extern "C" TCORE_FUN_EXPORT TCResult TCORE_PLUGIN_ENTRY_FUNC(const ITC* core,
 																  TCPluginInfo* outPluginInfo,
 																  TCPluginFunctions* outPluginFunctions)
 {

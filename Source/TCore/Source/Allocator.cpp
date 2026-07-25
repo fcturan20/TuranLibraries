@@ -101,7 +101,7 @@ struct SuperBlock
 	static TCSuperBlock Create(TU8 block_size, const char* name, const ITCBuffer* allocator)
 	{
 		// Search for a freed super memory block
-		uint32_t namelen = std::min(strlen(name), kMaxBlockName);
+		TU8 namelen = std::min(TU8(strlen(name)), kMaxBlockName);
 		if constexpr (UseContext)
 		{
 			for (uint32_t i = 0; i < GContext->SuperBlocks.Size(); i++)
@@ -256,7 +256,7 @@ struct EndOfPageAllocatorServices
 			foundMemBlock->Size = size;
 		}
 		foundMemBlock->IsFree = false;
-		TU4 nameLen = std::min(std::strlen(name), kMaxBlockName);
+		TU4 nameLen = std::min(TU8(std::strlen(name)), kMaxBlockName);
 		std::memcpy(foundMemBlock->Name, name, nameLen);
 
 		TCVirtualMemory->Commit(foundMemBlock->Ptr, size);
@@ -329,7 +329,7 @@ struct StandardAllocatorServices
 			foundMemBlock->Size = size;
 		}
 		foundMemBlock->IsFree = false;
-		TU4 nameLen = std::min(std::strlen(name), kMaxBlockName);
+		TU4 nameLen = std::min(TU8(std::strlen(name)), kMaxBlockName);
 		std::memcpy(foundMemBlock->Name, name, nameLen);
 
 		TCVirtualMemory->Commit(foundMemBlock->Ptr, size);

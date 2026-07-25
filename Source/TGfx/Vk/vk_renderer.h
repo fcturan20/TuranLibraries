@@ -29,15 +29,14 @@ namespace TGFX
 {
 namespace Vulkan
 {
-VkConstU4 VKCONST_MAXCMDBUNDLE_PERCALL = 256;
 
-class Renderer
+extern class RendererContext* GRendererContext = nullptr;
+class RendererContext
 {
-	static void BindFunctions(ITGfxRenderer* renderer);
+public:
+	static void HookRenderer(ITGfxRenderer* renderer);
+	static void Initialize();
 };
-void vk_getSecondaryCmdBuffers(unsigned int cmdBundleCount,
-							   TGfxCommandBundle const* cmdBundles,
-							   uint32_t queueFamIndx,
-							   VkCommandBuffer* secondaryCmdBuffers);
+
 } // namespace Vulkan
 } // namespace TGFX

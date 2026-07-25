@@ -12,154 +12,12 @@
 
 #include "vk_predefinitions.h"
 
-// Some algorithms and data structures to help in C++ (like threadlocalvector)
-
-template <typename T>
-class atomic
-{
-	std::atomic<T> data;
-
-public:
-	// Returns the old value
-	uint64_t DirectAdd(const uint64_t& add) { return data.fetch_add(add); }
-	// Returns the old value
-	uint64_t DirectSubtract(const uint64_t& sub) { return data.fetch_sub(sub); }
-	void DirectStore(const uint64_t& Store) { data.store(Store); }
-	uint64_t DirectLoad() const { return data.load(); }
-
-	// Deep Sleeping: The thread won't be available soon enough and application will fail at some
-	// point (or be buggy) because condition's not gonna be met soon enough. By the way, it keeps
-	// yielding at that time. This situation is so dangerous because maybe other threads's keep
-	// creating jobs that depends on this job. In such a situation, 2 cases possible; Case 1)
-	// Developers were not careful enough to do a "WaitForTheJob()" and the following operations was
-	// depending on the job's execution so all the following operations are wrong because job is not
-	// finished executing because of Deep Sleeping. Case 2) Developers were careful enough but this
-	// means developers' design lacks of a concept that covers not-meeting the condition. For example;
-	// atomic::LimitedAdd_strong() waits until addition happens. But if addition is not possible for
-	// the rest of the application, the thread'll keep yielding until termination. Or addition happens
-	// late enough that Case 1 occurs, which means following execution is wrong.
-
-	// If you want to try to do addition but want to check if it is possible in a lock-free way, it is
-	// this There are 2 cases this function may return false; 1) Your addition is already exceeds the
-	// maxlimit even there isn't any concurrent addition 2) Your addition may not exceed if there
-	// wouldn't be any concurrent addition If you think your case is '1', my advice is that you should
-	// design your application such that, the function that calls "LimitedAdd_weak()" may fail and
-	// user is aware about that You should predict cases like '2' at design level and should change
-	// your job scheduling accordingly But if you didn't and need a tricky solution, you can use
-	// LimitedAdd_strong(). But be aware of long waits. Also for some possible Deep Sleeping because
-	// data won't be small enough to do the addition By design level, I mean that; 1) You should know
-	// when there won't be any concurrent operations on the data and read it when it's time 2) You
-	// should predict the max 'add' and min value (and their timings) when concurrent operations will
-	// occur 3) You should reduce concurrent operations or schedule your concurrent operations such
-	// that LimitedAdd_strong()'ll never introduce late awakening (Never awakening) or concurrent
-	// operations'll use job waiting instead of this lock-free system
-	bool LimitedAdd_weak(const uint64_t& add, const uint64_t& maxlimit)
-	{
-		uint64_t x = data.load();
-		if (x + add > maxlimit || // Addition is bigger
-			x + add < x			  // UINT overflow
-		)
-		{
-			return false;
-		}
-		if (!data.compare_exchange_strong(x, x + add))
-		{
-			return LimitedSubtract_weak(add, maxlimit);
-		}
-		return true;
-	}
-	// You should use this function only for this case, because this is not performant;
-	// The value is very close to the limit so you are gonna reduce the value some nanoseconds later
-	// from other threads And when the value is reduced, you want addition to happen immediately
-	//"Immediately" here means after this_thread::yield()
-	// If you pay attention, this function doesn't return bool. Because this will block the thread
-	// until addition is possible So
-	void LimitedAdd_strong(const uint64_t& add, const uint64_t& maxlimit)
-	{
-		while (true)
-		{
-			if (LimitedAdd_weak(add, maxlimit))
-			{
-				return;
-			}
-			std::this_thread::yield();
-		}
-	}
-	// Similar but the reverse of the LimitedAdd_weak()
-	bool LimitedSubtract_weak(const uint64_t& subtract, const uint64_t& minlimit)
-	{
-		uint64_t x = data.load();
-		if (x - subtract < minlimit || // Subtraction is bigger
-			x - subtract > x		   // UINT overflow
-		)
-		{
-			return false;
-		}
-		if (!data.compare_exchange_strong(x, x - subtract))
-		{
-			return LimitedSubtract_weak(subtract, minlimit);
-		}
-		return true;
-	}
-	// Similar but the reverse of the LimitedAdd_strong()
-	void LimitedSubtract_strong(const uint64_t& subtract, const uint64_t& minlimit)
-	{
-		while (true)
-		{
-			if (LimitedSubtract_weak(subtract, minlimit))
-			{
-				return;
-			}
-			std::this_thread::yield();
-		}
-	}
-};
-
 namespace TGFX
 {
 namespace Vulkan
 {
 
-inline unsigned char GetByteSizeOf_TextureChannels(TGfxTextureChannels channeltype)
-{
-	switch (channeltype)
-	{
-	case TGFX_TEXTURE_CHANNELS_R8B:
-	case TGFX_TEXTURE_CHANNELS_R8UB: return 1;
-	case TGFX_TEXTURE_CHANNELS_RGB8B:
-	case TGFX_TEXTURE_CHANNELS_RGB8UB: return 3;
-	case TGFX_TEXTURE_CHANNELS_D24S8:
-	case TGFX_TEXTURE_CHANNELS_D32:
-	case TGFX_TEXTURE_CHANNELS_RGBA8B:
-	case TGFX_TEXTURE_CHANNELS_RGBA8UB:
-	case TGFX_TEXTURE_CHANNELS_BGRA8UB:
-	case TGFX_TEXTURE_CHANNELS_BGRA8UNORM:
-	case TGFX_TEXTURE_CHANNELS_R32F:
-	case TGFX_TEXTURE_CHANNELS_R32I:
-	case TGFX_TEXTURE_CHANNELS_R32UI: return 4;
-	case TGFX_TEXTURE_CHANNELS_RA32F:
-	case TGFX_TEXTURE_CHANNELS_RA32I:
-	case TGFX_TEXTURE_CHANNELS_RA32UI: return 8;
-	case TGFX_TEXTURE_CHANNELS_RGB32F:
-	case TGFX_TEXTURE_CHANNELS_RGB32I:
-	case TGFX_TEXTURE_CHANNELS_RGB32UI: return 12;
-	case TGFX_TEXTURE_CHANNELS_RGBA32F:
-	case TGFX_TEXTURE_CHANNELS_RGBA32I:
-	case TGFX_TEXTURE_CHANNELS_RGBA32UI: return 16;
-	default: vkPrint(49); return 0;
-	}
-}
-inline VkFormat findDataType(TGfxDataType datatype)
-{
-	switch (datatype)
-	{
-	case TGFX_DATATYPE_FVEC2: return VK_FORMAT_R32G32_SFLOAT;
-	case TGFX_DATATYPE_FVEC3: return VK_FORMAT_R32G32B32_SFLOAT;
-	case TGFX_DATATYPE_FVEC4: return VK_FORMAT_R32G32B32A32_SFLOAT;
-	default: vkPrint(49); return VK_FORMAT_UNDEFINED;
-	}
-}
-inline VkFormat findFormatVk(TGfxTextureChannels channels)
+inline VkFormat GetVkEnum(TGfxTextureChannels channels)
 {
 	switch (channels)
 	{
@@ -183,7 +41,7 @@ inline VkFormat findFormatVk(TGfxTextureChannels channels)
 	default: vkPrint(49); return VK_FORMAT_UNDEFINED;
 	}
 }
-inline TGfxTextureChannels findTextureChannelsTgfx(VkFormat format)
+inline TGfxTextureChannels GetTGfxEnum(VkFormat format)
 {
 	switch (format)
 	{
@@ -205,30 +63,7 @@ inline TGfxTextureChannels findTextureChannelsTgfx(VkFormat format)
 	default: vkPrint(49); return TGFX_TEXTURE_CHANNELS_R8B;
 	}
 }
-inline TGfxDataType findTextureDataType(VkFormat format)
-{
-	switch (format)
-	{
-	case VK_FORMAT_D32_SFLOAT:
-	case VK_FORMAT_R32G32B32A32_SFLOAT:
-	case VK_FORMAT_B8G8R8A8_SRGB:
-	case VK_FORMAT_R16G16B16A16_SFLOAT:
-	case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
-	case VK_FORMAT_B8G8R8A8_UNORM: return TGFX_DATATYPE_F32;
-
-	case VK_FORMAT_B8G8R8A8_UINT:
-	case VK_FORMAT_R8G8B8A8_UINT:
-	case VK_FORMAT_R8G8B8_UINT:
-	case VK_FORMAT_R32G32B32A32_UINT:
-	case VK_FORMAT_D24_UNORM_S8_UINT: return TGFX_DATATYPE_U32;
-
-	case VK_FORMAT_R8G8B8A8_SINT:
-	case VK_FORMAT_R8_SINT:
-	case VK_FORMAT_R32G32B32A32_SINT: return TGFX_DATATYPE_I32;
-	default: vkPrint(49); return TGFX_DATATYPE_UNDEFINED;
-	}
-}
-inline VkDescriptorType findDescTypeVk(TGfxShaderDescriptorType desc)
+inline VkDescriptorType GetVkEnum(TGfxShaderDescriptorType desc)
 {
 	switch (desc)
 	{
@@ -240,7 +75,7 @@ inline VkDescriptorType findDescTypeVk(TGfxShaderDescriptorType desc)
 	default: vkPrint(49); return VK_DESCRIPTOR_TYPE_MAX_ENUM;
 	}
 }
-inline TGfxShaderDescriptorType findDescTypeTgfx(VkDescriptorType desc)
+inline TGfxShaderDescriptorType GetTGfxEnum(VkDescriptorType desc)
 {
 	switch (desc)
 	{
@@ -252,7 +87,7 @@ inline TGfxShaderDescriptorType findDescTypeTgfx(VkDescriptorType desc)
 	default: vkPrint(49); return (TGfxShaderDescriptorType)UINT64_MAX;
 	}
 }
-inline VkSamplerAddressMode findAddressModeVk(TGfxTextureWrapping Wrapping)
+inline VkSamplerAddressMode GetVkEnum(TGfxTextureWrapping Wrapping)
 {
 	switch (Wrapping)
 	{
@@ -262,7 +97,7 @@ inline VkSamplerAddressMode findAddressModeVk(TGfxTextureWrapping Wrapping)
 	default: vkPrint(49); return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
 	}
 }
-inline VkFilter findFilterVk(TGfxTextureMipmapFilter filter)
+inline VkFilter GetFilter(TGfxTextureMipmapFilter filter)
 {
 	switch (filter)
 	{
@@ -273,7 +108,7 @@ inline VkFilter findFilterVk(TGfxTextureMipmapFilter filter)
 	default: vkPrint(49); return VK_FILTER_MAX_ENUM;
 	}
 }
-inline VkSamplerMipmapMode findMipmapModeVk(TGfxTextureMipmapFilter filter)
+inline VkSamplerMipmapMode GetMipmapMode(TGfxTextureMipmapFilter filter)
 {
 	switch (filter)
 	{
@@ -284,7 +119,7 @@ inline VkSamplerMipmapMode findMipmapModeVk(TGfxTextureMipmapFilter filter)
 	default: vkPrint(49); return VK_SAMPLER_MIPMAP_MODE_MAX_ENUM;
 	}
 }
-inline VkCullModeFlags findCullModeVk(TGfxCullMode mode)
+inline VkCullModeFlags GetVkEnum(TGfxCullMode mode)
 {
 	switch (mode)
 	{
@@ -294,7 +129,7 @@ inline VkCullModeFlags findCullModeVk(TGfxCullMode mode)
 	default: vkPrint(49); return VK_CULL_MODE_NONE;
 	}
 }
-inline VkPolygonMode findPolygonModeVk(TGfxPolygonMode mode)
+inline VkPolygonMode GetVkEnum(TGfxPolygonMode mode)
 {
 	switch (mode)
 	{
@@ -304,7 +139,7 @@ inline VkPolygonMode findPolygonModeVk(TGfxPolygonMode mode)
 	default: vkPrint(49); return VK_POLYGON_MODE_MAX_ENUM;
 	}
 }
-inline VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(TGfxVertexListType vertextype)
+inline VkPrimitiveTopology GetVkEnum(TGfxVertexListType vertextype)
 {
 	switch (vertextype)
 	{
@@ -312,21 +147,21 @@ inline VkPrimitiveTopology Find_PrimitiveTopology_byGFXVertexListType(TGfxVertex
 	default: vkPrint(49); return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
 	}
 }
-inline VkLogicOp findLogicOpVk()
+inline VkLogicOp GetVkEnum()
 {
 	vkPrint(49);
 	return VK_LOGIC_OP_MAX_ENUM;
 }
-inline VkIndexType Find_IndexType_byGFXDATATYPE(TGfxDataType datatype)
+inline VkIndexType GetIndexType(TGfxDataType t)
 {
-	switch (datatype)
+	switch (t)
 	{
 	case TGFX_DATATYPE_U32: return VK_INDEX_TYPE_UINT32;
 	case TGFX_DATATYPE_U16: return VK_INDEX_TYPE_UINT16;
 	default: vkPrint(49); return VK_INDEX_TYPE_MAX_ENUM;
 	}
 }
-inline VkCompareOp findCompareOpVk(TGfxCompare test)
+inline VkCompareOp GetVkEnum(TGfxCompare test)
 {
 	switch (test)
 	{
@@ -358,7 +193,7 @@ inline void Find_DepthMode_byGFXDepthMode(TGfxDepthMode mode, VkBool32& ShouldTe
 	default: vkPrint(49); break;
 	}
 }
-inline VkAttachmentLoadOp findLoadTypeVk(TGfxRasterPassLoad load)
+inline VkAttachmentLoadOp GetVkEnum(TGfxRasterPassLoad load)
 {
 	switch (load)
 	{
@@ -369,7 +204,7 @@ inline VkAttachmentLoadOp findLoadTypeVk(TGfxRasterPassLoad load)
 	default: vkPrint(49); return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
 	}
 }
-inline VkAttachmentStoreOp findStoreTypeVk(TGfxRasterPassStore store)
+inline VkAttachmentStoreOp GetVkEnum(TGfxRasterPassStore store)
 {
 	switch (store)
 	{
@@ -379,7 +214,7 @@ inline VkAttachmentStoreOp findStoreTypeVk(TGfxRasterPassStore store)
 	default: vkPrint(49); return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
 	}
 }
-inline VkStencilOp findStencilOpVk(TGfxStencilOp op)
+inline VkStencilOp GetVkEnum(TGfxStencilOp op)
 {
 	switch (op)
 	{
@@ -394,7 +229,7 @@ inline VkStencilOp findStencilOpVk(TGfxStencilOp op)
 	default: vkPrint(49); return VK_STENCIL_OP_KEEP;
 	}
 }
-inline VkBlendOp findBlendOpVk(TGfxBlendMode mode)
+inline VkBlendOp GetVkEnum(TGfxBlendMode mode)
 {
 	switch (mode)
 	{
@@ -406,7 +241,7 @@ inline VkBlendOp findBlendOpVk(TGfxBlendMode mode)
 	default: vkPrint(49); return VK_BLEND_OP_MAX_ENUM;
 	}
 }
-inline VkBlendFactor findBlendFactorVk(TGfxBlendFactor factor)
+inline VkBlendFactor GetVkEnum(TGfxBlendFactor factor)
 {
 	switch (factor)
 	{
@@ -503,106 +338,39 @@ inline void findSubpassAccessPattern(TGfxSubDrawPassAccess access,
 		stageflag |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
 		accessflag |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
 		break;
-	case TGFX_SUBDRAWPASSACCESS_VERTEXUBUFFER_READONLY:
-		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-		accessflag |= VK_ACCESS_UNIFORM_READ_BIT;
-		break;
+	case TGFX_SUBDRAWPASSACCESS_VERTEXUBUFFER_READONLY: stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; break;
 	case TGFX_SUBDRAWPASSACCESS_VERTEXSBUFFER_READONLY:
 	case TGFX_SUBDRAWPASSACCESS_VERTEXSAMPLED_READONLY:
-	case TGFX_SUBDRAWPASSACCESS_VERTEXIMAGE_READONLY:
-		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_READ_BIT;
-		break;
+	case TGFX_SUBDRAWPASSACCESS_VERTEXIMAGE_READONLY: stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; break;
 	case TGFX_SUBDRAWPASSACCESS_VERTEXSBUFFER_READWRITE:
-	case TGFX_SUBDRAWPASSACCESS_VERTEXIMAGE_READWRITE:
-		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		break;
+	case TGFX_SUBDRAWPASSACCESS_VERTEXIMAGE_READWRITE: stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; break;
 	case TGFX_SUBDRAWPASSACCESS_VERTEXIMAGE_WRITEONLY:
-	case TGFX_SUBDRAWPASSACCESS_VERTEXSBUFFER_WRITEONLY:
-		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_WRITE_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_VERTEXINPUTS_READONLY:
-		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_VERTEXINPUTS_READWRITE:
-		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_VERTEXINPUTS_WRITEONLY:
-		stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_WRITE_BIT;
-		break;
+	case TGFX_SUBDRAWPASSACCESS_VERTEXSBUFFER_WRITEONLY: stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_VERTEXINPUTS_READONLY: stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_VERTEXINPUTS_READWRITE: stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_VERTEXINPUTS_WRITEONLY: stageflag |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT; break;
 
-	case TGFX_SUBDRAWPASSACCESS_EARLY_Z_READ:
-		stageflag |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_EARLY_Z_READWRITE:
-		stageflag |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_EARLY_Z_WRITEONLY:
-		stageflag |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_FRAGMENTUBUFFER_READONLY:
-		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		accessflag |= VK_ACCESS_UNIFORM_READ_BIT;
-		break;
+	case TGFX_SUBDRAWPASSACCESS_EARLY_Z_READ: stageflag |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_EARLY_Z_READWRITE: stageflag |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_EARLY_Z_WRITEONLY: stageflag |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTUBUFFER_READONLY: stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; break;
 	case TGFX_SUBDRAWPASSACCESS_FRAGMENTSBUFFER_READONLY:
 	case TGFX_SUBDRAWPASSACCESS_FRAGMENTSAMPLED_READONLY:
-	case TGFX_SUBDRAWPASSACCESS_FRAGMENTIMAGE_READONLY:
-		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_READ_BIT;
-		break;
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTIMAGE_READONLY: stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; break;
 	case TGFX_SUBDRAWPASSACCESS_FRAGMENTSBUFFER_READWRITE:
-	case TGFX_SUBDRAWPASSACCESS_FRAGMENTIMAGE_READWRITE:
-		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		break;
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTIMAGE_READWRITE: stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; break;
 	case TGFX_SUBDRAWPASSACCESS_FRAGMENTIMAGE_WRITEONLY:
-	case TGFX_SUBDRAWPASSACCESS_FRAGMENTSBUFFER_WRITEONLY:
-		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_WRITE_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_FRAGMENTINPUTS_READONLY:
-		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_FRAGMENTINPUTS_READWRITE:
-		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_FRAGMENTINPUTS_WRITEONLY:
-		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		accessflag |= VK_ACCESS_SHADER_WRITE_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_FRAGMENTRT_READONLY:
-		stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		accessflag |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_LATE_Z_READ:
-		stageflag |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_LATE_Z_READWRITE:
-		stageflag |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_LATE_Z_WRITEONLY:
-		stageflag |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-		accessflag |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		break;
-	case TGFX_SUBDRAWPASSACCESS_FRAGMENTRT_WRITEONLY:
-		stageflag |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		accessflag |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		break;
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTSBUFFER_WRITEONLY: stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTINPUTS_READONLY: stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTINPUTS_READWRITE: stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTINPUTS_WRITEONLY: stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTRT_READONLY: stageflag |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_LATE_Z_READ: stageflag |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_LATE_Z_READWRITE: stageflag |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_LATE_Z_WRITEONLY: stageflag |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT; break;
+	case TGFX_SUBDRAWPASSACCESS_FRAGMENTRT_WRITEONLY: stageflag |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; break;
 	default:
 		stageflag = UINT64_MAX;
-		accessflag = UINT64_MAX;
 		vkPrint(49);
 		break;
 	}
@@ -702,7 +470,7 @@ inline void findImageAccessPattern(const TGfxImageAccess& Access,
 	default: vkPrint(49); return;
 	}
 }
-inline VkImageType findImageTypeVk(TGfxTextureDimensions dimensions)
+inline VkImageType GetVkEnum(TGfxTextureDimensions dimensions)
 {
 	switch (dimensions)
 	{
@@ -712,7 +480,7 @@ inline VkImageType findImageTypeVk(TGfxTextureDimensions dimensions)
 	default: vkPrint(49); return VkImageType::VK_IMAGE_TYPE_MAX_ENUM;
 	}
 }
-inline VkImageTiling Find_VkTiling(TGfxTextureOrder order)
+inline VkImageTiling GetVkEnum(TGfxTextureOrder order)
 {
 	switch (order)
 	{
@@ -753,7 +521,7 @@ inline TU4 GetDataTypeSizeInBytes(TGfxDataType data)
 	default: vkPrint(49); return 0;
 	}
 }
-inline VkPresentModeKHR findPresentModeVk(TGfxWindowPresentation p)
+inline VkPresentModeKHR GetVkEnum(TGfxWindowPresentation p)
 {
 	switch (p)
 	{
@@ -764,7 +532,7 @@ inline VkPresentModeKHR findPresentModeVk(TGfxWindowPresentation p)
 	default: vkPrint(49); return VK_PRESENT_MODE_MAX_ENUM_KHR;
 	}
 }
-inline TGfxWindowPresentation findPresentModeTgfx(VkPresentModeKHR p)
+inline TGfxWindowPresentation GetTGfxEnum(VkPresentModeKHR p)
 {
 	switch (p)
 	{
@@ -775,7 +543,7 @@ inline TGfxWindowPresentation findPresentModeTgfx(VkPresentModeKHR p)
 	default: vkPrint(49); return TGFX_WINDOWPRESENTATION_FIFO;
 	}
 }
-inline VkColorSpaceKHR findColorSpaceVk(TGfxColorSpace cs)
+inline VkColorSpaceKHR GetVkEnum(TGfxColorSpace cs)
 {
 	switch (cs)
 	{
@@ -785,45 +553,11 @@ inline VkColorSpaceKHR findColorSpaceVk(TGfxColorSpace cs)
 	default: vkPrint(49); return VK_COLOR_SPACE_MAX_ENUM_KHR;
 	}
 }
-inline VkColorComponentFlags findColorWriteMask(TGfxTextureChannels chnnls)
-{
-	switch (chnnls)
-	{
-	case TGFX_TEXTURE_CHANNELS_BGRA8UB:
-	case TGFX_TEXTURE_CHANNELS_BGRA8UNORM:
-	case TGFX_TEXTURE_CHANNELS_RGBA32F:
-	case TGFX_TEXTURE_CHANNELS_RGBA32UI:
-	case TGFX_TEXTURE_CHANNELS_RGBA32I:
-	case TGFX_TEXTURE_CHANNELS_RGBA8UB:
-	case TGFX_TEXTURE_CHANNELS_RGBA8B:
-		return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-			   VK_COLOR_COMPONENT_A_BIT;
-	case TGFX_TEXTURE_CHANNELS_RGB32F:
-	case TGFX_TEXTURE_CHANNELS_RGB32UI:
-	case TGFX_TEXTURE_CHANNELS_RGB32I:
-	case TGFX_TEXTURE_CHANNELS_RGB8UB:
-	case TGFX_TEXTURE_CHANNELS_RGB8B:
-		return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
-	case TGFX_TEXTURE_CHANNELS_RA32F:
-	case TGFX_TEXTURE_CHANNELS_RA32UI:
-	case TGFX_TEXTURE_CHANNELS_RA32I:
-	case TGFX_TEXTURE_CHANNELS_RA8UB:
-	case TGFX_TEXTURE_CHANNELS_RA8B: return VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT;
-	case TGFX_TEXTURE_CHANNELS_R32F:
-	case TGFX_TEXTURE_CHANNELS_R32UI:
-	case TGFX_TEXTURE_CHANNELS_R32I: return VK_COLOR_COMPONENT_R_BIT;
-	case TGFX_TEXTURE_CHANNELS_R8UB:
-	case TGFX_TEXTURE_CHANNELS_R8B: return VK_COLOR_COMPONENT_R_BIT;
-	case TGFX_TEXTURE_CHANNELS_D32:
-	case TGFX_TEXTURE_CHANNELS_D24S8:
-	default: vkPrint(49); return VK_COLOR_COMPONENT_FLAG_BITS_MAX_ENUM;
-	}
-}
-inline VkColorComponentFlags findColorComponentsVk(TGfxTextureComponentMask mask, TGfxTextureChannels format)
+inline VkColorComponentFlags GetVkEnum(TGfxTextureComponentMask mask, TGfxTextureChannels format)
 {
 	if (mask == TGFX_TEXTURECOMPONENTMASK_RGBA && format != TGFX_TEXTURE_CHANNELS_UNDEF)
 	{
-		return findColorWriteMask(format);
+		return GetVkEnum(format);
 	}
 	if (mask == (TGfxTextureComponentMask)0)
 	{
@@ -836,7 +570,7 @@ inline VkColorComponentFlags findColorComponentsVk(TGfxTextureComponentMask mask
 	flag |= (mask & TGFX_TEXTURECOMPONENTMASK_A) ? VK_COLOR_COMPONENT_A_BIT : 0;
 	return flag;
 }
-inline TGfxColorSpace findColorSpaceTgfx(VkColorSpaceKHR cs)
+inline TGfxColorSpace GetTGfxEnum(VkColorSpaceKHR cs)
 {
 	switch (cs)
 	{
@@ -846,7 +580,7 @@ inline TGfxColorSpace findColorSpaceTgfx(VkColorSpaceKHR cs)
 	default: vkPrint(49); return (TGfxColorSpace)UINT32_MAX;
 	}
 }
-inline TGfxShaderStage findShaderStageFromMask(unsigned int mask)
+inline TGfxShaderStage GetTGfxEnum(unsigned int mask)
 {
 	TGfxShaderStage flag = (TGfxShaderStage)0;
 	flag = (TGfxShaderStage)((mask & TGFX_SHADERSTAGE_VERTEXSHADER) ? TGFX_SHADERSTAGE_VERTEXSHADER : 0);
@@ -855,7 +589,7 @@ inline TGfxShaderStage findShaderStageFromMask(unsigned int mask)
 	flag = (TGfxShaderStage)((mask & TGFX_SHADERSTAGE_COMPUTESHADER) ? (flag | TGFX_SHADERSTAGE_COMPUTESHADER) : flag);
 	return flag;
 }
-inline TGfxGpuType findGPUTypeTgfx(VkPhysicalDeviceType t)
+inline TGfxGpuType GetTGfxEnum(VkPhysicalDeviceType t)
 {
 	switch (t)
 	{
@@ -865,7 +599,7 @@ inline TGfxGpuType findGPUTypeTgfx(VkPhysicalDeviceType t)
 	default: return (TGfxGpuType)UINT32_MAX;
 	}
 }
-inline VkPipelineBindPoint findPipelineBindPoint(TGfxPipelineType type)
+inline VkPipelineBindPoint GetVkEnum(TGfxPipelineType type)
 {
 	switch (type)
 	{
@@ -875,7 +609,30 @@ inline VkPipelineBindPoint findPipelineBindPoint(TGfxPipelineType type)
 	default: vkPrint(49); return VK_PIPELINE_BIND_POINT_MAX_ENUM;
 	}
 }
-inline VkBufferUsageFlags findBufferUsageFlagVk(unsigned int mask)
+
+inline VkFormat GetVkFormatFromTGfxDataType(TGfxDataType type)
+{
+	switch (type)
+	{
+	case TGFX_DATATYPE_I8: return VK_FORMAT_R8_SINT;
+	case TGFX_DATATYPE_U8: return VK_FORMAT_R8_UINT;
+	case TGFX_DATATYPE_I16: return VK_FORMAT_R16_SINT;
+	case TGFX_DATATYPE_U16: return VK_FORMAT_R16_UINT;
+	case TGFX_DATATYPE_I32: return VK_FORMAT_R32_SINT;
+	case TGFX_DATATYPE_U32: return VK_FORMAT_R32_UINT;
+	case TGFX_DATATYPE_F32: return VK_FORMAT_R32_SFLOAT;
+	case TGFX_DATATYPE_FVEC2: return VK_FORMAT_R32G32_SFLOAT;
+	case TGFX_DATATYPE_FVEC3: return VK_FORMAT_R32G32B32_SFLOAT;
+	case TGFX_DATATYPE_FVEC4: return VK_FORMAT_R32G32B32A32_SFLOAT;
+	case TGFX_DATATYPE_FMAT4x4:
+		// Represent a 4x4 matrix as four vec4 attributes when needed.
+		// Vulkan has no single format for a 4x4 matrix, so return a vec4 format as a sensible default.
+		return VK_FORMAT_R32G32B32A32_SFLOAT;
+	default: vkPrint(49); return VK_FORMAT_UNDEFINED;
+	}
+}
+
+inline VkBufferUsageFlags GetVkEnum(unsigned int mask)
 {
 	VkBufferUsageFlags flag = {};
 	// The TGfx buffer usage mask constants should be mapped here; placeholder mapping:
@@ -888,7 +645,7 @@ inline VkBufferUsageFlags findBufferUsageFlagVk(unsigned int mask)
 	// flag |= (mask & TGFX_BUFFERUSAGE_VERTEXBUFFER) ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : 0;
 	return flag;
 }
-inline VkImageUsageFlags findTextureUsageFlagVk(unsigned int mask)
+inline VkImageUsageFlags GetVkEnum_forTextureUsage(unsigned int mask)
 {
 	VkImageUsageFlags flag = {};
 	// Placeholder mapping; replace TGFX_TEXTUREUSAGE_* masks with actual constants when available
@@ -912,7 +669,7 @@ inline unsigned int findTextureUsageFlagTgfx(VkImageUsageFlags mask)
 	// TGFX_TEXTUREUSAGE_RENDERATTACHMENT : 0;
 	return flag;
 }
-inline VkVertexInputRate findVertexInputRateVk(TGfxVertexBindingInputRate rate)
+inline VkVertexInputRate GetVkEnum(TGfxVertexBindingInputRate rate)
 {
 	switch (rate)
 	{

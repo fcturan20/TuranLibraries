@@ -1,11 +1,8 @@
 #pragma once
-#include <TGfxStructs.h>
-
 #include <atomic>
 #include <glm/glm.hpp>
-
+#include "vk_core.h"
 #include "vk_includes.h"
-#include "vk_predefinitions.h"
 
 namespace TGFX
 {
@@ -44,67 +41,41 @@ struct VMemoryRequirements
 
 // Classic Memory Resources
 
-struct TEXTURE_VKOBJ
+struct Texture : public VkObjectBase<Texture, TGfxTexture, VkObjTypes::TEXTURE>, public GpuObject
 {
-	VkConstHndType HANDLETYPE = VKHANDLETYPEs::TEXTURE;
-	static uint16_t GET_EXTRAFLAGS(TEXTURE_VKOBJ* obj) { return 0; }
+	Texture(GPU* gpu) : vk_image(gpu->ReferenceManager), vk_imageView(gpu->ReferenceManager), GpuObject(gpu) {}
+	uint16_t GetExtraFlags(Texture* obj) { return 0; }
 
-	void operator=(const TEXTURE_VKOBJ& src)
-	{
-		m_width = src.m_width;
-		m_height = src.m_height;
-		m_mips = src.m_mips;
-		m_channels = src.m_channels;
-		vk_imageUsage = src.vk_imageUsage;
-		m_dim = src.m_dim;
-		m_memBlock = src.m_memBlock;
-		vk_image = src.vk_image;
-		vk_imageView = src.vk_imageView;
-		m_memReqs = src.m_memReqs;
-		m_GPU = src.m_GPU;
-	}
-
-	unsigned int m_width, m_height;
-	unsigned char m_mips;
+	TGfxUVec2 Size;
+	TU1 MipCount;
 	TGfxTextureChannels m_channels;
 	TGfxTextureDimensions m_dim;
 	VMemoryBlock m_memBlock = VMemoryBlock::GETINVALID();
 	VMemoryRequirements m_memReqs = VMemoryRequirements::GETINVALID();
-	uint8_t m_GPU;
 
-	VkImage vk_image = {};
-	VkImageView vk_imageView = {};
-	VkImageUsageFlags vk_imageUsage = {};
+	VkImageHnd vk_image;
+	VkImageViewHnd vk_imageView;
 };
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Texture, Vk)
 
-struct BUFFER_VKOBJ
+struct Buffer : public VkObjectBase<Buffer, TGfxBuffer, VkObjTypes::BUFFER>, public GpuObject
 {
-	VkConstHndType HANDLETYPE = VKHANDLETYPEs::BUFFER;
-	static uint16_t GET_EXTRAFLAGS(BUFFER_VKOBJ* obj) { return 0; }
-
-	void operator=(const BUFFER_VKOBJ& src)
-	{
-		vk_usage = src.vk_usage;
-		vk_buffer = src.vk_buffer;
-		m_memBlock = src.m_memBlock;
-		m_GPU = src.m_GPU;
-		m_memReqs = src.m_memReqs;
-	}
+	Buffer(GPU* gpu) : GpuObject(gpu), vk_buffer(gpu->ReferenceManager) {}
+	uint16_t GetExtraFlags() { return 0; }
 
 	VMemoryBlock m_memBlock;
 	VMemoryRequirements m_memReqs;
-	uint8_t m_GPU;
 	uint64_t m_intendedSize = UINT64_MAX;
 
-	VkBuffer vk_buffer;
-	VkBufferUsageFlags vk_usage;
+	VkBufferHnd vk_buffer;
 };
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Buffer, Vk)
 
 // Framebuffer RT Slot Management
 
 struct colorslot_vk
 {
-	TEXTURE_VKOBJ* RT;
+	Texture* RT;
 	TGfxRasterPassLoad LOADSTATE;
 	bool IS_USED_LATER;
 	TGfxOperationType RT_OPERATIONTYPE;
@@ -113,7 +84,7 @@ struct colorslot_vk
 };
 struct depthstencilslot_vk
 {
-	TEXTURE_VKOBJ* RT;
+	Texture* RT;
 	TGfxRasterPassLoad DEPTH_LOAD, STENCIL_LOAD;
 	bool IS_USED_LATER;
 	TGfxOperationType DEPTH_OPTYPE, STENCIL_OPTYPE;
@@ -139,115 +110,60 @@ struct rtslots_vk
 	}
 };
 
-/*
-struct RTSLOTSET_VKOBJ {
-
-  VkConstHndType    HANDLETYPE = VKHANDLETYPEs::RTSLOTSET;
-  static uint16_t  GET_EXTRAFLAGS(RTSLOTSET_VKOBJ* obj) { return 0; }
-
-  void operator=(const RTSLOTSET_VKOBJ& copyFrom) {
-	isALIVE.store(true);
-	PERFRAME_SLOTSETs[0] = copyFrom.PERFRAME_SLOTSETs[0];
-	PERFRAME_SLOTSETs[1] = copyFrom.PERFRAME_SLOTSETs[1];
-	FB_ci[0]             = copyFrom.FB_ci[0];
-	FB_ci[1]             = copyFrom.FB_ci[1];
-  }
-  rtslots_vk PERFRAME_SLOTSETs[2];
-  // You should change this struct's vkRenderPass object pointer as your vkRenderPass object
-  VkFramebufferCreateInfo FB_ci[2];
-};
-struct IRTSLOTSET_VKOBJ {
-
-  VkConstHndType    HANDLETYPE = VKHANDLETYPEs::IRTSLOTSET;
-  static uint16_t  GET_EXTRAFLAGS(IRTSLOTSET_VKOBJ* obj) { return 0; }
-
-  void operator=(const IRTSLOTSET_VKOBJ& copyFrom) {
-	isALIVE.store(true);
-	BASESLOTSET    = copyFrom.BASESLOTSET;
-	COLOR_OPTYPEs  = copyFrom.COLOR_OPTYPEs;
-	DEPTH_OPTYPE   = copyFrom.DEPTH_OPTYPE;
-	STENCIL_OPTYPE = copyFrom.STENCIL_OPTYPE;
-  }
-  uint32_t            BASESLOTSET;
-  operationtype_tgfx* COLOR_OPTYPEs;
-  operationtype_tgfx  DEPTH_OPTYPE;
-  operationtype_tgfx  STENCIL_OPTYPE;
-};
-struct rtslot_create_description_vk {
-  TEXTURE_VKOBJ*     textures[2];
-  operationtype_tgfx optype;
-  drawpassload_tgfx  loadtype;
-  bool               isUsedLater;
-  vec4_tgfx          clear_value;
-};
-struct rtslot_inheritance_descripton_vk {
-  bool               IS_DEPTH = false;
-  operationtype_tgfx OPTYPE = operationtype_tgfx_UNUSED, OPTYPESTENCIL = operationtype_tgfx_UNUSED;
-  drawpassload_tgfx  LOADTYPE = drawpassload_tgfx_CLEAR, LOADTYPESTENCIL = drawpassload_tgfx_CLEAR;
-};*/
-
-struct SUBRASTERPASS_VKOBJ
+struct SubRasterpass : public VkObjectBase<SubRasterpass, TGfxSubRasterpass, VkObjTypes::SUBRASTERPASS>,
+					   public GpuObject
 {
-	std::atomic_bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::SUBRASTERPASS;
-	static uint16_t GET_EXTRAFLAGS(SUBRASTERPASS_VKOBJ* obj) { return 0; }
+	SubRasterpass(GPU* gpu) : GpuObject(gpu), vk_renderPass(gpu->ReferenceManager) {}
+	uint16_t GetExtraFlags() { return 0; }
 
 	uint32_t m_subpassIndx;
-	TGfxGpu m_gpu;
-	VkRenderPass vk_renderPass; // It's same across all subpasses
+	VkRenderPassHnd vk_renderPass; // It's same across all subpasses
 	bool isDepthAttachment = false;
 	// Extra information to check raster pipeline compilations without relying on validation layer
 };
-struct SAMPLER_VKOBJ
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(SubRasterpass, Vk)
+
+struct Sampler : public VkObjectBase<Sampler, TGfxSampler, VkObjTypes::SAMPLER>, public GpuObject
 {
+	Sampler(GPU* gpu) : GpuObject(gpu), vk_sampler(gpu->ReferenceManager) {}
+	uint16_t GetExtraFlags() { return m_flags.load(); }
 
-	VkConstHndType HANDLETYPE = VKHANDLETYPEs::SAMPLER;
-	static uint16_t GET_EXTRAFLAGS(SAMPLER_VKOBJ* obj) { return obj->m_flags.load(); }
-
-	VkSampler vk_sampler = VK_NULL_HANDLE;
+	VkSamplerHnd vk_sampler;
 	std::atomic_uint16_t m_flags = 0; // YCbCr conversion only flag for now
-	uint8_t m_gpu;
 };
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Sampler, Vk)
 
 /////////////////////////////////////////////
 //				PIPELINE RESOURCES
 /////////////////////////////////////////////
 
-struct PIPELINE_VKOBJ
+struct Pipeline : public VkObjectBase<Pipeline, TGfxPipeline, VkObjTypes::PIPELINE>, public GpuObject
 {
-	VkConstHndType HANDLETYPE = VKHANDLETYPEs::PIPELINE;
-	static uint16_t GET_EXTRAFLAGS(PIPELINE_VKOBJ* obj) { return obj->vk_type; }
+	Pipeline(GPU* gpu) : GpuObject(gpu), vk_layout(gpu->ReferenceManager), vk_object(gpu->ReferenceManager) {}
+	uint16_t GetExtraFlags() { return vk_type; }
 
-	uint8_t m_gpu;
-
-	VkPipelineLayout vk_layout = VK_NULL_HANDLE;
-	VkPipeline vk_object = VK_NULL_HANDLE;
+	VkPipelineLayoutHnd vk_layout;
+	VkPipelineHnd vk_object;
 	VkPipelineBindPoint vk_type = VK_PIPELINE_BIND_POINT_MAX_ENUM;
 
 	VkFormat vk_colorAttachmentFormats[TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT] = {};
 	VkFormat vk_depthAttachmentFormat = {};
 };
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Pipeline, Vk)
 
-struct SHADERSOURCE_VKOBJ
+struct ShaderSource : VkObjectBase<ShaderSource, TGfxShaderSource, VkObjTypes::SHADERSOURCE>, public GpuObject
 {
-	bool isALIVE = false;
-	static constexpr VKHANDLETYPEs HANDLETYPE = VKHANDLETYPEs::SHADERSOURCE;
-	static uint16_t GET_EXTRAFLAGS(SHADERSOURCE_VKOBJ* obj) { return obj->Stage; }
+	ShaderSource(GPU* gpu) : GpuObject(gpu), Module(gpu->ReferenceManager) {}
+	uint16_t GetExtraFlags() { return Stage; }
 
-	void operator=(const SHADERSOURCE_VKOBJ& copyFrom)
-	{
-		isALIVE = true;
-		Module = copyFrom.Module;
-		Stage = copyFrom.Stage;
-		SourceCode = copyFrom.SourceCode;
-		SourceCodeSize = copyFrom.SourceCodeSize;
-	}
-	VkShaderModule Module;
+	VkShaderModuleHnd Module;
 	TGfxShaderStage Stage;
 	void* SourceCode = nullptr;
 	unsigned int SourceCodeSize = 0;
 	TGfxGpu Gpu;
 };
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(ShaderSource, Vk)
+
 struct depthsettingsdesc_vk
 {
 	VkBool32 ShouldWrite = VK_FALSE;
@@ -267,41 +183,40 @@ struct blendinginfo_vk
 	VkPipelineColorBlendAttachmentState BlendState = {};
 };
 
+TCORE_DEFINE_HANDLE(VkVertexAttrib);
 VkConstU4 VKCONST_MAXVERTEXATTRIBCOUNT = 16, VKCONST_MAXVERTEXBINDINGCOUNT = 4;
-struct VERTEXATTRIBLAYOUT_VKOBJ
+struct VertexAttributeLayout : public VkObjectBase<VertexAttributeLayout, VkVertexAttrib, VkObjTypes::VERTEXATTRIB>
 {
-
-	VkConstHndType HANDLETYPE = VKHANDLETYPEs::VERTEXATTRIB;
-	static uint16_t GET_EXTRAFLAGS(VERTEXATTRIBLAYOUT_VKOBJ* obj) { return 0; }
+	uint16_t GetExtraFlags() { return 0; }
 
 	VkVertexInputBindingDescription bindingDescs[VKCONST_MAXVERTEXBINDINGCOUNT];
 	VkVertexInputAttributeDescription attribDescs[VKCONST_MAXVERTEXATTRIBCOUNT];
 	unsigned char attribDescsCount, bindingDescsCount;
 };
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(VertexAttributeLayout, Vk)
 
-struct HEAP_VKOBJ
+struct Heap : public VkObjectBase<Heap, TGfxHeap, VkObjTypes::HEAP>, public GpuObject
 {
-
-	VkConstHndType HANDLETYPE = VKHANDLETYPEs::HEAP;
-
-	static uint16_t GET_EXTRAFLAGS(HEAP_VKOBJ* obj)
+	Heap(GPU* gpu) : GpuObject(gpu), vk_memoryHnd(gpu->ReferenceManager) {}
+	uint16_t GetExtraFlags()
 	{
 		// assert(0 && "GPU index & memTypeIndex should be passed as extra flag");
 		return 0;
 	}
-	void operator=(const HEAP_VKOBJ& src)
-	{
-		vk_memoryHnd = src.vk_memoryHnd;
-		vk_memoryTypeIndex = src.vk_memoryTypeIndex;
-		m_size = src.m_size;
-	}
-
-	uint8_t m_GPU;
 	unsigned long long m_size;
 
-	VkDeviceMemory vk_memoryHnd;
+	VkDeviceMemoryHnd vk_memoryHnd;
 	unsigned int vk_memoryTypeIndex;
 };
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Heap, Vk)
+
+struct Fence : VkObjectBase<Fence, TGfxFence, VkObjTypes::FENCE>, public GpuObject
+{
+	Fence(GPU* gpu) : GpuObject(gpu), FenceHnd(gpu->ReferenceManager), SemaphoreHnd(gpu->ReferenceManager) {}
+	VkFenceHnd FenceHnd;
+	VkSemaphoreHnd SemaphoreHnd;
+};
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Fence, Vk)
 
 struct cmdPool_vk;
 struct cmdBundleRef_vk
@@ -311,11 +226,10 @@ struct cmdBundleRef_vk
 	VkCommandBuffer vk_cmdBuffer;
 };
 
-struct FRAMEBUFFER_VKOBJ
+struct Framebuffer : public GpuObject
 {
-
-	VkConstHndType HANDLETYPE = VKHANDLETYPEs::INTERNAL;
-	static uint16_t GET_EXTRAFLAGS(FRAMEBUFFER_VKOBJ* obj) { return 0; }
+	Framebuffer(GPU* gpu) : GpuObject(gpu), vk_framebuffer(gpu->ReferenceManager) {}
+	uint16_t GetExtraFlags(Framebuffer* obj) { return 0; }
 
 	TGfxTexture m_textures[kMaxRtSlotCount];
 	// Command bundles records a command buffer for each framebuffer
@@ -323,7 +237,7 @@ struct FRAMEBUFFER_VKOBJ
 	static constexpr uint32_t MAXCMDBUNDLECOUNT = 32;
 	uint32_t m_cmdBundleCount = 0;
 	cmdBundleRef_vk m_cmdBundleRefs[MAXCMDBUNDLECOUNT] = {};
-	VkFramebuffer vk_framebuffer = {};
+	VkFramebufferHnd vk_framebuffer;
 };
 
 } // namespace Vulkan

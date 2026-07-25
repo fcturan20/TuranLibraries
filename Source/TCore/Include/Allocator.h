@@ -70,7 +70,6 @@ namespace TCore
 // Use macros at the end of the header
 extern TCSuperBlock GSuperMemoryBlock;
 
-// Write a C++ wrapper for the vector allocator
 template <typename T, bool EnableTrivialCopy = std::is_trivially_copyable<T>::value>
 class Vector
 {
@@ -78,76 +77,153 @@ public:
 	Vector(TCSuperBlock mem_block = GSuperMemoryBlock, unsigned int initial_size = 0, unsigned int initial_capacity = 0)
 	{
 		Handle = TCVectorManager->Create(mem_block, sizeof(T), initial_size, initial_capacity);
-		if constexpr (!EnableTrivialCopy)
-			for (size_t i = 0; i < initial_size; i++)
-				new ((*this)[i]) T();
+
+		// Construct non-trivial elements
+		if (!EnableTrivialCopy)
+		{
+			T* data = reinterpret_cast<T*>(Handle);
+			for (unsigned int i = 0; i < initial_size; ++i)
+				new (&data[i]) T();
+		}
 	}
 
+	// Copy constructor
 	Vector(const Vector& other)
 	{
-		Handle = TCVectorManager->Create(GSuperMemoryBlock, sizeof(T), other.Size(), other.Capacity());
-		if constexpr (!EnableTrivialCopy)
-			for (TU8 i = 0; i < other.Size(); i++)
-				new ((*this)[i]) T(other[i]);
+		TU8 otherSize = other.Size();
+		Handle = TCVectorManager->Create(GSuperMemoryBlock, sizeof(T), otherSize, other.Capacity());
+
+		if (!EnableTrivialCopy)
+		{
+			T* dst = reinterpret_cast<T*>(Handle);
+			for (TU8 i = 0; i < otherSize; ++i)
+				new (&dst[i]) T(other[i]);
+		}
+		else
+		{
+			std::memcpy(reinterpret_cast<void*>(Handle),
+						reinterpret_cast<const void*>(other.Handle),
+						sizeof(T) * static_cast<size_t>(otherSize));
+		}
+	}
+
+	// Destructor — destroy elements and free the underlying vector handle.
+	~Vector()
+	{
+		if (!Handle)
+			return;
+
+		TU8 size = Size();
+
+		if (!EnableTrivialCopy)
+		{
+			T* data = reinterpret_cast<T*>(Handle);
+			for (TU8 i = 0; i < size; ++i)
+				data[i].~T();
+		}
+
+		TCVectorManager->Destroy(Handle);
+		Handle = nullptr;
 	}
 
 	// STD::vector like functions
 	void PushBack(const T& item)
 	{
-		Resize(Size() + 1);
-		if (TCVectorManager->PushBack(Handle, &item) != TC_RESULTSTATE_SUCCESS)
-		{
-			printf("Vector push back failed!\n");
-			return;
-		}
+		TU8 idx = Size();
+		Resize(idx + 1);
 
-		if constexpr (!EnableTrivialCopy)
-			new ((*this)[Size() - 1]) T(item);
+		// Construct last element for non-trivial types
+		if (!EnableTrivialCopy)
+			new (&reinterpret_cast<T*>(Handle)[idx]) T(item);
+		else
+			std::memcpy(reinterpret_cast<void*>(Data() + idx), reinterpret_cast<const void*>(&item), sizeof(T));
 	}
+
 	TU8 Size() const { return TCVectorManager->Size(Handle); }
 	TU8 Capacity() const { return TCVectorManager->Capacity(Handle); }
 	T* Data() { return reinterpret_cast<T*>(Handle); }
+	const T* Data() const { return reinterpret_cast<const T*>(Handle); }
 	T& operator[](TU8 index) { return reinterpret_cast<T*>(Handle)[index]; }
 	const T& operator[](TU8 index) const { return reinterpret_cast<const T*>(Handle)[index]; }
+
+	// Resize: if new_size > capacity, allocate a new underlying buffer and move/copy elements.
+	// If new_size > size and new_size <= capacity, use PushBack() to increase size.
+	// If new_size < size, call destructor for non-trivial elements then Erase() to reduce size.
 	void Resize(TU8 new_size)
 	{
-		auto capacity = TCVectorManager->Capacity(Handle);
-		auto size = TCVectorManager->Size(Handle);
+		TU8 capacity = Capacity();
+		TU8 size = Size();
 
 		if (new_size > capacity)
 		{
-			auto newHnd = TCVectorManager->Create(GSuperMemoryBlock, sizeof(T), new_size, new_size);
+			TCVector newHnd = TCVectorManager->Create(GSuperMemoryBlock, sizeof(T), new_size, new_size * 2);
+			T* newData = reinterpret_cast<T*>(newHnd);
+			T* oldData = reinterpret_cast<T*>(Handle);
 
-			if constexpr (!EnableTrivialCopy)
-				for (TU8 i = 0; i < size; i++)
-					new ((*newHnd)[i]) T((*this)[i]);
+			if (!EnableTrivialCopy)
+			{
+				for (TU8 i = 0; i < size; ++i)
+					new (&newData[i]) T(oldData[i]);
+
+				// Destroy old elements
+				for (TU8 i = 0; i < size; ++i)
+					oldData[i].~T();
+			}
 			else
-				std::memcpy(newHnd, Handle, sizeof(T) * size);
+			{
+				std::memcpy(reinterpret_cast<void*>(newData),
+							reinterpret_cast<const void*>(oldData),
+							sizeof(T) * static_cast<size_t>(size));
+			}
 
 			TCVectorManager->Destroy(Handle);
 			Handle = newHnd;
+
+			// If expanding beyond previous size, default-construct / zero new elements
+			if (new_size > size)
+			{
+				for (TU8 i = size; i < new_size; ++i)
+				{
+					if (!EnableTrivialCopy)
+						new (&reinterpret_cast<T*>(Handle)[i]) T();
+					else
+						std::memset(reinterpret_cast<char*>(reinterpret_cast<T*>(Handle) + i), 0, sizeof(T));
+				}
+			}
 		}
-		else if (capacity > new_size && new_size > size)
+		else if (new_size > size && new_size <= capacity)
 		{
-			auto diff = new_size - size;
-			for (TU8 i = 0; i < diff; i++)
-				PushBack(T());
+			// Expand within existing capacity by pushing default-constructed elements.
+			T diffVal{};
+			TU8 diff = new_size - size;
+			for (TU8 i = 0; i < diff; ++i)
+			{
+				if (!EnableTrivialCopy)
+					new (&reinterpret_cast<T*>(Handle)[i]) T();
+				else
+					std::memset(reinterpret_cast<char*>(reinterpret_cast<T*>(Handle) + i), 0, sizeof(T));
+			}
 		}
-		else
+		else if (new_size < size)
 		{
-			if constexpr (!EnableTrivialCopy)
-				for (TU8 i = new_size; i < size; i++)
-					(*this)[i].~T();
-			else
-				std::memset((this) + new_size, 0, sizeof(T) * (new_size - size));
+			// Shrink: destroy and erase elements from end down to new_size
+			for (TU8 i = size; i > new_size; --i)
+			{
+				TU8 idx = i - 1;
+				if (!EnableTrivialCopy)
+					reinterpret_cast<T*>(Handle)[idx].~T();
+				TCVectorManager->Erase(Handle, idx);
+			}
 		}
+		// if new_size == size: nothing to do
 	}
+
 	void Erase(TU8 index) { TCVectorManager->Erase(Handle, index); }
 	T* Begin() { return Data(); }
-	T* End() { return Data() + Size() - 1; }
+	T* End() { return Data() + Size(); }
 
 private:
-	TCVector Handle;
+	TCVector Handle = nullptr;
 };
 
 } // namespace TCore

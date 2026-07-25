@@ -19,6 +19,8 @@ typedef struct TCUnitTestDescription
 	TCReadBuffer Data; // Data that will be passed to the test function
 	// If test returns 0, test is successful
 	TCResult (*Test)(TCReadBuffer inputData);
+	// Interactive tests will run either first or last
+	TBool IsInteractive;
 } TCUnitTestDescription;
 
 typedef struct ITCUnitTest
@@ -32,6 +34,9 @@ typedef struct ITCUnitTest
 	// If inputData is not empty, it will be passed to the test function. Otherwise default data will
 	// be used. If the test returns 0, it is successful. Otherwise, it is failed.
 	void (*RunTest)(const char* name, TCReadBuffer inputData);
+
+	// Interactive test helpers
+	char* (*WaitForInput)(TBool warningBell, const char* printf, ...);
 } ITCUnitTest;
 
 TCORE_END_C_LINKAGE

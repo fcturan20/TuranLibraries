@@ -3,13 +3,14 @@
 #include <stdlib.h>
 #include <wchar.h>
 #include <string>
+#include <Windows.h>
+#include <vector>
 
 #define TCORE_USE_CPP_WRAPPER
 #include "UnitTestSystem.h"
 
 TCORE_PLUGIN_INIT(TC)
 TCORE_PLUGIN_INIT(TCUnitTest)
-
 TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCUnitTest)
 TCORE_PLUGIN_ENTRY_POINT_END()
 
@@ -55,14 +56,55 @@ struct TCUnitTestContext
 		{
 			auto& test = GContext->Tests[indx];
 			if (auto res = test.Test(test.Data); res != TC_RESULTSTATE_SUCCESS)
-			{
 				printf("Test failed: %s\n", test.Name.c_str());
-			}
 			else
-			{
 				printf("Test successful: %s\n", test.Name.c_str());
-			}
 		}
+	}
+
+	static char* WaitForInput(TBool warningBell, const char* print, ...)
+	{
+#ifdef T_ENVWINDOWS
+		if (warningBell)
+			Beep(1000, 200);
+#else
+		printf('\a');
+		fflush(stdout);
+#endif
+
+		if (!print)
+			print = "";
+
+		// First compute required buffer size
+		va_list args;
+		va_start(args, print);
+		int required = std::vsnprintf(nullptr, 0, print, args);
+		va_end(args);
+
+		std::vector<char> buffer;
+		if (required > 0)
+		{
+			// allocate required + 1 for null terminator
+			buffer.resize((size_t)required + 1);
+			va_start(args, print);
+			std::vsnprintf(buffer.data(), buffer.size(), print, args);
+			va_end(args);
+		}
+		else
+		{
+			// fallback to empty string
+			buffer.resize(1);
+			buffer[0] = '\0';
+		}
+
+		printf(print);
+
+		static constexpr TU8 maxLength = 4096;
+		char* b = new char[maxLength];
+		if (!fgets(b, maxLength, stdin))
+			return nullptr;
+
+		return b;
 	}
 };
 
@@ -79,6 +121,7 @@ TCResult TCUnitTest_Initialize(const void** outPluginAPI)
 	sys->RunAllTests = TCore::UnitTest::TCUnitTestContext::RunAllTests;
 	sys->RunTests = nullptr;
 	sys->RunTest = TCore::UnitTest::TCUnitTestContext::RunTest;
+	sys->WaitForInput = TCore::UnitTest::TCUnitTestContext::WaitForInput;
 
 	TCUnitTest = sys;
 	*outPluginAPI = TCUnitTest;

@@ -2,12 +2,13 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <wchar.h>
-
 #include <codecvt>
 #include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cstdarg>
+#include <cstdio>
 
 #define TCORE_USE_CPP_WRAPPER
 #include "Logger.h"
@@ -141,6 +142,18 @@ public:
 				if (auto res = saveAndCheck("OveridenLogPath.txt"); res != TC_RESULTSTATE_SUCCESS)
 					return res;
 
+				return {TC_RESULTSTATE_SUCCESS, 0};
+			};
+			TCUnitTest->RegisterTest(&desc);
+		}
+		// TEST 2 - Test C++ API
+		{
+			TCUnitTestDescription desc{};
+			desc.Name = "TCLog_UnitTest_2";
+			desc.GlobalCategoryName = "TCore";
+			desc.Test = [](TCReadBuffer inputData) -> TCResult {
+				TCore::tl(TC_LOG_LEVEL_STATUS) << "Fine, i'll do it myself!" << td() << "In infinity war ofc :)";
+				TCLog->Save(TC_LOG_LEVEL_ALL, nullptr);
 				return {TC_RESULTSTATE_SUCCESS, 0};
 			};
 			TCUnitTest->RegisterTest(&desc);

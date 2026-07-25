@@ -14,6 +14,7 @@ typedef struct ITCStringSys
 	void (*Clear)(TCString str);
 	void (*Set)(TCString str, const char* new_str);
 	const char* (*CStr)(TCString str);
+	char* (*Data)(TCString str);
 	void (*Resize)(TCString str, size_t new_capacity);
 	TCString (*Substring)(TCString str, size_t start_index, size_t end_index);
 } ITCStringSys;
@@ -72,9 +73,7 @@ public:
 	~String()
 	{
 		if (Handle)
-		{
 			TCStringSys->Destroy(Handle);
-		}
 	}
 	String& Append(const char* str_to_append)
 	{
@@ -92,6 +91,7 @@ public:
 		return *this;
 	}
 	const char* CStr() const { return TCStringSys->CStr(Handle); }
+	char* Data() const { return TCStringSys->Data(Handle); }
 	void Resize(size_t new_capacity) { TCStringSys->Resize(Handle, new_capacity); }
 	String Substring(size_t start_index, size_t end_index)
 	{
@@ -114,8 +114,12 @@ public:
 	//   TCore::String textData = std::string("abd");
 	String(const std::string& str) { Handle = TCStringSys->Create(str.c_str()); }
 #endif
-private:
+
+	operator TCString() const { return Handle; }
+
+protected:
 	TCString Handle;
 };
+
 } // namespace TCore
 #endif

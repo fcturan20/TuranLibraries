@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
+#include <cstring>
 #include <algorithm>
 #include <cstring>
 
@@ -393,7 +393,7 @@ struct VectorServices
 			return nullptr;
 
 		TCVirtualMemory->Commit(vector, reserveSize);
-		vector->Count = 0;
+		vector->Count = initial_size;
 		vector->ElementSize = element_size;
 		vector->Capacity = capacity;
 		vector->AllocationSize = reserveSize;

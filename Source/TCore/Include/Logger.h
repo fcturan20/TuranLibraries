@@ -43,6 +43,10 @@ TCORE_END_C_LINKAGE
 namespace TCore
 {
 
+class td
+{
+};
+
 class tl
 {
 public:
@@ -74,10 +78,44 @@ public:
 	TCore::String Message;
 	TCore::String Details;
 	bool IsStartedDetailing = false;
+
+	tl& operator<<(const td& d)
+	{
+		StartDetailing();
+		return *this;
+	}
+
+#if defined(_SSTREAM_) || defined(_GLIBCXX_SSTREAM) || defined(_LIBCPP_SSTREAM)
+	tl& operator<<(const std::ostringstream& t)
+	{
+		Append(t.str().c_str());
+		return *this;
+	}
+#endif
+
+	tl& operator<<(const char* l)
+	{
+		Append(l);
+		return *this;
+	}
 };
 
-class td
+class tw : public tl
 {
+public:
+	tw(const char* owner = TCORE_ACTIVE_PLUGIN_NAME) : tl(TC_LOG_LEVEL_WARNING, owner) {}
+};
+
+class ti : public tl
+{
+public:
+	ti(const char* owner = TCORE_ACTIVE_PLUGIN_NAME) : tl(TC_LOG_LEVEL_STATUS, owner) {}
+};
+
+class te : public tl
+{
+public:
+	te(const char* owner = TCORE_ACTIVE_PLUGIN_NAME) : tl(TC_LOG_LEVEL_ERROR, owner) {}
 };
 
 } // namespace TCore

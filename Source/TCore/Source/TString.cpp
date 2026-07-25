@@ -2,6 +2,7 @@
 #include "TString.h"
 
 // TCore
+#include "CppGenerics.h"
 #include "ECS.h"
 #include "Allocator.h"
 #include "UnitTestSystem.h"
@@ -36,18 +37,12 @@ struct TCStringContext
 		const size_t minCap = 64;
 		size_t capacity = NextPowerOfTwo(std::max(minCap, len + 1));
 
-		TCVector vec = TCVectorManager->Create(TCore::GSuperMemoryBlock, 1u, capacity, 0);
+		TCVector vec = TCVectorManager->Create(TCore::GSuperMemoryBlock, 1u, 0, capacity * 2);
 		if (!vec)
 			return nullptr;
 
-		// Push characters including null terminator so internal Count is correct
 		if (str)
-		{
-			for (size_t i = 0; i < len; ++i)
-				TCVectorManager->PushBack(vec, &str[i]);
-		}
-		char nullc = '\0';
-		TCVectorManager->PushBack(vec, &nullc);
+			strcpy((char*)vec, str);
 
 		return (TCString)vec;
 	}
@@ -64,29 +59,14 @@ struct TCStringContext
 		size_t capacity = TCVectorManager->Capacity((TCVector)str);
 
 		// Available space for new chars (excluding null terminator)
-		if (capacity <= oldLen + 1)
+		if (capacity <= oldLen + addLen + 1)
 			return; // no space at all; avoid overflow
 
 		size_t available = capacity - oldLen - 1;
 		size_t toCopy = std::min(available, addLen);
 
 		// Append up to available characters
-		*((char*)str + oldLen) = str_to_append[0];
-		for (size_t i = 1; i < toCopy; ++i)
-			TCVectorManager->PushBack((TCVector)str, &str_to_append[i]);
-
-		// Ensure null terminator at the end (if there is still space, PushBack appended the bytes but we need a final
-		// '\0')
-		if (oldLen + toCopy + 1 <= capacity)
-		{
-			char nullc = '\0';
-			TCVectorManager->PushBack((TCVector)str, &nullc);
-		}
-		else
-		{
-			// If exactly filled capacity with no room for terminator, replace last byte with '\0'
-			((char*)str)[capacity - 1] = '\0';
-		}
+		strcat((char*)str, str_to_append);
 	}
 
 	static void Clear(TCString str)
@@ -155,6 +135,7 @@ struct TCStringContext
 	}
 
 	static const char* CStr(TCString str) { return (const char*)str; }
+	static char* Data(TCString str) { return (char*)str; }
 
 	static void Resize(TCString str, size_t new_capacity)
 	{
@@ -218,6 +199,7 @@ TCResult TCStringSys_Initialize(const void** outPluginAPI)
 								&TCStringContext::Clear,
 								&TCStringContext::Set,
 								&TCStringContext::CStr,
+								&TCStringContext::Data,
 								&TCStringContext::Resize,
 								&TCStringContext::Substring};
 	TCStringSys = api;

@@ -1,7 +1,7 @@
 ﻿cmake_minimum_required (VERSION 3.8)
 
 # Core system headers
-set(TCoreFiles "Source/TCore.cpp" "Include/TCore.h" "Include/TCoreMacros.h")
+set(TCoreFiles "Source/TCore.cpp" "Include/TCore.h" "Include/TCoreMacros.h" "Include/CppGenerics.h")
 tcmake_create_dynamic_target(TCore "${TCoreFiles}" "TCore")
 set_target_properties(TCore PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/Include")
 target_link_libraries(TCore PRIVATE dynalo)
@@ -55,3 +55,4 @@ target_link_libraries(TCoreProfiler PRIVATE TCore)
 set(TCoreWINDOWING_SOURCES "Source/Windowing.cpp" "Include/Windowing.h")
 tcmake_create_dynamic_target(TCoreWindowing "${TCoreWINDOWING_SOURCES}" "TCore")
 target_link_libraries(TCoreWindowing PRIVATE TCore)
+tcmake_add_vcpkg_dependency(TCoreWindowing glfw3 glfw)

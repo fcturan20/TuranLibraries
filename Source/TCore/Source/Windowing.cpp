@@ -306,7 +306,7 @@ struct WindowingContext
 		if (glfwWndw == NULL)
 			return;
 
-		auto w = TCStdAllocator->Malloc(GSuperMemoryBlock, sizeof(Window), "Window");
+		auto w = TCAllocator->Malloc(GSuperMemoryBlock, sizeof(Window), "Window");
 		auto window = new (w) Window;
 		window->m_lastWidth = desc->Width;
 		window->m_newWidth = desc->Width;

@@ -114,14 +114,14 @@ typedef struct TCResult
 typedef struct TCBuffer
 {
 	void* Data;
-	unsigned long Size;
+	TU8 Size;
 } TCBuffer;
 
 // Constant (non-modifiable) buffer
 typedef struct TCReadBuffer
 {
 	const void* Data;
-	unsigned long Size;
+	TU8 Size;
 } TCReadBuffer;
 
 #if defined(NDEBUG)
@@ -158,6 +158,11 @@ typedef struct TCReadBuffer
 TCORE_END_C_LINKAGE
 
 #ifdef TCORE_USE_CPP_WRAPPER
+
+inline bool operator==(const TCResult& lhs, const TCResult& rhs)
+{
+	return lhs.State == rhs.State && lhs.ResultCode == rhs.ResultCode;
+}
 
 inline bool operator==(const TCResult& lhs, const TCResultState& state)
 {

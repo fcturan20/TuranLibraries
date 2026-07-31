@@ -1,6 +1,4 @@
-#define TCORE_USE_CPP_WRAPPER
-#include "FileSystem.h"
-
+// External
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -8,13 +6,21 @@
 #include <string>
 #include <vector>
 
+#define TCORE_USE_CPP_WRAPPER
+#include "FileSystem.h"
+
 #include <UnitTestSystem.h>
+#include <Allocator.h>
 
 TCORE_PLUGIN_INIT(TC)
 TCORE_PLUGIN_INIT(TCFileSystem)
 TCORE_PLUGIN_INIT(TCUnitTest)
+TCORE_PLUGIN_INIT(TCAllocator)
+TCORE_PLUGIN_MEMORY_BLOCK_INIT()
 
 TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TCFileSystem)
+TCORE_PLUGIN_HARD_DEPENDENCY(TCAllocator, TCAllocator_PLUGIN_VERSION)
+TCORE_PLUGIN_RESERVE_ADDRESS_SPACE(1 << 30);
 TCORE_PLUGIN_ENTRY_POINT_END()
 
 namespace TCore
@@ -129,7 +135,7 @@ void RegisterUnitTests()
 			{
 				return {TC_RESULTSTATE_FAILURE, 0};
 			}
-			printf("ReadBinaryFile test passed, size: %lu\n", size);
+			printf("ReadBinaryFile test passed, size: %llu\n", size);
 			delete[] static_cast<char*>(data);
 			return {TC_RESULTSTATE_SUCCESS, 0};
 		};

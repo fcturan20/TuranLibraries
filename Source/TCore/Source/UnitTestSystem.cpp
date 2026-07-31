@@ -4,12 +4,13 @@
 #include <wchar.h>
 #include <string>
 #include <vector>
-#if defined(T_ENVWINDOWS)
-#include <Windows.h>
-#endif
 
 #define TCORE_USE_CPP_WRAPPER
 #include "UnitTestSystem.h"
+
+#if defined(T_ENVWINDOWS)
+#include <Windows.h>
+#endif
 
 TCORE_PLUGIN_INIT(TC)
 TCORE_PLUGIN_INIT(TCUnitTest)
@@ -53,6 +54,18 @@ struct TCUnitTestContext
 	static void RunTest(const char* name, TCReadBuffer inputData) {}
 
 	static void RunAllTests()
+	{
+		for (TU4 indx = 0; indx < GContext->TestCount; indx++)
+		{
+			auto& test = GContext->Tests[indx];
+			if (auto res = test.Test(test.Data); res != TC_RESULTSTATE_SUCCESS)
+				printf("Test failed: %s\n", test.Name.c_str());
+			else
+				printf("Test successful: %s\n", test.Name.c_str());
+		}
+	}
+
+	static void RunTests(const char* CategoryName)
 	{
 		for (TU4 indx = 0; indx < GContext->TestCount; indx++)
 		{
@@ -121,7 +134,7 @@ TCResult TCUnitTest_Initialize(const void** outPluginAPI)
 	sys->RegisterTest = TCore::UnitTest::TCUnitTestContext::RegisterTest;
 	sys->UnregisterTest = TCore::UnitTest::TCUnitTestContext::UnregisterTest;
 	sys->RunAllTests = TCore::UnitTest::TCUnitTestContext::RunAllTests;
-	sys->RunTests = nullptr;
+	sys->RunTests = TCore::UnitTest::TCUnitTestContext::RunTests;
 	sys->RunTest = TCore::UnitTest::TCUnitTestContext::RunTest;
 	sys->WaitForInput = TCore::UnitTest::TCUnitTestContext::WaitForInput;
 

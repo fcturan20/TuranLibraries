@@ -187,7 +187,7 @@ typedef struct TGfxTypelessColor
 
 typedef struct TGfxVertexAttributeDescription
 {
-	TU4 AttributeIndx, BindingIndx, Offset;
+	TU4 AttributeIdx, BindingIdx, Offset;
 	TGfxDataType DataType;
 } TGfxVertexAttributeDescription;
 
@@ -200,7 +200,7 @@ typedef enum TGfxVertexBindingInputRate
 
 typedef struct TGfxVertexBindingDescription
 {
-	TU4 BindingIndx, Stride;
+	TU4 BindingIdx, Stride;
 	TGfxVertexBindingInputRate InputRate;
 } TGfxVertexBindingDescription;
 

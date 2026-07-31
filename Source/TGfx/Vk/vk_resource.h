@@ -116,7 +116,7 @@ struct SubRasterpass : public VkObjectBase<SubRasterpass, TGfxSubRasterpass, VkO
 	SubRasterpass(GPU* gpu) : GpuObject(gpu), vk_renderPass(gpu->ReferenceManager) {}
 	uint16_t GetExtraFlags() { return 0; }
 
-	uint32_t m_subpassIndx;
+	uint32_t m_subpassIdx;
 	VkRenderPassHnd vk_renderPass; // It's same across all subpasses
 	bool isDepthAttachment = false;
 	// Extra information to check raster pipeline compilations without relying on validation layer
@@ -126,10 +126,10 @@ TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(SubRasterpass, Vk)
 struct Sampler : public VkObjectBase<Sampler, TGfxSampler, VkObjTypes::SAMPLER>, public GpuObject
 {
 	Sampler(GPU* gpu) : GpuObject(gpu), vk_sampler(gpu->ReferenceManager) {}
-	uint16_t GetExtraFlags() { return m_flags.load(); }
+	uint16_t GetExtraFlags() { return Flags; }
 
 	VkSamplerHnd vk_sampler;
-	std::atomic_uint16_t m_flags = 0; // YCbCr conversion only flag for now
+	TU1 Flags = 0; // YCbCr conversion only flag for now
 };
 TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Sampler, Vk)
 
@@ -218,25 +218,12 @@ struct Fence : VkObjectBase<Fence, TGfxFence, VkObjTypes::FENCE>, public GpuObje
 };
 TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Fence, Vk)
 
-struct cmdPool_vk;
-struct cmdBundleRef_vk
-{
-	cmdPool_vk* m_cmdPool;
-	TGfxCommandBundle m_cmdBundle;
-	VkCommandBuffer vk_cmdBuffer;
-};
-
 struct Framebuffer : public GpuObject
 {
 	Framebuffer(GPU* gpu) : GpuObject(gpu), vk_framebuffer(gpu->ReferenceManager) {}
 	uint16_t GetExtraFlags(Framebuffer* obj) { return 0; }
 
 	TGfxTexture m_textures[kMaxRtSlotCount];
-	// Command bundles records a command buffer for each framebuffer
-	// For now, proper tracking mechanism isn't implemented.
-	static constexpr uint32_t MAXCMDBUNDLECOUNT = 32;
-	uint32_t m_cmdBundleCount = 0;
-	cmdBundleRef_vk m_cmdBundleRefs[MAXCMDBUNDLECOUNT] = {};
 	VkFramebufferHnd vk_framebuffer;
 };
 

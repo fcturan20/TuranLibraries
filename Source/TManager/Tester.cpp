@@ -64,9 +64,9 @@ int main()
 		return 1;
 	}
 
-	for (TU4 pluginIndx = 0; pluginIndx < sizeof(GPluginsToTest) / sizeof(sizeof(GPluginsToTest[0])); pluginIndx++)
+	for (TU4 pluginIdx = 0; pluginIdx < sizeof(GPluginsToTest) / sizeof(sizeof(GPluginsToTest[0])); pluginIdx++)
 	{
-		auto plugin = GPluginsToTest[pluginIndx];
+		auto plugin = GPluginsToTest[pluginIdx];
 		if (auto res = TC->LoadPlugin(plugin, nullptr); res != TC_RESULTSTATE_SUCCESS)
 		{
 			printf("Failed to load plugin; %s", plugin);

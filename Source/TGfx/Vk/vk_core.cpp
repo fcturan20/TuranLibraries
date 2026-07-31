@@ -31,10 +31,9 @@ namespace Vulkan
 inline bool CheckInstanceExtensionSupported(const char* extName)
 {
 	bool Is_Found = false;
-	for (uint32_t supportedExtIndx = 0; supportedExtIndx < GContext->VKGLOBAL_MAX_INSTANCE_EXT_COUNT;
-		 supportedExtIndx++)
+	for (uint32_t supportedExtIdx = 0; supportedExtIdx < GContext->VKGLOBAL_MAX_INSTANCE_EXT_COUNT; supportedExtIdx++)
 	{
-		VkExtensionProperties& ext = GContext->SupportedInstanceExtensions[supportedExtIndx];
+		VkExtensionProperties& ext = GContext->SupportedInstanceExtensions[supportedExtIdx];
 		if (!ext.extensionName)
 		{
 			break;
@@ -207,7 +206,47 @@ inline void CreateGpuDevices()
 		// Analize GPU memory & extensions
 		AnalizeGpuMemory(gpu);
 
-		auto& queueFams = manager->get_queue_cis(gpu);
+		VkDeviceQueueCreateInfo queues[kMaxQueueFamilyCountPerGpu]{};
+		uint32_t queueFamiliesCount = 0;
+		{
+			VkQueueFamilyProperties2 props[kMaxQueueFamilyCountPerGpu]{};
+			for (uint32_t i = 0; i < kMaxQueueFamilyCountPerGpu; i++)
+				props[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2;
+			vkGetPhysicalDeviceQueueFamilyProperties2(gpu->vk_physical, &queueFamiliesCount, nullptr);
+			if (queueFamiliesCount > kMaxQueueFamilyCountPerGpu)
+			{
+				vkPrint(16, "kMaxQueueFamilyCountPerGpu is exceeded, please report this!");
+				continue;
+			}
+			vkGetPhysicalDeviceQueueFamilyProperties2(gpu->vk_physical, &queueFamiliesCount, props);
+
+			for (uint32_t queueFamIdx = 0; queueFamIdx < queueFamiliesCount; queueFamIdx++)
+			{
+				float priorities[kMaxQueueCountPerQueueFamily]{};
+				if (gpu->vk_propsQueue[queueFamIdx].queueFamilyProperties.queueCount > kMaxQueueCountPerQueueFamily)
+				{
+					vkPrint(16, "kMaxQueueCountPerQueueFamily is exceeded, please report this!");
+					continue;
+				}
+				auto& queueFam = props[queueFamIdx];
+				queues[queueFamIdx].queueCount = queueFam.queueFamilyProperties.queueCount;
+				queues[queueFamIdx].queueFamilyIndex = queueFamIdx;
+				queues[queueFamIdx].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+				for (uint32_t queueIdx = 0; queueIdx < queueFam.queueFamilyProperties.queueCount; queueIdx++)
+					priorities[queueIdx] =
+						1.0f - float(float(queueIdx) / float(queueFam.queueFamilyProperties.queueCount));
+				queues[queueFamIdx].pQueuePriorities = priorities;
+
+				if (queueFam.queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT)
+					gpu->desc.OperationSupport_Compute = true;
+
+				if (queueFam.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+					gpu->desc.OperationSupport_Raster = true;
+
+				if (queueFam.queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT)
+					gpu->desc.OperationSupport_Transfer = true;
+			}
+		}
 
 		// Create logical device
 		{
@@ -215,8 +254,8 @@ inline void CreateGpuDevices()
 			VkDeviceCreateInfo ci{};
 			ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 			ci.flags = 0;
-			ci.pQueueCreateInfos = queueFams.list;
-			ci.queueCreateInfoCount = gpu->desc.queueFamilyCount;
+			ci.pQueueCreateInfos = queues;
+			ci.queueCreateInfoCount = queueFamiliesCount;
 			ci.pNext = &gpu->vk_featuresDev;
 			ci.enabledExtensionCount = sizeof(kRequiredDeviceExtensionNames) / sizeof(kRequiredDeviceExtensionNames[0]);
 			ci.ppEnabledExtensionNames = kRequiredDeviceExtensionNames;
@@ -229,7 +268,34 @@ inline void CreateGpuDevices()
 			}
 			gpu->vk_logical.Set(l);
 		}
-		manager->get_queue_objects(gpu);
+
+		// Get VkQueue objects
+		gpu->desc.QueueFamilyCount = queueFamiliesCount;
+		for (uint32_t queueFamIdx = 0; queueFamIdx < queueFamiliesCount; queueFamIdx++)
+		{
+			for (uint32_t queueIdx = 0; queueIdx < kMaxQueueCountPerQueueFamily; queueIdx++)
+			{
+				VkQueue queue;
+				vkGetDeviceQueue(gpu->vk_logical, queueFamIdx, queueIdx, &queue);
+
+				// Create call synchronization semaphore (DX12 like sequential ordering)
+				VkSemaphore sem;
+				{
+					VkSemaphoreCreateInfo sem_ci = {};
+					sem_ci.flags = 0;
+					sem_ci.pNext = nullptr;
+					sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+					if (vkCreateSemaphore(gpu->vk_logical, &sem_ci, nullptr, &sem) != VK_SUCCESS)
+						vkPrint(16, "Queue Call Synchronization Binary Semaphore creation failed!");
+				}
+
+				Queue x(gpu);
+				x.queue.Set(queue);
+				x.CallSynchronizer.Set(sem);
+				x.QueueIdx = queueIdx;
+				x.QueueFamIdx = queueFamIdx;
+			}
+		}
 	}
 }
 void AnalizeGpuMemory(GPU* VKGPU)
@@ -241,9 +307,9 @@ void AnalizeGpuMemory(GPU* VKGPU)
 	VKGPU->vk_propsMemory.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
 	vkGetPhysicalDeviceMemoryProperties2(VKGPU->vk_physical, &VKGPU->vk_propsMemory);
 
-	for (uint32_t memTypeIndx = 0; memTypeIndx < VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount; memTypeIndx++)
+	for (uint32_t memTypeIdx = 0; memTypeIdx < VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount; memTypeIdx++)
 	{
-		VkMemoryType& memType = VKGPU->vk_propsMemory.memoryProperties.memoryTypes[memTypeIndx];
+		VkMemoryType& memType = VKGPU->vk_propsMemory.memoryProperties.memoryTypes[memTypeIdx];
 		bool isDeviceLocal = false;
 		bool isHostVisible = false;
 		bool isHostCoherent = false;
@@ -261,10 +327,10 @@ void AnalizeGpuMemory(GPU* VKGPU)
 		if (!isDeviceLocal && !isHostVisible && !isHostCoherent && !isHostCached)
 			continue;
 
-		auto createMemDesc = [memTypeIndx, VKGPU, memType](TGfxMemoryAllocationType allocType) {
-			TGfxMemoryInfo& memtype_desc = VKGPU->m_memoryDescTGFX[memTypeIndx];
+		auto createMemDesc = [memTypeIdx, VKGPU, memType](TGfxMemoryAllocationType allocType) {
+			TGfxMemoryInfo& memtype_desc = VKGPU->m_memoryDescTGFX[memTypeIdx];
 			memtype_desc.AllocationType = allocType;
-			memtype_desc.MemoryTypeId = memTypeIndx;
+			memtype_desc.MemoryTypeId = memTypeIdx;
 			memtype_desc.MaxAllocationSize = VKGPU->vk_propsMemory.memoryProperties.memoryHeaps[memType.heapIndex].size;
 		};
 		if (isDeviceLocal)
@@ -324,7 +390,7 @@ VkContext::~VkContext()
 VkSurfaceKHR VkContext::FindOrCreateSurface(void* windowOsHnd)
 {
 	VkSurfaceKHR surface{};
-	if (auto it = WindowToVkSurfaceMap.find(windowOsHnd); it != WindowToVkSurfaceMap.end())
+	if (auto it = WindowToVkSurfaceMap.Find(windowOsHnd))
 		surface = *it;
 	else
 	{
@@ -450,195 +516,48 @@ TCResult VkContext::CreateSwapchain(const TGfxSwapchainDescription* desc, TGfxSw
 		acquireSem.Set(s);
 	}
 
-	// Validate swapchain image texture layout
-	constexpr bool validateTextureLayout = false;
-	if constexpr (validateTextureLayout)
+	TGfxGpuSwapchainSupportInfo supportInfo{};
+	uint32_t supportedQueueCount = 0;
+	for (uint32_t queueFamIdx = 0; queueFamIdx < GPU->desc.QueueFamilyCount; queueFamIdx++)
 	{
-		VkCommandPool transitionCmdPool, initializeCmdPool;
-		// Create command pools
-		{
-			VkCommandPoolCreateInfo cp_ci = {};
-			cp_ci.flags = 0;
-			cp_ci.queueFamilyIndex = vkQueueFamIndx;
-			cp_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			if (vkCreateCommandPool(GPU->vk_logical, &cp_ci, nullptr, &transitionCmdPool) != VK_SUCCESS)
-			{
-				return vkPrint(16, "at command pool creation for swapchain transition");
-			}
-			if (vkCreateCommandPool(GPU->vk_logical, &cp_ci, nullptr, &initializeCmdPool) != VK_SUCCESS)
-			{
-				return vkPrint(16, "at command pool creation for swapchain initialization");
-			}
-		}
-		{
-			VkCommandBufferAllocateInfo cb_ai = {};
-			cb_ai.commandBufferCount = desc->ImageCount;
-			cb_ai.commandPool = transitionCmdPool;
-			cb_ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			cb_ai.pNext = nullptr;
-			cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			// General -> Present
-			if (vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai, window->vk_generalToPresent[vkQueueFamIndx]) !=
-				VK_SUCCESS)
-			{
-				return vkPrint(16, "at general->present command buffer creation for swapchain transition");
-			}
-			if (vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai, window->vk_presentToGeneral[vkQueueFamIndx]) !=
-				VK_SUCCESS)
-			{
-				return vkPrint(16, "at present->general command buffer creation for swapchain transition");
-			}
-		}
-		for (uint32_t textureIndx = 0; textureIndx < window->m_swapchainTextureCount; textureIndx++)
-		{
-			VkImageMemoryBarrier imBar = {};
-			// General -> Present CB Recording
-			VkCommandBufferBeginInfo cb_bi = {};
-			cb_bi.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-			cb_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			{
-				VkCommandBuffer cb = window->vk_generalToPresent[vkQueueFamIndx][textureIndx];
-				if (vkBeginCommandBuffer(cb, &cb_bi) != VK_SUCCESS)
-				{
-					return vkPrint(16, "at general->present command buffer recording begin");
-				}
-				imBar.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-				imBar.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				imBar.image = imgs[textureIndx];
-				imBar.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-				imBar.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-				imBar.pNext = nullptr;
-				imBar.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-				imBar.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				imBar.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-				imBar.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				imBar.subresourceRange.baseArrayLayer = 0;
-				imBar.subresourceRange.baseMipLevel = 0;
-				imBar.subresourceRange.layerCount = 1;
-				imBar.subresourceRange.levelCount = 1;
-
-				vkCmdPipelineBarrier(cb,
-									 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-									 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-									 VK_DEPENDENCY_DEVICE_GROUP_BIT,
-									 0,
-									 nullptr,
-									 0,
-									 nullptr,
-									 1,
-									 &imBar);
-				if (vkEndCommandBuffer(cb) != VK_SUCCESS)
-				{
-					return vkPrint(16, "at general->present command buffer recording end");
-				}
-			}
-			// Present -> General CB Recording
-			{
-				VkCommandBuffer cb = window->vk_presentToGeneral[vkQueueFamIndx][textureIndx];
-				if (vkBeginCommandBuffer(cb, &cb_bi) != VK_SUCCESS)
-				{
-					vkPrint(16, "at present->general command buffer recording begin");
-				}
-
-				imBar.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-				imBar.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-				imBar.dstAccessMask = imBar.srcAccessMask;
-				imBar.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-				vkCmdPipelineBarrier(cb,
-									 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-									 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-									 VK_DEPENDENCY_DEVICE_GROUP_BIT,
-									 0,
-									 nullptr,
-									 0,
-									 nullptr,
-									 1,
-									 &imBar);
-				if (vkEndCommandBuffer(cb) != VK_SUCCESS)
-				{
-					vkPrint(16, "at present->general command buffer recording begin");
-				}
-			}
-
-			// Present Texture only once
-			if (queueFamListIterIndx == 0)
-			{
-				VkCommandBuffer initializeCmdBuffer = {};
-				// Allocate CB
-				{
-					VkCommandBufferAllocateInfo cb_ai = {};
-					cb_ai.commandBufferCount = 1;
-					cb_ai.commandPool = transitionCmdPool;
-					cb_ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-					cb_ai.pNext = nullptr;
-					cb_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-					if (vkAllocateCommandBuffers(GPU->vk_logical, &cb_ai, &initializeCmdBuffer) != VK_SUCCESS)
-					{
-						vkPrint(16, "at presentation command buffer allocation");
-					}
-				}
-				// Record first CB
-				{
-					VkCommandBufferBeginInfo cb_bi = {};
-					cb_bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-					cb_bi.pNext = nullptr;
-					cb_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-					vkBeginCommandBuffer(initializeCmdBuffer, &cb_bi);
-
-					imBar.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-					imBar.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-					vkCmdPipelineBarrier(initializeCmdBuffer,
-										 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-										 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-										 VK_DEPENDENCY_DEVICE_GROUP_BIT,
-										 0,
-										 nullptr,
-										 0,
-										 nullptr,
-										 1,
-										 &imBar);
-
-					vkEndCommandBuffer(initializeCmdBuffer);
-				}
-
-				// Submit to transition
-				{
-					VkSubmitInfo si = {};
-					si.commandBufferCount = 1;
-					si.pCommandBuffers = &initializeCmdBuffer;
-					si.pNext = nullptr;
-					si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-					si.waitSemaphoreCount = 0;
-					si.signalSemaphoreCount = 0;
-					if (vkQueueSubmit(
-							getQueueVkObj(getQueue(getQueueFam(GPU, vkQueueFamIndx), 0)), 1, &si, VK_NULL_HANDLE) !=
-						VK_SUCCESS)
-					{
-						return vkPrint(16, "at queue submission for layout transition");
-					}
-				}
-			}
-		}
-		vkDestroyCommandPool(GPU->vk_logical, initializeCmdPool, nullptr);
+		VkBool32 isSupported = false;
+		if (vkGetPhysicalDeviceSurfaceSupportKHR(GPU->vk_physical, queueFamIdx, surface, &isSupported) != VK_SUCCESS)
+			vkPrint(50, "at vkGetPhysicalDeviceSurfaceSupportKHR");
+		const uint32_t queueCount = GPU->vk_propsQueue[queueFamIdx].queueFamilyProperties.queueCount;
+		if (isSupported)
+			for (uint32_t queueIdx = 0;
+				 queueIdx < queueCount && supportedQueueCount < TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT;
+				 queueIdx++)
+				supportInfo.Queues[supportedQueueCount++] = GetOpaqueHandle(getQueue(queueFam, queueIdx));
 	}
+	if (supportedQueueCount < TGFX_WINDOWGPUSUPPORT_MAXQUEUECOUNT)
+		supportInfo.Queues[supportedQueueCount] = nullptr;
 
 	// Create Textures and return handles
-	for (uint32_t vkImIndx = 0; vkImIndx < desc->ImageCount; vkImIndx++)
+	TGfxTexture textures[kMaxSwapchainTextureCountPerSwapchain]{};
+	for (uint32_t vkImIdx = 0; vkImIdx < desc->ImageCount; vkImIdx++)
 	{
-		Texture* SWAPCHAINTEXTURE = GContentManagerContext->Textures.create_OBJ();
-		SWAPCHAINTEXTURE->m_channels = TGFX_TEXTURE_CHANNELS_BGRA8UNORM;
-		SWAPCHAINTEXTURE->Size = TGfxUVec2{.x = desc->ImageExtent.x, .y = desc->ImageExtent.y};
-		SWAPCHAINTEXTURE->MipCount = 1;
-		SWAPCHAINTEXTURE->vk_image.Set(imgs[vkImIndx]);
-		SWAPCHAINTEXTURE->vk_imageView.Set(imgViews[vkImIndx]);
-		SWAPCHAINTEXTURE->vk_imageUsage = swpchnTextureUsage;
-		SWAPCHAINTEXTURE->m_dim = TGFX_TEXTURE_DIMENSIONS_2D;
+		Texture* swpchnTexture = GContentManagerContext->Textures.CreateObject(GPU);
+		swpchnTexture->m_channels = TGFX_TEXTURE_CHANNELS_BGRA8UNORM;
+		swpchnTexture->Size = TGfxUVec2{.x = desc->ImageExtent.x, .y = desc->ImageExtent.y};
+		swpchnTexture->MipCount = 1;
+		swpchnTexture->vk_image.Set(imgs[vkImIdx]);
+		swpchnTexture->vk_imageView.Set(imgViews[vkImIdx]);
+		swpchnTexture->vk_imageUsage = swpchnTextureUsage;
+		swpchnTexture->m_dim = TGFX_TEXTURE_DIMENSIONS_2D;
 		// No memory allocation is possible for these textures
-		SWAPCHAINTEXTURE->m_memBlock = VMemoryBlock::GETINVALID();
-		SWAPCHAINTEXTURE->m_memReqs = VMemoryRequirements::GETINVALID();
+		swpchnTexture->m_memBlock = VMemoryBlock::GETINVALID();
+		swpchnTexture->m_memReqs = VMemoryRequirements::GETINVALID();
 
-		window->m_swapchainTextures[vkImIndx] = GetOpaqueHandle(SWAPCHAINTEXTURE);
+		textures[vkImIdx] = GetOpaqueHandle(swpchnTexture);
 	}
+
+	auto finalObj = GContentManagerContext->Swapchains.CreateObject(GPU);
+	finalObj->AcquireSemaphore = acquireSem;
+	finalObj->Swpchn.Set(swpchn);
+	finalObj->Surface.Set(surface);
+	finalObj->Info = supportInfo;
+
 	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
@@ -646,22 +565,22 @@ TCResult VkContext::GetCurrentSwapchainTextureIndex(TGfxSwapchain swapchain, TU4
 {
 	Swapchain* swpchn = GetVkObject(swapchain);
 
-	uint32_t swpchnIndx = UINT32_MAX;
+	uint32_t swpchnIdx = UINT32_MAX;
 	if (vkAcquireNextImageKHR(
-			swpchn->GetGpu()->vk_logical, swpchn->Swpchn, UINT64_MAX, swpchn->AcquireSemaphore, nullptr, &swpchnIndx) !=
+			swpchn->GetGpu()->vk_logical, swpchn->Swpchn, UINT64_MAX, swpchn->AcquireSemaphore, nullptr, &swpchnIdx) !=
 		VK_SUCCESS)
 		return vkPrint(16, "vkAcquireNextImageKHR() has failed");
 
-	if (UINT32_MAX == swpchnIndx)
+	if (UINT32_MAX == swpchnIdx)
 	{
 		*index = UINT32_MAX;
 		return vkPrint(16, "Acquired texture's index is invalid!");
 	}
 
 	// Set current swapchain index
-	swpchn->m_swapchainCurrentTextureIndx = swpchnIndx;
+	swpchn->m_swapchainCurrentTextureIdx = swpchnIdx;
 	if (index)
-		*index = swpchnIndx;
+		*index = swpchnIdx;
 
 	return {TC_RESULTSTATE_SUCCESS, 0};
 }
@@ -740,7 +659,6 @@ void VkContext::DestroySwapchain(TGfxSwapchain swapchain)
 
 TCResult VkContext::Hook(ITGfx* gfx)
 {
-	TCORE_ACTIVE_PLUGIN_NAME;
 	gfx->ChangeSwapchainResolution = ChangeSwapchainResolution;
 	gfx->CreateSwapchain = CreateSwapchain;
 	gfx->GetCurrentSwapchainTextureIndex = GetCurrentSwapchainTextureIndex;

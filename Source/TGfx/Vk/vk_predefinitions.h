@@ -1,4 +1,8 @@
 #pragma once
+#define VK_NO_PROTOTYPES
+#include <atomic>
+#include <volk.h>
+
 #define TCORE_USE_CPP_WRAPPER
 #include "CppGenerics.h"
 #include <TGfxCore.h>
@@ -8,8 +12,6 @@
 #ifndef NDEBUG
 #define VK_VALIDATION_LAYER
 #endif
-
-#include <volk.h>
 
 namespace TGFX
 {
@@ -27,16 +29,17 @@ extern VkApplicationInfo GVkAppInfo;
 //		CONSTANTS
 // <------------------------------------------------------------------------------------>
 
-#define VkConstU4 static constexpr uint32_t
+#define VkConstU4 static constexpr TU4
 #define VkConstF4 static constexpr float
-#define VkConstU1 static constexpr uint8_t
+#define VkConstU1 static constexpr TU1
 #define VkConstStr static constexpr const char*
 // User can pass lots of descriptor sets in a list, this defines the max size
 VkConstU4 kMaxDescSetPerList = 12;
 VkConstU4 kMaxViewportCount = 16;
 VkConstU4 kMaxGpuCount = 4;
 VkConstU4 kMaxRtSlotCount = 16;
-VkConstU4 kMaxQueueFamilyCountPerGpu = 5;
+VkConstU4 kMaxQueueFamilyCountPerGpu = 8;
+VkConstU4 kMaxQueueCountPerQueueFamily = 128;
 VkConstU4 kMaxSemaphoreCountPerSubmit = 16;
 VkConstU4 kMaxSwapchainCountPerSubmit = 8; // Max count of swapchain count per submit
 VkConstU1 kMaxSwapchainTextureCountPerSwapchain = 4;
@@ -90,7 +93,21 @@ TCResult vkPrint(TU4 returnCode, const char* extraDetails = nullptr)
 		TCore::tl(TC_LOG_LEVEL_STATUS) << message;
 }
 
-void Append_pNext(void* targetStruct, void* attachStruct);
+struct VkChainableStructType
+{
+	VkStructureType sType;
+	const void* pNext;
+};
+
+void Append_pNext(void* targetStruct, void* attachStruct)
+{
+	// pNext is always second member of a struct
+	VkChainableStructType** nextChain = (VkChainableStructType**)&((VkChainableStructType*)targetStruct)->pNext;
+	// Iterate until you find last pNext filled
+	while (*nextChain)
+		nextChain = (VkChainableStructType**)&((VkChainableStructType*)targetStruct)->pNext;
+	*nextChain = (VkChainableStructType*)attachStruct;
+}
 
 #define VK_PRIM_MIN(primType) std::numeric_limits<primType>::min()
 #define VK_PRIM_MAX(primType) std::numeric_limits<primType>::max()
@@ -117,39 +134,62 @@ enum class VkOpaqueHandleType : TU4
 	VkDescriptorSetLayout_HND,
 	VkDescriptorSet_HND,
 	VkDescriptorPool_HND,
-	VkFence_HND
+	VkFence_HND,
+	VkQueue_HND
 };
 
 class VkReferenceManager
 {
-public:
+private:
 	struct ReferenceCountHandle
 	{
 		TU8 Id = 0;
-		TU8 ReferenceCount = 0;
+		std::atomic_uint64_t ReferenceCount = 0;
 		void* Handle;
 		VkOpaqueHandleType Type;
 		TBool IsAlive = TTRUE;
 	};
-	// TCore::UnorderedMap<void*, ReferenceCountHandle> HandleList;
+
+	std::atomic_uint64_t Id;
+	TCore::PairedList<void*, ReferenceCountHandle> HandleList;
+
+public:
 	void AddRef(void* opaqueHandle, VkOpaqueHandleType type)
 	{
-		if (auto obj = GetObj())
+		if (auto obj = HandleList.Find(opaqueHandle))
 		{
 			TCORE_SOFT_CHECK(
-				obj.IsAlive == TTRUE,
+				obj->IsAlive == TTRUE,
 				"A dead object referenced again. Either a different object uses same handle before all references are "
 				"removed (VkAllocator problem) or vulkan backend references a dead object.");
+			obj->ReferenceCount++;
 			return;
 		}
-		// Add to list
+		ReferenceCountHandle r;
+		r.Handle = opaqueHandle;
+		r.Id = Id++;
+		r.IsAlive = TTRUE;
+		r.ReferenceCount = 1;
+		r.Type = type;
+		HandleList.Insert(opaqueHandle, r);
 	}
-	void RemoveRef(void* opaqueHandle) {}
+	TBool IsAlive(void* opaqueHandle)
+	{
+		if (auto obj = HandleList.Find(opaqueHandle))
+			return obj->IsAlive;
+		return false;
+	}
+	void RemoveRef(void* opaqueHandle)
+	{
+		auto obj = HandleList.Find(opaqueHandle);
+		TCORE_SOFT_CHECK(obj, "Vulkan object doesn't exist");
+		obj->ReferenceCount--;
+	}
 	void SetAsDead(void* opaqueHandle)
 	{
-		auto obj = GetObj();
-		TCORE_SOFT_CHECK(obj.ReferenceCount <= 1, "This vulkan object still has references somewhere!");
-		obj.IsAlive = TFALSE;
+		auto obj = HandleList.Find(opaqueHandle);
+		TCORE_SOFT_CHECK(obj->ReferenceCount <= 1, "This vulkan object still has references somewhere!");
+		obj->IsAlive = TFALSE;
 	}
 };
 
@@ -165,6 +205,7 @@ public:
 		Handle = r.Handle;
 		ReferenceManager.AddRef(Handle, typeEnum);
 	}
+	VkHandle() {}
 	void* Handle;
 	VkReferenceManager& ReferenceManager;
 	~VkHandle()
@@ -174,11 +215,20 @@ public:
 	}
 	void Set(T hnd)
 	{
-		TCORE_SOFT_CHECK(!Handle);
+		if (Handle)
+			ReferenceManager.RemoveRef(Handle);
+
 		Handle = hnd;
-		ReferenceManager.AddRef(Handle, typeEnum);
+
+		if (Handle)
+			ReferenceManager.AddRef(Handle, typeEnum);
 	}
-	operator T() const { return (T)Handle; }
+	void SetManager(VkReferenceManager& refManager) { ReferenceManager = refManager; }
+	operator T() const
+	{
+		TCORE_SOFT_CHECK(ReferenceManager.IsAlive(Handle), "Vulkan object is dead!");
+		return (T)Handle;
+	}
 	VkHandle<T, typeEnum>& operator=(const VkHandle<T, typeEnum>& rhs)
 	{
 		if (Handle)
@@ -212,6 +262,7 @@ VK_TYPE_TO_HND_SPECIALIZATION(VkDescriptorSet);
 VK_TYPE_TO_HND_SPECIALIZATION(VkDescriptorSetLayout);
 VK_TYPE_TO_HND_SPECIALIZATION(VkDescriptorPool);
 VK_TYPE_TO_HND_SPECIALIZATION(VkFence);
+VK_TYPE_TO_HND_SPECIALIZATION(VkQueue);
 
 #if defined(T_ENVWINDOWS)
 static constexpr VkExternalFenceHandleTypeFlags kSharedFenceHandleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_OPAQUE_WIN32_BIT;

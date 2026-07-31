@@ -32,14 +32,15 @@ extern class ContentManagerContext* GContentManagerContext = nullptr;
 class ContentManagerContext
 {
 public:
-	VK_LINEAR_OBJARRAY<Texture, 1 << 24> textures;
-	VK_LINEAR_OBJARRAY<Pipeline, 1 << 24> pipelines;
-	VK_LINEAR_OBJARRAY<ShaderSource, 1 << 24> shadersources;
-	VK_LINEAR_OBJARRAY<Sampler, 1 << 16> samplers;
-	VK_LINEAR_OBJARRAY<Buffer> buffers;
-	VK_LINEAR_OBJARRAY<BindingTableInstance, 1 << 16> bindingtableinsts;
-	VK_LINEAR_OBJARRAY<Heap, 1 << 10> heaps;
-	VK_LINEAR_OBJARRAY<Fence, 1 << 20> Fences;
+	VkGpuObjectArray<Texture, 1 << 24> Textures;
+	VkGpuObjectArray<Pipeline, 1 << 24> Pipelines;
+	VkGpuObjectArray<ShaderSource, 1 << 24> ShaderSources;
+	VkGpuObjectArray<Sampler, 1 << 16> Samplers;
+	VkGpuObjectArray<Buffer, 1 << 24> Buffers;
+	VkGpuObjectArray<BindingTableInstance, 1 << 16> BindingTableInsts;
+	VkGpuObjectArray<Heap, 1 << 10> Heaps;
+	VkGpuObjectArray<Fence, 1 << 20> Fences;
+	VkGpuObjectArray<Swapchain, 1 << 20> Swapchains;
 
 	static void HookContentManager(ITGfxResourceManager* r);
 	static TCResult Initialize();

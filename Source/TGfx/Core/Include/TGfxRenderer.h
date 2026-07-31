@@ -81,7 +81,7 @@ typedef struct ITGfxRenderer
 	void (*DestroyCommandBundle)(TGfxCommandBundle hnd);
 	void (*CmdBindBindingTables)(TGfxCommandBundle bundle,
 								 TSize sortKey,
-								 TU4 firstSetIndx,
+								 TU4 firstSetIdx,
 								 TU4 bindingTableCount,
 								 TGfxBindingTable const* bindingTables,
 								 TGfxPipelineType pipeline);

@@ -16,7 +16,7 @@ struct GPU : public VkObjectBase<GPU, TGfxGpu, VkObjTypes::GPU>
 {
 public:
 	GPU(uint8_t idx);
-	uint16_t GetExtraFlags() { return m_gpuIndx; }
+	uint16_t GetExtraFlags() { return m_gpuIdx; }
 
 	TGfxGpuInfo desc;
 
@@ -31,15 +31,14 @@ public:
 	TGfxBuffer m_invalidBuffer = {};
 
 	VkQueueFamilyProperties2 vk_propsQueue[kMaxQueueFamilyCountPerGpu] = {};
-	uint32_t m_queueFamPtrs[kMaxQueueFamilyCountPerGpu] = {};
 	TGfxQueue m_internalQueue = {};
 	VkReferenceManager ReferenceManager;
 
 private:
-	uint8_t m_gpuIndx = 255;
+	uint8_t m_gpuIdx = 255;
 
 public:
-	uint8_t GetGpuIndx() const { return m_gpuIndx; }
+	uint8_t GetGpuIdx() const { return m_gpuIdx; }
 };
 TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(GPU, Vk)
 
@@ -47,8 +46,8 @@ TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(GPU, Vk)
 struct GpuObject
 {
 protected:
-	uint8_t GpuIndx;
-	GpuObject(GPU* gpu) { GpuIndx = gpu->GetGpuIndx(); }
+	uint8_t GpuIdx;
+	GpuObject(GPU* gpu) { GpuIdx = gpu->GetGpuIdx(); }
 
 public:
 	GPU* GetGpu();
@@ -65,7 +64,7 @@ struct Swapchain : public VkObjectBase<Swapchain, TGfxSwapchain, VkObjTypes::SWA
 
 	TGfxUVec2 m_lastSize;
 	TGfxTexture m_swapchainTextures[kMaxSwapchainTextureCountPerSwapchain] = {};
-	TU1 m_swapchainCurrentTextureIndx = 0;
+	TU1 m_swapchainCurrentTextureIdx = 0;
 	// Presentation Fences should only be used for CPU to wait
 	TGfxFence m_presentationFences[kMaxSwapchainTextureCountPerSwapchain];
 	struct PresentationModes
@@ -81,10 +80,24 @@ struct Swapchain : public VkObjectBase<Swapchain, TGfxSwapchain, VkObjTypes::SWA
 	VkSurfaceKHRHnd Surface;
 	VkSwapchainKHRHnd Swpchn;
 	VkSemaphoreHnd AcquireSemaphore;
-	VkCommandBuffer vk_generalToPresent[kMaxQueueFamilyCountPerGpu][kMaxSwapchainTextureCountPerSwapchain] = {},
-					vk_presentToGeneral[kMaxQueueFamilyCountPerGpu][kMaxSwapchainTextureCountPerSwapchain] = {};
+	TGfxGpuSwapchainSupportInfo Info{};
 };
 TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Swapchain, Vk)
+
+template <typename T, TU8 MaxCapacity>
+class VkGpuObjectArray : public TCore::Vector<T, true>
+{
+public:
+	VkGpuObjectArray() : TCore::Vector<T, true>(TCore::GSuperMemoryBlock, 0, MaxCapacity) {}
+
+	T* CreateObject(GPU* gpu)
+	{
+		auto& obj = this->EmplaceBack(gpu);
+		return &obj;
+	}
+
+	void DestroyObject(T* obj) { obj->~T(); }
+};
 
 extern class VkContext* GContext = nullptr;
 class VkContext
@@ -93,7 +106,7 @@ public:
 	// These are VK_VECTORs, instead of VK_LINEAROBJARRAYs, because they won't change at run-time so
 	// frequently
 	VK_ARRAY<GPU, TGfxGpu> GPUs;
-	TCore::UnorderedMap<void*, VkSurfaceKHR> WindowToVkSurfaceMap;
+	TCore::PairedList<void*, VkSurfaceKHR> WindowToVkSurfaceMap;
 
 	VkConstU4 VKGLOBAL_MAX_INSTANCE_EXT_COUNT = 256;
 	VkExtensionProperties SupportedInstanceExtensions[VKGLOBAL_MAX_INSTANCE_EXT_COUNT] = {};
@@ -121,7 +134,7 @@ public:
 };
 
 GPU::GPU(uint8_t idx)
-	: vk_physical(GContext->InstanceObjectReferences), vk_logical(GContext->InstanceObjectReferences), m_gpuIndx(idx)
+	: vk_physical(GContext->InstanceObjectReferences), vk_logical(GContext->InstanceObjectReferences), m_gpuIdx(idx)
 {
 }
 
@@ -134,7 +147,7 @@ inline GPU* GetGpuFromIndex(uint8_t idx)
 
 GPU* GpuObject::GetGpu()
 {
-	return GetGpuFromIndex(GpuIndx);
+	return GetGpuFromIndex(GpuIdx);
 }
 
 } // namespace Vulkan

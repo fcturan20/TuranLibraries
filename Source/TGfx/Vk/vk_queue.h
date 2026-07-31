@@ -9,56 +9,6 @@ namespace TGFX
 {
 namespace Vulkan
 {
-extern vk_virmem::dynamicmem* VKGLOBAL_VIRMEM_MANAGER;
-// Initializes as everything is false (same as CreateInvalidNullFlag)
-struct queueflag_vk
-{
-	bool IsSupportedGraphics : 1;
-	bool IsSupportedCompute : 1;
-	bool IsSupportedTransfer : 1;
-	bool doesntNeedAnything : 1; // This is a special flag to be used as "Don't care other parameters,
-								 // this is a special operation"
-	// bool is_VTMEMsupported : 1;	Not supported for now!
-	inline queueflag_vk()
-	{
-		doesntNeedAnything = false;
-		IsSupportedGraphics = false;
-		IsSupportedCompute = false;
-		IsSupportedTransfer = false;
-	}
-
-	inline queueflag_vk(const queueflag_vk& copy)
-	{
-		doesntNeedAnything = copy.doesntNeedAnything;
-		IsSupportedGraphics = copy.IsSupportedGraphics;
-		IsSupportedCompute = copy.IsSupportedCompute;
-		IsSupportedTransfer = copy.IsSupportedTransfer;
-	}
-	// Returned flag's every bit is false. You should set at least one of them as true.
-	inline static queueflag_vk CreateInvalidNullFlag() { return queueflag_vk(); }
-	static constexpr const char* VKCONST_FLAG_INVALID_ERROR_TEXT = "Some inner flag is invalid";
-	inline bool isFlagValid() const
-	{
-		if (doesntNeedAnything && (IsSupportedGraphics || IsSupportedCompute || IsSupportedTransfer))
-		{
-			vkPrint(16, VKCONST_FLAG_INVALID_ERROR_TEXT);
-			return false;
-		}
-		if (!doesntNeedAnything && !IsSupportedGraphics && !IsSupportedCompute && !IsSupportedTransfer)
-		{
-			vkPrint(16, VKCONST_FLAG_INVALID_ERROR_TEXT);
-			return false;
-		}
-		return true;
-	}
-
-	operator uint8_t() const;
-};
-
-typedef void (*submissionCallback)(GPU* gpu, VkFence fence, void* userData);
-// Handle both has GPU's ID & QueueFamily's ID
-struct QUEUEFAM_VK;
-struct Queue;
 /*
 This class manages queues and command buffer allocations per GPU
   This is important in multi-threaded cases because;
@@ -77,30 +27,15 @@ pools, just bind command buffers to queue.
 struct manager_vk
 {
 public:
-	struct queueCreateInfoList
-	{
-		VkDeviceQueueCreateInfo list[kMaxQueueFamilyCountPerGpu];
-	};
-	// While creating VK Logical Device, we need which queues to create. Get that info from here.
-	queueCreateInfoList get_queue_cis(GPU* gpu) const;
-	// Get VkQueue objects from logical device
-	void get_queue_objects(GPU* gpu);
 	// Submit queue operations to GPU
 	// Adds the queue's binary semaphore to the first&last submit to synchronize queue submissions.
 	// This is because some queue operations are not synchronized by Vulkan (present and sparse).
 	// NOTE: Queue's synchronizer binary semaphore is named : "QueueBinSem aka QBS".
 	// For ex: Present 1 -> CmdBufferSubmitList (Submits A, B & C) -> Present 2.
 	//  Present 1 signals QueueBinSem. SubmitA waits (un-signals) QBS. SubmitC signals QBS. Present 2
-	//  both waits then signals QBS. With this way, we're
-
+	//  both waits then signals QBS.
 	void queueSubmit(Queue* family);
-	uint32_t get_queuefam_index(Queue* fam);
-	bool does_queuefamily_support(Queue* family, const queueflag_vk& flag);
 };
-
-void allocateCmdBuffer(
-	QUEUEFAM_VK* queueFam, VkCommandBufferLevel level, cmdPool_vk*& cmdPool, VkCommandBuffer* cbs, uint32_t count);
-void freeCmdBuffer(cmdPool_vk* cmdPool, VkCommandBuffer cb);
 
 } // namespace Vulkan
 } // namespace TGFX

@@ -7,10 +7,8 @@
 #include <string.h>
 #include <cstring>
 #include <algorithm>
-#include <cstring>
 
 #include "VirtualMemory.h"
-#include "UnitTestSystem.h"
 #include "UnitTestSystem.h"
 
 TCORE_PLUGIN_INIT(TC)
@@ -34,6 +32,11 @@ static constexpr TU8 kMaxBlockName = 230; // You should use null terminator
 static TU8 GPageSizeBitCount = 0;
 static TU8 GHandleConstantSuffix = 0;
 
+static inline TU8 PagesToBytes(TU8 pageCount)
+{
+	return pageCount << GPageSizeBitCount;
+}
+
 void BindVectorAndAllocatorServices(ITCAllocator* allocator);
 struct TCAllocatorContext* GContext = nullptr;
 struct SuperBlock;
@@ -42,12 +45,14 @@ struct TCAllocatorContext
 	TCore::Vector<SuperBlock*, true> SuperBlocks;
 
 	static void Initialize();
+	SuperBlock* FindCollidingSuperBlock(void* ptr);
 };
 
-static inline TU8 PagesToBytes(TU8 pageCount)
-{
-	return pageCount << GPageSizeBitCount;
-}
+using MallocFunc = decltype(ITCAllocator::Malloc);
+using FreeFunc = decltype(ITCAllocator::Free);
+
+MallocFunc GetMallocFunc(TCSuperBlockAllocationStrategy strategy);
+FreeFunc GetFreeFunc(TCSuperBlockAllocationStrategy strategy);
 
 struct SuperBlock
 {
@@ -60,7 +65,7 @@ struct SuperBlock
 	char Name[kMaxBlockName + 1];
 	bool IsFreed = true;
 	TU8 PageCount;
-	const ITCBuffer* Allocator = nullptr;
+	TCSuperBlockAllocationStrategy Strategy;
 
 	// Validate if this super block is valid
 	static bool IsValid(TCSuperBlock hnd)
@@ -98,7 +103,7 @@ struct SuperBlock
 	}
 
 	template <bool UseContext>
-	static TCSuperBlock Create(TU8 block_size, const char* name, const ITCBuffer* allocator)
+	static TCSuperBlock Create(TU8 block_size, const char* name, TCSuperBlockAllocationStrategy strategy)
 	{
 		// Search for a freed super memory block
 		TU8 namelen = std::min(TU8(strlen(name)), kMaxBlockName);
@@ -119,7 +124,7 @@ struct SuperBlock
 				TCVirtualMemory->Commit(super->Ptr, PagesToBytes(1));
 				super->IsFreed = false;
 				memcpy(super->Name, name, namelen * sizeof(char));
-				super->Allocator = allocator;
+				super->Strategy = strategy;
 				return (TCSuperBlock)super;
 			}
 		}
@@ -136,7 +141,7 @@ struct SuperBlock
 
 		TCVirtualMemory->Commit(block, PagesToBytes(1));
 		block->PageCount = block_size / PagesToBytes(1);
-		block->Allocator = allocator;
+		block->Strategy = strategy;
 		block->IsFreed = false;
 		memcpy(block->Name, name, namelen * sizeof(char));
 		block->Ptr = reinterpret_cast<void*>(uintptr_t(block) + PagesToBytes(1));
@@ -152,10 +157,24 @@ struct SuperBlock
 		IsFreed = true;
 	}
 };
+SuperBlock* TCAllocatorContext::FindCollidingSuperBlock(void* ptr)
+{
+	auto target = reinterpret_cast<uintptr_t>(ptr);
+	for (TU8 i = 0; i < SuperBlocks.Size(); i++)
+	{
+		auto& superBlock = SuperBlocks[i];
+		auto superBlockStart = reinterpret_cast<uintptr_t>(superBlock->Ptr);
+		auto superBlockEnd = superBlockStart + PagesToBytes(superBlock->PageCount);
+		if (target >= superBlockStart && target < superBlockEnd)
+			return superBlock;
+	}
+	return nullptr;
+}
 
+static ITCAllocator a;
 void TCAllocatorContext::Initialize()
 {
-	ITCAllocator* services = new ITCAllocator;
+	ITCAllocator* services = &a;
 	BindVectorAndAllocatorServices(services);
 	TCAllocator = services;
 
@@ -168,8 +187,8 @@ void TCAllocatorContext::Initialize()
 	static constexpr TU8 kInitialAllocatorSize = 1ull << 20ull;
 	auto reservedMemory = TCVirtualMemory->Reserve(kInitialAllocatorSize);
 	TCVirtualMemory->Commit(reservedMemory, PagesToBytes(1));
-	TCore::GSuperMemoryBlock =
-		SuperBlock::Create<false>(kInitialAllocatorSize, TCORE_ACTIVE_PLUGIN_NAME, TCStdAllocator);
+	TCore::GSuperMemoryBlock = SuperBlock::Create<false>(
+		kInitialAllocatorSize, TCORE_ACTIVE_PLUGIN_NAME, TCORE_SUPERBLOCKALLOCATIONSTRATEGY_EOP);
 
 	GContext = new (reservedMemory) TCAllocatorContext;
 }
@@ -199,7 +218,7 @@ struct EndOfPageAllocatorServices
 {
 	static TCSuperBlock CreateSuperBlock(TU8 blockSize, const char* superMemBlockName)
 	{
-		return SuperBlock::Create<true>(blockSize, superMemBlockName, TCEopAllocator);
+		return SuperBlock::Create<true>(blockSize, superMemBlockName, TCORE_SUPERBLOCKALLOCATIONSTRATEGY_EOP);
 	}
 	static void DestroySuperBlock(TCSuperBlock super_memory_block)
 	{
@@ -224,7 +243,8 @@ struct EndOfPageAllocatorServices
 	{
 		auto block = reinterpret_cast<MemoryBlock*>(uintptr_t(alloc) - PagesToBytes(2));
 		TCORE_SOFT_CHECK(block->IsValid(), "Invalid block");
-		TCORE_SOFT_CHECK(block->ParentSuperBlock->Allocator == TCEopAllocator, "Allocator mismatch");
+		TCORE_SOFT_CHECK(block->ParentSuperBlock->Strategy == TCORE_SUPERBLOCKALLOCATIONSTRATEGY_EOP,
+						 "Allocator mismatch");
 		return block;
 	}
 	static void* Malloc(TCSuperBlock super_block, TU8 size, const char* name)
@@ -232,7 +252,7 @@ struct EndOfPageAllocatorServices
 		auto totalAlloc = CalculateFinalAllocSize(size);
 
 		auto superBlock = SuperBlock::GetFromHnd(super_block);
-		TCORE_SOFT_CHECK(superBlock->Allocator == TCEopAllocator, "Allocator mismatch");
+		TCORE_SOFT_CHECK(superBlock->Strategy == TCORE_SUPERBLOCKALLOCATIONSTRATEGY_EOP, "Allocator mismatch");
 
 		MemoryBlock* foundMemBlock = nullptr;
 		auto activeMemBlock = (MemoryBlock*)superBlock->Ptr;
@@ -271,6 +291,8 @@ struct EndOfPageAllocatorServices
 	static void Free(void* allocation)
 	{
 		auto memBlock = GetMemoryBlockFromAllocationPointer(allocation);
+		if (!memBlock)
+			return;
 		TCVirtualMemory->Decommit(allocation, memBlock->Size);
 		memBlock->IsFree = true;
 	}
@@ -281,7 +303,7 @@ struct StandardAllocatorServices
 {
 	static TCSuperBlock CreateSuperBlock(TU8 blockSize, const char* superMemBlockName)
 	{
-		return SuperBlock::Create<true>(blockSize, superMemBlockName, TCStdAllocator);
+		return SuperBlock::Create<true>(blockSize, superMemBlockName, TCORE_SUPERBLOCKALLOCATIONSTRATEGY_STANDARD);
 	}
 	static void DestroySuperBlock(TCSuperBlock super_memory_block)
 	{
@@ -298,7 +320,8 @@ struct StandardAllocatorServices
 	{
 		MemoryBlock* memBlock = (MemoryBlock*)allocation - 1;
 		TCORE_SOFT_CHECK(memBlock->IsValid(), "Invalid memory allocation");
-		TCORE_SOFT_CHECK(memBlock->ParentSuperBlock->Allocator == TCStdAllocator, "Allocator mismatch");
+		TCORE_SOFT_CHECK(memBlock->ParentSuperBlock->Strategy == TCORE_SUPERBLOCKALLOCATIONSTRATEGY_STANDARD,
+						 "Allocator mismatch");
 		return memBlock;
 	}
 	static void* Malloc(TCSuperBlock super_block, TU8 size, const char* name)
@@ -343,7 +366,9 @@ struct StandardAllocatorServices
 	static void Free(void* allocation)
 	{
 		auto memBlock = GetMemoryBlockFromAllocationPointer(allocation);
-		TCVirtualMemory->Decommit(allocation, memBlock->Size);
+		if (!memBlock)
+			return;
+		// TCVirtualMemory->Decommit(allocation, memBlock->Size);
 	}
 };
 
@@ -356,6 +381,7 @@ struct Vector
 	SuperBlock* ParentSuperBlock = nullptr;
 	void* Data() { return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(this) + sizeof(Vector)); }
 };
+
 struct VectorServices
 {
 #define GetVector(data) reinterpret_cast<Vector*>(reinterpret_cast<uintptr_t>(data) - sizeof(Vector))
@@ -388,7 +414,7 @@ struct VectorServices
 		const TU8 capacity = std::max<TU8>(initial_size, max_size ? max_size : 1);
 		const TU8 reserveSize = std::max<TU8>(sizeof(Vector) + (element_size * capacity), PagesToBytes(1));
 		Vector* vector =
-			reinterpret_cast<Vector*>(superBlock->Allocator->Malloc(superBlock->GetHnd(), reserveSize, "Vector"));
+			reinterpret_cast<Vector*>(GetMallocFunc(superBlock->Strategy)(superBlock->GetHnd(), reserveSize, "Vector"));
 		if (!vector)
 			return nullptr;
 
@@ -445,31 +471,18 @@ struct VectorServices
 			return;
 		DestroyElements(hnd->Data(), hnd->Count);
 	}
+	static TCSuperBlock GetSuperBlock(TCVector v)
+	{
+		Vector* hnd = GetVector(v);
+		if (!hnd)
+			return nullptr;
+		return hnd->ParentSuperBlock->GetHnd();
+	}
 };
 
 void BindVectorAndAllocatorServices(ITCAllocator* services)
 {
-	// Standard Allocator
-	{
-		ITCBuffer* Allocator = (ITCBuffer*)malloc(sizeof(ITCBuffer));
-		Allocator->CreateSuperBlock = StandardAllocatorServices::CreateSuperBlock;
-		Allocator->DestroySuperBlock = StandardAllocatorServices::DestroySuperBlock;
-		Allocator->Malloc = StandardAllocatorServices::Malloc;
-		Allocator->Free = StandardAllocatorServices::Free;
-		services->StandardAllocator = Allocator;
-	}
-
-	// End of Page Buffer Allocator
-	{
-		ITCBuffer* bufAllocator = (ITCBuffer*)malloc(sizeof(ITCBuffer));
-		bufAllocator->CreateSuperBlock = EndOfPageAllocatorServices::CreateSuperBlock;
-		bufAllocator->DestroySuperBlock = EndOfPageAllocatorServices::DestroySuperBlock;
-		bufAllocator->Malloc = EndOfPageAllocatorServices::Malloc;
-		bufAllocator->Free = EndOfPageAllocatorServices::Free;
-		services->EndOfPageAllocator = bufAllocator;
-	}
-
-	// Vector Allocator
+	// Vector Manager
 	{
 		ITCVector* f_vector = (ITCVector*)malloc(sizeof(ITCVector));
 		f_vector->Create = VectorServices::Create;
@@ -478,134 +491,186 @@ void BindVectorAndAllocatorServices(ITCAllocator* services)
 		f_vector->Size = VectorServices::Size;
 		f_vector->PushBack = VectorServices::PushBack;
 		f_vector->Destroy = VectorServices::Destroy;
+		f_vector->GetSuperBlock = VectorServices::GetSuperBlock;
 		services->VectorManager = f_vector;
 	}
+
+	services->Malloc = [](TCSuperBlock memory_block, TU8 size, const char* name) -> void* {
+		auto superBlock = SuperBlock::GetFromHnd(memory_block);
+		return GetMallocFunc(superBlock->Strategy)(memory_block, size, name);
+	};
+	services->Free = [](void* allocationPtr) {
+		auto superBlock = GContext->FindCollidingSuperBlock(allocationPtr);
+		if (superBlock)
+			return GetFreeFunc(superBlock->Strategy)(allocationPtr);
+		printf("Failed to free %p. It is not allocated with TCAllocator\n", allocationPtr);
+	};
+	services->CreateSuperBlock =
+		[](TU8 block_size, const char* name, TCSuperBlockAllocationStrategy strategy) -> TCSuperBlock {
+		return SuperBlock::Create<true>(block_size, name, strategy);
+	};
+	services->DestroySuperBlock = [](TCSuperBlock super_memory_block) {
+		SuperBlock::GetFromHnd(super_memory_block)->Destroy();
+	};
 }
 
-} // namespace Allocator
-} // namespace TCore
-
-namespace TCore
+MallocFunc GetMallocFunc(TCSuperBlockAllocationStrategy strategy)
 {
-namespace Allocator
+	switch (strategy)
+	{
+	case TCORE_SUPERBLOCKALLOCATIONSTRATEGY_EOP: return EndOfPageAllocatorServices::Malloc;
+	case TCORE_SUPERBLOCKALLOCATIONSTRATEGY_STANDARD: return StandardAllocatorServices ::Malloc;
+	}
+	return nullptr;
+}
+FreeFunc GetFreeFunc(TCSuperBlockAllocationStrategy strategy)
 {
+	switch (strategy)
+	{
+	case TCORE_SUPERBLOCKALLOCATIONSTRATEGY_EOP: return EndOfPageAllocatorServices::Free;
+	case TCORE_SUPERBLOCKALLOCATIONSTRATEGY_STANDARD: return StandardAllocatorServices ::Free;
+	}
+	return nullptr;
+}
 
 struct TCAllocatorUnitTests
 {
 	static TCResult StandardAllocatorTest(TCReadBuffer inputData);
 	static TCResult EndOfPageAllocatorTest(TCReadBuffer inputData);
 	static TCResult VectorManagerTest(TCReadBuffer inputData);
+	static TCResult PairedListTest(TCReadBuffer inputData);
 	static void Register();
 };
 
 TCResult TCAllocatorUnitTests::StandardAllocatorTest(TCReadBuffer inputData)
 {
 	(void)inputData;
-	if (!TCAllocator || !TCAllocator->StandardAllocator || !TCAllocator->StandardAllocator->CreateSuperBlock ||
-		!TCAllocator->StandardAllocator->Malloc || !TCAllocator->StandardAllocator->Free ||
-		!TCAllocator->StandardAllocator->DestroySuperBlock)
+	if (!TCAllocator || !TCAllocator || !TCAllocator->CreateSuperBlock || !TCAllocator->Malloc || !TCAllocator->Free ||
+		!TCAllocator->DestroySuperBlock)
 		return {TC_RESULTSTATE_FAILURE, 0};
 
-	TCSuperBlock superBlock = TCAllocator->StandardAllocator->CreateSuperBlock(4096, "TCAllocatorStdTest");
+	TCSuperBlock superBlock =
+		TCAllocator->CreateSuperBlock(4096, "TCAllocatorStdTest", TCORE_SUPERBLOCKALLOCATIONSTRATEGY_STANDARD);
 	if (!superBlock)
 		return {TC_RESULTSTATE_FAILURE, 0};
-	void* allocation = TCAllocator->StandardAllocator->Malloc(superBlock, 128, "TCAllocatorStdTest");
+	void* allocation = TCAllocator->Malloc(superBlock, 128, "TCAllocatorStdTest");
 	if (!allocation)
 	{
-		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
+		TCAllocator->DestroySuperBlock(superBlock);
 		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	std::memset(allocation, 0x5A, 128);
-	TCAllocator->StandardAllocator->Free(allocation);
-	TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
+	TCAllocator->Free(allocation);
+	TCAllocator->DestroySuperBlock(superBlock);
 	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCAllocatorUnitTests::EndOfPageAllocatorTest(TCReadBuffer inputData)
 {
 	(void)inputData;
-	if (!TCAllocator || !TCAllocator->EndOfPageAllocator || !TCAllocator->EndOfPageAllocator->CreateSuperBlock ||
-		!TCAllocator->EndOfPageAllocator->Malloc || !TCAllocator->EndOfPageAllocator->Free ||
-		!TCAllocator->EndOfPageAllocator->DestroySuperBlock)
+	if (!TCAllocator || !TCAllocator || !TCAllocator->CreateSuperBlock || !TCAllocator->Malloc || !TCAllocator->Free ||
+		!TCAllocator->DestroySuperBlock)
 		return {TC_RESULTSTATE_FAILURE, 0};
 
-	TCSuperBlock superBlock = TCAllocator->EndOfPageAllocator->CreateSuperBlock(1ull << 20ull, "TCAllocatorEopTest");
+	TCSuperBlock superBlock =
+		TCAllocator->CreateSuperBlock(1ull << 20ull, "TCAllocatorEopTest", TCORE_SUPERBLOCKALLOCATIONSTRATEGY_EOP);
 	if (!superBlock)
 		return {TC_RESULTSTATE_FAILURE, 0};
-	void* allocation = TCAllocator->EndOfPageAllocator->Malloc(superBlock, 64, "TCAllocatorEopTest");
+	void* allocation = TCAllocator->Malloc(superBlock, 64, "TCAllocatorEopTest");
 	if (!allocation)
 	{
-		TCAllocator->EndOfPageAllocator->DestroySuperBlock(superBlock);
+		TCAllocator->DestroySuperBlock(superBlock);
 		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	std::memset(allocation, 0x7C, 64);
-	TCAllocator->EndOfPageAllocator->Free(allocation);
-	TCAllocator->EndOfPageAllocator->DestroySuperBlock(superBlock);
+	TCAllocator->Free(allocation);
+	TCAllocator->DestroySuperBlock(superBlock);
 	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
 TCResult TCAllocatorUnitTests::VectorManagerTest(TCReadBuffer inputData)
 {
 	(void)inputData;
-	if (!TCAllocator || !TCAllocator->VectorManager || !TCAllocator->VectorManager->Create ||
-		!TCAllocator->VectorManager->PushBack || !TCAllocator->VectorManager->Size ||
-		!TCAllocator->VectorManager->Erase || !TCAllocator->VectorManager->Destroy)
+	if (!TCAllocator || !TCVectorManager || !TCVectorManager->Create || !TCVectorManager->PushBack ||
+		!TCVectorManager->Size || !TCVectorManager->Erase || !TCVectorManager->Destroy ||
+		!TCVectorManager->GetSuperBlock)
 		return {TC_RESULTSTATE_FAILURE, 0};
 
-	TCSuperBlock superBlock = TCAllocator->StandardAllocator->CreateSuperBlock(8192, "TCAllocatorVectorTest");
+	TCSuperBlock superBlock =
+		TCAllocator->CreateSuperBlock(8192, "TCAllocatorVectorTest", TCORE_SUPERBLOCKALLOCATIONSTRATEGY_STANDARD);
 	if (!superBlock)
 		return {TC_RESULTSTATE_FAILURE, 0};
-	TCVector vector = TCAllocator->VectorManager->Create(superBlock, sizeof(int), 0, 4);
+	TCVector vector = TCVectorManager->Create(superBlock, sizeof(int), 0, 4);
 	if (!vector)
 	{
-		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
+		TCAllocator->DestroySuperBlock(superBlock);
 		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	int values[3] = {10, 20, 30};
 	for (int i = 0; i < 3; ++i)
 	{
-		if (TCAllocator->VectorManager->PushBack(vector, &values[i]) != TC_RESULTSTATE_SUCCESS)
+		if (TCVectorManager->PushBack(vector, &values[i]) != TC_RESULTSTATE_SUCCESS)
 		{
-			TCAllocator->VectorManager->Destroy(vector);
-			TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
+			TCVectorManager->Destroy(vector);
+			TCAllocator->DestroySuperBlock(superBlock);
 			return {TC_RESULTSTATE_FAILURE, 0};
 		}
 	}
 
-	if (TCAllocator->VectorManager->Size(vector) != 3)
+	if (TCVectorManager->Size(vector) != 3)
 	{
-		TCAllocator->VectorManager->Destroy(vector);
-		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
+		TCVectorManager->Destroy(vector);
+		TCAllocator->DestroySuperBlock(superBlock);
 		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
-	if (TCAllocator->VectorManager->Erase(vector, 1) != TC_RESULTSTATE_SUCCESS)
+	if (TCVectorManager->Erase(vector, 1) != TC_RESULTSTATE_SUCCESS)
 	{
-		TCAllocator->VectorManager->Destroy(vector);
-		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
+		TCVectorManager->Destroy(vector);
+		TCAllocator->DestroySuperBlock(superBlock);
 		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
-	if (TCAllocator->VectorManager->Size(vector) != 2)
+	if (TCVectorManager->Size(vector) != 2)
 	{
-		TCAllocator->VectorManager->Destroy(vector);
-		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
+		TCVectorManager->Destroy(vector);
+		TCAllocator->DestroySuperBlock(superBlock);
 		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
 	int* data = reinterpret_cast<int*>(vector);
 	if (data[0] != 10 || data[1] != 30)
 	{
-		TCAllocator->VectorManager->Destroy(vector);
-		TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
+		TCVectorManager->Destroy(vector);
+		TCAllocator->DestroySuperBlock(superBlock);
 		return {TC_RESULTSTATE_FAILURE, 0};
 	}
 
-	TCAllocator->VectorManager->Destroy(vector);
-	TCAllocator->StandardAllocator->DestroySuperBlock(superBlock);
+	TCVectorManager->Destroy(vector);
+	TCAllocator->DestroySuperBlock(superBlock);
+	return {TC_RESULTSTATE_SUCCESS, 0};
+}
+
+TCORE_DEFINE_HANDLE(TGfxHnd);
+TCResult TCAllocatorUnitTests::PairedListTest(TCReadBuffer inputData)
+{
+	(void)inputData;
+	if (!TCAllocator || !TCVectorManager || !TCVectorManager->Create || !TCVectorManager->PushBack ||
+		!TCVectorManager->Size || !TCVectorManager->Erase || !TCVectorManager->Destroy)
+		return {TC_RESULTSTATE_FAILURE, 0};
+
+	TCSuperBlock superBlock =
+		TCAllocator->CreateSuperBlock(8192, "TCAllocatorPairedListTest", TCORE_SUPERBLOCKALLOCATIONSTRATEGY_EOP);
+	if (!superBlock)
+		return {TC_RESULTSTATE_FAILURE, 0};
+
+	PairedList<TU8, TGfxHnd> list;
+	list.Insert(7, (TGfxHnd)superBlock);
+
+	TCAllocator->DestroySuperBlock(superBlock);
 	return {TC_RESULTSTATE_SUCCESS, 0};
 }
 
@@ -629,10 +694,15 @@ void TCAllocatorUnitTests::Register()
 	desc.Name = "TCAllocator_UnitTest_VectorManager";
 	desc.Test = VectorManagerTest;
 	TCUnitTest->RegisterTest(&desc);
+
+	desc.Name = "TCAllocator_UnitTest_PairedList";
+	desc.Test = PairedListTest;
+	TCUnitTest->RegisterTest(&desc);
 }
 
 } // namespace Allocator
 } // namespace TCore
+
 TCResult TCAllocator_Initialize(const void** outPluginAPI)
 {
 	TCore::Allocator::TCAllocatorContext::Initialize();

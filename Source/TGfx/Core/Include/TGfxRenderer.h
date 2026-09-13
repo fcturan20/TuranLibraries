@@ -11,9 +11,7 @@ typedef struct ITGfxRenderer
 	// Command buffers are one-time only buffers
 	//  so when you submit for execution, they'll be freed after their execution
 	// Extensions: Storage command buffers
-	TGfxCommandBuffer (*BeginCommandBuffer)(TGfxQueue queue,
-
-											TGfxExtension* exts);
+	TGfxCommandBuffer (*BeginCommandBuffer)(TGfxQueue queue, TGfxExtension* exts);
 	void (*EndCommandBuffer)(TGfxCommandBuffer commandBuffer);
 	// In a Rendersubpass: All bundles should be created with the rendersubpass' handle
 	// Outside: All bundles should be created with rendersubpass as NULL.
@@ -140,6 +138,10 @@ typedef struct ITGfxRenderer
 							  TGfxImageAccess lastAccess,
 							  TGfxImageAccess nextAccess,
 							  TGfxExtension* exts);
+	void (*CmdMoveTextureToQueue)(
+		TGfxCommandBundle bndl, TU8 key, TGfxTexture texture, TGfxQueue nextQueue, TGfxExtension* exts);
+	void (*CmdMoveBufferToQueue)(
+		TGfxCommandBundle bndl, TU8 key, TGfxBuffer buffer, TGfxQueue nextQueue, TGfxExtension* exts);
 
 	void (*CmdDispatch)(TGfxCommandBundle bndl, TU8 key, const TGfxUVec3 dispatchSize);
 	void (*CmdPushConstant)(TGfxCommandBundle bndl, TU8 key, unsigned char offset, unsigned char size, const void* d);

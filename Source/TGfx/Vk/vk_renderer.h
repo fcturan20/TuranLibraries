@@ -17,6 +17,8 @@ other systems
 */
 
 #pragma once
+#include <type_traits>
+#include <utility>
 #include <TGfxDeclarations.h>
 #include <TGfxStructs.h>
 
@@ -39,6 +41,14 @@ struct Submission
 VkConstU4 VKCONST_MAXUNSENTSUBMITCOUNT = 32;
 struct Queue : public VkObjectBase<Queue, TGfxQueue, VkObjTypes::GPUQUEUE>, GpuObject
 {
+	enum OperationType : TU1
+	{
+		ERROR_QUEUEOPTYPE = 0,
+		CMDBUFFER = 1,
+		PRESENT = 2,
+		SPARSE = 3
+	};
+
 	Queue(GPU* gpu) : GpuObject(gpu), CallSynchronizer(gpu->ReferenceManager), queue(gpu->ReferenceManager) {}
 	uint16_t GetExtraFlags() { return (GpuIdx << 8) | QueueFamIdx; }
 	static GPU* getGPUfromHnd(TGfxQueue hnd)
@@ -54,6 +64,7 @@ struct Queue : public VkObjectBase<Queue, TGfxQueue, VkObjTypes::GPUQUEUE>, GpuO
 	}
 
 	uint32_t QueueFamIdx = 0, QueueIdx = 0;
+	OperationType ActiveQueueOperation = ERROR_QUEUEOPTYPE;
 	VkQueueHnd queue;
 
 	// This is a binary semaphore to sync sequential executeCmdBufferList calls in the same queue
@@ -65,7 +76,7 @@ struct Queue : public VkObjectBase<Queue, TGfxQueue, VkObjTypes::GPUQUEUE>, GpuO
 
 	// Check previously sent submissions
 	void checkSubmissions();
-	void createSubmission(VkFence fence, void* data, submissionCallback callback);
+	// void createSubmission(VkFence fence, void* data, submissionCallback callback);
 };
 TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Queue, Vk)
 
@@ -187,10 +198,9 @@ private:
 	TU8 PrimaryCommandBufferCounter = 0;
 };
 
-typedef TU4 VkCmdTypeEnumType;
-enum class CommandType : VkCmdTypeEnumType
+enum class CommandType : TU4
 {
-	error = VK_PRIM_MIN(VkCmdTypeEnumType), // cmdType neither should be 0 nor 255
+	error = 0, // cmdType neither should be 0 nor 255
 	BindBindingTables,
 	BindVertexBuffers,
 	BindIndexBuffer,
@@ -207,55 +217,27 @@ enum class CommandType : VkCmdTypeEnumType
 	CopyBufferToTexture,
 	CopyBufferToBuffer,
 	PushConstant,
-	error_2 = VK_PRIM_MAX(VkCmdTypeEnumType)
+	error_2 = UINT32_MAX
 };
 
-// Secondary command buffers
-// These are to use across different command buffers and frames
-struct CommandBundle : public VkObjectBase<CommandBundle, TGfxCommandBundle, VkObjTypes::CMDBUNDLE>, public GpuObject
-{
-	CommandBundle(GPU* gpu)
-		: GpuObject(gpu), ActivePipeline(gpu->ReferenceManager), ActivePipelineLayout(gpu->ReferenceManager),
-		  ActiveCb(gpu->ReferenceManager)
-	{
-		for (TU8 i = 0; i < kMaxQueueFamilyCountPerGpu; i++)
-			SecondaryCommandBuffers[i].SetManager(gpu->ReferenceManager);
-		for (TU8 i = 0; i < kMaxDescSetPerList; i++)
-			ActiveDescSets[i].SetManager(gpu->ReferenceManager);
-	}
-	uint16_t GetExtraFlags() { return 0; }
-
-	VkCommandBufferHnd SecondaryCommandBuffers[kMaxQueueFamilyCountPerGpu];
-	VkCommandBufferHnd ActiveCb;
-	// Command Buffer States
-	VkPipelineHnd ActivePipeline;
-	// To check pipeline compatibility
-	VkPipelineLayoutHnd ActivePipelineLayout;
-	VkDescriptorSetLayoutHnd ActiveDescSets[kMaxDescSetPerList];
-	VkPipelineBindPoint BindPoint = {};
-	TGfxPipeline m_defaultPipeline = {};
-
-	Command* m_cmds = {};
-	uint64_t m_cmdCount = 0;
-
-	void createCmdBuffer(uint64_t cmdCount);
-};
-TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(CommandBundle, Vk)
+class CommandBundle;
+// Detectable concept for a CmdExecute(CommandBundle*) member
+template <typename U>
+concept HasCmdExecute = requires(U& u, CommandBundle* b) { u.CmdExecute(b); };
 
 template <typename T, CommandType type>
 struct Command
 {
-	template <typename T>
-	constexpr bool HasCmdExecute = requires(T t) { t.CmdExecute(std::declval<CommandBundle*>()); };
-
-	static constexpr CommandType Type = type;
+	CommandType Type = type;
 
 	void Execute(CommandBundle* cmdBundle)
 	{
 		if constexpr (HasCmdExecute<T>)
 		{
-			((T*)this)->CmdExecute();
+			((T*)this)->CmdExecute(cmdBundle);
 		}
+		else
+			static_assert(0 && "CmdExecute should be defined!");
 	}
 };
 

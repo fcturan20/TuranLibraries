@@ -33,6 +33,15 @@ typedef enum TGfxTextureOrder
 	TGFX_TEXTURE_ORDER_LINEAR = 1
 } TGfxTextureOrder;
 
+typedef enum TGfxTextureUsage
+{
+	TGFX_TEXTUREUSAGE_UNKNOWN,
+	TGFX_TEXTUREUSAGE_SAMPLED = 1 << 0,
+	TGFX_TEXTUREUSAGE_STORAGE = 1 << 1,
+	TGFX_TEXTUREUSAGE_RENDER_TARGET = 1 << 2,
+	TGFX_TEXTUREUSAGE_PRESENT = 1 << 3
+} TGfxTextureUsage;
+
 typedef struct TGfxTextureDescription
 {
 	TGfxTextureDimensions Dimension;
@@ -40,6 +49,7 @@ typedef struct TGfxTextureDescription
 	TGfxTextureChannels ChannelType;
 	TU4 MipCount;
 	TGfxTextureOrder DataOrder;
+	TGfxTextureUsage Usage;
 } TGfxTextureDescription;
 
 typedef struct TGfxBufferDescription
@@ -319,12 +329,6 @@ typedef enum TGfxDepthMode
 	TGFX_DEPTHMODE_OFF
 } TGfxDepthMode;
 
-typedef enum TGfxTextureAccess
-{
-	TGFX_TEXTURE_ACCESS_SAMPLER_OPERATION,
-	TGFX_TEXTURE_ACCESS_IMAGE_OPERATION,
-} TGfxTextureAccess;
-
 typedef enum TGfxVsync
 {
 	TGFX_VSYNC_OFF,
@@ -419,6 +423,16 @@ typedef enum TGfxIndirectOperationType
 	TGFX_INDIRECTOPERATIONTYPE_UNDEF2
 } TGfxIndirectOperationType;
 
-typedef void (*tgfx_PrintLogCallback)(TU4 logCode, const char* extraInfo);
+typedef enum TGfxBufferUsage
+{
+	TGFX_BUFFERUSAGE_UNKNOWN,
+	TGFX_BUFFERUSAGE_VERTEX = 1 << 0,
+	TGFX_BUFFERUSAGE_INDEX = 1 << 1,
+	TGFX_BUFFERUSAGE_UNIFORM = 1 << 2,
+	TGFX_BUFFERUSAGE_UNORDEREDACCESS = 1 << 3,
+	TGFX_BUFFERUSAGE_INDIRECT = 1 << 4,
+	TGFX_BUFFERUSAGE_TRANSFER_SRC = 1 << 5,
+	TGFX_BUFFERUSAGE_TRANSFER_DST = 1 << 6
+} TGfxBufferUsage;
 
 TCORE_END_C_LINKAGE

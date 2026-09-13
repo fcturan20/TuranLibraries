@@ -13,7 +13,6 @@
 #include "vk_contentmanager.h"
 #include "vk_core.h"
 #include "vk_predefinitions.h"
-#include "vk_queue.h"
 #include "vk_resource.h"
 
 namespace TGFX
@@ -21,7 +20,7 @@ namespace TGFX
 namespace Vulkan
 {
 
-VkConstU4 VKCONST_MAXFENCECOUNT_PERSUBMIT = 8, VKCONST_MAXCMDBUFFER_PRIMARY_COUNT = 32;
+VkConstU4 kMaxFenceCountPerSubmit = 8, kMaxPrimaryCmdBufferCount = 32;
 
 #define getCmdBufferfromHnd(cmdBufferHnd)                                                                              \
 	CommandBuffer* cmdBuffer = GetVkObject(cmdBufferHnd);                                                              \
@@ -33,6 +32,423 @@ VkConstU4 VKCONST_MAXFENCECOUNT_PERSUBMIT = 8, VKCONST_MAXCMDBUFFER_PRIMARY_COUN
 		vkPrint(11);                                                                                                   \
 		return;                                                                                                        \
 	}
+
+#define GetGpuFromQueue(queueHnd)                                                                                      \
+	Queue* queue = GetVkObject(queueHnd);                                                                              \
+	GPU* gpu = queue->GetGpu();
+
+VkPipelineStageFlags gWaitStagesForPresentOperation[kMaxSemaphoreCountPerSubmit] = {
+	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+
+struct submission_vk
+{
+	VkFence fence = nullptr;
+	GPU* m_gpu = nullptr;
+	void* m_userData = nullptr;
+	uint32_t queueIdx = UINT32_MAX;
+};
+
+struct submit_vk
+{
+	Queue::OperationType type = Queue::CMDBUFFER;
+	union {
+		VkSubmitInfo submit;
+		VkPresentInfoKHR present;
+	};
+
+	uint32_t signalSemaphoreCount = 0, waitSemaphoreCount = 0, cmdBufferCount = 0, windowCount = 0;
+	TGfxCommandBuffer* cmdBuffers = {};
+
+	VkSemaphore *signalSemaphores = {}, *waitSemaphores = {};
+
+	uint64_t *signalSemaphoreValues = {}, *waitSemaphoreValues = {};
+	VkTimelineSemaphoreSubmitInfo semaphoreInfo;
+
+	Swapchain** m_windows = {};
+	// Allocates enough memory and sets pointers to valid arrays (waiting to be filled)
+	static submit_vk* allocateSubmit(uint64_t i_signalSemaphoreCount,
+									 uint64_t i_waitSemaphoreCount,
+									 uint64_t i_cmdBufferCount,
+									 uint32_t i_windowCount)
+	{
+		uint32_t allocSize =
+			sizeof(submit_vk) +
+			(sizeof(void*) * (i_signalSemaphoreCount + i_waitSemaphoreCount + i_cmdBufferCount + i_windowCount + 4)) +
+			(sizeof(uint64_t) * (i_signalSemaphoreCount + i_waitSemaphoreCount));
+		submit_vk* submit = (submit_vk*)TCore::Malloc(allocSize);
+		submit->signalSemaphoreCount = i_signalSemaphoreCount;
+		submit->waitSemaphoreCount = i_waitSemaphoreCount;
+		submit->cmdBufferCount = i_cmdBufferCount;
+		submit->windowCount = i_windowCount;
+
+		uintptr_t lastPos = uintptr_t(submit + 1);
+		// Allocate cmd buffer object list
+		{
+			submit->cmdBuffers = (TGfxCommandBuffer*)lastPos;
+			lastPos += sizeof(CommandBuffer**) * (submit->cmdBufferCount + 1ull);
+		}
+		// Allocate signal semaphore list
+		{
+			submit->signalSemaphores = (VkSemaphore*)lastPos;
+			lastPos += sizeof(VkSemaphore) * (submit->signalSemaphoreCount + 1ull);
+			submit->signalSemaphoreValues = (uint64_t*)lastPos;
+			lastPos += sizeof(uint64_t) * (submit->signalSemaphoreCount + 1ull);
+		}
+		// Allocate wait semaphore list
+		{
+			submit->waitSemaphores = (VkSemaphore*)lastPos;
+			lastPos += sizeof(VkSemaphore) * (submit->waitSemaphoreCount + 1ull);
+			submit->waitSemaphoreValues = (uint64_t*)lastPos;
+			lastPos += sizeof(uint64_t) * (submit->waitSemaphoreCount + 1ull);
+		}
+		// Allocate window list
+		{
+			submit->m_windows = (Swapchain**)lastPos;
+			lastPos += sizeof(Swapchain*) * (submit->windowCount + 1ull);
+		}
+		return submit;
+	}
+};
+
+struct submitList
+{
+	unsigned int submitCount = 0, binarySemCount = 0;
+	submit_vk** submits = nullptr;
+	VkSemaphore* binarySems = nullptr;
+	Queue* queue = nullptr;
+};
+void destroyCBsubmission(GPU* gpu, VkFence fence, void* data)
+{
+	submitList* submission = (submitList*)data;
+	for (uint32_t submitIdx = 0; submitIdx < submission->submitCount; submitIdx++)
+	{
+		submit_vk* submit = submission->submits[submitIdx];
+
+		for (uint32_t cbIdx = 0; cbIdx < submit->cmdBufferCount; cbIdx++)
+		{
+			CommandBuffer* cmdBuffer = GetVkObject(submit->cmdBuffers[cbIdx]);
+			vkDestroyCommandPool(gpu->vk_logical, cmdBuffer->Pool, nullptr);
+			mngrPriv->m_cmdBuffers.destroyObj(mngrPriv->m_cmdBuffers.getINDEXbyOBJ(cmdBuffer));
+		}
+
+		TCore::Free(submit);
+	}
+	for (uint32_t binarySemaphoreIdx = 0; binarySemaphoreIdx < submission->binarySemCount; binarySemaphoreIdx++)
+	{
+		vkDestroySemaphore(gpu->vk_logical, submission->binarySems[binarySemaphoreIdx], nullptr);
+	}
+
+	vkDestroyFence(gpu->vk_logical, fence, nullptr);
+}
+void Queue::checkSubmissions()
+{
+	for (int32_t i = 0; i < m_submissions.size(); i++)
+	{
+		submission_vk* submission = m_submissions[i];
+		if (!submission || !submission->GetGpu())
+			continue;
+		if (vkGetFenceStatus(GetGpu()->vk_logical, submission->fence) == VK_SUCCESS)
+		{
+			submission->m_callback(submission->GetGpu(), submission->fence, submission->m_userData);
+			m_submissions.destroyObj(i);
+		}
+	}
+}
+void Queue::createSubmission(VkFence fence, void* data, submissionCallback callback)
+{
+	submission_vk* sm = m_submissions.create_OBJ();
+	sm->GetGpu() = m_gpu;
+	sm->m_callback = callback;
+	sm->m_userData = data;
+	sm->fence = fence;
+	sm->queueIdx = QueueIdx;
+}
+void createQueueSubmitSubmission(VkFence submitFence,
+								 Queue* queue,
+								 uint32_t binarySemCount,
+								 const VkSemaphore* binarySems)
+{
+	uint32_t submitCount = 0;
+	for (; queue->m_unsentSubmits[submitCount]; submitCount++)
+	{
+	}
+	uint32_t allocSize = sizeof(submitList) + (sizeof(void*) * (submitCount)) + (sizeof(VkSemaphore) * binarySemCount);
+
+	submitList* list = (submitList*)TCore::Malloc(allocSize);
+	list->submitCount = submitCount;
+	list->binarySemCount = binarySemCount;
+	list->submits = (submit_vk**)(list + 1);
+	for (uint32_t submitIdx = 0; submitIdx < submitCount; submitIdx++)
+	{
+		list->submits[submitIdx] = queue->m_unsentSubmits[submitIdx];
+	}
+	list->binarySems = (VkSemaphore*)(list->submits + list->submitCount);
+	for (uint32_t semIdx = 0; semIdx < binarySemCount; semIdx++)
+	{
+		list->binarySems[semIdx] = binarySems[semIdx];
+	}
+	list->queue = queue;
+	queue->createSubmission(submitFence, list, destroyCBsubmission);
+}
+uint32_t Queue::sizeUnsetSubmits()
+{
+	uint32_t submitCount = 0;
+	for (; m_unsentSubmits[submitCount] && submitCount < VKCONST_MAXUNSENTSUBMITCOUNT; submitCount++)
+	{
+	}
+	return submitCount;
+}
+
+void vkQueueSubmit_CmdBuffers(Queue* queue, VkFence submitFence)
+{
+	VkSubmitInfo infos[VKCONST_MAXUNSENTSUBMITCOUNT] = {};
+	VkCommandBuffer cmdBuffers[VKCONST_MAXUNSENTSUBMITCOUNT * 16] = {};
+	uint32_t lastCmdBufferIdx = 0;
+	const uint32_t submitCount = queue->sizeUnsetSubmits();
+	for (uint32_t submitIdx = 0; submitIdx < submitCount; submitIdx++)
+	{
+		submit_vk* submit = queue->m_unsentSubmits[submitIdx];
+		submit->submit.pWaitDstStageMask = gWaitStagesForPresentOperation;
+		// Add queue call synchronizer semaphore as wait to sync sequential executeCmdLists calls
+		if (submitIdx == 0 && queue->m_prevQueueOp == Queue::CMDBUFFER)
+		{
+			submit->waitSemaphores[submit->submit.waitSemaphoreCount++] = queue->CallSynchronizer;
+			submit->waitSemaphoreValues[submit->semaphoreInfo.waitSemaphoreValueCount++] = 0;
+		}
+		// Add queue call synchronizer semaphore as signal to the last submit
+		if (submitIdx == submitCount - 1)
+		{
+			submit->signalSemaphores[submit->submit.signalSemaphoreCount++] = queue->CallSynchronizer;
+			submit->signalSemaphoreValues[submit->semaphoreInfo.signalSemaphoreValueCount++] = 1;
+		}
+		submit->submit.pCommandBuffers = &cmdBuffers[lastCmdBufferIdx];
+		for (uint32_t cmdBufferIdx = 0; cmdBufferIdx < submit->submit.commandBufferCount; cmdBufferIdx++)
+		{
+			CommandBuffer* cmdBffr = GetVkObject(submit->cmdBuffers[cmdBufferIdx]);
+			cmdBuffers[lastCmdBufferIdx++] = cmdBffr->Buffer;
+			if (cmdBffr->Buffer == nullptr)
+				vkPrint(16, "vkCommandBuffer is nullptr");
+		}
+		infos[submitIdx] = submit->submit;
+	}
+	if (vkQueueSubmit(queue->queue, submitCount, infos, submitFence) != VK_SUCCESS)
+		vkPrint(16, "at vkQueueSubmit()");
+
+	// Add this submit call to submission tracker
+	createQueueSubmitSubmission(submitFence, queue, 0, nullptr);
+}
+void vkQueueSubmit_Present(Queue* queue, VkFence submitFence)
+{
+	VkSwapchainKHR swpchns[kMaxSwapchainCountPerSubmit] = {};
+	uint32_t swpchnIndices[kMaxSwapchainCountPerSubmit] = {}, swpchnCount = 0;
+	Swapchain* windows[kMaxSwapchainCountPerSubmit] = {};
+	// Timeline Semaphores
+	VkSemaphore waitSemaphores[kMaxSemaphoreCountPerSubmit] = {}, signalSemaphores[kMaxSemaphoreCountPerSubmit] = {};
+	uint64_t waitValues[kMaxSemaphoreCountPerSubmit] = {}, signalValues[kMaxSemaphoreCountPerSubmit] = {};
+	uint32_t signalSemCount = 0, waitSemCount = 0;
+
+	for (uint32_t submitIdx = 0; queue->m_unsentSubmits[submitIdx]; submitIdx++)
+	{
+		submit_vk* submit = queue->m_unsentSubmits[submitIdx];
+
+		// If queue call is present
+		if (submit->present.sType == VK_STRUCTURE_TYPE_PRESENT_INFO_KHR)
+		{
+			if (swpchnCount + submit->present.swapchainCount > kMaxSwapchainCountPerSubmit)
+			{
+				vkPrint(16, "Max swapchain count per submit is exceeded!");
+				break;
+			}
+			for (uint32_t swpchnIdx = 0;
+				 swpchnIdx < submit->present.swapchainCount && swpchnCount < kMaxSwapchainCountPerSubmit;
+				 swpchnIdx++)
+			{
+				swpchnIndices[swpchnCount] = submit->m_windows[swpchnIdx]->m_swapchainCurrentTextureIdx;
+				swpchns[swpchnCount] = submit->m_windows[swpchnIdx]->Swpchn;
+				windows[swpchnCount] = submit->m_windows[swpchnIdx];
+
+				swpchnCount++;
+			}
+		} // If queue call is wait/signal
+		else if (submit->submit.sType == VK_STRUCTURE_TYPE_SUBMIT_INFO)
+		{
+			for (uint32_t i = 0; i < submit->submit.waitSemaphoreCount; i++)
+			{
+				waitSemaphores[i + waitSemCount] = submit->submit.pWaitSemaphores[i];
+				waitValues[i + waitSemCount] = submit->waitSemaphoreValues[i];
+			}
+			waitSemCount += submit->submit.waitSemaphoreCount;
+
+			for (uint32_t i = 0; i < submit->submit.signalSemaphoreCount; i++)
+			{
+				signalSemaphores[i + signalSemCount] = submit->submit.pSignalSemaphores[i];
+				signalValues[i + signalSemCount] = submit->signalSemaphoreValues[i];
+			}
+			signalSemCount += submit->submit.signalSemaphoreCount;
+		} // Queue call invalid
+		else
+		{
+			vkPrint(16, "One of the submits is invalid!");
+			return;
+		}
+	}
+
+	VkSemaphore binarySignalSemaphores[kMaxSemaphoreCountPerSubmit] = {};
+	// Submit for timeline -> binary conversion
+	{
+		for (uint32_t i = 0; i < waitSemCount; i++)
+		{
+			VkSemaphoreCreateInfo ci = {};
+			ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+			if (vkCreateSemaphore(queue->GetGpu()->vk_logical, &ci, nullptr, &binarySignalSemaphores[i]) != VK_SUCCESS)
+				vkPrint(16, "Present's Timeline->Binary converter failed at binary semaphore creation!");
+		}
+		VkTimelineSemaphoreSubmitInfo timInfo = {};
+		timInfo.pNext = nullptr;
+		timInfo.pSignalSemaphoreValues = nullptr;
+		timInfo.signalSemaphoreValueCount = 0;
+		timInfo.pWaitSemaphoreValues = waitValues;
+		timInfo.waitSemaphoreValueCount = waitSemCount;
+		timInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+		VkSubmitInfo si = {};
+		si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		si.pNext = &timInfo;
+		si.commandBufferCount = 0;
+		si.pCommandBuffers = nullptr;
+		si.waitSemaphoreCount = waitSemCount;
+		si.pWaitDstStageMask = gWaitStagesForPresentOperation;
+		si.pWaitSemaphores = waitSemaphores;
+		if (queue->m_prevQueueOp == Queue::CMDBUFFER)
+		{
+			si.waitSemaphoreCount = waitSemCount + 1;
+			timInfo.waitSemaphoreValueCount++;
+			waitValues[waitSemCount] = 0;
+			waitSemaphores[waitSemCount] = queue->CallSynchronizer;
+		}
+		si.signalSemaphoreCount = signalSemCount;
+		si.pSignalSemaphores = binarySignalSemaphores;
+		if (vkQueueSubmit(queue->queue, 1, &si, VK_NULL_HANDLE) != VK_SUCCESS)
+			vkPrint(16, "at vkQueueSubmit() of Present's Timeline->Binary converter");
+	}
+
+	VkPresentInfoKHR info = {};
+	info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	info.pNext = nullptr;
+	info.pSwapchains = swpchns;
+	info.swapchainCount = swpchnCount;
+	info.pImageIndices = swpchnIndices;
+	// For now, all calls are synchronized after each other
+	// Because we don't have timeline semaphore emulation in binary semaphores
+	info.waitSemaphoreCount = waitSemCount;
+	info.pWaitSemaphores = binarySignalSemaphores;
+	info.pResults = nullptr;
+	VkResult result = vkQueuePresentKHR(queue->queue, &info);
+	if (result != VK_SUCCESS)
+		vkPrint(16, "at vkQueuePresentKHR()");
+
+	// Send a submit to signal timeline semaphore when all binary semaphore are signaled
+	{
+		VkSemaphore binAcquireSemaphores[kMaxSwapchainCountPerSubmit] = {};
+		for (uint32_t i = 0; i < swpchnCount; i++)
+			binAcquireSemaphores[i] = windows[i]->AcquireSemaphore;
+
+		VkTimelineSemaphoreSubmitInfo temSignalSemaphoresInfo = {};
+		temSignalSemaphoresInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+		temSignalSemaphoresInfo.pWaitSemaphoreValues = nullptr;
+		temSignalSemaphoresInfo.waitSemaphoreValueCount = 0;
+		temSignalSemaphoresInfo.pNext = nullptr;
+		temSignalSemaphoresInfo.signalSemaphoreValueCount = signalSemCount;
+		temSignalSemaphoresInfo.pSignalSemaphoreValues = signalValues;
+		VkSubmitInfo acquireSubmit = {};
+		acquireSubmit.waitSemaphoreCount = swpchnCount;
+		acquireSubmit.pWaitSemaphores = binAcquireSemaphores;
+		acquireSubmit.signalSemaphoreCount = signalSemCount;
+		acquireSubmit.pSignalSemaphores = signalSemaphores;
+		acquireSubmit.commandBufferCount = 0;
+		acquireSubmit.pCommandBuffers = nullptr;
+		acquireSubmit.pNext = nullptr;
+		acquireSubmit.pWaitDstStageMask = gWaitStagesForPresentOperation;
+		acquireSubmit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		if (vkQueueSubmit(GetVkObject(queue->GetGpu()->m_internalQueue)->queue, 1, &acquireSubmit, submitFence))
+			vkPrint(16, "at vkQueueSubmit() for binary -> timeline semaphore conversion");
+	}
+
+	// Add this submit call to tracker
+	createQueueSubmitSubmission(submitFence, queue, waitSemCount, binarySignalSemaphores);
+}
+void QueueSubmit(TGfxQueue q)
+{
+	GetGpuFromQueue(q);
+	GPU* gpu = queue->GetGpu();
+	// Check previously sent submission to detect if they're still executing
+	queue->checkSubmissions();
+
+	VkFence submitFence = {};
+	{
+		VkFenceCreateInfo f_ci = {};
+		f_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		TCORE_SOFT_CHECK(vkCreateFence(gpu->vk_logical, &f_ci, nullptr, &submitFence) == VK_SUCCESS,
+						 "Vulkan Submission Tracker Fence creation failed");
+	}
+	switch (queue->ActiveQueueOperation)
+	{
+	case Queue::ERROR_QUEUEOPTYPE: queue->ActiveQueueOperation = Queue::CMDBUFFER;
+	case Queue::CMDBUFFER: vkQueueSubmit_CmdBuffers(queue, submitFence); break;
+	case Queue::PRESENT: vkQueueSubmit_Present(queue, submitFence); break;
+	default: vkPrint(52, "Active queue operation type isn't supported by Vulkan backend!"); break;
+	}
+
+	queue->m_prevQueueOp = queue->m_activeQueueOp;
+	queue->ActiveQueueOperation = Queue::ERROR_QUEUEOPTYPE;
+	for (uint32_t submitIdx = 0; submitIdx < VKCONST_MAXUNSENTSUBMITCOUNT; submitIdx++)
+		queue->m_unsentSubmits[submitIdx] = nullptr;
+}
+
+void addSubmitToUnsentList(Queue* queue, submit_vk* submit)
+{
+	for (uint32_t submitIdx = 0; submitIdx < VKCONST_MAXUNSENTSUBMITCOUNT; submitIdx++)
+	{
+		if (!queue->m_unsentSubmits[submitIdx])
+		{
+			queue->m_unsentSubmits[submitIdx] = submit;
+			return;
+		}
+	}
+	vkPrint(16, "Unsent submit count limit is exceeded!");
+}
+
+struct CommandContainer;
+// Secondary command buffers
+// These are to use across different command buffers and frames
+struct CommandBundle : public VkObjectBase<CommandBundle, TGfxCommandBundle, VkObjTypes::CMDBUNDLE>, public GpuObject
+{
+	CommandBundle(GPU* gpu)
+		: GpuObject(gpu), ActivePipeline(gpu->ReferenceManager), ActivePipelineLayout(gpu->ReferenceManager),
+		  ActiveCb(gpu->ReferenceManager)
+	{
+		for (TU8 i = 0; i < kMaxQueueFamilyCountPerGpu; i++)
+			SecondaryCommandBuffers[i].SetManager(gpu->ReferenceManager);
+		for (TU8 i = 0; i < kMaxDescSetPerList; i++)
+			ActiveDescSets[i].SetManager(gpu->ReferenceManager);
+	}
+	uint16_t GetExtraFlags() { return 0; }
+
+	VkCommandBufferHnd SecondaryCommandBuffers[kMaxQueueFamilyCountPerGpu];
+	VkCommandBufferHnd ActiveCb;
+	// Command Buffer States
+	VkPipelineHnd ActivePipeline;
+	// To check pipeline compatibility
+	VkPipelineLayoutHnd ActivePipelineLayout;
+	VkDescriptorSetLayoutHnd ActiveDescSets[kMaxDescSetPerList];
+	VkPipelineBindPoint BindPoint = {};
+	TGfxPipeline m_defaultPipeline = {};
+
+	CommandContainer* m_cmds = {};
+	uint64_t m_cmdCount = 0;
+
+	void createCmdBuffer(uint64_t cmdCount);
+};
+TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(CommandBundle, Vk)
 
 struct CmdBarrierTexture : Command<CmdBarrierTexture, CommandType::BarrierTexture>
 {
@@ -52,6 +468,26 @@ struct CmdBarrierTexture : Command<CmdBarrierTexture, CommandType::BarrierTextur
 
 	// Command specific variables should have "m_" prefix
 	VkImageMemoryBarrier BarrierInfo = {};
+};
+
+struct CmdBarrierBuffer : Command<CmdBarrierBuffer, CommandType::BarrierBuffer>
+{
+	void CmdExecute(CommandBundle* bundle)
+	{
+		vkCmdPipelineBarrier(bundle->ActiveCb,
+							 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+							 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+							 VK_DEPENDENCY_BY_REGION_BIT,
+							 0,
+							 nullptr,
+							 1,
+							 &BarrierInfo,
+							 0,
+							 nullptr);
+	}
+
+	// Command specific variables should have "m_" prefix
+	VkBufferMemoryBarrier BarrierInfo = {};
 };
 
 struct CmdBindBindingTables : Command<CmdBindBindingTables, CommandType::BindBindingTables>
@@ -218,7 +654,10 @@ struct CmdExecuteIndirect : public Command<CmdExecuteIndirect, CommandType::Exec
 			}
 		}
 	};
-	void cmd_destroy() { virmem::free_page(VK_POINTER_TO_MEMOFFSET(opStates)); }
+	void cmd_destroy()
+	{
+		// virmem::free_page(VK_POINTER_TO_MEMOFFSET(opStates));
+	}
 	struct IndirectOperationState
 	{
 		uint32_t opCount;
@@ -256,9 +695,11 @@ struct CmdPushConstant : public Command<CmdPushConstant, CommandType::PushConsta
 	unsigned char offset, size, data[1];
 };
 
-struct cmd
+// Maximum size of command struct is calculated at compile time and stored in this struct. This is used to allocate
+// memory for command structs in CommandBundle.
+struct CommandContainer
 {
-	CommandType cmd_type = CommandType::error_2;
+	CommandType Type = CommandType::error_2;
 
 	// From https://stackoverflow.com/a/46408751
 	template <typename... T>
@@ -270,34 +711,35 @@ struct cmd
 #define vkCmdStructsLists                                                                                              \
 	CmdBarrierTexture, CmdBindBindingTables, CmdBindPipeline, CmdDispatch, CmdBindVertexBuffers, CmdExecuteIndirect,   \
 		CmdCopyBufferToTexture, CmdPushConstant
-	static constexpr uint32_t maxCmdStructSize = max_sizeof<vkCmdStructsLists>();
-	uint8_t cmd_data[maxCmdStructSize] = {};
-	cmd() : cmd_type(CommandType::error) {}
+	static constexpr uint32_t kMaxCommandStructSize = max_sizeof<vkCmdStructsLists>();
+	uint8_t Data[kMaxCommandStructSize] = {};
+	CommandContainer() : Type(CommandType::error) {}
 };
 
 template <typename T>
-T* createCmdStruct(cmd* cmd)
+T* createCmdStruct(CommandContainer* cmd)
 {
 	static_assert(T::Type != CommandType::error,
 				  "You forgot to specify command type as \"cmd_type\" variable in command struct");
-	cmd->cmd_type = T::Type;
-	static_assert(cmd::maxCmdStructSize >= sizeof(T), "You forgot to specify the struct in cmd::maxCmdStructSize!");
-	*(T*)cmd->cmd_data = T();
-	return (T*)cmd->cmd_data;
+	cmd->Type = T::Type;
+	static_assert(CommandContainer::kMaxCommandStructSize >= sizeof(T),
+				  "You forgot to specify the struct in CommandContainer::kMaxCommandStructSize!");
+	*(T*)cmd->Data = T();
+	return (T*)cmd->Data;
 }
 
-void destroyCmd(cmd& cmd)
+void destroyCmd(CommandContainer& cmd)
 {
-	switch (cmd.cmd_type)
+	switch (cmd.Type)
 	{
-	case CommandType::ExecuteIndirect: ((CmdExecuteIndirect*)cmd.cmd_data)->cmd_destroy(); break;
+	case CommandType::ExecuteIndirect: ((CmdExecuteIndirect*)cmd.Data)->cmd_destroy(); break;
 	}
 }
 
 void CommandBundle::createCmdBuffer(uint64_t cmdCount)
 {
-	uint32_t allocSize = sizeof(cmd) * cmdCount;
-	m_cmds = (cmd*)TCAllocator->Malloc(TCore::GSuperMemoryBlock, allocSize, "Command Bundle buffer");
+	uint32_t allocSize = sizeof(CommandContainer) * cmdCount;
+	m_cmds = (CommandContainer*)TCAllocator->Malloc(TCore::GSuperMemoryBlock, allocSize, "Command Bundle buffer");
 	m_cmdCount = cmdCount;
 	for (uint32_t i = 0; i < cmdCount; i++)
 		m_cmds[i] = {};
@@ -313,8 +755,9 @@ void CreateFences(TGfxGpu g, TU4 count, TU8 initValue, TBool isShared, TGfxFence
 	fCi.flags = 0;
 	fCi.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
-	VkSemaphoreCreateInfo sCi{};
-	sCi.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	VkSemaphoreCreateInfo timelineSemaphoreCi{};
+	VkSemaphoreCreateInfo binarySemaphoreCi{};
+	timelineSemaphoreCi.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
 	// Timeline semaphores are not allowed on exported semaphores
 	VkSemaphoreTypeCreateInfo timelineCreateInfo;
@@ -324,7 +767,7 @@ void CreateFences(TGfxGpu g, TU4 count, TU8 initValue, TBool isShared, TGfxFence
 		timelineCreateInfo.pNext = NULL;
 		timelineCreateInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
 		timelineCreateInfo.initialValue = initValue;
-		Append_pNext(&sCi, &timelineCreateInfo);
+		Append_pNext(&timelineSemaphoreCi, &timelineCreateInfo);
 	}
 
 	VkExportFenceCreateInfo exportFCi{};
@@ -337,7 +780,7 @@ void CreateFences(TGfxGpu g, TU4 count, TU8 initValue, TBool isShared, TGfxFence
 
 		exportSCi.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO;
 		exportSCi.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT;
-		Append_pNext(&sCi, &exportSCi);
+		Append_pNext(&timelineSemaphoreCi, &exportSCi);
 	}
 	for (uint32_t i = 0; i < count; i++)
 	{
@@ -347,10 +790,23 @@ void CreateFences(TGfxGpu g, TU4 count, TU8 initValue, TBool isShared, TGfxFence
 						 "Failed to create vkFence");
 		fenceObj->FenceHnd.Set(vkFence);
 
-		VkSemaphore vkSemaphore{};
-		TCORE_SOFT_CHECK(vkCreateSemaphore(gpu->vk_logical, &sCi, nullptr, &vkSemaphore) == VK_SUCCESS,
+		VkSemaphore timelineSemaphore{};
+		TCORE_SOFT_CHECK(vkCreateSemaphore(gpu->vk_logical, &timelineSemaphoreCi, nullptr, &timelineSemaphore) ==
+							 VK_SUCCESS,
 						 "Failed to create vkSemaphore");
-		fenceObj->SemaphoreHnd.Set(vkSemaphore);
+		fenceObj->TimelineSemaphoreHnd.Set(timelineSemaphore);
+
+		// Remove timeline semaphore create info from pNext of binary semaphore create info
+		binarySemaphoreCi = timelineSemaphoreCi;
+		if (!isShared)
+			binarySemaphoreCi.pNext = nullptr;
+
+		VkSemaphore binarySemaphore{};
+		TCORE_SOFT_CHECK(vkCreateSemaphore(gpu->vk_logical, &binarySemaphoreCi, nullptr, &binarySemaphore) ==
+							 VK_SUCCESS,
+						 "Failed to create vkSemaphore");
+		fenceObj->BinarySemaphoreHnd.Set(binarySemaphore);
+
 		fenceList[i] = GetOpaqueHandle(fenceObj);
 	}
 }
@@ -359,8 +815,8 @@ void DestroyFence(TGfxFence fence)
 {
 	auto vkFence = GetVkObject(fence);
 	GPU* gpu = vkFence->GetGpu();
-	vkDestroySemaphore(gpu->vk_logical, vkFence->SemaphoreHnd, nullptr);
-	vkFence->SemaphoreHnd.SetAsDead();
+	vkDestroySemaphore(gpu->vk_logical, vkFence->TimelineSemaphoreHnd, nullptr);
+	vkFence->TimelineSemaphoreHnd.SetAsDead();
 	vkDestroyFence(gpu->vk_logical, vkFence->FenceHnd, nullptr);
 	vkFence->FenceHnd.SetAsDead();
 }
@@ -391,6 +847,32 @@ TGfxCommandBundle BeginCommandBundle(TGfxGpu gpu, TSize maxCmdCount, TGfxPipelin
 
 	return GetOpaqueHandle(cmdBundle);
 }
+
+#define DEFINE_EXECUTE_COMMAND(CommandName)                                                                            \
+	case CommandType::CommandName: ((Cmd##CommandName*)cmd)->CmdExecute(bundle); break;
+void ExecuteCommand(CommandContainer* cmd, CommandBundle* bundle)
+{
+	switch (cmd->Type)
+	{
+		DEFINE_EXECUTE_COMMAND(BindBindingTables);
+		DEFINE_EXECUTE_COMMAND(BindVertexBuffers);
+		DEFINE_EXECUTE_COMMAND(BindIndexBuffer);
+		DEFINE_EXECUTE_COMMAND(SetDepthBounds);
+		DEFINE_EXECUTE_COMMAND(SetViewport);
+		DEFINE_EXECUTE_COMMAND(SetScissor);
+		DEFINE_EXECUTE_COMMAND(DrawNonIndexedIndirect);
+		DEFINE_EXECUTE_COMMAND(DrawIndexedDirect);
+		DEFINE_EXECUTE_COMMAND(ExecuteIndirect);
+		DEFINE_EXECUTE_COMMAND(BarrierTexture);
+		DEFINE_EXECUTE_COMMAND(BarrierBuffer);
+		DEFINE_EXECUTE_COMMAND(BindPipeline);
+		DEFINE_EXECUTE_COMMAND(Dispatch);
+		DEFINE_EXECUTE_COMMAND(CopyBufferToTexture);
+		DEFINE_EXECUTE_COMMAND(CopyBufferToBuffer);
+		DEFINE_EXECUTE_COMMAND(PushConstant);
+	}
+}
+
 void FinishCommandBundle(TGfxCommandBundle bndl, TGfxExtension* exts)
 {
 	CommandBundle* bundle = GetVkObject(bndl);
@@ -414,9 +896,7 @@ void FinishCommandBundle(TGfxCommandBundle bndl, TGfxExtension* exts)
 		rInfo.pColorAttachmentFormats = defaultPipe->vk_colorAttachmentFormats;
 		while (rInfo.colorAttachmentCount < TGFX_RASTERSUPPORT_MAXCOLORRT_SLOTCOUNT &&
 			   rInfo.pColorAttachmentFormats[rInfo.colorAttachmentCount] != VK_FORMAT_UNDEFINED)
-		{
 			rInfo.colorAttachmentCount++;
-		}
 		rInfo.depthAttachmentFormat = defaultPipe->vk_depthAttachmentFormat;
 		rInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 		secInfo.pNext = &rInfo;
@@ -454,7 +934,7 @@ void FinishCommandBundle(TGfxCommandBundle bndl, TGfxExtension* exts)
 			bundle->ActivePipelineLayout = pipe->vk_layout;
 		}
 		for (uint64_t cmdIdx = 0; cmdIdx < bundle->m_cmdCount; cmdIdx++)
-			executeCmd(cb, bundle, bundle->m_cmds[cmdIdx]);
+			ExecuteCommand(&bundle->m_cmds[cmdIdx], bundle);
 		if (vkEndCommandBuffer(cb) != VK_SUCCESS)
 			vkPrint(16, "at vkEndCommandBuffer()");
 	}
@@ -466,12 +946,13 @@ void DestroyCommandBundle(TGfxCommandBundle hnd)
 	for (uint32_t i = 0; i < bundle->m_cmdCount; i++)
 		destroyCmd(bundle->m_cmds[i]);
 
-	virmem::free_page(VK_POINTER_TO_MEMOFFSET(bundle->m_cmds));
+	delete[] bundle->m_cmds;
+
 	static constexpr TU8 cmdBufferCount =
 		sizeof(bundle->SecondaryCommandBuffers) / sizeof(bundle->SecondaryCommandBuffers[0]);
 	for (uint32_t i = 0; i < cmdBufferCount; i++)
 	{
-		VkCommandBuffer cmdBuffer = bundle->SecondaryCommandBuffers[i];
+		auto& cmdBuffer = bundle->SecondaryCommandBuffers[i];
 		if (cmdBuffer != VK_NULL_HANDLE)
 			freeCmdBuffer(bundle->cmdPools[i], cmdBuffer);
 	}
@@ -639,9 +1120,7 @@ void cmdExecuteIndirect(TGfxCommandBundle bndl,
 		cmd->opStateCount++;
 	}
 	uint32_t allocSize = sizeof(CmdExecuteIndirect::IndirectOperationState) * cmd->opStateCount;
-	cmd->opStates = (CmdExecuteIndirect::IndirectOperationState*)VK_MEMOFFSET_TO_POINTER(
-		virmem::allocatePage(allocSize, &allocSize));
-	vm->commit(cmd->opStates, allocSize);
+	cmd->opStates = new CmdExecuteIndirect::IndirectOperationState[cmd->opStateCount];
 	for (uint32_t i = 0, stateIdx = 0; i < operationCount;)
 	{
 		auto opType = operationTypes[i];
@@ -787,26 +1266,24 @@ static constexpr VkPipelineStageFlags waitDstStageMask[kMaxSemaphoreCountPerSubm
 void queueExecuteCmdBuffers(TGfxQueue i_queue,
 							unsigned int cmdBufferCount,
 							TGfxCommandBuffer const* i_cmdBuffers,
-
 							TGfxExtension* exts)
 {
+	GetGpuFromQueue(i_queue);
 	if (!cmdBufferCount)
-	{
 		return;
-	}
-	if (queue->m_activeQueueOp != ERROR_QUEUEOPTYPE && queue->m_activeQueueOp != CMDBUFFER)
+
+	if (queue->ActiveQueueOperation != Queue::ERROR_QUEUEOPTYPE && queue->ActiveQueueOperation != Queue::CMDBUFFER)
 	{
 		vkPrint(54);
 		return;
 	}
-	queue->m_activeQueueOp = CMDBUFFER;
+	queue->ActiveQueueOperation = Queue::CMDBUFFER;
 
+	// Validate command buffer handles
+	for (uint32_t i = 0; i < cmdBufferCount; i++)
 	{
-		for (uint32_t i = 0; i < cmdBufferCount; i++)
-		{
-			getCmdBufferfromHnd(i_cmdBuffers[i]);
-			checkCmdBufferHnd();
-		}
+		getCmdBufferfromHnd(i_cmdBuffers[i]);
+		checkCmdBufferHnd();
 	}
 
 	submit_vk* submit = submit_vk::allocateSubmit(0, 0, cmdBufferCount, 0);
@@ -819,6 +1296,7 @@ void queueExecuteCmdBuffers(TGfxQueue i_queue,
 	submit->submit.commandBufferCount = cmdBufferCount;
 	addSubmitToUnsentList(queue, submit);
 }
+
 void queueFenceWaitSignal(TGfxQueue i_queue,
 						  unsigned int waitsCount,
 						  TGfxFence const* waitFences,
@@ -827,9 +1305,8 @@ void queueFenceWaitSignal(TGfxQueue i_queue,
 						  TGfxFence const* signalFences,
 						  const unsigned long long* signalValues)
 {
-	getGPUfromQueueHnd(i_queue);
-	getTimelineSemaphoreEXT(gpu, semSys);
-	const FENCE_VKOBJ* waits[kMaxSemaphoreCountPerSubmit] = {};
+	GetGpuFromQueue(i_queue);
+	const Fence* waits[kMaxSemaphoreCountPerSubmit] = {};
 	{
 		if (waitsCount > kMaxSemaphoreCountPerSubmit)
 		{
@@ -838,13 +1315,13 @@ void queueFenceWaitSignal(TGfxQueue i_queue,
 		}
 		for (uint32_t i = 0; i < waitsCount; i++)
 		{
-			FENCE_VKOBJ* wait = getOBJ<FENCE_VKOBJ>(waitFences[i]);
+			Fence* wait = GetVkObject(waitFences[i]);
 			assert(wait);
 			waits[i] = wait;
 			wait->m_curValue.store(waitValues[i]);
 		}
 	}
-	const FENCE_VKOBJ* signals[kMaxSemaphoreCountPerSubmit] = {};
+	const Fence* signals[kMaxSemaphoreCountPerSubmit] = {};
 	{
 		if (signalsCount > kMaxSemaphoreCountPerSubmit)
 		{
@@ -853,10 +1330,10 @@ void queueFenceWaitSignal(TGfxQueue i_queue,
 		}
 		for (uint32_t i = 0; i < signalsCount; i++)
 		{
-			FENCE_VKOBJ* signal = getOBJ<FENCE_VKOBJ>(signalFences[i]);
+			Fence* signal = GetVkObject(signalFences[i]);
 			assert(signal);
 			signals[i] = signal;
-			signal->m_nextValue.store(signalValues[i]);
+			signal->NextValue.store(signalValues[i]);
 		}
 	}
 
@@ -868,24 +1345,21 @@ void queueFenceWaitSignal(TGfxQueue i_queue,
 		uint32_t& waitSemaphoreCount = submit->submit.waitSemaphoreCount;
 		for (waitSemaphoreCount = 0; waitSemaphoreCount < kMaxSemaphoreCountPerSubmit; waitSemaphoreCount++)
 		{
-			const FENCE_VKOBJ* fence = waits[waitSemaphoreCount];
+			const Fence* fence = waits[waitSemaphoreCount];
 			if (!fence)
-			{
 				break;
-			}
 			submit->waitSemaphoreValues[waitSemaphoreCount] = fence->m_curValue;
 			submit->waitSemaphores[waitSemaphoreCount] = fence->timelineSemaphore;
 		}
 		uint32_t& signalSemaphoreCount = submit->submit.signalSemaphoreCount;
 		for (signalSemaphoreCount = 0; signalSemaphoreCount < kMaxSemaphoreCountPerSubmit; signalSemaphoreCount++)
 		{
-			const FENCE_VKOBJ* fence = signals[signalSemaphoreCount];
+			const Fence* fence = signals[signalSemaphoreCount];
 			if (!fence)
-			{
 				break;
-			}
+
 			submit->signalSemaphoreValues[signalSemaphoreCount] = fence->m_nextValue;
-			submit->signalSemaphores[signalSemaphoreCount] = fence->timelineSemaphore;
+			submit->signalSemaphores[signalSemaphoreCount] = fence->TimelineSemaphoreHnd;
 		}
 
 		submit->semaphoreInfo.pNext = nullptr;
@@ -904,29 +1378,23 @@ void queueFenceWaitSignal(TGfxQueue i_queue,
 	}
 	addSubmitToUnsentList(queue, submit);
 }
-void queueSubmit(TGfxQueue i_queue)
-{
-	getGPUfromQueueHnd(i_queue);
-	manager->queueSubmit(queue);
-}
+
 void queuePresent(TGfxQueue i_queue, unsigned int windowCount, TGfxSwapchain const* windowlist)
 {
-	getGPUfromQueueHnd(i_queue);
+	GetGpuFromQueue(i_queue);
 
-	if (queue->m_activeQueueOp != ERROR_QUEUEOPTYPE && queue->m_activeQueueOp != PRESENT)
+	if (queue->ActiveQueueOperation != Queue::ERROR_QUEUEOPTYPE && queue->ActiveQueueOperation != Queue::PRESENT)
 	{
 		vkPrint(54);
 		return;
 	}
 
-	queue->m_activeQueueOp = PRESENT;
+	queue->ActiveQueueOperation = Queue::PRESENT;
 	submit_vk* submit = submit_vk::allocateSubmit(0, 0, 0, windowCount);
 
 	for (uint32_t i = 0; i < windowCount; i++)
-	{
 		submit->m_windows[i] = GetVkObject(windowlist[i]);
-	}
-	submit->type = PRESENT;
+	submit->type = Queue::PRESENT;
 	submit->present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	submit->present.pNext = nullptr;
 	submit->present.pWaitSemaphores = nullptr;
@@ -1093,6 +1561,13 @@ void endRasterpass(TGfxCommandBuffer commandBuffer, TGfxExtension* exts)
 
 	vkCmdEndRendering(cmdBuffer->Buffer);
 }
+
+void RendererContext::Initialize()
+{
+	for (uint32_t i = 0; i < kMaxSemaphoreCountPerSubmit; i++)
+		gWaitStagesForPresentOperation[i] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+}
+
 void RendererContext::HookRenderer(ITGfxRenderer* renderer)
 {
 	renderer->BeginCommandBundle = BeginCommandBundle;
@@ -1110,7 +1585,7 @@ void RendererContext::HookRenderer(ITGfxRenderer* renderer)
 	renderer->EndRasterpass = endRasterpass;
 	renderer->QueueExecuteCmdBuffers = queueExecuteCmdBuffers;
 	renderer->QueueFenceSignalWait = queueFenceWaitSignal;
-	renderer->QueueSubmit = queueSubmit;
+	renderer->QueueSubmit = QueueSubmit;
 	renderer->QueuePresent = queuePresent;
 
 	renderer->CmdBindBindingTables = cmdBindBindingTables;

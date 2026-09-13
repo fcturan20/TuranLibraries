@@ -1,16 +1,21 @@
-#define TCORE_USE_CPP_WRAPPER
-#include <TGfxCore.h>
-
 #include <assert.h>
 #include <algorithm>
 #include <string>
 
+#define TCORE_USE_CPP_WRAPPER
+#include <Allocator.h>
+#include <TGfxCore.h>
 #include <TGfxRenderer.h>
 #include <TGfxGpuContentManager.h>
 
 TCORE_PLUGIN_INIT(TC)
 TCORE_PLUGIN_INIT(TGfx)
+TCORE_PLUGIN_INIT(TCAllocator)
+TCORE_PLUGIN_MEMORY_BLOCK_INIT()
+
 TCORE_PLUGIN_BOUNDED_ENTRY_POINT_START(TGfx)
+TCORE_PLUGIN_HARD_DEPENDENCY(TCAllocator, TCAllocator_PLUGIN_VERSION)
+TCORE_PLUGIN_RESERVE_ADDRESS_SPACE(1 << 16);
 TCORE_PLUGIN_ENTRY_POINT_END()
 
 namespace TGFX
@@ -134,7 +139,7 @@ TCResultState GetResultStateByReturnCode(TU4 returnCode, const char** message)
 TCResult TGfx_Initialize(const void** outPluginAPI)
 {
 	auto interfacesSize = sizeof(ITGfx) + sizeof(ITGfxRenderer) + sizeof(ITGfxResourceManager);
-	auto interfaces = malloc(interfacesSize);
+	auto interfaces = TCore::Malloc(interfacesSize);
 	auto ITGFX = (ITGfx*)interfaces;
 	if (!ITGFX)
 		return {TC_RESULTSTATE_OUT_OF_MEMORY, 0};

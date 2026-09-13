@@ -375,6 +375,15 @@ public:
 	}
 };
 
+void* Malloc(size_t size)
+{
+	return TCAllocator->Malloc(TCore::GSuperMemoryBlock, size, "Malloc()");
+}
+
+void Free(void* ptr)
+{
+	TCAllocator->Free(ptr);
+}
 } // namespace TCore
 
 #ifndef TCORE_DONT_OVERRIDE_NEW_DELETE

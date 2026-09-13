@@ -55,6 +55,7 @@ struct Texture : public VkObjectBase<Texture, TGfxTexture, VkObjTypes::TEXTURE>,
 
 	VkImageHnd vk_image;
 	VkImageViewHnd vk_imageView;
+	VkImageUsageFlags vk_imageUsage = 0;
 };
 TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Texture, Vk)
 
@@ -212,9 +213,15 @@ TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Heap, Vk)
 
 struct Fence : VkObjectBase<Fence, TGfxFence, VkObjTypes::FENCE>, public GpuObject
 {
-	Fence(GPU* gpu) : GpuObject(gpu), FenceHnd(gpu->ReferenceManager), SemaphoreHnd(gpu->ReferenceManager) {}
+	Fence(GPU* gpu)
+		: GpuObject(gpu), FenceHnd(gpu->ReferenceManager), TimelineSemaphoreHnd(gpu->ReferenceManager),
+		  BinarySemaphoreHnd(gpu->ReferenceManager)
+	{
+	}
 	VkFenceHnd FenceHnd;
-	VkSemaphoreHnd SemaphoreHnd;
+	VkSemaphoreHnd TimelineSemaphoreHnd;
+	VkSemaphoreHnd BinarySemaphoreHnd;
+	TBool IsShared = TFALSE;
 };
 TCORE_DEFINE_HANDLE_TYPE_CONVERTERS(Fence, Vk)
 

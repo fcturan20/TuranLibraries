@@ -484,7 +484,7 @@ void BindVectorAndAllocatorServices(ITCAllocator* services)
 {
 	// Vector Manager
 	{
-		ITCVector* f_vector = (ITCVector*)malloc(sizeof(ITCVector));
+		ITCVector* f_vector = (ITCVector*)Malloc(sizeof(ITCVector));
 		f_vector->Create = VectorServices::Create;
 		f_vector->Erase = VectorServices::Erase;
 		f_vector->Capacity = VectorServices::Capacity;

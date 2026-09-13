@@ -10,7 +10,6 @@
 #include "vk_core.h"
 #include "vk_includes.h"
 #include "vk_predefinitions.h"
-#include "vk_queue.h"
 #include "vk_renderer.h"
 #include "vk_resource.h"
 #include "vkGlslang.h"
@@ -28,6 +27,7 @@ namespace Vulkan
 VkSampler defaultSampler;
 VkBuffer defaultBuffer;
 Texture* defaultTexture;
+VkBufferUsageFlags2 gBufferUsageFlag;
 
 struct sampler_descVK
 {
@@ -104,7 +104,7 @@ TU4 CalculateSizeOfVertexLayout(const TGfxDataType* ATTRIBUTEs, TU4 count)
 TCResult vk_createTexture(TGfxGpu i_gpu, const TGfxTextureDescription* desc, TGfxTexture* TextureHnd)
 {
 	GPU* gpu = GetVkObject(i_gpu);
-	VkImageUsageFlags usageFlag = findTextureUsageFlagVk(desc->usage);
+	VkImageUsageFlags usageFlag = findTextureUsageFlagVk(desc->Usage);
 	if (desc->ChannelType == TGFX_TEXTURE_CHANNELS_D24S8 || desc->ChannelType == TGFX_TEXTURE_CHANNELS_D32)
 		usageFlag &= ~(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 	else
@@ -114,7 +114,7 @@ TCResult vk_createTexture(TGfxGpu i_gpu, const TGfxTextureDescription* desc, TGf
 		return vkPrint(26);
 
 	// Create VkImage
-	VkImage vkTextureObj;
+	VkImageHnd vkTextureObj(gpu->ReferenceManager);
 	VkImageCreateInfo im_ci = {};
 	{
 		im_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -142,10 +142,11 @@ TCResult vk_createTexture(TGfxGpu i_gpu, const TGfxTextureDescription* desc, TGf
 		im_ci.usage = usageFlag;
 		im_ci.samples = VK_SAMPLE_COUNT_1_BIT;
 
-		if (vkCreateImage(gpu->vk_logical, &im_ci, nullptr, &vkTextureObj) != VK_SUCCESS)
-		{
+		VkImage image;
+		if (vkCreateImage(gpu->vk_logical, &im_ci, nullptr, &image) != VK_SUCCESS)
 			return vkPrint(24);
-		}
+
+		vkTextureObj.Set(image);
 	}
 
 	VMemoryRequirements memReqs = VMemoryRequirements::GETINVALID();
@@ -184,19 +185,26 @@ TCResult vk_createBuffer(TGfxGpu i_gpu, const TGfxBufferDescription* desc, TGfxB
 	GPU* gpu = GetVkObject(i_gpu);
 
 	// Create VkBuffer object
-	VkBuffer vkBufObj;
-	VkBufferCreateInfo ci = {};
+	VkBufferHnd vkBufObj(gpu->ReferenceManager);
 	{
-		ci.usage = findBufferUsageFlagVk(desc->usageFlag);
+		VkBufferCreateInfo ci = {};
 		ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		ci.size = desc->Size;
 
-		if (vkCreateBuffer(gpu->vk_logical, &ci, nullptr, &vkBufObj) != VK_SUCCESS)
-		{
+		VkBufferUsageFlags2CreateInfo flagsCi = {};
+		flagsCi.sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO;
+		flagsCi.usage = gBufferUsageFlag;
+		ci.pNext = &flagsCi;
+
+		VkBuffer buf;
+		if (vkCreateBuffer(gpu->vk_logical, &ci, nullptr, &buf) != VK_SUCCESS)
 			return vkPrint(27);
-		}
+
+		vkBufObj.Set(buf);
 	}
+
+	// Use dedicated allocation extension (not defined yet)
 	VMemoryRequirements memReqs;
 	vkGetBufferMemoryRequirements(gpu->vk_logical, vkBufObj, &memReqs.vk_memReqs);
 	if (memReqs.requiresDedicatedAlloc)
@@ -210,7 +218,6 @@ TCResult vk_createBuffer(TGfxGpu i_gpu, const TGfxBufferDescription* desc, TGfxB
 	Buffer* o_buffer = GContentManagerContext->Buffers.CreateObject(gpu);
 	{
 		o_buffer->vk_buffer.Set(vkBufObj);
-		o_buffer->vk_usage = ci.usage;
 		o_buffer->m_intendedSize = desc->Size;
 		o_buffer->m_memReqs = memReqs;
 	}
@@ -218,6 +225,7 @@ TCResult vk_createBuffer(TGfxGpu i_gpu, const TGfxBufferDescription* desc, TGfxB
 	*buffer = GetOpaqueHandle(o_buffer);
 	return {TC_RESULTSTATE_SUCCESS, 0};
 }
+
 void vk_destroyBuffer(TGfxBuffer buffer)
 {
 	Buffer* vkBuffer = GetVkObject(buffer);
@@ -225,8 +233,6 @@ void vk_destroyBuffer(TGfxBuffer buffer)
 	vkDestroyBuffer((vkBuffer->GetGpu())->vk_logical, vkBuffer->vk_buffer, nullptr);
 	GContentManagerContext->Buffers.DestroyObject(vkBuffer);
 }
-
-VkConstU4 VKCONST_MAXSTATICSAMPLERCOUNT = 128;
 
 void* getInvalidResourceByType(GPU* gpu, VkDescriptorType descType)
 {
@@ -347,16 +353,10 @@ TCResult CreateBindingTable(TGfxGpu i_gpu, const TGfxBindingTableDescription con
 	switch (finalobj->vk_descType)
 	{
 	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-		finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) texture_descVK[desc->ElementCount];
-		break;
+	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: finalobj->m_descs = new texture_descVK[desc->ElementCount]; break;
 	case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-	case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-		finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) buffer_descVK[desc->ElementCount];
-		break;
-	case VK_DESCRIPTOR_TYPE_SAMPLER:
-		finalobj->m_descs = new (VKGLOBAL_VIRMEM_CONTENTMANAGER) sampler_descVK[desc->ElementCount];
-		break;
+	case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: finalobj->m_descs = new buffer_descVK[desc->ElementCount]; break;
+	case VK_DESCRIPTOR_TYPE_SAMPLER: finalobj->m_descs = new sampler_descVK[desc->ElementCount]; break;
 	}
 	*table = GetOpaqueHandle(finalobj);
 	return {TC_RESULTSTATE_SUCCESS, 0};
@@ -1204,6 +1204,11 @@ void ContentManagerContext::HookContentManager(ITGfxResourceManager* r)
 
 TCResult ContentManagerContext::Initialize()
 {
+	gBufferUsageFlag = VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_2_INDIRECT_BUFFER_BIT |
+					   VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT |
+					   VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT |
+					   VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT;
+
 	GContentManagerContext = new ContentManagerContext;
 	GLSLang::Initialize();
 	return {TC_RESULTSTATE_SUCCESS, 0};

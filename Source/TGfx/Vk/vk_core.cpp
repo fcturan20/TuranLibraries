@@ -177,6 +177,66 @@ void SetupDebugging()
 	if (vkCreateDebugUtilsMessengerEXT(GVkInstance, &dbgMssngrCi, nullptr, &GContext->DebugMessenger) != VK_SUCCESS)
 		vkPrint(16, "Vulkan Debug Callback system initialization failed");
 }
+
+void AnalizeGpuMemory(GPU* VKGPU)
+{
+	VkPhysicalDeviceMemoryBudgetPropertiesEXT budgetProps;
+	budgetProps.pNext = nullptr;
+	budgetProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
+	VKGPU->vk_propsMemory.pNext = &budgetProps;
+	VKGPU->vk_propsMemory.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+	vkGetPhysicalDeviceMemoryProperties2(VKGPU->vk_physical, &VKGPU->vk_propsMemory);
+
+	for (uint32_t memTypeIdx = 0; memTypeIdx < VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount; memTypeIdx++)
+	{
+		VkMemoryType& memType = VKGPU->vk_propsMemory.memoryProperties.memoryTypes[memTypeIdx];
+		bool isDeviceLocal = false;
+		bool isHostVisible = false;
+		bool isHostCoherent = false;
+		bool isHostCached = false;
+
+		if ((memType.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+			isDeviceLocal = true;
+		if ((memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+			isHostVisible = true;
+		if ((memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+			isHostCoherent = true;
+		if ((memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
+			isHostCached = true;
+
+		if (!isDeviceLocal && !isHostVisible && !isHostCoherent && !isHostCached)
+			continue;
+
+		auto createMemDesc = [memTypeIdx, VKGPU, memType](TGfxMemoryAllocationType allocType) {
+			TGfxMemoryInfo& memtype_desc = VKGPU->m_memoryDescTGFX[memTypeIdx];
+			memtype_desc.AllocationType = allocType;
+			memtype_desc.MemoryTypeId = memTypeIdx;
+			memtype_desc.MaxAllocationSize = VKGPU->vk_propsMemory.memoryProperties.memoryHeaps[memType.heapIndex].size;
+		};
+		if (isDeviceLocal)
+		{
+			if (isHostVisible && isHostCoherent)
+			{
+				createMemDesc(TGFX_MEMORYALLOCATIONTYPE_FASTHOSTVISIBLE);
+			}
+			else
+			{
+				createMemDesc(TGFX_MEMORYALLOCATIONTYPE_DEVICELOCAL);
+			}
+		}
+		else if (isHostVisible && isHostCoherent)
+		{
+			if (isHostCached)
+				createMemDesc(TGFX_MEMORYALLOCATIONTYPE_READBACK);
+			else
+				createMemDesc(TGFX_MEMORYALLOCATIONTYPE_HOSTVISIBLE);
+		}
+	}
+
+	VKGPU->desc.MemRegions = VKGPU->m_memoryDescTGFX;
+	VKGPU->desc.MemRegionsCount = VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount;
+}
+
 inline void CreateGpuDevices()
 {
 	// CHECK GPUs
@@ -298,64 +358,6 @@ inline void CreateGpuDevices()
 		}
 	}
 }
-void AnalizeGpuMemory(GPU* VKGPU)
-{
-	VkPhysicalDeviceMemoryBudgetPropertiesEXT budgetProps;
-	budgetProps.pNext = nullptr;
-	budgetProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
-	VKGPU->vk_propsMemory.pNext = &budgetProps;
-	VKGPU->vk_propsMemory.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
-	vkGetPhysicalDeviceMemoryProperties2(VKGPU->vk_physical, &VKGPU->vk_propsMemory);
-
-	for (uint32_t memTypeIdx = 0; memTypeIdx < VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount; memTypeIdx++)
-	{
-		VkMemoryType& memType = VKGPU->vk_propsMemory.memoryProperties.memoryTypes[memTypeIdx];
-		bool isDeviceLocal = false;
-		bool isHostVisible = false;
-		bool isHostCoherent = false;
-		bool isHostCached = false;
-
-		if ((memType.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-			isDeviceLocal = true;
-		if ((memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
-			isHostVisible = true;
-		if ((memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-			isHostCoherent = true;
-		if ((memType.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == VK_MEMORY_PROPERTY_HOST_CACHED_BIT)
-			isHostCached = true;
-
-		if (!isDeviceLocal && !isHostVisible && !isHostCoherent && !isHostCached)
-			continue;
-
-		auto createMemDesc = [memTypeIdx, VKGPU, memType](TGfxMemoryAllocationType allocType) {
-			TGfxMemoryInfo& memtype_desc = VKGPU->m_memoryDescTGFX[memTypeIdx];
-			memtype_desc.AllocationType = allocType;
-			memtype_desc.MemoryTypeId = memTypeIdx;
-			memtype_desc.MaxAllocationSize = VKGPU->vk_propsMemory.memoryProperties.memoryHeaps[memType.heapIndex].size;
-		};
-		if (isDeviceLocal)
-		{
-			if (isHostVisible && isHostCoherent)
-			{
-				createMemDesc(TGFX_MEMORYALLOCATIONTYPE_FASTHOSTVISIBLE);
-			}
-			else
-			{
-				createMemDesc(TGFX_MEMORYALLOCATIONTYPE_DEVICELOCAL);
-			}
-		}
-		else if (isHostVisible && isHostCoherent)
-		{
-			if (isHostCached)
-				createMemDesc(TGFX_MEMORYALLOCATIONTYPE_READBACK);
-			else
-				createMemDesc(TGFX_MEMORYALLOCATIONTYPE_HOSTVISIBLE);
-		}
-	}
-
-	VKGPU->desc.MemRegions = VKGPU->m_memoryDescTGFX;
-	VKGPU->desc.MemRegionsCount = VKGPU->vk_propsMemory.memoryProperties.memoryTypeCount;
-}
 
 TCResult VkContext::Initialize()
 {
@@ -375,16 +377,6 @@ TCResult VkContext::Initialize()
 
 	ContentManagerContext::Initialize();
 	RendererContext::Initialize();
-}
-
-VkContext::VkContext()
-{
-	GContext = this;
-}
-
-VkContext::~VkContext()
-{
-	GContext = nullptr;
 }
 
 VkSurfaceKHR VkContext::FindOrCreateSurface(void* windowOsHnd)
@@ -543,7 +535,7 @@ TCResult VkContext::CreateSwapchain(const TGfxSwapchainDescription* desc, TGfxSw
 		swpchnTexture->MipCount = 1;
 		swpchnTexture->vk_image.Set(imgs[vkImIdx]);
 		swpchnTexture->vk_imageView.Set(imgViews[vkImIdx]);
-		swpchnTexture->vk_imageUsage = swpchnTextureUsage;
+		swpchnTexture->vk_imageUsage = swapchainUsage;
 		swpchnTexture->m_dim = TGFX_TEXTURE_DIMENSIONS_2D;
 		// No memory allocation is possible for these textures
 		swpchnTexture->m_memBlock = VMemoryBlock::GETINVALID();

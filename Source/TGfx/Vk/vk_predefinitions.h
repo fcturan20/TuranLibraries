@@ -1,4 +1,5 @@
 #pragma once
+#define NOMINMAX
 #define VK_NO_PROTOTYPES
 #include <atomic>
 #include <volk.h>
@@ -48,6 +49,8 @@ VkConstStr kRequiredDeviceExtensionNames[] = {VK_KHR_TIMELINE_SEMAPHORE_EXTENSIO
 											  VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME,
 											  VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
 											  VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME};
+
+extern VkBufferUsageFlags2 gBufferUsageFlag;
 
 // <-------------------------------------------------------------------------------------->
 //      Object system
@@ -108,9 +111,6 @@ void Append_pNext(void* targetStruct, void* attachStruct)
 		nextChain = (VkChainableStructType**)&((VkChainableStructType*)targetStruct)->pNext;
 	*nextChain = (VkChainableStructType*)attachStruct;
 }
-
-#define VK_PRIM_MIN(primType) std::numeric_limits<primType>::min()
-#define VK_PRIM_MAX(primType) std::numeric_limits<primType>::max()
 
 enum class VkOpaqueHandleType : TU4
 {
